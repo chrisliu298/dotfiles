@@ -14,7 +14,7 @@ cd ~/dotfiles
 
 - Syncs and initializes git submodules
 - Symlinks dotfiles and agent configs to `~`
-- Installs 24 AI agent skills to `~/.claude/skills/` and `~/.codex/skills/`
+- Installs 24 AI agent extensions to `~/.claude/skills/` and `~/.codex/skills/`
 - Registers MCP servers (Playwright browser automation, Codex cross-model review)
 - Verifies all required symlinks
 
@@ -24,12 +24,13 @@ cd ~/dotfiles
 
 ```text
 dotfiles/
-├── dotfiles.sh              # Single entrypoint: submodules + symlinks + skills
+├── dotfiles.sh              # Single entrypoint: submodules + symlinks + extensions
 ├── shell/                   # Zsh config (Zinit, Powerlevel10k, fzf)
 ├── .config/                 # App configs (Neovim, tmux, btop)
-├── skills/                  # Local AI agent skills (symlinked directly)
-├── claude/                  # Claude Code config (CLAUDE.md, settings, hooks)
-├── codex/                   # Codex config (AGENTS.md)
+├── agents/                  # AI agent configurations
+│   ├── claude/              # Claude Code config (CLAUDE.md, settings, hooks)
+│   ├── codex/               # Codex config (AGENTS.md)
+│   └── extensions/          # Local AI agent extensions (symlinked directly)
 └── ssh/                     # SSH host aliases (no keys stored)
 ```
 
@@ -37,9 +38,7 @@ dotfiles/
 |-----------|----------|---------|
 | [`shell/`](shell/README.md) | Zsh config, plugins, aliases, functions | Zinit, Powerlevel10k, modern Unix tools |
 | [`.config/`](.config/README.md) | Application configs | Neovim, tmux, btop |
-| [`skills/`](skills/README.md) | AI agent skills (24 total) | Local + upstream, managed via `dotfiles.sh` SKILLS table |
-| `claude/` | Claude Code config | `CLAUDE.md`, `settings.json`, `keybindings.json`, hooks, statusline |
-| `codex/` | Codex config | `AGENTS.md` (synced from `claude/CLAUDE.md`) |
+| [`agents/`](agents/) | AI agent configurations | Claude Code, Codex, and local extensions |
 | `ssh/` | SSH host aliases | No keys stored |
 
 ## 3. Symlinks
@@ -58,27 +57,27 @@ dotfiles/
 | `~/.config/ghostty` | [chrisliu298/ghostty-config](https://github.com/chrisliu298/ghostty-config) (cloned) |
 | `~/.config/nvim` | `.config/nvim` |
 | `~/.config/tmux` | `.config/tmux` |
-| `~/.claude/CLAUDE.md` | `claude/CLAUDE.md` |
-| `~/.claude/settings.json` | `claude/settings.json` |
-| `~/.claude/keybindings.json` | `claude/keybindings.json` |
-| `~/.claude/hooks` | `claude/hooks` |
-| `~/.claude/statusline-command.sh` | `claude/statusline-command.sh` |
-| `~/.codex/AGENTS.md` | `codex/AGENTS.md` |
+| `~/.claude/CLAUDE.md` | `agents/claude/CLAUDE.md` |
+| `~/.claude/settings.json` | `agents/claude/settings.json` |
+| `~/.claude/keybindings.json` | `agents/claude/keybindings.json` |
+| `~/.claude/hooks` | `agents/claude/hooks` |
+| `~/.claude/statusline-command.sh` | `agents/claude/statusline-command.sh` |
+| `~/.codex/AGENTS.md` | `agents/codex/AGENTS.md` |
 
-Skills are symlinked directly into `~/.claude/skills/` and `~/.codex/skills/` (see [`skills/`](skills/README.md)).
+Skills are symlinked directly into `~/.claude/skills/` and `~/.codex/skills/` (see [`agents/extensions/`](agents/extensions/README.md)).
 
-## 4. Skills
+## 4. Extensions
 
-**24 skills across local and upstream sources, installed to Claude Code and Codex.**
+**24 extensions across local and upstream sources, installed to Claude Code and Codex.**
 
-- Local skills live in `skills/<name>/SKILL.md` — symlinked directly, single file works in both agents
+- Local skills live in `agents/extensions/<name>/SKILL.md` — symlinked directly, single file works in both agents
 - Upstream skills are declared in the `SKILLS` table in `dotfiles.sh` and cloned from GitHub
 - Agent-specific skills (e.g., `pdf`, `relay`) use separate table entries with different sources per agent
 
 | Action | Command |
 |--------|---------|
 | Install/update all | `./dotfiles.sh` |
-| Add a new local skill | Create `skills/<name>/SKILL.md`, run `./dotfiles.sh` |
+| Add a new local skill | Create `agents/extensions/<name>/SKILL.md`, run `./dotfiles.sh` |
 | Add upstream skill | Add `name\|owner/repo/subpath\|agents` to SKILLS table in `dotfiles.sh` |
 
 ## 5. What's Not Backed Up

@@ -1,9 +1,9 @@
 ---
 name: publish-skill
 description: |
-  Publish a local skill from ~/dotfiles/skills/<name>/ to a standalone public GitHub
+  Publish a local skill from ~/dotfiles/agents/extensions/<name>/ to a standalone public GitHub
   repo under chrisliu298/<name>. Handles creating the repo with README and LICENSE,
-  updating dotfiles.sh, CLAUDE.md, and skills/README.md, then verifying symlinks.
+  updating dotfiles.sh, CLAUDE.md, and agents/extensions/README.md, then verifying symlinks.
   Use when the user says "publish skill", "publish <name>", "make <name> a public repo",
   "release skill", or invokes /publish-skill.
 user-invocable: true
@@ -12,11 +12,11 @@ allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 
 # Publish Skill
 
-Publish a local skill from `~/dotfiles/skills/<name>/` to a standalone public GitHub repo at `chrisliu298/<name>`, then update the dotfiles repo to reference the upstream source.
+Publish a local skill from `~/dotfiles/agents/extensions/<name>/` to a standalone public GitHub repo at `chrisliu298/<name>`, then update the dotfiles repo to reference the upstream source.
 
 ## Context
 
-- Skills directory: !`ls ~/dotfiles/skills/`
+- Skills directory: !`ls ~/dotfiles/agents/extensions/`
 - GitHub auth: !`gh auth status 2>&1 | head -3`
 - Current SKILLS table entries: !`grep -A 30 '^SKILLS=(' ~/dotfiles/dotfiles.sh | head -35`
 
@@ -28,7 +28,7 @@ The skill name is passed as an argument: `/publish-skill <skill-name>`. If no ar
 
 ### Phase 1: Validate
 
-1. **Check the skill exists** at `~/dotfiles/skills/<name>/SKILL.md`. If not, list available local skills and ask the user to pick one.
+1. **Check the skill exists** at `~/dotfiles/agents/extensions/<name>/SKILL.md`. If not, list available local skills and ask the user to pick one.
 2. **Read the SKILL.md** and any files in `references/`, `agents/`, `scripts/`, `assets/` to understand what the skill does.
 3. **Check the target doesn't exist** — verify `~/Developer/GitHub/<name>/` does not already exist and `gh repo view chrisliu298/<name>` returns a 404. If the repo already exists, stop and tell the user.
 4. **Verify GitHub CLI** — `gh auth status` must succeed.
@@ -85,7 +85,7 @@ All edits happen in `~/dotfiles/`. Read each file before editing.
 9. **Remove the local skill directory**:
 
 ```bash
-rm -rf ~/dotfiles/skills/<name>/
+rm -rf ~/dotfiles/agents/extensions/<name>/
 ```
 
 10. **Update `dotfiles.sh`** — add an upstream entry to the SKILLS table. Place it alphabetically among the "Upstream shared" entries:
@@ -95,7 +95,7 @@ rm -rf ~/dotfiles/skills/<name>/
 
 11. **Update `CLAUDE.md`** — find the skills directory tree under `## Structure` and remove the `<name>/` line from the local skills listing.
 
-12. **Update `skills/README.md`** — find the skill's row in the skill list table and change the Source column from `Local` to `[chrisliu298/<name>](https://github.com/chrisliu298/<name>)`.
+12. **Update `agents/extensions/README.md`** — remove the skill from the "Workflow skills" table, then add it to the "Published skills" table in alphabetical order with Source set to `[chrisliu298/<name>](https://github.com/chrisliu298/<name>)`. Preserve the description and Enhanced marker.
 
 13. **Update `~/Developer/GitHub/agent-skills/README.md`** — read the file, then add a row to the "My Skills" table in alphabetical order. Use the format: `| [<name>](https://github.com/chrisliu298/<name>) | <one-line description from SKILL.md> |`. Do NOT commit or push — the user will handle that separately.
 
@@ -111,6 +111,6 @@ rm -rf ~/dotfiles/skills/<name>/
 
 - Do NOT commit or push dotfiles changes — just make the edits. The user will commit when ready.
 - Do NOT modify the SKILL.md content when copying — the published version should be identical to the local version.
-- Do NOT publish skills that have `Local` as their source and are not in `~/dotfiles/skills/` — they must be local skills managed by this dotfiles repo.
+- Do NOT publish skills that have `Local` as their source and are not in `~/dotfiles/agents/extensions/` — they must be local skills managed by this dotfiles repo.
 - If the skill has sub-dependencies (e.g., references another skill), note this in the README but do not publish the dependency.
 - Always use `cp` to copy files, never regenerate from memory.

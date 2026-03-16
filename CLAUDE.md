@@ -23,29 +23,25 @@ dotfiles/
 │   ├── nvim/                # Neovim config (minimal, custom GitHub Dark theme)
 │   ├── tmux/                # Tmux config (prefix: C-a)
 │   └── btop/                # System monitor config and themes
-├── skills/                  # Local skills (symlinked directly)
-│   ├── analyze-results/
-│   ├── atomic-push/
-│   ├── novelty-check/
-│   ├── paper-compile/
-│   ├── paper-figure/
-│   ├── paper-plan/
-│   ├── publish-skill/
-│   ├── push/
-│   ├── session-recovery/
-│   ├── sync-upstream/
-│   └── update-readme/
-├── claude/                  # Claude Code (~/.claude/)
-│   ├── CLAUDE.md            # Global user instructions
-│   ├── settings.json        # Settings (symlinked)
-│   ├── keybindings.json     # Key bindings (symlinked)
-│   ├── statusline-command.sh # Statusline script (symlinked)
-│   └── hooks/               # Session hooks
-└── codex/                   # Codex (~/.codex/)
-    └── AGENTS.md            # Global user instructions (synced from claude/CLAUDE.md)
+├── agents/                  # AI agent configurations
+│   ├── claude/              # Claude Code (~/.claude/)
+│   │   ├── CLAUDE.md        # Global user instructions
+│   │   ├── settings.json    # Settings (symlinked)
+│   │   ├── keybindings.json # Key bindings (symlinked)
+│   │   ├── statusline-command.sh # Statusline script (symlinked)
+│   │   └── hooks/           # Session hooks
+│   ├── codex/               # Codex (~/.codex/)
+│   │   └── AGENTS.md        # Global user instructions (synced from agents/claude/CLAUDE.md)
+│   └── extensions/          # Local extensions (symlinked directly)
+│       ├── atomic-push/
+│       ├── publish-skill/
+│       ├── push/
+│       ├── session-recovery/
+│       ├── sync-upstream/
+│       └── update-readme/
 ```
 
-**Note:** This file (project-level CLAUDE.md) is different from `claude/CLAUDE.md` (global user instructions that apply to all projects).
+**Note:** This file (project-level CLAUDE.md) is different from `agents/claude/CLAUDE.md` (global user instructions that apply to all projects).
 
 ## Setup
 
@@ -71,11 +67,11 @@ Installed via Zinit from GitHub releases (macOS ARM).
 - **Python**: Use `uv` for virtual environments (`sv`, `us`, `ua`, `upi` aliases)
 - **Themes**: Ghostty and btop themes are coordinated (Grok Dark)
 
-## Adding Skills
+## Adding Extensions
 
-Skills are managed by the `SKILLS` table in `dotfiles.sh` using direct git-clone + symlink (no `npx skills`):
+Extensions are managed by the `SKILLS` table in `dotfiles.sh` using direct git-clone + symlink (no `npx skills`):
 
-- **Local skills**: Add a `<name>/SKILL.md` directory under `skills/`, run `./dotfiles.sh`
+- **Local skills**: Add a `<name>/SKILL.md` directory under `agents/extensions/`, run `./dotfiles.sh`
 - **Upstream skills**: Add a `name|owner/repo/subpath|agents` entry to the `SKILLS` table in `dotfiles.sh`
 - **Agent-specific skills**: Use separate table entries with different sources per agent (e.g., `pdf` has different sources for claude vs codex)
 - **Install/update all**: Run `./dotfiles.sh` (clones/updates upstream repos, symlinks everything)
@@ -84,7 +80,7 @@ Each skill has a single SKILL.md that works in both Claude Code and Codex. Inclu
 
 ## Keeping Instructions Synced
 
-`claude/CLAUDE.md` and `codex/AGENTS.md` contain the same working principles. When updating one, copy the content to the other.
+`agents/claude/CLAUDE.md` and `agents/codex/AGENTS.md` contain the same working principles. When updating one, copy the content to the other.
 
 ## Maintaining Docs
 

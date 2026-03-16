@@ -7,9 +7,9 @@ This repository contains personal dotfiles and AI agent configurations for macOS
 - `ssh/config`: SSH host aliases (symlinked on macOS only)
 - `.config/`: Application configs kept in-repo (`tmux`, `btop`, `nvim`)
 - `~/.config/ghostty`: Ghostty config installed from the external `chrisliu298/ghostty-config` repo via `dotfiles.sh`
-- `skills/`: Local skills (one SKILL.md per skill, symlinked via `dotfiles.sh`)
-- `claude/`: Claude Code config (`CLAUDE.md`, `settings.json`, `hooks/`)
-- `codex/`: Codex config (`AGENTS.md`)
+- `agents/extensions/`: Local skills (one SKILL.md per skill, symlinked via `dotfiles.sh`)
+- `agents/claude/`: Claude Code config (`CLAUDE.md`, `settings.json`, `hooks/`)
+- `agents/codex/`: Codex config (`AGENTS.md`)
 - `dotfiles.sh`: single canonical entrypoint for dotfiles, external repo sync, agent configs, and skill installation
 - `README.md` and `CLAUDE.md`: top-level usage and maintenance docs
 

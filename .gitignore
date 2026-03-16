@@ -3,7 +3,7 @@ Icon*
 __pycache__/
 *.py[cod]
 .venv/
-claude/plugins/installed_plugins.json
+agents/claude/plugins/installed_plugins.json
 .relay/
 scripts/
 launchd/

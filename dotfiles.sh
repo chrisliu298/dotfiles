@@ -15,12 +15,12 @@ LINKS=(
     ".config/btop:.config/btop"
     ".config/nvim:.config/nvim"
     ".config/tmux:.config/tmux"
-    "claude/CLAUDE.md:.claude/CLAUDE.md"
-    "claude/settings.json:.claude/settings.json"
-    "claude/keybindings.json:.claude/keybindings.json"
-    "claude/hooks:.claude/hooks"
-    "claude/statusline-command.sh:.claude/statusline-command.sh"
-    "codex/AGENTS.md:.codex/AGENTS.md"
+    "agents/claude/CLAUDE.md:.claude/CLAUDE.md"
+    "agents/claude/settings.json:.claude/settings.json"
+    "agents/claude/keybindings.json:.claude/keybindings.json"
+    "agents/claude/hooks:.claude/hooks"
+    "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
+    "agents/codex/AGENTS.md:.codex/AGENTS.md"
 )
 
 # name|source|agents
@@ -28,8 +28,8 @@ LINKS=(
 # source: ./path (local dir) or owner/repo[/subpath] (GitHub)
 # agents: claude,codex | claude | codex
 SKILLS=(
-    # Local skills (wildcard: all subdirs with SKILL.md)
-    "*|./skills|claude,codex"
+    # Local extensions (wildcard: all subdirs with SKILL.md)
+    "*|./agents/extensions|claude,codex"
 
     # Upstream shared
     "*|chrisliu298/autoresearch|claude,codex"
@@ -559,8 +559,8 @@ main() {
     install_repos
     flush_ok
 
-    # Skills
-    section "Skills"
+    # Extensions
+    section "Extensions"
     install_skills
     flush_ok
 
