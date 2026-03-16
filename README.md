@@ -10,11 +10,7 @@ cd ~/dotfiles
 ./dotfiles.sh
 ```
 
-- Syncs and initializes git submodules
-- Symlinks dotfiles and agent configs to `~`
-- Installs 24 AI agent extensions to `~/.claude/skills/` and `~/.codex/skills/`
-- Registers MCP servers (Playwright browser automation, Codex cross-model review)
-- Verifies all required symlinks
+Syncs submodules, symlinks dotfiles and agent configs to `~`, installs AI agent extensions, registers MCP servers, and verifies all links.
 
 ## Structure
 
@@ -30,30 +26,6 @@ dotfiles/
 ```
 
 See [`shell/`](shell/README.md), [`.config/`](.config/README.md), and [`agents/extensions/`](agents/extensions/README.md) for details.
-
-## Symlinks
-
-All managed by `dotfiles.sh`.
-
-| Target | Source |
-|--------|--------|
-| `~/.zshrc` | `shell/.zshrc` |
-| `~/.zshenv` | `shell/.zshenv` |
-| `~/.aliases` | `shell/.aliases` |
-| `~/.functions` | `shell/.functions` |
-| `~/.p10k.zsh` | `shell/.p10k.zsh` |
-| `~/.config/btop` | `.config/btop` |
-| `~/.config/ghostty` | [chrisliu298/ghostty-config](https://github.com/chrisliu298/ghostty-config) (cloned) |
-| `~/.config/nvim` | `.config/nvim` |
-| `~/.config/tmux` | `.config/tmux` |
-| `~/.claude/CLAUDE.md` | `agents/claude/CLAUDE.md` |
-| `~/.claude/settings.json` | `agents/claude/settings.json` (copied, `~` expanded) |
-| `~/.claude/keybindings.json` | `agents/claude/keybindings.json` |
-| `~/.claude/hooks` | `agents/claude/hooks` |
-| `~/.claude/statusline-command.sh` | `agents/claude/statusline-command.sh` |
-| `~/.codex/AGENTS.md` | `agents/codex/AGENTS.md` |
-
-Skills are symlinked into `~/.claude/skills/` and `~/.codex/skills/` (see [`agents/extensions/`](agents/extensions/README.md)).
 
 ## Extensions
 
