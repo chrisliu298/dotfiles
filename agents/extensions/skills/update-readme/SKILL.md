@@ -6,7 +6,8 @@ description: |
   a README that helps a new reader succeed quickly without inventing details.
   Use when the user wants to update, improve, or create a README.md file.
   Invoke with /update-readme.
-allowed-tools: Bash(find:*), Bash(ls:*), Bash(tree:*), Bash(wc:*), Glob(*), Grep(*), Read(*), Edit(*), Write(*)
+user-invocable: true
+allowed-tools: Bash(find:*), Bash(ls:*), Bash(tree:*), Bash(wc:*), Bash(pwd:*), Bash(head:*), Bash(awk:*), Bash(git remote:*), Glob(*), Grep(*), Read(*), Edit(*), Write(*)
 ---
 
 # Update README
@@ -16,15 +17,18 @@ Generate or update `README.md` from repository evidence, not conventions.
 ## Context
 
 - Working directory: !`pwd`
-- Directory tree (top 3 levels): !`find . -maxdepth 3 -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/__pycache__/*' -not -path '*/venv/*' -not -path '*/.venv/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/target/*' -not -path '*/.next/*' -not -path '*/coverage/*' 2>/dev/null | head -80`
+- Directory tree (top 3 levels): !`find . -maxdepth 3 -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/__pycache__/*' -not -path '*/venv/*' -not -path '*/.venv/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/target/*' -not -path '*/.next/*' -not -path '*/coverage/*' 2>/dev/null | sort | head -80`
 - Key manifests: !`find . -maxdepth 2 -type f \( -name "package.json" -o -name "pyproject.toml" -o -name "Cargo.toml" -o -name "go.mod" -o -name "Makefile" -o -name "justfile" -o -name "Taskfile.yml" -o -name "setup.py" -o -name "setup.cfg" -o -name "requirements*.txt" -o -name "Dockerfile*" -o -name "docker-compose*.yml" -o -name "CMakeLists.txt" \) 2>/dev/null | grep -v node_modules | head -20`
 - Existing README headings: !`awk '/^#/{print}' README.md 2>/dev/null | head -40 || echo "No README.md found"`
-- Project description sources: !`head -30 CLAUDE.md 2>/dev/null; head -30 AGENTS.md 2>/dev/null`
+- CLAUDE.md opening: !`head -50 CLAUDE.md 2>/dev/null || echo "No CLAUDE.md found"`
+- AGENTS.md opening: !`head -50 AGENTS.md 2>/dev/null || echo "No AGENTS.md found"`
 - Git remote: !`git remote -v 2>/dev/null | head -2`
 
 ## Core Rule
 
-**Never invent facts.** Do not fabricate install commands, environment variables, supported platforms, feature claims, architecture details, or integration details. Every command, path, and claim in the README must be verified against the actual repository. If something is important but unverifiable, omit it or ask the user.
+**Never invent facts.** Every command, path, and claim in the README must be verified against the repository. If something is important but cannot be verified, omit it or ask the user.
+
+**Scope:** This skill targets the root `README.md` unless the user specifies a different path.
 
 ## Phase 1: Analyze the Project
 
@@ -39,17 +43,16 @@ Before writing, build a fact table by reading files in this order:
 
 **Evidence ranking:** Package scripts, Make/just targets, CI workflows, executable entrypoints, and tests are stronger evidence than naming conventions or folder structure.
 
-**Determine the project type** — this shapes which sections belong:
+**Determine the project type** — use the strongest repository signals to decide which sections belong:
 
-| Signal | Type | Key sections |
-|--------|------|-------------|
-| bin scripts, CLI entry, `--help` | CLI tool | Installation, Usage (real commands), Configuration |
-| lib exports, `"main"` in manifest | Library | Installation, API/Usage, Examples |
-| Dockerfile, docker-compose | Service/app | Setup, Running, Configuration, API endpoints |
-| experiments/, citations | Research code | Overview, Reproduction, Citation |
-| dotfiles, symlinks | Dotfiles | What's included, Installation, Customization |
-| SKILL.md, plugin manifest | Plugin/skill | What it does, Invocation, Configuration |
-| multiple package manifests | Monorepo | Overview, Package map, Development |
+- CLI tool: Installation, Usage, Configuration
+- Library: Installation, API/Usage, Examples
+- Service/app: Setup, Running, Configuration
+- Research code: Overview, Reproduction, Citation
+- Dotfiles, skill, or plugin: Overview, Installation, Usage, Customization
+- Monorepo: Overview, Package map, Development
+
+Use this as a heuristic, not a template.
 
 **Stop when you can answer:** What does this project do? Who is it for? How do you install, configure, and use it? What should the reader *not* assume?
 
@@ -60,7 +63,8 @@ Before writing, decide:
 - **Create vs. update** — if a README exists, identify sections that are accurate (keep), outdated (rewrite), and missing (add). Do not discard custom sections.
 - **Section selection** — only include sections with real content. Choose from the project-type table above, or keep existing sections if they work.
 - **Depth calibration** — match README length to project complexity. A 50-line script needs 10 lines of README. A framework needs detailed docs. Never pad a simple project.
-- **No-op is valid** — if the README is already accurate and complete, say so and make no changes.
+- **Large READMEs** — if the existing README exceeds 200 lines, prefer targeted edits over full rewrites. Only rewrite sections that are outdated or missing.
+- **No-op is valid** — if the README is already accurate and complete, tell the user "The README is up to date — no changes needed" and stop without editing the file.
 
 ## Phase 3: Write
 
@@ -101,3 +105,10 @@ After writing, spot-check:
 4. **Preservation** — if updating, confirm no important user-authored sections were deleted.
 
 Fix any issues before finishing.
+
+## Constraints
+
+- Never invent facts — this is the core rule.
+- When updating an existing README, never delete user-authored sections without explicit permission.
+- Do not add badges, shields, or decorative elements unless they already exist.
+- Do NOT delete an existing README.md. If the file seems unnecessary, tell the user rather than removing it.
