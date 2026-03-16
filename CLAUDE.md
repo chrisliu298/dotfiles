@@ -30,7 +30,7 @@ dotfiles/
 - **Platform detection**: `IS_MACOS` set in `shell/.zshenv`, used for macOS-only code
 - **Safe rm**: `rm()` in `shell/.functions` uses `trash` instead of permanent deletion (macOS only)
 - **Python**: Use `uv` for virtual environments (`sv`, `us`, `ua`, `upi` aliases)
-- **Themes**: Ghostty (GitHub Dark), btop (Grok Dark)
+- **Themes**: Ghostty (GitHub Dark), btop (GitHub Dark)
 
 ## Editing Skills
 
