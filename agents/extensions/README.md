@@ -13,7 +13,7 @@ Agent extensions managed by `dotfiles.sh`. Three types: **skills**, **MCP server
 Each skill has one SKILL.md that works in both Claude Code and Codex. `dotfiles.sh` clones upstream repos to a cache and creates direct symlinks.
 
 ```text
-dotfiles/agents/extensions/atomic-push/SKILL.md  # Local skill (in git)
+dotfiles/agents/extensions/skills/atomic-push/SKILL.md  # Local skill (in git)
         ↓ symlink
 ~/.claude/skills/atomic-push/                  # Claude Code reads from here
 ~/.codex/skills/atomic-push/                   # Codex reads from here
@@ -23,7 +23,7 @@ dotfiles/agents/extensions/atomic-push/SKILL.md  # Local skill (in git)
 ~/.claude/skills/pdf/                          # Claude Code reads from here
 ```
 
-- **Local extensions** are symlinked directly from `agents/extensions/` — edits take effect immediately
+- **Local extensions** are symlinked directly from `agents/extensions/skills/` — edits take effect immediately
 - **Upstream skills** are cloned to `~/.cache/skills-src/` and symlinked from there; re-run `./dotfiles.sh` to update
 - **Agent-specific skills** (`pdf`, `relay`) use separate SKILLS table entries with different sources per agent
 - **Repos are cloned in parallel** for speed
@@ -33,7 +33,7 @@ dotfiles/agents/extensions/atomic-push/SKILL.md  # Local skill (in git)
 ```bash
 # name|source|agents
 SKILLS=(
-    "*|./agents/extensions|claude,codex"                            # local wildcard
+    "*|./agents/extensions/skills|claude,codex"                      # local wildcard
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex"  # upstream
     "pdf|anthropics/skills/skills/pdf|claude"                       # claude-only
     "pdf|openai/skills/skills/.curated/pdf|codex"                   # codex-only (different source)

@@ -31,6 +31,7 @@ dotfiles/
     ├── codex/               # Codex (~/.codex/)
     │   └── AGENTS.md        # Global user instructions (synced from agents/claude/CLAUDE.md)
     └── extensions/          # Local extensions (see agents/extensions/README.md)
+        └── skills/          # Local skills (SKILL.md per skill)
 ```
 
 **Note:** This file (project-level CLAUDE.md) is different from `agents/claude/CLAUDE.md` (global user instructions that apply to all projects).
@@ -63,7 +64,7 @@ Installed via Zinit from GitHub releases (macOS ARM).
 
 Extensions are managed by the `SKILLS` table in `dotfiles.sh` using direct git-clone + symlink (no `npx skills`):
 
-- **Local skills**: Add a `<name>/SKILL.md` directory under `agents/extensions/`, run `./dotfiles.sh`
+- **Local skills**: Add a `<name>/SKILL.md` directory under `agents/extensions/skills/`, run `./dotfiles.sh`
 - **Upstream skills**: Add a `name|owner/repo/subpath|agents` entry to the `SKILLS` table in `dotfiles.sh`
 - **Agent-specific skills**: Use separate table entries with different sources per agent (e.g., `pdf` has different sources for claude vs codex)
 - **Install/update all**: Run `./dotfiles.sh` (clones/updates upstream repos, symlinks everything)

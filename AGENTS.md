@@ -6,7 +6,7 @@ This repository contains personal dotfiles and AI agent configurations for macOS
 - `shell/.aliases`, `shell/.functions`, `shell/.zshrc`, `shell/.zshenv`, `shell/.p10k.zsh`: Shell dotfiles
 - `.config/`: Application configs kept in-repo (`tmux`, `btop`, `nvim`)
 - `~/.config/ghostty`: Ghostty config installed from the external `chrisliu298/ghostty-config` repo via `dotfiles.sh`
-- `agents/extensions/`: Local skills (one SKILL.md per skill, symlinked via `dotfiles.sh`)
+- `agents/extensions/skills/`: Local skills (one SKILL.md per skill, symlinked via `dotfiles.sh`)
 - `agents/claude/`: Claude Code config (`CLAUDE.md`, `settings.json`, `hooks/`)
 - `agents/codex/`: Codex config (`AGENTS.md`)
 - `dotfiles.sh`: single canonical entrypoint for dotfiles, external repo sync, agent configs, and skill installation

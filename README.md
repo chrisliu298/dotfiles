@@ -26,7 +26,8 @@ dotfiles/
 └── agents/                  # AI agent configurations
     ├── claude/              # Claude Code config (CLAUDE.md, settings, hooks)
     ├── codex/               # Codex config (AGENTS.md)
-    └── extensions/          # Local AI agent extensions (symlinked directly)
+    └── extensions/          # Local AI agent extensions
+        └── skills/          # Local skills (symlinked via dotfiles.sh)
 ```
 
 | Directory | Contents | Details |
@@ -63,14 +64,14 @@ Skills are symlinked into `~/.claude/skills/` and `~/.codex/skills/` (see [`agen
 
 24 extensions across local and upstream sources, installed to Claude Code and Codex.
 
-- Local skills live in `agents/extensions/<name>/SKILL.md` — symlinked directly, single file works in both agents
+- Local skills live in `agents/extensions/skills/<name>/SKILL.md` — symlinked directly, single file works in both agents
 - Upstream skills are declared in the `SKILLS` table in `dotfiles.sh` and cloned from GitHub
 - Agent-specific skills (e.g., `pdf`, `relay`) use separate table entries with different sources per agent
 
 | Action | Command |
 |--------|---------|
 | Install/update all | `./dotfiles.sh` |
-| Add a local skill | Create `agents/extensions/<name>/SKILL.md`, run `./dotfiles.sh` |
+| Add a local skill | Create `agents/extensions/skills/<name>/SKILL.md`, run `./dotfiles.sh` |
 | Add an upstream skill | Add `name\|owner/repo/subpath\|agents` to `SKILLS` table in `dotfiles.sh` |
 
 ## What's Not Backed Up
