@@ -97,9 +97,12 @@ _total_ok=0 _total_new=0 _total_skip=0 _total_clean=0 _total_fail=0
 # ── Section header ───────────────────────────────
 section() {
     local title="$1"
-    local pad="" i len=$(( 54 - ${#title} ))
-    (( len < 4 )) && len=4
-    for (( i = 0; i < len; i++ )); do pad+="─"; done
+    local total_width=60
+    local prefix="  ── $title "
+    local pad_width=$(( total_width - ${#prefix} ))
+    local pad="" i
+    (( pad_width < 4 )) && pad_width=4
+    for (( i = 0; i < pad_width; i++ )); do pad+="─"; done
     printf '\n  %s── %s %s%s\n' "${_BOLD}${_CYN}" "$title" "$pad${_RST}" ""
     _sec_ok=0
 }
