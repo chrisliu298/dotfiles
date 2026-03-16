@@ -64,11 +64,3 @@ Skills are symlinked into `~/.claude/skills/` and `~/.codex/skills/` (see [`agen
 | Install/update all | `./dotfiles.sh` |
 | Add a local skill | Create `agents/extensions/skills/<name>/SKILL.md`, run `./dotfiles.sh` |
 | Add an upstream skill | Add `name\|owner/repo/subpath\|agents` to `SKILLS` table in `dotfiles.sh` |
-
-## Not Backed Up
-
-- `auth.json`, `~/.claude.json` — OAuth tokens
-- `history.jsonl` — command history
-- `settings.local.json` — local settings overrides
-- `projects/`, `sessions/` — per-project/session data
-- `cache/`, `log/`, `debug/` — temporary files
