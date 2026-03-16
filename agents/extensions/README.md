@@ -25,7 +25,7 @@ One SKILL.md per skill, works in both Claude Code and Codex. Local skills are sy
 | [nanorepl](https://github.com/chrisliu298/nanorepl) | Minimal reimplementations following Karpathy's nano philosophy |
 | [note-gen](https://github.com/chrisliu298/note-gen) | Generate Obsidian notes from source materials |
 | [prism](https://github.com/chrisliu298/prism) | Multi-perspective review through parallel agent deliberation |
-| [prompt-engineer](https://github.com/chrisliu298/prompt-engineer) | Write and refine prompts for Claude or GPT/Codex |
+| [prompt-engineer](https://github.com/chrisliu298/prompt-engineer) | Write and refine prompts for Claude or Codex |
 | [recall](https://github.com/chrisliu298/recall) | Search past sessions and Obsidian notes for context |
 | [relay](https://github.com/chrisliu298/relay) | Bidirectional cross-agent relay between Claude Code and Codex |
 | [vault-linker](https://github.com/chrisliu298/vault-linker) | Build wikilink connections across Obsidian vaults |
