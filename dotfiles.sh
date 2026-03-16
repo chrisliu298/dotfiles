@@ -16,7 +16,6 @@ LINKS=(
     ".config/nvim:.config/nvim"
     ".config/tmux:.config/tmux"
     "agents/claude/CLAUDE.md:.claude/CLAUDE.md"
-    "agents/claude/settings.json:.claude/settings.json"
     "agents/claude/keybindings.json:.claude/keybindings.json"
     "agents/claude/hooks:.claude/hooks"
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
@@ -522,6 +521,24 @@ install_plugins() {
     done
 }
 
+install_claude_settings() {
+    local src="$ROOT/agents/claude/settings.json"
+    local dest="$HOME/.claude/settings.json"
+    local label="~/.claude/settings.json"
+    [[ -f "$src" ]] || { skip "$label (source not found)"; return; }
+    mkdir -p "$(dirname "$dest")"
+    # Expand ~ to $HOME so Claude Code resolves absolute paths correctly
+    local content
+    content=$(sed "s|~/|$HOME/|g" "$src")
+    if [[ -f "$dest" && ! -L "$dest" ]] && [[ "$(cat "$dest")" == "$content" ]]; then
+        ok "$label"
+    else
+        rm -f "$dest"
+        printf '%s\n' "$content" > "$dest"
+        wrote "$label"
+    fi
+}
+
 # ── Main ─────────────────────────────────────────────────────────
 
 main() {
@@ -552,6 +569,7 @@ main() {
     for entry in "${LINKS[@]}"; do
         ensure_link "${entry%%:*}" "${entry#*:}"
     done
+    install_claude_settings
     flush_ok
 
     # External repos
