@@ -78,23 +78,85 @@ PLUGIN_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-plugins"
 SKILL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/skills-src"
 MANIFEST="$HOME/.dotfiles-managed"
 
+# ── Output helpers ───────────────────────────────────────────────
+
+# ANSI colors (auto-disabled when stdout is not a terminal)
+if [[ -t 1 ]]; then
+    _DIM=$'\033[2m'    _BOLD=$'\033[1m'
+    _GRN=$'\033[32m'   _YLW=$'\033[33m'   _RED=$'\033[31m'   _CYN=$'\033[36m'
+    _RST=$'\033[0m'
+else
+    _DIM="" _BOLD="" _GRN="" _YLW="" _RED="" _CYN="" _RST=""
+fi
+
+# Per-section OK counter (batched, printed once via flush_ok)
+_sec_ok=0
+# Global totals for the final summary line
+_total_ok=0 _total_new=0 _total_skip=0 _total_clean=0 _total_fail=0
+
+# ── Section header ───────────────────────────────
+section() {
+    local title="$1"
+    local pad="" i len=$(( 54 - ${#title} ))
+    (( len < 4 )) && len=4
+    for (( i = 0; i < len; i++ )); do pad+="─"; done
+    printf '\n  %s── %s %s%s\n' "${_BOLD}${_CYN}" "$title" "$pad${_RST}" ""
+    _sec_ok=0
+}
+
+# Flush batched OK count as one compact line, then reset
+flush_ok() {
+    if (( _sec_ok > 0 )); then
+        printf '     %s✓ %d unchanged%s\n' "$_DIM" "$_sec_ok" "$_RST"
+        (( _total_ok += _sec_ok ))
+        _sec_ok=0
+    fi
+}
+
+# ── Status printers ──────────────────────────────
+# ok() is silent — it just increments the batch counter.
+# Everything else prints immediately so changes/errors are visible.
+ok()      { (( ++_sec_ok )); }
+new()     { (( ++_total_new ));   printf '     🔗 %s%s%s\n' "$_GRN" "$1" "$_RST"; }
+skip()    { (( ++_total_skip ));  printf '     %s⏭️  %s%s\n' "$_YLW" "$1" "$_RST"; }
+cleaned() { (( ++_total_clean )); printf '     %s🧹 %s%s\n' "$_DIM" "$1" "$_RST"; }
+fail()    { (( ++_total_fail ));  printf '     %s❌ %s%s\n' "$_RED" "$1" "$_RST" >&2; }
+added()   { (( ++_total_new ));   printf '     ➕ %s%s%s\n' "$_GRN" "$1" "$_RST"; }
+wrote()   { (( ++_total_new ));   printf '     🔀 %s%s%s\n' "$_CYN" "$1" "$_RST"; }
+
+# Final summary bar: "42 ok | 2 changed | 1 skipped"
+print_summary() {
+    local parts=()
+    (( _total_ok > 0 ))    && parts+=("${_GRN}${_total_ok} ok${_RST}")
+    (( _total_new > 0 ))   && parts+=("${_CYN}${_total_new} changed${_RST}")
+    (( _total_skip > 0 ))  && parts+=("${_YLW}${_total_skip} skipped${_RST}")
+    (( _total_clean > 0 )) && parts+=("${_YLW}${_total_clean} cleaned${_RST}")
+    (( _total_fail > 0 ))  && parts+=("${_RED}${_total_fail} failed${_RST}")
+    local result="" i
+    for (( i = 0; i < ${#parts[@]}; i++ )); do
+        (( i > 0 )) && result+="  ${_DIM}|${_RST}  "
+        result+="${parts[$i]}"
+    done
+    printf '\n  %s\n' "$result"
+}
+
 # ── Functions ────────────────────────────────────────────────────
 
 ensure_link() {
     local src="$ROOT/$1" dest="$HOME/$2"
     local label="~/$2"
     if [[ ! -e "$src" ]]; then
-        echo "  ⏭️  $label (source not found)"
+        skip "$label (source not found)"
         return
     fi
     if [[ -L "$dest" && "$(readlink "$dest")" == "$src" ]]; then
-        echo "  ✅ $label"
+        ok "$label"
         return
     fi
     mkdir -p "$(dirname "$dest")"
     rm -rf "$dest"
     ln -s "$src" "$dest"
-    echo "  🔗 $label"
+    new "$label"
 }
 
 clean_stale_managed() {
@@ -116,7 +178,7 @@ clean_stale_managed() {
                 echo "$current_links$current_repos" | grep -qxF "$value" && continue
                 if [[ -L "$HOME/$value" ]]; then
                     rm -f "$HOME/$value"
-                    echo "  🧹 ~/$value (stale $type)"
+                    cleaned "~/$value (stale $type)"
                 fi
                 ;;
             mcp)
@@ -128,7 +190,7 @@ clean_stale_managed() {
                 if command -v codex &>/dev/null && codex mcp remove "$value" 2>/dev/null; then
                     removed=true
                 fi
-                $removed && echo "  🧹 mcp/$value (stale server)"
+                $removed && cleaned "mcp/$value (stale server)"
                 ;;
         esac
     done < "$MANIFEST"
@@ -159,16 +221,16 @@ install_repos() {
             git -C "$dir" pull --ff-only -q 2>/dev/null || true
         else
             git clone "https://github.com/$slug.git" "$dir" 2>/dev/null || {
-                echo "  ❌ clone $slug" >&2; continue
+                fail "clone $slug"; continue
             }
         fi
         if [[ -L "$dest" && "$(readlink "$dest")" == "$dir" ]]; then
-            echo "  ✅ $label"
+            ok "$label"
         else
             mkdir -p "$(dirname "$dest")"
             rm -rf "$dest"
             ln -s "$dir" "$dest"
-            echo "  🔗 $label"
+            new "$label"
         fi
     done
 }
@@ -184,7 +246,7 @@ sync_repo() {
         [[ -e "$dir" ]] && rm -rf "$dir"
         mkdir -p "$SKILL_CACHE"
         git clone --depth 1 "https://github.com/$slug.git" "$dir" 2>/dev/null || {
-            echo "  ❌ clone $slug" >&2; return 1
+            fail "clone $slug"; return 1
         }
     fi
     echo "$dir"
@@ -193,11 +255,11 @@ sync_repo() {
 ensure_skill_link() {
     local src="$1" dest="$2"
     if [[ -L "$dest" && "$(readlink "$dest")" == "$src" ]]; then
-        echo "  ✅ ~${dest#$HOME}"
+        ok "~${dest#$HOME}"
     else
         rm -rf "$dest"
         ln -s "$src" "$dest"
-        echo "  🔗 ~${dest#$HOME}"
+        new "~${dest#$HOME}"
     fi
 }
 
@@ -239,7 +301,7 @@ install_skills() {
             [[ "$subpath" != "$_rest" ]] && base_dir="$base_dir/$subpath"
         fi
         if [[ ! -d "$base_dir" ]]; then
-            echo "  ⏭️  $name (source not found: $source)" >&2
+            skip "$name (source not found: $source)"
             continue
         fi
 
@@ -260,7 +322,7 @@ install_skills() {
             if [[ -f "$base_dir/SKILL.md" ]]; then
                 skill_entries+=("$name:$base_dir")
             else
-                echo "  ⏭️  $name (no SKILL.md at $source)" >&2
+                skip "$name (no SKILL.md at $source)"
             fi
         fi
 
@@ -291,10 +353,10 @@ install_skills() {
             [[ $'\n'"$expected" == *$'\n'"$bname"$'\n'* ]] && continue
             if [[ -L "$entry" ]]; then
                 rm -f "$entry"
-                echo "  🧹 ${entry/#$HOME/~}"
+                cleaned "${entry/#$HOME/~}"
             else
                 rm -rf "$entry"
-                echo "  🧹 ${entry/#$HOME/~} (unmanaged)"
+                cleaned "${entry/#$HOME/~} (unmanaged)"
             fi
         done
     done
@@ -314,7 +376,7 @@ install_skills() {
             local cname="${cached%/}"; cname="${cname##*/}"
             local found=false
             for r in ${repos[@]+"${repos[@]}"}; do [[ "${r//\//__}" == "$cname" ]] && found=true && break; done
-            $found || { rm -rf "$cached"; echo "  ✂️  cache/$cname"; }
+            $found || { rm -rf "$cached"; cleaned "cache/$cname"; }
         done
     fi
 }
@@ -327,17 +389,17 @@ install_mcp_servers() {
         for entry in "${MCP_SERVERS[@]}"; do
             IFS='|' read -r name cmd args <<< "$entry"
             if claude mcp list 2>/dev/null | grep -q "^$name:"; then
-                echo "  ✅ claude/$name"
+                ok "claude/$name"
             else
                 if claude mcp add --scope user "$name" -- $cmd $args 2>/dev/null; then
-                    echo "  ➕ claude/$name"
+                    added "claude/$name"
                 else
-                    echo "  ❌ claude/$name" >&2
+                    fail "claude/$name"
                 fi
             fi
         done
     else
-        echo "  ⏭️  claude CLI not found"
+        skip "claude CLI not found"
     fi
 
     # Codex
@@ -346,17 +408,17 @@ install_mcp_servers() {
             IFS='|' read -r name cmd args <<< "$entry"
             [[ "$name" == "codex" ]] && continue
             if codex mcp get "$name" &>/dev/null; then
-                echo "  ✅ codex/$name"
+                ok "codex/$name"
             else
                 if codex mcp add "$name" -- $cmd $args 2>/dev/null; then
-                    echo "  ➕ codex/$name"
+                    added "codex/$name"
                 else
-                    echo "  ❌ codex/$name" >&2
+                    fail "codex/$name"
                 fi
             fi
         done
     else
-        echo "  ⏭️  codex CLI not found"
+        skip "codex CLI not found"
     fi
 }
 
@@ -414,15 +476,15 @@ if os.path.isfile(path):
 with open(path, "w") as f: write(merge(existing, desired), f)
 PYEOF
     then
-        echo "  ❌ ~/.codex/config.toml (python3 with tomllib required)" >&2
+        fail "~/.codex/config.toml (python3 with tomllib required)"
         return
     fi
-    echo "  🔀 ~/.codex/config.toml"
+    wrote "~/.codex/config.toml"
 }
 
 install_plugins() {
     if ! command -v claude &>/dev/null; then
-        echo "  ⏭️  claude CLI not found"
+        skip "claude CLI not found"
         return
     fi
 
@@ -434,24 +496,24 @@ install_plugins() {
 
         # Clone or update (use gh for private repo auth)
         if [[ -d "$dir/.git" ]]; then
-            git -C "$dir" fetch --depth=1 origin 2>/dev/null \
-                && git -C "$dir" reset --hard origin/HEAD 2>/dev/null \
+            git -C "$dir" fetch --depth=1 origin >/dev/null 2>&1 \
+                && git -C "$dir" reset --hard origin/HEAD >/dev/null 2>&1 \
                 || true
         else
             gh repo clone "$slug" "$dir" -- --depth 1 2>/dev/null || {
-                echo "  ❌ clone $slug" >&2; continue
+                fail "clone $slug"; continue
             }
         fi
 
         # Install plugin (extraKnownMarketplaces provides the marketplace,
         # but claude plugin install is still needed to register it)
         if claude plugin list 2>/dev/null | grep -q "$name@$name"; then
-            echo "  ✅ plugin/$name"
+            ok "plugin/$name"
         else
             if claude plugin install "$name@$name" 2>/dev/null; then
-                echo "  ➕ plugin/$name"
+                added "plugin/$name"
             else
-                echo "  ❌ plugin/$name" >&2
+                fail "plugin/$name"
             fi
         fi
     done
@@ -462,61 +524,65 @@ install_plugins() {
 main() {
     cd "$ROOT"
 
-    echo "Bootstrapping dotfiles from: $ROOT"
-    echo
+    printf '\n  %s%s dotfiles%s  %s%s%s\n' \
+        "${_BOLD}${_CYN}" "🔧" "$_RST" "$_DIM" "$ROOT" "$_RST"
 
     # Cleanup stale managed items
-    echo "=== Cleanup ==="
+    section "Cleanup"
     clean_stale_managed
+    flush_ok
 
     # Submodules
-    echo
-    echo "=== Submodules ==="
+    section "Submodules"
     if [[ -f .gitmodules && -s .gitmodules ]]; then
-        git submodule sync --recursive
-        git submodule update --init --recursive
+        git submodule sync --recursive >/dev/null 2>&1
+        git submodule update --init --recursive >/dev/null 2>&1
+        ok "synced"
     else
-        echo "  ⏭️  no submodules found"
+        skip "no submodules found"
     fi
+    flush_ok
 
     # Symlinks
-    echo
-    echo "=== Symlinks ==="
+    section "Symlinks"
     local entry
     for entry in "${LINKS[@]}"; do
         ensure_link "${entry%%:*}" "${entry#*:}"
     done
+    flush_ok
 
     # External repos
-    echo
-    echo "=== Repos ==="
+    section "Repos"
     install_repos
+    flush_ok
 
     # Skills
-    echo
-    echo "=== Skills ==="
+    section "Skills"
     install_skills
+    flush_ok
 
     # Codex config
-    echo
-    echo "=== Codex Config ==="
+    section "Codex Config"
     write_codex_config
+    flush_ok
 
     # MCP servers
-    echo
-    echo "=== MCP Servers ==="
+    section "MCP Servers"
     install_mcp_servers
+    flush_ok
 
     # Plugins
-    echo
-    echo "=== Plugins ==="
+    section "Plugins"
     install_plugins
+    flush_ok
 
     # Record managed state for future cleanup
     write_manifest
 
-    echo
-    echo "✨ Done. Restart your shell or source ~/.zshrc."
+    # Final summary
+    print_summary
+    printf '  ✨ %sDone.%s Restart your shell or %ssource ~/.zshrc%s\n\n' \
+        "$_BOLD" "$_RST" "$_DIM" "$_RST"
 }
 
 main
