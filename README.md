@@ -27,14 +27,9 @@ dotfiles/
     ├── claude/              # Claude Code config (CLAUDE.md, settings, hooks)
     ├── codex/               # Codex config (AGENTS.md)
     └── extensions/          # Local AI agent extensions
-        └── skills/          # Local skills (symlinked via dotfiles.sh)
 ```
 
-| Directory | Contents | Details |
-|-----------|----------|---------|
-| [`shell/`](shell/README.md) | Zsh config, plugins, aliases, functions | Zinit, Powerlevel10k, modern Unix tools |
-| [`.config/`](.config/README.md) | Application configs | Neovim, tmux, btop |
-| [`agents/`](agents/) | AI agent configurations | Claude Code, Codex, and local extensions |
+See [`shell/`](shell/README.md), [`.config/`](.config/README.md), and [`agents/extensions/`](agents/extensions/README.md) for details.
 
 ## Symlinks
 
@@ -52,7 +47,7 @@ All managed by `dotfiles.sh`.
 | `~/.config/nvim` | `.config/nvim` |
 | `~/.config/tmux` | `.config/tmux` |
 | `~/.claude/CLAUDE.md` | `agents/claude/CLAUDE.md` |
-| `~/.claude/settings.json` | `agents/claude/settings.json` |
+| `~/.claude/settings.json` | `agents/claude/settings.json` (copied, `~` expanded) |
 | `~/.claude/keybindings.json` | `agents/claude/keybindings.json` |
 | `~/.claude/hooks` | `agents/claude/hooks` |
 | `~/.claude/statusline-command.sh` | `agents/claude/statusline-command.sh` |
@@ -62,11 +57,7 @@ Skills are symlinked into `~/.claude/skills/` and `~/.codex/skills/` (see [`agen
 
 ## Extensions
 
-24 extensions across local and upstream sources, installed to Claude Code and Codex.
-
-- Local skills live in `agents/extensions/skills/<name>/SKILL.md` — symlinked directly, single file works in both agents
-- Upstream skills are declared in the `SKILLS` table in `dotfiles.sh` and cloned from GitHub
-- Agent-specific skills (e.g., `pdf`, `relay`) use separate table entries with different sources per agent
+24 extensions across local and upstream sources. See [`agents/extensions/README.md`](agents/extensions/README.md) for full catalog.
 
 | Action | Command |
 |--------|---------|
@@ -74,12 +65,10 @@ Skills are symlinked into `~/.claude/skills/` and `~/.codex/skills/` (see [`agen
 | Add a local skill | Create `agents/extensions/skills/<name>/SKILL.md`, run `./dotfiles.sh` |
 | Add an upstream skill | Add `name\|owner/repo/subpath\|agents` to `SKILLS` table in `dotfiles.sh` |
 
-## What's Not Backed Up
-
-Security-sensitive and ephemeral files are excluded.
+## Not Backed Up
 
 - `auth.json`, `~/.claude.json` — OAuth tokens
-- `history.jsonl` — command history (sensitive)
+- `history.jsonl` — command history
 - `settings.local.json` — local settings overrides
 - `projects/`, `sessions/` — per-project/session data
 - `cache/`, `log/`, `debug/` — temporary files

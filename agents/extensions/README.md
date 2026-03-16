@@ -10,23 +10,12 @@ Agent extensions managed by `dotfiles.sh`. Three types: **skills**, **MCP server
 
 ## Skills
 
-Each skill has one SKILL.md that works in both Claude Code and Codex. `dotfiles.sh` clones upstream repos to a cache and creates direct symlinks.
+One SKILL.md per skill, works in both Claude Code and Codex. `dotfiles.sh` clones upstream repos to `~/.cache/skills-src/` and symlinks them.
 
-```text
-dotfiles/agents/extensions/skills/atomic-push/SKILL.md  # Local skill (in git)
-        ↓ symlink
-~/.claude/skills/atomic-push/                  # Claude Code reads from here
-~/.codex/skills/atomic-push/                   # Codex reads from here
-
-~/.cache/skills-src/anthropics__skills/        # Cloned upstream repo
-        ↓ symlink (to subpath)
-~/.claude/skills/pdf/                          # Claude Code reads from here
-```
-
-- **Local extensions** are symlinked directly from `agents/extensions/skills/` — edits take effect immediately
-- **Upstream skills** are cloned to `~/.cache/skills-src/` and symlinked from there; re-run `./dotfiles.sh` to update
-- **Agent-specific skills** (`pdf`, `relay`) use separate SKILLS table entries with different sources per agent
-- **Repos are cloned in parallel** for speed
+- **Local skills**: Symlinked from `agents/extensions/skills/` — edits take effect immediately
+- **Upstream skills**: Cloned to cache, symlinked; re-run `./dotfiles.sh` to update
+- **Agent-specific** (`pdf`, `relay`): Separate `SKILLS` table entries with different sources per agent
+- **Parallel cloning**: Repos cloned concurrently for speed
 
 ### SKILLS Table Format
 
@@ -36,13 +25,11 @@ SKILLS=(
     "*|./agents/extensions/skills|claude,codex"                      # local wildcard
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex"  # upstream
     "pdf|anthropics/skills/skills/pdf|claude"                       # claude-only
-    "pdf|openai/skills/skills/.curated/pdf|codex"                   # codex-only (different source)
+    "pdf|openai/skills/skills/.curated/pdf|codex"                   # codex-only
 )
 ```
 
 ### Published Skills
-
-Skills built and maintained as open-source repos.
 
 | Skill | Source | Description | Enhanced |
 |-------|--------|-------------|----------|
@@ -62,8 +49,6 @@ Skills built and maintained as open-source repos.
 
 ### Community Skills
 
-Public skills by others.
-
 | Skill | Source | Description | Agents |
 |-------|--------|-------------|--------|
 | defuddle | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) | Extract clean markdown from web pages via CLI | Both |
@@ -74,7 +59,7 @@ Public skills by others.
 
 ### Workflow Skills
 
-Local skills for workflow acceleration, not published as standalone repos.
+Local skills (not published as standalone repos).
 
 | Skill | Description | Enhanced |
 |-------|-------------|----------|
@@ -85,11 +70,11 @@ Local skills for workflow acceleration, not published as standalone repos.
 | sync-upstream | Sync forked repo with upstream remote | [skill-creator](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills) |
 | update-readme | Update or create README.md for repos | [skill-creator](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills) |
 
-Skills marked with **skill-creator** in the Enhanced column were iteratively refined using the [skill-creator eval framework](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills).
+*Enhanced* = refined via the [skill-creator eval framework](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills).
 
 ## MCP Servers
 
-Registered per-agent via the `MCP_SERVERS` table in `dotfiles.sh`. Format: `name|command|args`.
+Registered per-agent via `MCP_SERVERS` table in `dotfiles.sh`. Format: `name|command|args`.
 
 | Server | Purpose | Agents | Config |
 |--------|---------|--------|--------|
@@ -98,13 +83,13 @@ Registered per-agent via the `MCP_SERVERS` table in `dotfiles.sh`. Format: `name
 
 ## Plugins
 
-Cloned from GitHub via the `PLUGINS` table, installed with `claude plugin install`. Plugins are Claude Code only.
+Cloned from GitHub via `PLUGINS` table, installed with `claude plugin install`. Claude Code only.
 
 | Plugin | Source | Description |
 |--------|--------|-------------|
 | aris-lite | [chrisliu298/aris-lite](https://github.com/chrisliu298/aris-lite) | Autonomous research pipeline (idea discovery, experiments, paper writing) |
 
-Plugins from the official marketplace (`claude plugin install <name>`) are installed manually and not tracked in `dotfiles.sh`.
+Marketplace plugins (installed manually, not tracked in `dotfiles.sh`):
 
 | Plugin | Description |
 |--------|-------------|

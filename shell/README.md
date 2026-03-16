@@ -18,12 +18,7 @@ Load order: `.zshenv` (sets `IS_MACOS`) → `.zshrc` (sources `.aliases` and `.f
 
 Installed via Zinit from GitHub releases (macOS ARM).
 
-| Tool | Command |
-|------|---------|
-| [fd](https://github.com/sharkdp/fd) | `fd` |
-| [ripgrep](https://github.com/BurntSushi/ripgrep) | `rg` |
-| [zoxide](https://github.com/ajeetdsouza/zoxide) | `z` |
-| [delta](https://github.com/dandavison/delta) | `delta` |
+- `fd` → find, `rg` → grep, `zoxide` → z, `delta` → diff
 
 ## Zsh Plugins
 
