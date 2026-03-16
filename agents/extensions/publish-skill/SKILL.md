@@ -97,11 +97,9 @@ rm -rf ~/dotfiles/agents/extensions/<name>/
 
 12. **Update `agents/extensions/README.md`** — remove the skill from the "Workflow skills" table, then add it to the "Published skills" table in alphabetical order with Source set to `[chrisliu298/<name>](https://github.com/chrisliu298/<name>)`. Preserve the description and Enhanced marker.
 
-13. **Update `~/Developer/GitHub/agent-skills/README.md`** — read the file, then add a row to the "My Skills" table in alphabetical order. Use the format: `| [<name>](https://github.com/chrisliu298/<name>) | <one-line description from SKILL.md> |`. Do NOT commit or push — the user will handle that separately.
+13. **Verify** — run `./dotfiles.sh` from `~/dotfiles/` and confirm the skill symlinks are created correctly.
 
-14. **Verify** — run `./dotfiles.sh` from `~/dotfiles/` and confirm the skill symlinks are created correctly.
-
-15. **Report** — show the user:
+14. **Report** — show the user:
     - The repo URL: `https://github.com/chrisliu298/<name>`
     - A summary of files in the repo
     - The dotfiles changes made
