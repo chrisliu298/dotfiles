@@ -47,25 +47,36 @@ fi
 
 # Install dotfiles locally, then sync to remote machines
 dfs() {
+    local _d=$'\033[2m' _b=$'\033[1m' _c=$'\033[36m'
+    local _g=$'\033[32m' _r=$'\033[31m' _0=$'\033[0m'
+
+    # Section header helper (matches dotfiles.sh: 60 visible chars)
+    _sec() {
+        local t="$1" total_width=60
+        local prefix="  ── $t "
+        local pad="" i len=$(( total_width - ${#prefix} ))
+        (( len < 4 )) && len=4
+        for (( i = 0; i < len; i++ )); do pad+="─"; done
+        printf '\n  %s── %s %s%s\n' "${_b}${_c}" "$t" "${pad}${_0}" ""
+    }
+
     # Pull latest changes
-    printf "\033[1m=> Pulling latest changes\033[0m\n"
-    git -C ~/dotfiles pull --ff-only
-    local pull_rc=$?
-    if (( pull_rc )); then
-        printf "   pull      \033[31m✗\033[0m (exit %d)\n" "$pull_rc"
-        return $pull_rc
+    _sec "Pull"
+    if git -C ~/dotfiles pull --ff-only >/dev/null 2>&1; then
+        printf "     ✓ ${_d}up to date${_0}\n"
+    else
+        printf "     ${_r}✗ pull failed${_0}\n"
+        return 1
     fi
-    printf "   pull      \033[32m✓\033[0m\n"
 
     # Local install
-    printf "\033[1m=> Installing dotfiles locally\033[0m\n"
+    _sec "Install"
     ~/dotfiles/dotfiles.sh
     local local_rc=$?
     if (( local_rc )); then
-        printf "   local     \033[31m✗\033[0m (exit %d)\n" "$local_rc"
+        printf "     ${_r}✗ local install failed${_0}\n"
         return $local_rc
     fi
-    printf "   local     \033[32m✓\033[0m\n"
 
     # Remote sync (macOS only — requires SSH hosts)
     (( IS_MACOS )) || return 0
@@ -73,31 +84,39 @@ dfs() {
     local hosts=(macmini l40s)
     local tmpdir=$(mktemp -d)
     local pids=()
+    local n=${#hosts[@]}
 
-    printf "\033[1m=> Syncing dotfiles to %d hosts\033[0m\n" ${#hosts[@]}
+    _sec "Sync ($n hosts)"
+
+    # Disable job control to suppress [1] PID / [1]+ Done noise
+    set +m
 
     for h in "${hosts[@]}"; do
-        printf "   %-10s syncing...\n" "$h"
         ssh "$h" "cd ~/dotfiles && git pull --ff-only 2>&1 && ./dotfiles.sh 2>&1" \
             > "$tmpdir/$h.log" 2>&1 &
         pids+=($!)
     done
 
-    local failed=0
-    for i in {1..${#hosts[@]}}; do
-        if wait "${pids[$i]}" 2>/dev/null; then
-            printf "   %-10s \033[32m✓\033[0m\n" "${hosts[$i]}"
+    local failed=0 idx=1
+    for h in "${hosts[@]}"; do
+        if wait "${pids[$idx]}" 2>/dev/null; then
+            printf "     ${_g}✓${_0} %s\n" "$h"
         else
-            printf "   %-10s \033[31m✗\033[0m\n" "${hosts[$i]}"
-            sed 's/^/   │ /' "$tmpdir/${hosts[$i]}.log"
-            ((failed++))
+            printf "     ${_r}✗${_0} %s\n" "$h"
+            sed "s/^/       ${_d}│${_0} /" "$tmpdir/$h.log"
+            ((++failed))
         fi
+        ((++idx))
     done
 
+    set -m
     rm -rf "$tmpdir"
-    printf "\033[1m=> Done.\033[0m"
-    (( failed )) && printf " \033[31m(%d failed)\033[0m" "$failed"
-    printf "\n"
+
+    if (( failed )); then
+        printf "\n  ${_r}${failed} failed${_0}\n\n"
+    else
+        printf "\n  ${_g}✨ All synced.${_0}\n\n"
+    fi
     return $failed
 }
 
