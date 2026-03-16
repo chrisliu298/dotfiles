@@ -4,7 +4,6 @@
 This repository contains personal dotfiles and AI agent configurations for macOS with zsh.
 
 - `shell/.aliases`, `shell/.functions`, `shell/.zshrc`, `shell/.zshenv`, `shell/.p10k.zsh`: Shell dotfiles
-- `ssh/config`: SSH host aliases (symlinked on macOS only)
 - `.config/`: Application configs kept in-repo (`tmux`, `btop`, `nvim`)
 - `~/.config/ghostty`: Ghostty config installed from the external `chrisliu298/ghostty-config` repo via `dotfiles.sh`
 - `agents/extensions/`: Local skills (one SKILL.md per skill, symlinked via `dotfiles.sh`)
@@ -18,7 +17,6 @@ This repository contains personal dotfiles and AI agent configurations for macOS
 - `git status --short`: confirm only intended files changed before commit.
 - `rg --files`: quickly inspect tracked structure when adding/updating skills.
 - `uv venv && source .venv/bin/activate`: initialize local Python environment for script-based skills.
-- `./dotfiles.sh`: also handles upstream skill updates (clones/updates repos, symlinks everything).
 
 ## Coding Style & Naming Conventions
 - Use Markdown for guides and skill instructions, with short sections and actionable bullets.

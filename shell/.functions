@@ -134,7 +134,7 @@ crc(){ command claude rc --dangerously-skip-permissions "$@"; }
 cu(){ command claude update "$@"; }
 cap(){ local prompt="/atomic-push"; (( $# )) && prompt+=" ${*}"; command claude -p --dangerously-skip-permissions "$prompt"; }
 cpu(){ local prompt="/push"; (( $# )) && prompt+=" ${*}"; command claude -p --dangerously-skip-permissions "$prompt"; }
-chl(){ (( $# )) || { echo 'Usage: ch "<prompt>"'; return 1; }; command claude -p --dangerously-skip-permissions "${*}"; }
+chl(){ (( $# )) || { echo 'Usage: chl "<prompt>"'; return 1; }; command claude -p --dangerously-skip-permissions "${*}"; }
 
 x(){ command codex --yolo -m gpt-5.4 "$@"; }
 xl(){ command codex --yolo -m gpt-5.4 --config model_reasoning_effort=low "$@"; }
@@ -143,4 +143,4 @@ xh(){ command codex --yolo -m gpt-5.4 --config model_reasoning_effort=high "$@";
 xc(){ command codex resume --last --yolo "$@"; }
 xr(){ command codex resume --yolo "$@"; }
 xu(){ npm install -g @openai/codex@latest "$@"; }
-xhl(){ (( $# )) || { echo 'Usage: xh "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.4 --config model_reasoning_effort=high "${*}"; }
+xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.4 --config model_reasoning_effort=high "${*}"; }

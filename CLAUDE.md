@@ -17,28 +17,20 @@ dotfiles/
 │   ├── .aliases            # Command shortcuts (modern tools)
 │   ├── .functions          # Shell utility functions
 │   └── .p10k.zsh           # Powerlevel10k prompt config
-├── ssh/
-│   └── config               # SSH host aliases (no keys)
 ├── .config/
 │   ├── nvim/                # Neovim config (minimal, custom GitHub Dark theme)
 │   ├── tmux/                # Tmux config (prefix: C-a)
 │   └── btop/                # System monitor config and themes
-├── agents/                  # AI agent configurations
-│   ├── claude/              # Claude Code (~/.claude/)
-│   │   ├── CLAUDE.md        # Global user instructions
-│   │   ├── settings.json    # Settings (symlinked)
-│   │   ├── keybindings.json # Key bindings (symlinked)
-│   │   ├── statusline-command.sh # Statusline script (symlinked)
-│   │   └── hooks/           # Session hooks
-│   ├── codex/               # Codex (~/.codex/)
-│   │   └── AGENTS.md        # Global user instructions (synced from agents/claude/CLAUDE.md)
-│   └── extensions/          # Local extensions (symlinked directly)
-│       ├── atomic-push/
-│       ├── publish-skill/
-│       ├── push/
-│       ├── session-recovery/
-│       ├── sync-upstream/
-│       └── update-readme/
+└── agents/                  # AI agent configurations
+    ├── claude/              # Claude Code (~/.claude/)
+    │   ├── CLAUDE.md        # Global user instructions
+    │   ├── settings.json    # Settings (symlinked)
+    │   ├── keybindings.json # Key bindings (symlinked)
+    │   ├── statusline-command.sh # Statusline script (symlinked)
+    │   └── hooks/           # Session hooks
+    ├── codex/               # Codex (~/.codex/)
+    │   └── AGENTS.md        # Global user instructions (synced from agents/claude/CLAUDE.md)
+    └── extensions/          # Local extensions (see agents/extensions/README.md)
 ```
 
 **Note:** This file (project-level CLAUDE.md) is different from `agents/claude/CLAUDE.md` (global user instructions that apply to all projects).
@@ -65,7 +57,7 @@ Installed via Zinit from GitHub releases (macOS ARM).
 - **Platform detection**: `IS_MACOS` is set in `shell/.zshenv` and used for macOS-only code across all dotfiles
 - **Safe rm**: The `rm()` function in `shell/.functions` uses `trash` instead of permanent deletion (macOS only)
 - **Python**: Use `uv` for virtual environments (`sv`, `us`, `ua`, `upi` aliases)
-- **Themes**: Ghostty and btop themes are coordinated (Grok Dark)
+- **Themes**: Ghostty (GitHub Dark) and btop (Grok Dark)
 
 ## Adding Extensions
 

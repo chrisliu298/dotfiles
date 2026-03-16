@@ -39,37 +39,41 @@ Shortcuts defined in `.aliases` and `.functions`.
 
 ```bash
 # Shell
-ez, o, b            # reload zsh, open, btop
+ez, o, b, fx           # reload zsh, open, btop, reset mouse tracking
+
+# Tmux
+t, ta, tl, tn, tk      # tmux, attach, list, new, kill
+to, tka                 # new/attach to $PWD name, kill all
 
 # Python/uv
-sv, upi, uvp        # source venv, pip install, venv --python
-us, ua              # sync, add
+sv, upi, uvp            # source venv, pip install, venv --python
+us, ua                  # sync, add
 
 # Claude Code (functions)
-c, cc, cr           # claude (auto-accept), --continue, --resume
-crc, cu, cap, ch    # remote control, update, /atomic-push, headless prompt
-ct                   # claude-usage-tracker
+c, cc, cr               # claude (auto-accept), --continue, --resume
+crc, cu                 # remote control, update
+cap, cpu, chl           # /atomic-push, /push, headless prompt
 
 # Codex (functions)
-x, xs               # codex (gpt-5.4), spark variant
-xc, xr              # resume --last, resume
-xu, xh              # update, headless prompt
+x, xl, xm, xh          # codex default, low/medium/high reasoning
+xc, xr, xu, xhl        # resume --last, resume, update, headless prompt
 
 # Homebrew (macOS)
-bi, bu, bic, buz    # install, uninstall, cask install, uninstall --zap
-bupd, bupg, buu     # update, upgrade, update+upgrade
-bs, bl, bo          # search, list, outdated
+bi, bu, bic, buz        # install, uninstall, cask install, uninstall --zap
+bupd, bupg, buu         # update, upgrade, update+upgrade
+bs, bl, bo              # search, list, outdated
+
+# Git
+glog                    # oneline graph log
 
 # Tailscale (macOS)
-tu, td, ts          # up, down, status
-
-# Quartz
-nqs, nqb, nqu       # sync, build --serve, upload
+tu, td, ts              # up, down, status
 ```
 
 ## Key Functions
 
 Utilities defined in `.functions` (linked to `~/.functions`).
 
+- `dfs` - Pull, install locally, sync to remote machines
 - `rm()` - Safe delete using `trash` instead of permanent removal (macOS only)
 - `rename_device <name>` - Set macOS hostname, local hostname, and computer name

@@ -4,7 +4,7 @@ Personal dotfiles and AI agent configurations for macOS with zsh. Managed with a
 
 ## 1. Installation
 
-**One command sets up everything: submodules, symlinks, and skills.**
+**One command sets up everything: submodules, symlinks, and extensions.**
 
 ```bash
 git clone git@github.com:chrisliu298/dotfiles.git ~/dotfiles
@@ -20,18 +20,17 @@ cd ~/dotfiles
 
 ## 2. Structure
 
-**Shell config, app configs, and AI agent skills — all in one repo.**
+**Shell config, app configs, and AI agent extensions — all in one repo.**
 
 ```text
 dotfiles/
 ├── dotfiles.sh              # Single entrypoint: submodules + symlinks + extensions
 ├── shell/                   # Zsh config (Zinit, Powerlevel10k, fzf)
 ├── .config/                 # App configs (Neovim, tmux, btop)
-├── agents/                  # AI agent configurations
-│   ├── claude/              # Claude Code config (CLAUDE.md, settings, hooks)
-│   ├── codex/               # Codex config (AGENTS.md)
-│   └── extensions/          # Local AI agent extensions (symlinked directly)
-└── ssh/                     # SSH host aliases (no keys stored)
+└── agents/                  # AI agent configurations
+    ├── claude/              # Claude Code config (CLAUDE.md, settings, hooks)
+    ├── codex/               # Codex config (AGENTS.md)
+    └── extensions/          # Local AI agent extensions (symlinked directly)
 ```
 
 | Directory | Contents | Details |
@@ -39,11 +38,10 @@ dotfiles/
 | [`shell/`](shell/README.md) | Zsh config, plugins, aliases, functions | Zinit, Powerlevel10k, modern Unix tools |
 | [`.config/`](.config/README.md) | Application configs | Neovim, tmux, btop |
 | [`agents/`](agents/) | AI agent configurations | Claude Code, Codex, and local extensions |
-| `ssh/` | SSH host aliases | No keys stored |
 
 ## 3. Symlinks
 
-**All managed by `dotfiles.sh`. SSH config is macOS-only.**
+**All managed by `dotfiles.sh`.**
 
 | Symlink Target | Source |
 |----------------|--------|
@@ -52,7 +50,6 @@ dotfiles/
 | `~/.aliases` | `shell/.aliases` |
 | `~/.functions` | `shell/.functions` |
 | `~/.p10k.zsh` | `shell/.p10k.zsh` |
-| `~/.ssh/config` | `ssh/config` |
 | `~/.config/btop` | `.config/btop` |
 | `~/.config/ghostty` | [chrisliu298/ghostty-config](https://github.com/chrisliu298/ghostty-config) (cloned) |
 | `~/.config/nvim` | `.config/nvim` |
