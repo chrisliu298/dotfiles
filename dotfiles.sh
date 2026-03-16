@@ -28,7 +28,7 @@ LINKS=(
 # agents: claude,codex | claude | codex
 SKILLS=(
     # Local extensions (wildcard: all subdirs with SKILL.md)
-    "*|./agents/extensions|claude,codex"
+    "*|./agents/extensions/skills|claude,codex"
 
     # Upstream shared
     "*|chrisliu298/autoresearch|claude,codex"
