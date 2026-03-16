@@ -2,11 +2,11 @@
 name: sync-upstream
 description: |
   Sync a forked repository with its upstream remote. Use when the user says
-  "sync upstream", "update from upstream", "pull upstream", "sync fork",
-  "sync repo with upstream", or invokes /sync-upstream. Handles adding the
-  upstream remote, fetching, rebasing, and optionally force-pushing to origin.
+  "sync upstream", "update from upstream", "sync fork", "rebase on upstream",
+  "sync repo with upstream", or invokes /sync-upstream. Only applies to repos
+  that are forks. Do NOT use for simple git pull on non-forked repos.
 user-invocable: true
-allowed-tools: Bash(git remote:*), Bash(git fetch:*), Bash(git stash:*), Bash(git rebase:*), Bash(git log:*), Bash(git status:*), Bash(git push:*)
+allowed-tools: Bash(git remote:*), Bash(git fetch:*), Bash(git stash:*), Bash(git rebase:*), Bash(git log:*), Bash(git status:*), Bash(git push:*), Bash(git branch:*), Bash(gh repo:*)
 ---
 
 # Sync Upstream
@@ -18,26 +18,32 @@ Sync a forked repository's current branch with the upstream remote.
 - Current remotes: !`git remote -v`
 - Current branch: !`git branch --show-current`
 - Working tree status: !`git status --short`
+- Upstream branches (if upstream exists): !`git branch -r --list 'upstream/*' 2>/dev/null | head -10`
 
 ## Workflow
 
-1. **Check for upstream remote** — run `git remote -v`. If no `upstream` remote exists, infer it from the `origin` URL (same host, same repo name, different org) and ask the user to confirm before adding. If the upstream repo is ambiguous, ask the user for the URL.
+1. **Check for upstream remote** — use the remotes from Context. If no `upstream` remote exists, try `gh repo view --json parent -q '.parent.owner.login + "/" + .parent.name'` to find the parent repo. If that fails or the repo is not a GitHub fork, ask the user for the upstream URL. Confirm with the user before running `git remote add upstream <url>`.
 
-2. **Fetch upstream** — run `git fetch upstream`.
+2. **Fetch upstream** — run `git fetch upstream`. If this fails (network error, auth issue, deleted repo), report the error and stop.
 
-3. **Check divergence** — run `git log --oneline HEAD..upstream/<branch>` (where `<branch>` matches the current branch) to show the user how many new commits are incoming.
+3. **Determine upstream branch** — check if `upstream/<current-branch>` exists (`git branch -r --list 'upstream/<current-branch>'`). If it does not, tell the user and ask which upstream branch to rebase onto (suggest `main` as a likely default). Do not silently fall back.
 
-4. **Handle local changes** — if `git status` shows uncommitted changes, `git stash` before rebasing and `git stash pop` after.
+4. **Check divergence** — run `git log --oneline HEAD..upstream/<branch>` to show the user how many new commits are incoming. If zero, tell the user the branch is already up to date and stop.
 
-5. **Rebase** — run `git rebase upstream/<branch>`. If conflicts arise, stop and tell the user rather than resolving automatically.
+5. **Handle local changes** — if `git status --porcelain` produces output, run `git stash push -m "sync-upstream"` before rebasing. Track whether a stash was created so you only pop if you actually stashed.
 
-6. **Report result** — show a brief summary: how many commits were pulled in and whether local changes were preserved.
+6. **Rebase** — run `git rebase upstream/<branch>`. If conflicts arise, stop and tell the user rather than resolving automatically.
 
-7. **Offer to push** — ask the user if they want to force-push to `origin` to update their fork. Only push after explicit confirmation. Use `git push --force-with-lease` (not `--force`) for safety.
+7. **Restore stashed changes** — if a stash was created in step 5, run `git stash pop`. If this causes conflicts, inform the user that their local changes conflict with the rebased code and leave the stash intact.
+
+8. **Report result** — show a brief summary: how many commits were pulled in and whether local changes were preserved.
+
+9. **Offer to push** — ask whether to update `origin` with `git push --force-with-lease`. Only push after explicit confirmation.
 
 ## Constraints
 
 - Do NOT force-push without the user's confirmation.
 - Do NOT resolve rebase conflicts automatically — surface them and let the user decide.
 - Do NOT modify branches other than the current one.
-- Default to `main` as the upstream branch if the current branch name doesn't exist on upstream.
+- Before starting, check for an in-progress rebase (`git status` will mention "rebase in progress"). If found, inform the user and ask whether to abort it or let them resolve it manually.
+- If the current branch doesn't exist on upstream, ask the user which branch to sync against — do not silently fall back.
