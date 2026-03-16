@@ -1,11 +1,10 @@
 ---
 name: publish-skill
 description: |
-  Publish a local skill from ~/dotfiles/agents/extensions/skills/<name>/ to a standalone public GitHub
-  repo under chrisliu298/<name>. Handles creating the repo with README and LICENSE,
-  updating dotfiles.sh, CLAUDE.md, and agents/extensions/README.md, then verifying symlinks.
-  Use when the user says "publish skill", "publish <name>", "make <name> a public repo",
-  "release skill", or invokes /publish-skill.
+  Publish a local skill from `~/dotfiles/agents/extensions/skills/<name>/` to `chrisliu298/<name>`,
+  then update this dotfiles repo to reference the published source. Use when the user says
+  "publish skill", "publish <name>", "make <name> a public skill repo", "release skill",
+  or invokes /publish-skill. Do NOT trigger for publishing npm packages or deploying apps.
 user-invocable: true
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 ---
@@ -18,7 +17,7 @@ Publish a local skill from `~/dotfiles/agents/extensions/skills/<name>/` to a st
 
 - Skills directory: !`ls ~/dotfiles/agents/extensions/skills/`
 - GitHub auth: !`gh auth status 2>&1 | head -3`
-- Current SKILLS table entries: !`grep -A 30 '^SKILLS=(' ~/dotfiles/dotfiles.sh | head -35`
+- Current SKILLS table entries: !`sed -n '/^SKILLS=(/,/^)/p' ~/dotfiles/dotfiles.sh`
 
 ## Arguments
 
@@ -37,36 +36,15 @@ The skill name is passed as an argument: `/publish-skill <skill-name>`. If no ar
 
 5. **Copy skill files** to `~/Developer/GitHub/<name>/` using `cp -r`. Copy everything: SKILL.md, references/, agents/, scripts/, assets/, and any other files in the skill directory. Do NOT regenerate files — copy them directly.
 
-6. **Write README.md** — study the skill's SKILL.md thoroughly, then let the skill itself dictate the README's shape. A simple utility might need only a brief explanation and a usage snippet. A multi-agent orchestration skill might warrant an architecture diagram and detailed phase breakdown. A workflow skill might be best explained through a concrete example walkthrough. Do NOT follow a fixed template or rigid set of sections — adapt the structure, tone, depth, and presentation to whatever communicates this particular skill most effectively. Look at a few existing published skill READMEs (e.g., `~/Developer/GitHub/prism/README.md`, `~/Developer/GitHub/relay/README.md`, `~/Developer/GitHub/autoresearch/README.md`) for inspiration but do not replicate their structure.
+6. **Write README.md** — let the skill dictate the README structure. If available, glance at one or two existing published skill READMEs (e.g., `~/Developer/GitHub/prism/README.md`) for tone inspiration, but do not replicate their structure. If these files don't exist locally, skip — the SKILL.md content is sufficient.
 
-   **Required elements** (include these somewhere, in whatever form fits):
-   - **Opening subtitle** — `**A skill for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex](https://github.com/openai/codex) that <does X>.**` as the first line after the `# Title`
-   - **Invocation hint** — tell users how to trigger it (e.g., "Invoke with `/<name>` or ask your agent to '...'")
-   - **Installation** — git clone commands for Claude Code (`~/.claude/skills/<name>`) and Codex (`~/.codex/skills/<name>`)
-   - **Contributors** — `[@chrisliu298](https://github.com/chrisliu298)` and `**Claude Code**` with a brief note on what Claude contributed (e.g., "protocol design", "implementation and testing"). If Codex was also involved, include it too.
+   **Include:**
+   - The opening subtitle: `**A skill for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex](https://github.com/openai/codex) that <does X>.**`
+   - A brief invocation hint
+   - Installation commands for Claude Code (`~/.claude/skills/<name>`) and Codex (`~/.codex/skills/<name>`)
+   - Contributors: `[@chrisliu298](https://github.com/chrisliu298)` and `**Claude Code**`, plus `**Codex**` if it contributed
 
-7. **Write LICENSE** — MIT license:
-
-```
-MIT License
-
-Copyright (c) 2025 chrisliu298
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the "Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
-following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
-LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
-EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-USE OR OTHER DEALINGS IN THE SOFTWARE.
-```
+7. **Write LICENSE** — standard MIT license text with `Copyright (c) <current-year> chrisliu298`.
 
 8. **Initialize and push**:
 
@@ -82,22 +60,23 @@ gh repo create chrisliu298/<name> --public --source . --push
 
 All edits happen in `~/dotfiles/`. Read each file before editing.
 
-9. **Remove the local skill directory**:
-
-```bash
-rm -rf ~/dotfiles/agents/extensions/skills/<name>/
-```
-
-10. **Update `dotfiles.sh`** — add an upstream entry to the SKILLS table. Place it alphabetically among the "Upstream shared" entries:
+9. **Update `dotfiles.sh`** — add an upstream entry to the SKILLS table. Place it alphabetically among the "Upstream shared" entries:
 
 - If the skill works with both agents (most common): `"*|chrisliu298/<name>|claude,codex"`
 - If agent-specific with separate SKILL.md files per agent, use two entries like relay does
 
-11. **Update `CLAUDE.md`** — if any paths or descriptions under `## Structure` or `## Adding Extensions` reference the skill being published, update them to reflect the removal.
+10. **Update `CLAUDE.md`** — if any paths or descriptions under `## Structure` or `## Adding Extensions` reference the skill being published, update them to reflect the removal.
 
-12. **Update `agents/extensions/README.md`** — remove the skill from the "Workflow skills" table, then add it to the "Published skills" table in alphabetical order with Source set to `[chrisliu298/<name>](https://github.com/chrisliu298/<name>)`. Preserve the description and Enhanced marker.
+11. **Update `agents/extensions/README.md`** — remove the skill from the "Workflow skills" table, then add it to the "Published skills" table in alphabetical order with Source set to `[chrisliu298/<name>](https://github.com/chrisliu298/<name>)`. Preserve the description and Enhanced marker.
 
-13. **Verify** — run `./dotfiles.sh` from `~/dotfiles/` and confirm the skill symlinks are created correctly.
+12. **Verify** — run `./dotfiles.sh` from `~/dotfiles/` and confirm the skill symlinks are created correctly.
+
+13. **Remove the local skill directory** — only after verification succeeds and `gh repo view chrisliu298/<name>` confirms the repo is accessible:
+
+```bash
+gh repo view chrisliu298/<name> --json url -q .url  # confirm repo exists
+rm -rf ~/dotfiles/agents/extensions/skills/<name>/
+```
 
 14. **Report** — show the user:
     - The repo URL: `https://github.com/chrisliu298/<name>`
@@ -112,3 +91,4 @@ rm -rf ~/dotfiles/agents/extensions/skills/<name>/
 - Do NOT publish skills that have `Local` as their source and are not in `~/dotfiles/agents/extensions/skills/` — they must be local skills managed by this dotfiles repo.
 - If the skill has sub-dependencies (e.g., references another skill), note this in the README but do not publish the dependency.
 - Always use `cp` to copy files, never regenerate from memory.
+- If `gh repo create` fails, do NOT proceed to Phase 3. Diagnose the error and report to the user.
