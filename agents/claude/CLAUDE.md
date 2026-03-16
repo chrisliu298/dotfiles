@@ -48,8 +48,6 @@
 
 - **Skills and automation**: If a task is performed more than once daily, suggest turning it into a skill or command. Examples: a `/techdebt` command to find and remove duplicated code at session end, or a command that aggregates recent Slack/docs/GitHub into one context dump.
 
-- **Extensions live in `~/dotfiles/agents/extensions/`**: When creating or updating skills, always write to `~/dotfiles/agents/extensions/skills/<skill-name>/`. This is the canonical location; running `./dotfiles.sh` syncs them to `~/.claude/skills/` and `~/.codex/skills/` automatically.
-
 - **Download, don't generate**: When installing files from URLs (skills, configs, etc.), use `curl`/`wget` to download directly. Avoid manually recreating remote file contents.
 
 - **Data and analytics**: Use CLI tools (bq, psql, sqlite3, etc.) directly for data queries and analysis. Any database with a CLI, MCP, or API works. Users should not need to write SQL or switch contexts.
