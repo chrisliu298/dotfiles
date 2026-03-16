@@ -1,16 +1,12 @@
 ---
 name: session-recovery
 description: >
-  Recover Claude Code or Codex sessions after a directory has been renamed or
-  moved. Claude Code stores session data keyed by the absolute path of the
-  working directory. Codex stores sessions in a SQLite database with a cwd
-  column. When a directory is renamed or moved, previous sessions become
-  invisible because the path no longer matches. This skill knows exactly how
-  both tools store sessions and how to fix them. Use this skill whenever the
-  user mentions lost sessions, missing conversation history, renamed or moved
-  directories, or wants to migrate sessions from one path to another. Also use
-  when the user says "my sessions are gone", "I can't find my old conversations",
-  "I renamed my project folder", or "moved my repo".
+  Recover Claude Code or Codex sessions after a directory rename or move.
+  Sessions become invisible when the working-directory path changes. Use when
+  the user mentions lost Claude Code/Codex sessions, missing conversation
+  history after a rename/move, or says "my sessions are gone", "I renamed my
+  project folder", "moved my repo", or asks to migrate sessions between paths.
+  Do NOT use for tmux, SSH, browser, or other non-agent sessions.
 allowed-tools:
   - Bash
   - Read
@@ -23,6 +19,16 @@ user-invocable: true
 
 # Session Recovery After Directory Rename
 
+## Context
+
+- Claude Code projects: !`ls ~/.claude/projects/ 2>/dev/null | head -20 || echo "No projects directory found"`
+- Codex database: !`ls ~/.codex/state_*.sqlite 2>/dev/null || echo "No Codex database found"`
+- Current directory: !`pwd`
+
+## Prerequisite
+
+Ask the user to close all Claude Code and Codex instances before proceeding. Session files may be written to during an active session, and modifying them concurrently risks data corruption.
+
 This skill covers both **Claude Code** and **Codex (OpenAI)** session recovery.
 
 ---
@@ -31,21 +37,13 @@ This skill covers both **Claude Code** and **Codex (OpenAI)** session recovery.
 
 ### How Claude Code Session Storage Works
 
-Claude Code ties all session data to the **absolute path** of the working directory. The path is encoded by replacing every `/` with `-`. For example:
+Claude Code stores project sessions under `~/.claude/projects/` using the absolute working directory path with `/` replaced by `-`.
 
-```
-/Users/alice/my-project  →  -Users-alice-my-project
-```
+Example: `/Users/alice/my-project` → `-Users-alice-my-project`
 
-This encoded path becomes a directory name under `~/.claude/projects/`. Inside it:
+A project directory may contain session `.jsonl` files, subagent directories, and `memory/`. `~/.claude/history.jsonl` also stores the original path in each entry's `"project"` field.
 
-- **`<uuid>.jsonl`** files — conversation transcripts for each session
-- **`<uuid>/`** directories — subagent data for sessions
-- **`memory/`** directory — auto-memory that persists across sessions (MEMORY.md, etc.)
-
-Additionally, **`~/.claude/history.jsonl`** contains one JSON object per user message, each with a `"project"` field holding the original absolute path and a `"sessionId"` linking it to the session file.
-
-When you rename `/Users/alice/my-project` to `/Users/alice/my-project-v2`, Claude Code looks for sessions under `-Users-alice-my-project-v2` and finds nothing. The old sessions still exist under `-Users-alice-my-project` — they're not lost, just orphaned.
+After a rename, Claude Code looks under the new encoded path, so the old sessions still exist but no longer match the current directory.
 
 ### Recovery Procedure
 
@@ -61,7 +59,7 @@ If the user only knows the new path, help them find the old one by listing candi
 ls ~/.claude/projects/ | grep -i "<keyword>"
 ```
 
-Each directory name is an encoded path — decode by replacing leading `-` with `/` and subsequent `-` with `/` (though be careful: hyphens that were originally in the path stay as hyphens, so eyeballing is usually needed). Show the user the candidates and ask them to confirm which one is the old project.
+Each directory name is an encoded path where `/` was replaced with `-`. This encoding is NOT reversible programmatically because literal hyphens in directory names are indistinguishable from path separators. Present the candidate directory names to the user and ask them to identify which one corresponds to their old path.
 
 ### Step 2: Move or merge the project directory
 
@@ -80,22 +78,13 @@ mv ~/.claude/projects/"$OLD_ENCODED" ~/.claude/projects/"$NEW_ENCODED"
 ```
 
 **Case B: New directory already exists** (user already started sessions at the new path — merge is needed):
-```bash
-# Copy session files from old into new (don't overwrite existing)
-cp -n ~/.claude/projects/"$OLD_ENCODED"/*.jsonl ~/.claude/projects/"$NEW_ENCODED"/ 2>/dev/null
-# Move session subdirectories (not memory)
-for d in ~/.claude/projects/"$OLD_ENCODED"/*/; do
-    dirname=$(basename "$d")
-    if [ "$dirname" != "memory" ] && [ ! -d ~/.claude/projects/"$NEW_ENCODED"/"$dirname" ]; then
-        mv "$d" ~/.claude/projects/"$NEW_ENCODED"/
-    fi
-done
-# Memory: if both dirs have memory/MEMORY.md, show both to user and let them decide
-# If only the old dir has memory, copy it over
-rm -rf ~/.claude/projects/"$OLD_ENCODED"
-```
 
-Checking first avoids the pitfall where `mv` nests the old directory inside the new one (since `mv` into an existing directory creates a subdirectory rather than replacing it).
+1. Compare the old and new directories before copying. If any `.jsonl` filenames or session subdirectory names collide, show the collisions to the user and ask how to proceed instead of silently skipping them.
+2. Only after the user confirms the merge is safe:
+   - Copy non-conflicting `.jsonl` files from old into new
+   - Move non-conflicting session subdirectories (excluding `memory/`)
+   - Handle `memory/` explicitly: if both dirs have `memory/MEMORY.md`, show both to the user and let them decide how to merge. If only the old dir has memory, copy it over.
+3. Do NOT remove `~/.claude/projects/"$OLD_ENCODED"` yet — wait until Step 4 (Verify) confirms everything looks correct, then remove in Step 5 (Clean up).
 
 ### Step 3: Update history.jsonl
 
@@ -110,12 +99,20 @@ history_file = os.path.expanduser("~/.claude/history.jsonl")
 
 updated = 0
 lines = []
+if not os.path.exists(history_file):
+    print("No history.jsonl found — skipping history update")
+    exit(0)
+
 with open(history_file) as f:
     for line in f:
         line = line.strip()
         if not line:
             continue
-        d = json.loads(line)
+        try:
+            d = json.loads(line)
+        except json.JSONDecodeError:
+            lines.append(line)  # preserve malformed lines as-is
+            continue
         if d.get("project") == old_path:
             d["project"] = new_path
             updated += 1
@@ -168,46 +165,24 @@ Tell the user:
 
 Codex uses a fundamentally different architecture from Claude Code. Instead of encoding the working directory into a filesystem path, Codex stores everything in a **centralized SQLite database** with the working directory as a column value.
 
-#### Storage locations
+#### Relevant Codex storage
 
-| Component | Location | Format |
-|---|---|---|
-| Session transcripts | `~/.codex/sessions/YYYY/MM/DD/rollout-<timestamp>-<uuid>.jsonl` | JSONL (one event per line) |
-| Session metadata | `~/.codex/state_5.sqlite` → `threads` table | SQLite |
-| User message history | `~/.codex/history.jsonl` | JSONL with `session_id`, `ts`, `text` |
-| Session name index | `~/.codex/session_index.jsonl` | JSONL with `id`, `thread_name` |
-| Logs | `~/.codex/logs_1.sqlite` | SQLite |
-| Global state | `~/.codex/.codex-global-state.json` | JSON |
-| Memories | `~/.codex/memories/` | Directory (may be empty) |
+- `~/.codex/state_*.sqlite` contains the `threads` table with `cwd` and `rollout_path` columns
+- `~/.codex/sessions/YYYY/MM/DD/rollout-<timestamp>-<uuid>.jsonl` stores session events by date (not by project path)
+- `~/.codex/history.jsonl` does **not** store the working directory — it does NOT need updating
+- Subagent threads live in the same `threads` table, linked through the `source` column
 
-#### The `threads` table schema (key columns)
-
-```sql
-CREATE TABLE threads (
-    id TEXT PRIMARY KEY,
-    rollout_path TEXT NOT NULL,    -- path to the session .jsonl file
-    cwd TEXT NOT NULL,             -- absolute working directory path
-    title TEXT NOT NULL,
-    source TEXT NOT NULL,          -- "cli", "vscode", "exec", or JSON for subagents
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL,
-    has_user_event INTEGER NOT NULL DEFAULT 0,
-    archived INTEGER NOT NULL DEFAULT 0,
-    ...
-);
-```
-
-The `cwd` column is how Codex associates sessions with a project directory. Session transcript files under `~/.codex/sessions/` are organized by **date** (not by project path), and each rollout `.jsonl` file also embeds `cwd` in its `session_meta` event.
-
-Subagent threads are linked via the `source` column, which contains JSON like `{"subagent":{"thread_spawn":{"parent_thread_id":"<uuid>", ...}}}`.
-
-#### Why sessions break after a rename
-
-When you rename a directory, the `cwd` column in the `threads` table still holds the old path. Codex filters sessions by the current working directory, so sessions from the old path won't appear. Unlike Claude Code, the session files themselves are NOT orphaned (they're date-organized), but the metadata lookup fails.
-
-Additionally, `~/.codex/history.jsonl` does **not** store the working directory — it only has `session_id`, `ts`, and `text` — so it does NOT need updating.
+After a rename, the `cwd` column still holds the old path, so sessions from the old path won't appear. The session files themselves are NOT orphaned (date-organized), but the metadata lookup fails.
 
 ### Recovery Procedure
+
+Before starting, identify the current database file:
+
+```bash
+ls ~/.codex/state_*.sqlite
+```
+
+Use the actual filename found (e.g., `state_5.sqlite`, `state_6.sqlite`) throughout this procedure. If no database file exists, Codex has not been used on this machine — inform the user and skip Part 2.
 
 #### Step 1: Identify the old and new paths
 
@@ -245,10 +220,10 @@ sqlite3 ~/.codex/state_5.sqlite \
 
 #### Step 3: Back up the database
 
-Always back up before modifying:
+Always back up before modifying. Use SQLite's built-in backup for WAL-safe consistency:
 
 ```bash
-cp ~/.codex/state_5.sqlite ~/.codex/state_5.sqlite.bak
+sqlite3 ~/.codex/state_5.sqlite ".backup ~/.codex/state_5.sqlite.bak"
 ```
 
 #### Step 4: Update the `cwd` column
@@ -328,5 +303,14 @@ Tell the user:
   ```
 - **Database version**: The database filename includes a version number (`state_5.sqlite`). If Codex upgrades its schema, the filename may change. Check `ls ~/.codex/state_*.sqlite` to find the current one.
 - **Multiple renames**: If the directory was renamed more than once, there may be threads under multiple old paths. Query for all distinct `cwd` values and update each.
-- **WAL mode**: The SQLite database may have `-shm` and `-wal` companion files. These are normal Write-Ahead Log files. Do not delete them. The backup command (`cp`) will capture the main file; for a fully consistent backup, ensure Codex is not running, or use `sqlite3 ... ".backup backup.sqlite"`.
+- **WAL mode**: The SQLite database may have `-shm` and `-wal` companion files. These are normal Write-Ahead Log files. Do not delete them.
 - **Codex Cloud / remote sessions**: The `~/.codex/sessions/` directory may contain `.remote-*` subdirectories for remote sessions. These are separate from local sessions and are not affected by local directory renames.
+
+---
+
+## Constraints
+
+- Always close Claude Code/Codex before modifying session data (see Prerequisite).
+- Do NOT modify session `.jsonl` file contents for Claude Code (only move/copy files and update history.jsonl).
+- Do NOT auto-resolve memory conflicts — always show both versions to the user.
+- Verify recovery succeeded before removing old directories or backups.
