@@ -29,4 +29,4 @@
 3. **Activate**: `source .venv/bin/activate` or `source ~/.venv/bin/activate`.
 4. **Run**: Use the venv's `python`, `uv run`, or activated shell.
 
-Use `uv pip install` or `uv sync` for packages (never system pip).
+Prefer `uv add` (updates `pyproject.toml` + lockfile) over `uv pip install` (ephemeral). Use `uv sync` to install from lockfile. Never use system pip.
