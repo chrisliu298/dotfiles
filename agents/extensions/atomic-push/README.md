@@ -10,7 +10,7 @@ Commit and push changes to remote with separate atomic commits for each logical 
 
 Groups all working tree changes into logical units, stages each independently, commits with a message matching the repo's existing convention, then pushes.
 
-## How it works
+## How It Works
 
 1. Inspects `git log --oneline -10` to detect commit message convention
 2. Groups changes into logical units (feature/fix/refactor/docs)
@@ -19,6 +19,6 @@ Groups all working tree changes into logical units, stages each independently, c
 
 ## Constraints
 
-- Does NOT create a pull request
-- Does NOT rebase, squash, or amend
-- If changes can't be cleanly separated, prefers fewer commits over tangled ones
+- Does not create a pull request
+- Does not rebase, squash, or amend
+- If changes cannot be cleanly separated, prefers fewer commits over tangled ones

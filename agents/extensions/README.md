@@ -12,7 +12,7 @@ Agent extensions managed by `dotfiles.sh`. Three types: **skills**, **MCP server
 
 Each skill has one SKILL.md that works in both Claude Code and Codex. `dotfiles.sh` clones upstream repos to a cache and creates direct symlinks.
 
-```
+```text
 dotfiles/agents/extensions/atomic-push/SKILL.md  # Local skill (in git)
         ↓ symlink
 ~/.claude/skills/atomic-push/                  # Claude Code reads from here
@@ -23,26 +23,26 @@ dotfiles/agents/extensions/atomic-push/SKILL.md  # Local skill (in git)
 ~/.claude/skills/pdf/                          # Claude Code reads from here
 ```
 
-- **Local extensions** are symlinked directly from `agents/extensions/` — edits take effect immediately.
-- **Upstream skills** are cloned to `~/.cache/skills-src/` and symlinked from there. Re-run `./dotfiles.sh` to update.
-- **Agent-specific skills** (`pdf`, `relay`) use separate SKILLS table entries with different sources per agent.
-- **Repos are cloned in parallel** for speed.
+- **Local extensions** are symlinked directly from `agents/extensions/` — edits take effect immediately
+- **Upstream skills** are cloned to `~/.cache/skills-src/` and symlinked from there; re-run `./dotfiles.sh` to update
+- **Agent-specific skills** (`pdf`, `relay`) use separate SKILLS table entries with different sources per agent
+- **Repos are cloned in parallel** for speed
 
-### SKILLS table format
+### SKILLS Table Format
 
 ```bash
 # name|source|agents
 SKILLS=(
-    "*|./agents/extensions|claude,codex"                                    # local wildcard
+    "*|./agents/extensions|claude,codex"                            # local wildcard
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex"  # upstream
-    "pdf|anthropics/skills/skills/pdf|claude"                    # claude-only
-    "pdf|openai/skills/skills/.curated/pdf|codex"                # codex-only (different source)
+    "pdf|anthropics/skills/skills/pdf|claude"                       # claude-only
+    "pdf|openai/skills/skills/.curated/pdf|codex"                   # codex-only (different source)
 )
 ```
 
-### Published skills
+### Published Skills
 
-Skills built and maintained as open-source repos:
+Skills built and maintained as open-source repos.
 
 | Skill | Source | Description | Enhanced |
 |-------|--------|-------------|----------|
@@ -60,9 +60,9 @@ Skills built and maintained as open-source repos:
 | relay | [chrisliu298/relay](https://github.com/chrisliu298/relay) | Bidirectional cross-agent relay between Claude Code and Codex | [skill-creator](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills) |
 | vault-linker | [chrisliu298/vault-linker](https://github.com/chrisliu298/vault-linker) | Build wikilink connections across Obsidian vaults | |
 
-### Community skills
+### Community Skills
 
-Public skills by others:
+Public skills by others.
 
 | Skill | Source | Description | Agents |
 |-------|--------|-------------|--------|
@@ -72,9 +72,9 @@ Public skills by others:
 | pdf | [anthropics/skills](https://github.com/anthropics/skills) / [openai/skills](https://github.com/openai/skills) | PDF manipulation: extract, create, merge, split, fill forms | Both |
 | skill-creator | [anthropics/skills](https://github.com/anthropics/skills) | Guide for creating new skills | Claude |
 
-### Workflow skills
+### Workflow Skills
 
-Local skills for workflow acceleration (not published as standalone repos):
+Local skills for workflow acceleration, not published as standalone repos.
 
 | Skill | Description | Enhanced |
 |-------|-------------|----------|
@@ -85,9 +85,7 @@ Local skills for workflow acceleration (not published as standalone repos):
 | sync-upstream | Sync forked repo with upstream remote | |
 | update-readme | Update or create README.md for repos | |
 
-#### Enhanced column
-
-Skills marked with **skill-creator** were iteratively refined using the [skill-creator eval framework](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills).
+Skills marked with **skill-creator** in the Enhanced column were iteratively refined using the [skill-creator eval framework](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills).
 
 ## MCP Servers
 
@@ -106,7 +104,7 @@ Cloned from GitHub via the `PLUGINS` table, installed with `claude plugin instal
 |--------|--------|-------------|
 | aris-lite | [chrisliu298/aris-lite](https://github.com/chrisliu298/aris-lite) | Autonomous research pipeline (idea discovery, experiments, paper writing) |
 
-Plugins from the official marketplace (`claude plugin install <name>`) are installed manually and not tracked in `dotfiles.sh`:
+Plugins from the official marketplace (`claude plugin install <name>`) are installed manually and not tracked in `dotfiles.sh`.
 
 | Plugin | Description |
 |--------|-------------|

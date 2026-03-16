@@ -4,36 +4,38 @@ Zsh with Zinit plugin manager and Powerlevel10k prompt.
 
 ## Files
 
-- `.zshenv` - Platform detection (`IS_MACOS`), environment variables, PATH
-- `.zshrc` - Plugin manager, completions, keybindings, history
-- `.aliases` - Command shortcuts
-- `.functions` - Shell utility functions
-- `.p10k.zsh` - Powerlevel10k prompt configuration
+| File | Purpose |
+|------|---------|
+| `.zshenv` | Platform detection (`IS_MACOS`), environment variables, PATH |
+| `.zshrc` | Plugin manager, completions, keybindings, history |
+| `.aliases` | Command shortcuts |
+| `.functions` | Shell utility functions |
+| `.p10k.zsh` | Powerlevel10k prompt configuration |
 
-Load order: `.zshenv` (sets `IS_MACOS`) → `.zshrc` (sources `.aliases` and `.functions`)
+Load order: `.zshenv` (sets `IS_MACOS`) → `.zshrc` (sources `.aliases` and `.functions`).
 
 ## Modern Unix Tools
 
 Installed via Zinit from GitHub releases (macOS ARM).
 
-| Tool | Command | Aliases |
-|------|---------|---------|
-| [fd](https://github.com/sharkdp/fd) | `fd` | - |
-| [ripgrep](https://github.com/BurntSushi/ripgrep) | `rg` | - |
-| [zoxide](https://github.com/ajeetdsouza/zoxide) | `z` | - |
-| [delta](https://github.com/dandavison/delta) | `delta` | - |
+| Tool | Command |
+|------|---------|
+| [fd](https://github.com/sharkdp/fd) | `fd` |
+| [ripgrep](https://github.com/BurntSushi/ripgrep) | `rg` |
+| [zoxide](https://github.com/ajeetdsouza/zoxide) | `z` |
+| [delta](https://github.com/dandavison/delta) | `delta` |
 
 ## Zsh Plugins
 
 Managed by Zinit.
 
-- `zsh-syntax-highlighting` - Command syntax coloring
-- `zsh-completions` - Additional completions
-- `zsh-autosuggestions` - Fish-like suggestions
-- `fzf` + `fzf-tab` - Fuzzy finder with tab completion
+- `zsh-syntax-highlighting` — command syntax coloring
+- `zsh-completions` — additional completions
+- `zsh-autosuggestions` — fish-like suggestions
+- `fzf` + `fzf-tab` — fuzzy finder with tab completion
 - Oh My Zsh snippets: `git`, `sudo`, `command-not-found`
 
-## Key Aliases
+## Aliases
 
 Shortcuts defined in `.aliases` and `.functions`.
 
@@ -70,10 +72,10 @@ glog                    # oneline graph log
 tu, td, ts              # up, down, status
 ```
 
-## Key Functions
+## Functions
 
 Utilities defined in `.functions` (linked to `~/.functions`).
 
-- `dfs` - Pull, install locally, sync to remote machines
-- `rm()` - Safe delete using `trash` instead of permanent removal (macOS only)
-- `rename_device <name>` - Set macOS hostname, local hostname, and computer name
+- `dfs` — pull, install locally, sync to remote machines
+- `rm()` — safe delete using `trash` instead of permanent removal (macOS only)
+- `rename_device <name>` — set macOS hostname, local hostname, and computer name

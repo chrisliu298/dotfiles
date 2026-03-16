@@ -1,5 +1,7 @@
 # Application Configs
 
+Configuration for terminal applications managed by the dotfiles repo.
+
 ## Apps
 
 | App | Config | Notes |
@@ -11,7 +13,7 @@
 
 ## Tmux Keybindings
 
-Prefix is `C-a` (not `C-b`).
+Prefix is `C-a` (not the default `C-b`).
 
 | Key | Action |
 |-----|--------|

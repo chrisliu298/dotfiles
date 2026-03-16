@@ -2,9 +2,7 @@
 
 Personal dotfiles and AI agent configurations for macOS with zsh. Managed with a single `dotfiles.sh` script.
 
-## 1. Installation
-
-**One command sets up everything: submodules, symlinks, and extensions.**
+## Installation
 
 ```bash
 git clone git@github.com:chrisliu298/dotfiles.git ~/dotfiles
@@ -18,9 +16,7 @@ cd ~/dotfiles
 - Registers MCP servers (Playwright browser automation, Codex cross-model review)
 - Verifies all required symlinks
 
-## 2. Structure
-
-**Shell config, app configs, and AI agent extensions — all in one repo.**
+## Structure
 
 ```text
 dotfiles/
@@ -39,12 +35,12 @@ dotfiles/
 | [`.config/`](.config/README.md) | Application configs | Neovim, tmux, btop |
 | [`agents/`](agents/) | AI agent configurations | Claude Code, Codex, and local extensions |
 
-## 3. Symlinks
+## Symlinks
 
-**All managed by `dotfiles.sh`.**
+All managed by `dotfiles.sh`.
 
-| Symlink Target | Source |
-|----------------|--------|
+| Target | Source |
+|--------|--------|
 | `~/.zshrc` | `shell/.zshrc` |
 | `~/.zshenv` | `shell/.zshenv` |
 | `~/.aliases` | `shell/.aliases` |
@@ -61,11 +57,11 @@ dotfiles/
 | `~/.claude/statusline-command.sh` | `agents/claude/statusline-command.sh` |
 | `~/.codex/AGENTS.md` | `agents/codex/AGENTS.md` |
 
-Skills are symlinked directly into `~/.claude/skills/` and `~/.codex/skills/` (see [`agents/extensions/`](agents/extensions/README.md)).
+Skills are symlinked into `~/.claude/skills/` and `~/.codex/skills/` (see [`agents/extensions/`](agents/extensions/README.md)).
 
-## 4. Extensions
+## Extensions
 
-**24 extensions across local and upstream sources, installed to Claude Code and Codex.**
+24 extensions across local and upstream sources, installed to Claude Code and Codex.
 
 - Local skills live in `agents/extensions/<name>/SKILL.md` — symlinked directly, single file works in both agents
 - Upstream skills are declared in the `SKILLS` table in `dotfiles.sh` and cloned from GitHub
@@ -74,12 +70,12 @@ Skills are symlinked directly into `~/.claude/skills/` and `~/.codex/skills/` (s
 | Action | Command |
 |--------|---------|
 | Install/update all | `./dotfiles.sh` |
-| Add a new local skill | Create `agents/extensions/<name>/SKILL.md`, run `./dotfiles.sh` |
-| Add upstream skill | Add `name\|owner/repo/subpath\|agents` to SKILLS table in `dotfiles.sh` |
+| Add a local skill | Create `agents/extensions/<name>/SKILL.md`, run `./dotfiles.sh` |
+| Add an upstream skill | Add `name\|owner/repo/subpath\|agents` to `SKILLS` table in `dotfiles.sh` |
 
-## 5. What's Not Backed Up
+## What's Not Backed Up
 
-**Security-sensitive and ephemeral files are excluded.**
+Security-sensitive and ephemeral files are excluded.
 
 - `auth.json`, `~/.claude.json` — OAuth tokens
 - `history.jsonl` — command history (sensitive)
