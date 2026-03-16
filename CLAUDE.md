@@ -60,6 +60,15 @@ Installed via Zinit from GitHub releases (macOS ARM).
 - **Python**: Use `uv` for virtual environments (`sv`, `us`, `ua`, `upi` aliases)
 - **Themes**: Ghostty (GitHub Dark) and btop (Grok Dark)
 
+## Editing Skills
+
+Before modifying a skill, read `agents/extensions/README.md` to determine its source. Never edit files in `~/.claude/skills/` or `~/.codex/skills/` — those are symlinks.
+
+- **Local skills** (listed under `agents/extensions/skills/`): Edit in this repo
+- **Published/upstream skills** (cloned from GitHub): Edit in the source repo under `~/Developer/GitHub/<skill-name>/`
+
+Run `./dotfiles.sh` after changes to re-sync symlinks.
+
 ## Adding Extensions
 
 Extensions are managed by the `SKILLS` table in `dotfiles.sh` using direct git-clone + symlink (no `npx skills`):

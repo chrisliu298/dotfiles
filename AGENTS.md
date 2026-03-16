@@ -18,6 +18,14 @@ This repository contains personal dotfiles and AI agent configurations for macOS
 - `rg --files`: quickly inspect tracked structure when adding/updating skills.
 - `uv venv && source .venv/bin/activate`: initialize local Python environment for script-based skills.
 
+## Editing Skills
+Before modifying a skill, read `agents/extensions/README.md` to determine its source. Never edit files in `~/.claude/skills/` or `~/.codex/skills/` — those are symlinks.
+
+- **Local skills** (listed under `agents/extensions/skills/`): Edit in this repo
+- **Published/upstream skills** (cloned from GitHub): Edit in the source repo under `~/Developer/GitHub/<skill-name>/`
+
+Run `./dotfiles.sh` after changes to re-sync symlinks.
+
 ## Coding Style & Naming Conventions
 - Use Markdown for guides and skill instructions, with short sections and actionable bullets.
 - Shell scripts should stay Bash-first, with clear helper functions and defensive flags (`set -e`).
