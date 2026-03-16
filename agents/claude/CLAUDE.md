@@ -42,6 +42,8 @@
 
 - **Self-review with subagents**: For non-trivial changes, run independent subagent reviews. Use 2 reviewers for risky or broad changes. Skip subagent review for trivial edits (typos, single-line changes, simple docs updates).
 
+- **Redundancy vs. division of labor**: Use Prism (redundancy) when the task benefits from diverse judgment on the same question — reviews, decisions, analysis. Use parallel subagents with distinct tasks (division of labor) when the work is naturally partitioned into independent subtasks with different inputs/outputs. Do not force division-of-labor tasks into Prism, and do not force judgment tasks into parallel subtasks.
+
 ### Tooling & Workflow
 
 - **Skills and automation**: If a task is performed more than once daily, suggest turning it into a skill or command. Examples: a `/techdebt` command to find and remove duplicated code at session end, or a command that aggregates recent Slack/docs/GitHub into one context dump.
