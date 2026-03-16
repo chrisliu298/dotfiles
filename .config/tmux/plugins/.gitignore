@@ -1,0 +1,4 @@
+# Managed by TPM — only track TPM itself
+*
+!.gitignore
+!tpm/

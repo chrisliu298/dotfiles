@@ -1,0 +1,44 @@
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL": "true"
+  },
+  "hooks": {
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/export-and-index.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline-command.sh"
+  },
+  "enabledPlugins": {
+    "pyright-lsp@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true,
+    "plugin-dev@claude-plugins-official": true,
+    "feature-dev@claude-plugins-official": true,
+    "playground@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "aris-lite@aris-lite": true
+  },
+  "extraKnownMarketplaces": {
+    "aris-lite": {
+      "source": {
+        "source": "directory",
+        "path": "~/.cache/dotfiles-plugins/chrisliu298__aris-lite"
+      }
+    }
+  },
+  "effortLevel": "high",
+  "skipDangerousModePermissionPrompt": true,
+  "autoInstallIdeExtension": false
+}
