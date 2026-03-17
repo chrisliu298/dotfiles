@@ -10,7 +10,9 @@ Agent extensions managed by `dotfiles.sh`. Three types: **skills**, **MCP server
 
 ## Skills
 
-One SKILL.md per skill, works in both Claude Code and Codex. Local skills are symlinked from `agents/extensions/skills/`; upstream skills are cloned to `~/.cache/skills-src/` and symlinked.
+One SKILL.md per skill, works in both Claude Code and Codex. All own skills live in `agents/extensions/skills/` as the single source of truth. Community/third-party skills are cloned to `~/.cache/skills-src/`. Both are symlinked to `~/.claude/skills/` and `~/.codex/skills/`.
+
+Published skills are synced to their standalone GitHub repos via `./dotfiles.sh publish`.
 
 ### Published Skills
 

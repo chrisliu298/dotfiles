@@ -3,7 +3,7 @@
 Personal dotfiles and AI agent configurations for macOS with zsh. Managed with a single `dotfiles.sh` script.
 
 ## Installation
-
+btw
 ```bash
 git clone git@github.com:chrisliu298/dotfiles.git ~/dotfiles
 cd ~/dotfiles
@@ -34,5 +34,6 @@ See [`shell/`](shell/README.md), [`.config/`](.config/README.md), and [`agents/e
 | Action | Command |
 |--------|---------|
 | Install/update all | `./dotfiles.sh` |
+| Sync skills to published repos | `./dotfiles.sh publish` |
 | Add a local skill | Create `agents/extensions/skills/<name>/SKILL.md`, run `./dotfiles.sh` |
 | Add an upstream skill | Add `name\|owner/repo/subpath\|agents` to `SKILLS` table in `dotfiles.sh` |
