@@ -45,6 +45,7 @@ One SKILL.md per skill, works in both Claude Code and Codex. Local skills are sy
 | Skill | Description |
 |-------|-------------|
 | atomic-push | Atomic commits and push to remote |
+| jina | Fetch web content and search via Jina AI (r.jina.ai / s.jina.ai) |
 | publish-skill | Publish local skill to standalone public GitHub repo |
 | push | Single-commit push to remote |
 | session-recovery | Recover sessions after directory rename/move |
