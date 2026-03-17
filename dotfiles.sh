@@ -30,19 +30,11 @@ SKILLS=(
     # Local extensions (wildcard: all subdirs with SKILL.md)
     "*|./agents/extensions/skills|claude,codex"
 
-    # Upstream shared
-    "*|chrisliu298/autoresearch|claude,codex"
-    "*|chrisliu298/citation-assistant|claude,codex"
-    "*|chrisliu298/deslop|claude,codex"
-    "*|chrisliu298/interviewer|claude,codex"
-    "*|chrisliu298/last-call|claude,codex"
-    "*|chrisliu298/lbreview|claude,codex"
-    "*|chrisliu298/nanorepl|claude,codex"
-    "*|chrisliu298/note-gen|claude,codex"
-    "*|chrisliu298/prism|claude,codex"
-    "*|chrisliu298/prompt-engineer|claude,codex"
-    "*|chrisliu298/recall|claude,codex"
-    "*|chrisliu298/vault-linker|claude,codex"
+    # Relay: agent-specific SKILL.md (not caught by wildcard — no top-level SKILL.md)
+    "relay|./agents/extensions/skills/relay/claude|claude"
+    "relay|./agents/extensions/skills/relay/codex|codex"
+
+    # Third-party
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex"
     "humanizer|blader/humanizer|claude,codex"
     "obsidian-cli|kepano/obsidian-skills/skills/obsidian-cli|claude,codex"
@@ -51,10 +43,6 @@ SKILLS=(
     "pdf|anthropics/skills/skills/pdf|claude"
     "skill-creator|anthropics/skills/skills/skill-creator|claude"
     "pdf|openai/skills/skills/.curated/pdf|codex"
-
-    # Per-agent content
-    "relay|chrisliu298/relay/claude/skills/relay|claude"
-    "relay|chrisliu298/relay/codex/skills/relay|codex"
 )
 
 # slug:dest (clone → symlink to ~/dest)
@@ -70,6 +58,23 @@ MCP_SERVERS=(
 
 PLUGINS=(
     "chrisliu298/nanoresearch"
+)
+
+# Skills to sync from agents/extensions/skills/ → ~/Developer/GitHub/<name>/
+PUBLISH_SKILLS=(
+    "autoresearch"
+    "citation-assistant"
+    "deslop"
+    "interviewer"
+    "last-call"
+    "lbreview"
+    "nanorepl"
+    "note-gen"
+    "prism"
+    "prompt-engineer"
+    "recall"
+    "relay"
+    "vault-linker"
 )
 
 REPO_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-repos"
@@ -553,6 +558,55 @@ install_claude_settings() {
     fi
 }
 
+sync_published_skills() {
+    local dev_dir="$HOME/Developer/GitHub"
+    local skills_dir="$ROOT/agents/extensions/skills"
+    local name
+
+    for name in "${PUBLISH_SKILLS[@]}"; do
+        local repo_dir="$dev_dir/$name"
+        local skill_dir="$skills_dir/$name"
+
+        if ! git -C "$repo_dir" rev-parse --is-inside-work-tree &>/dev/null; then
+            skip "publish/$name (no repo)"
+            continue
+        fi
+        if [[ ! -d "$skill_dir" ]]; then
+            skip "publish/$name (no local skill)"
+            continue
+        fi
+
+        # Skip dirty repos to avoid overwriting uncommitted work
+        if ! git -C "$repo_dir" diff --quiet 2>/dev/null \
+            || ! git -C "$repo_dir" diff --cached --quiet 2>/dev/null \
+            || [[ -n "$(git -C "$repo_dir" ls-files --others --exclude-standard 2>/dev/null)" ]]; then
+            skip "publish/$name (repo dirty)"
+            continue
+        fi
+
+        if [[ "$name" == "relay" ]]; then
+            mkdir -p "$repo_dir/claude/skills/relay" "$repo_dir/codex/skills/relay" "$repo_dir/scripts"
+            rsync -a --delete --exclude='scripts/' \
+                "$skill_dir/claude/" "$repo_dir/claude/skills/relay/"
+            rsync -a --delete --exclude='scripts/' \
+                "$skill_dir/codex/" "$repo_dir/codex/skills/relay/"
+            rsync -a --delete "$skill_dir/scripts/" "$repo_dir/scripts/"
+        else
+            rsync -a --delete \
+                --exclude='.git' --exclude='LICENSE' --exclude='README.md' \
+                --exclude='.gitignore' --exclude='.relay' \
+                "$skill_dir/" "$repo_dir/"
+        fi
+
+        if git -C "$repo_dir" diff --quiet 2>/dev/null \
+            && [[ -z "$(git -C "$repo_dir" ls-files --others --exclude-standard 2>/dev/null)" ]]; then
+            ok "publish/$name"
+        else
+            wrote "publish/$name"
+        fi
+    done
+}
+
 # ── Main ─────────────────────────────────────────────────────────
 
 main() {
@@ -606,6 +660,13 @@ main() {
     install_mcp_servers
     flush_ok
 
+    # Publish skills to repos (opt-in: ./dotfiles.sh publish)
+    if [[ "${1:-}" == "publish" ]]; then
+        section "Publish"
+        sync_published_skills
+        flush_ok
+    fi
+
     # Plugins
     section "Plugins"
     install_plugins
@@ -620,4 +681,4 @@ main() {
         "$_BOLD" "$_RST" "$_DIM" "$_RST"
 }
 
-main
+main "$@"
