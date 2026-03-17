@@ -69,7 +69,7 @@ MCP_SERVERS=(
 )
 
 PLUGINS=(
-    "chrisliu298/aris-lite"
+    "chrisliu298/nanoresearch"
 )
 
 REPO_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-repos"
@@ -507,8 +507,22 @@ install_plugins() {
             }
         fi
 
-        # Install plugin (extraKnownMarketplaces provides the marketplace,
-        # but claude plugin install is still needed to register it)
+        # Register marketplace in known_marketplaces.json so claude can discover the plugin
+        local km_file="$HOME/.claude/plugins/known_marketplaces.json"
+        mkdir -p "$(dirname "$km_file")"
+        [[ -f "$km_file" ]] || echo '{}' > "$km_file"
+        local abs_dir
+        abs_dir="$(cd "$dir" && pwd)"
+        "$HOME/.venv/bin/python3" - "$km_file" "$name" "$abs_dir" << 'PYEOF'
+import json, sys
+path, name, dir = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(path) as f: data = json.load(f)
+if name not in data or data[name].get("installLocation") != dir:
+    data[name] = {"source": {"source": "directory", "path": dir}, "installLocation": dir, "lastUpdated": "2026-01-01T00:00:00.000Z"}
+    with open(path, "w") as f: json.dump(data, f, indent=2); f.write("\n")
+PYEOF
+
+        # Install plugin
         if claude plugin list 2>/dev/null | grep -q "$name@$name"; then
             ok "plugin/$name"
         else

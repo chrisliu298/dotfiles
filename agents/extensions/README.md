@@ -65,6 +65,6 @@ Cloned from GitHub via `PLUGINS` table, installed with `claude plugin install`. 
 
 | Plugin | Description |
 |--------|-------------|
-| [aris-lite](https://github.com/chrisliu298/aris-lite) | Autonomous research pipeline (idea discovery, experiments, paper writing) |
+| [nanoresearch](https://github.com/chrisliu298/nanoresearch) | Autonomous research pipeline (idea discovery, experiments, paper writing) |
 
 Marketplace plugins (installed manually, not tracked in `dotfiles.sh`): claude-md-management, pr-review-toolkit, feature-dev, frontend-design, playground, plugin-dev, pyright-lsp.

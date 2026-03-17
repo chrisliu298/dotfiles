@@ -28,13 +28,13 @@
     "feature-dev@claude-plugins-official": true,
     "playground@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
-    "aris-lite@aris-lite": true
+    "nanoresearch@nanoresearch": true
   },
   "extraKnownMarketplaces": {
-    "aris-lite": {
+    "nanoresearch": {
       "source": {
         "source": "directory",
-        "path": "~/.cache/dotfiles-plugins/chrisliu298__aris-lite"
+        "path": "~/.cache/dotfiles-plugins/chrisliu298__nanoresearch"
       }
     }
   },
