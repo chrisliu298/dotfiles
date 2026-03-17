@@ -107,7 +107,7 @@ When running Python code for citation lookups:
 
 1. Create a virtual environment if needed: `uv venv`
 2. Activate it: `source .venv/bin/activate`
-3. Install dependencies: `uv pip install semanticscholar requests`
+3. Install dependencies: `uv add semanticscholar requests`
 
 Never use the system Python directly.
 

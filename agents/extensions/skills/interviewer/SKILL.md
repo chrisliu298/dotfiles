@@ -1,6 +1,10 @@
 ---
 name: interviewer
-description: Conducts mock technical interviews for AI/ML topics. Supports topic-based or material-based questioning, multiple difficulty levels, and tracks session history. Use when practicing for technical interviews or testing understanding of concepts. Invoke with /interview.
+description: |
+  Conducts mock technical interviews for AI/ML topics. Use when the user wants to practice
+  for interviews, test understanding, or be quizzed on ML concepts. Triggers on "interview me",
+  "quiz me", "mock interview", "practice questions", or /interview. Supports topic-based or
+  material-based questioning with multiple difficulty levels.
 user-invocable: true
 ---
 
@@ -24,7 +28,7 @@ A mock interview system that helps users practice technical concepts through str
 ### 1. Session Check
 
 When invoked:
-- If `session-name` provided and exists in `~/.claude/skills/interviewer/history/`:
+- If `session-name` provided and exists in `~/.local/share/interviewer/history/`:
   - Use AskUserQuestion to offer: "Resume existing session" or "Start fresh with same name"
 - If no name provided:
   - List existing sessions if any exist
@@ -167,7 +171,7 @@ Generate summary including:
 
 ### 6. Save Session
 
-Write session log to `~/.claude/skills/interviewer/history/[session-name].md`:
+Write session log to `~/.local/share/interviewer/history/[session-name].md`:
 
 ```markdown
 # Interview Session: [session-name]
@@ -204,7 +208,7 @@ Duration: [total time]
 ## History Commands
 
 ### `/interview history`
-List all sessions in `~/.claude/skills/interviewer/history/`:
+List all sessions in `~/.local/share/interviewer/history/`:
 - Session name
 - Date
 - Questions attempted
@@ -249,7 +253,7 @@ These are NOT configurable - they always apply:
 | Skipping | Limited to 2 per session |
 | Time Tracking | Always tracked, shown in stats only |
 | Scoring | Multi-dimensional (accuracy, completeness, clarity) |
-| Session Storage | `~/.claude/skills/interviewer/history/` by default |
+| Session Storage | `~/.local/share/interviewer/history/` by default |
 | ASCII Diagrams | Use in model answers and feedback to illustrate architectures, pipelines, data flows, or any structural concept that benefits from a visual |
 
 ## Question Generation

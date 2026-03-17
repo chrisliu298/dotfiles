@@ -2,7 +2,9 @@
 name: last-call
 description: |
   Session-end quality review. Deep-reads every changed file and evaluates correctness,
-  documentation debt, architecture, and session completeness. Invoke with /last-call.
+  documentation debt, architecture, and session completeness. Use when wrapping up a session,
+  or when user says "final check", "anything I missed", "review before I'm done", or invokes
+  /last-call. Do NOT use mid-session for incremental reviews; use /lbreview instead.
 allowed-tools: Read, Edit, Grep, Glob, Agent, Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git stash list:*), Bash(git rev-parse:*), Bash(git show:*)
 user-invocable: true
 ---

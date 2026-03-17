@@ -4,8 +4,8 @@ description: |
   Update or create README.md for the current repository. Inspects the repo,
   extracts verified facts, preserves strong user-written content, and produces
   a README that helps a new reader succeed quickly without inventing details.
-  Use when the user wants to update, improve, or create a README.md file.
-  Invoke with /update-readme.
+  Triggers on "update the readme", "improve the readme", "create a readme",
+  "document this repo", or /update-readme. Do NOT use for non-README docs.
 user-invocable: true
 allowed-tools: Bash(find:*), Bash(ls:*), Bash(tree:*), Bash(wc:*), Bash(pwd:*), Bash(head:*), Bash(awk:*), Bash(git remote:*), Glob(*), Grep(*), Read(*), Edit(*), Write(*)
 ---
