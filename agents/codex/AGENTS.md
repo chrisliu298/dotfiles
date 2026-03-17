@@ -4,7 +4,7 @@
 
 ### Planning & Problem-Solving
 
-- **Plan and review**: For multi-step tasks, maintain a plan with `update_plan`; re-plan when assumptions break. Use the `prism` skill for non-trivial plans (>3 steps, multi-file).
+- **Plan and review**: For multi-step tasks, maintain a plan with `update_plan`; re-plan when assumptions break.
 - **Self-improvement**: After meaningful corrections, add a concise rule in AGENTS.md to prevent recurrence.
 - **Debugging**: Create a minimal reproduction before fixing.
 - **Elegant solutions**: After a suboptimal fix, reconsider with full context—discard and implement a cleaner approach.
@@ -18,7 +18,7 @@
 
 - **Concurrent subagents**: Use subagents for parallelizable or isolated work—no keyword trigger required. Spawn them asynchronously, continue local work while they run, and wait only when blocked or before final synthesis.
 - **Self-review**: For non-trivial changes, run independent subagent reviews. Use 2 reviewers for risky/broad changes. Skip for trivial edits.
-- **Redundancy vs. division**: Prism for diverse judgment on one question. Parallel subtasks for naturally partitioned work. Don't conflate them.
+- **Redundancy vs. division**: Use redundant reviewers for diverse judgment on one question. Use parallel subtasks for naturally partitioned work. Don't conflate them.
 
 ## Python Environment
 
