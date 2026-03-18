@@ -3,7 +3,7 @@
 Personal dotfiles and AI agent configurations for macOS with zsh. Managed with a single `dotfiles.sh` script.
 
 ## Installation
-btw
+
 ```bash
 git clone git@github.com:chrisliu298/dotfiles.git ~/dotfiles
 cd ~/dotfiles
@@ -29,7 +29,7 @@ See [`shell/`](shell/README.md), [`.config/`](.config/README.md), and [`agents/e
 
 ## Extensions
 
-25 extensions across local and upstream sources. See [`agents/extensions/README.md`](agents/extensions/README.md) for full catalog.
+29 extensions across local and upstream sources. See [`agents/extensions/README.md`](agents/extensions/README.md) for full catalog.
 
 | Action | Command |
 |--------|---------|

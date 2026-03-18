@@ -47,6 +47,7 @@ Published skills are synced to their standalone GitHub repos via `./dotfiles.sh 
 | Skill | Description |
 |-------|-------------|
 | atomic-push | Atomic commits and push to remote |
+| beautify | Simplify and beautify code changes on the current branch |
 | jina | Fetch web content and search via Jina AI (r.jina.ai / s.jina.ai) |
 | publish-skill | Publish local skill to standalone public GitHub repo |
 | push | Single-commit push to remote |
