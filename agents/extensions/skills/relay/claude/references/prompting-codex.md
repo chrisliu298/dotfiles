@@ -213,16 +213,17 @@ Reserve the relay prompt body for what changes from task to task: the goal, cont
 
 ## Reasoning Effort Selection
 
-Choose the reasoning effort level based on the task you are delegating.
+Choose the reasoning effort level based on the task you are delegating. **Default to `high` for most agentic work** — it hits the best tradeoff between quality and speed.
 
 | Level | When to use |
 |-------|-------------|
 | `none` | Fast, cost/latency-sensitive tasks where the model does not need to think. Best for execution-heavy work: workflow steps, field extraction, triage, short structured transforms. |
 | `low` | Latency-sensitive tasks where a small amount of thinking can produce a meaningful accuracy gain, especially with complex instructions. |
-| `medium` or `high` | Reserve for tasks that truly require stronger reasoning and can absorb the latency and cost tradeoff. Choose between them based on how much performance gain the task gets from additional reasoning. Start with `medium` for research-heavy work. |
-| `xhigh` | Good default for agentic, reasoning-heavy tasks where correctness and thoroughness matter. Especially valuable for tasks that require one-shot correctness — where there is no interactive feedback loop and the output must be right the first time. Use freely for multi-step research, complex debugging, code review, and any task where deeper thinking improves outcomes. Only drop to a lower level when speed or cost is the primary concern. |
+| `medium` | Moderate reasoning tasks. A reasonable starting point for research-heavy work, but `high` is usually worth the small extra cost. |
+| `high` | **Recommended default for agentic tasks.** Best balance of quality, thoroughness, and speed. Use for code changes, PR-scoped work, multi-step debugging, code review, and general coding tasks. Produces clean, well-structured output without the latency penalty of `xhigh`. |
+| `xhigh` | Reserve for extremely tough logic problems or tasks requiring full-codebase context. Takes ~2x longer than `high` and can produce worse-vibed, over-reasoned responses for normal tasks. Only reach for this when `high` is demonstrably insufficient. |
 
-**Escalation rule**: Both prompt quality and reasoning effort matter. Improve the prompt first — add an `<output_contract>`, `<completeness_contract>`, or `<verification_loop>` — but don't hesitate to use `xhigh` when the task is complex or correctness-critical. If the model feels too literal or stops at the first plausible answer, combine a dig-deeper nudge with higher effort:
+**Escalation rule**: Both prompt quality and reasoning effort matter. Improve the prompt first — add an `<output_contract>`, `<completeness_contract>`, or `<verification_loop>` — before reaching for `xhigh`. If the model feels too literal or stops at the first plausible answer, combine a dig-deeper nudge with higher effort:
 
 ```xml
 <dig_deeper_nudge>
