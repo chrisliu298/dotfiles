@@ -134,4 +134,8 @@ add-zsh-hook precmd disable_mouse_tracking
 if [[ -n "$CMUX_SHELL_INTEGRATION" ]]; then
     precmd_functions=(${precmd_functions:#_ghostty_precmd})
     preexec_functions=(${preexec_functions:#_ghostty_preexec})
+    # Clear screen on resize to prevent prompt garbling from sidebar toggle
+    function TRAPWINCH() {
+        [[ -o zle ]] && zle && zle clear-screen
+    }
 fi
