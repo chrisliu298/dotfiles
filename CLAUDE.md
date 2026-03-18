@@ -32,6 +32,8 @@ dotfiles/
 - **Python**: Use `uv` for virtual environments (`sv`, `us`, `ua`, `upi` aliases)
 - **Themes**: Ghostty (GitHub Dark), btop (GitHub Dark)
 
+<important if="you are editing or creating skills">
+
 ## Editing Skills
 
 Never edit in `~/.claude/skills/` or `~/.codex/skills/` — those are symlinks. Check `agents/extensions/README.md` for source.
@@ -40,6 +42,10 @@ Never edit in `~/.claude/skills/` or `~/.codex/skills/` — those are symlinks. 
 - **Published/upstream skills**: Edit in source repo at `~/Developer/GitHub/<skill-name>/`
 
 Run `./dotfiles.sh` after changes to re-sync symlinks.
+
+</important>
+
+<important if="you are adding a new extension or skill to dotfiles">
 
 ## Adding Extensions
 
@@ -52,10 +58,16 @@ Managed by `SKILLS` table in `dotfiles.sh` (git-clone + symlink, no `npx skills`
 
 Single SKILL.md per skill works in both agents. Include Claude-specific frontmatter (`allowed-tools`, `user-invocable`) — Codex ignores unknown keys.
 
+</important>
+
+<important if="you are modifying CLAUDE.md, AGENTS.md, README.md, or project structure">
+
 ## Maintenance
 
 - **Sync instructions**: `agents/claude/CLAUDE.md` and `agents/codex/AGENTS.md` share working principles — update both when changing either
 - **Update docs**: After structural changes, check if `README.md`, `CLAUDE.md`, or `AGENTS.md` reference affected paths
+
+</important>
 
 ## Not Backed Up
 

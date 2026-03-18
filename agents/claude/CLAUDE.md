@@ -14,11 +14,17 @@
 - **Minimal changes**: No TYPE_CHECKING imports, unnecessary abstractions, or scope expansion. Prefer simple imports. No large dependencies for small features. Avoid cleverness unless it clearly helps. Don't refactor or reformat outside the task. When in doubt, do less.
 - **Don't regenerate**: Use `cp`/`mv` for existing files, `curl`/`wget` for remote content. Never recreate from scratch—copy/move first, then edit in place.
 
+<important if="you are spawning or coordinating subagents">
+
 ### Agent Coordination
 
 - **Concurrent subagents**: Use subagents for parallelizable or isolated work—no keyword trigger required. Launch in background (`run_in_background: true`). Wait for ALL before synthesizing.
 - **Self-review**: For non-trivial changes, run independent subagent reviews. Use 2 reviewers for risky/broad changes. Skip for trivial edits.
 - **Redundancy vs. division**: Use redundant reviewers for diverse judgment on one question. Use parallel subtasks for naturally partitioned work. Don't conflate them.
+
+</important>
+
+<important if="you are running Python, creating virtual environments, or installing packages">
 
 ## Python Environment
 
@@ -30,3 +36,5 @@
 4. **Run**: Use the venv's `python`, `uv run`, or activated shell.
 
 Use `uv add` or `uv sync` for packages (never `uv pip install` or system pip).
+
+</important>
