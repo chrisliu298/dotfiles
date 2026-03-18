@@ -92,24 +92,26 @@ dfs() {
     set +m
 
     for h in "${hosts[@]}"; do
-        command ssh "$h" "cd ~/dotfiles && git pull --ff-only 2>&1 && ./dotfiles.sh 2>&1" \
+        command ssh "$h" "cd ~/dotfiles && git pull --ff-only 2>&1 && ./dotfiles.sh 2>&1; printf '\\n__RC__=%d\\n' \$?" \
             > "$tmpdir/$h.log" 2>&1 &
         pids+=($!)
     done
 
     local failed=0 idx=1
     for h in "${hosts[@]}"; do
-        if wait "${pids[$idx]}" 2>/dev/null; then
+        wait "${pids[$idx]}" 2>/dev/null
+        # Check the embedded exit code rather than wait's return code
+        if tail -1 "$tmpdir/$h.log" | grep -q '^__RC__=0$'; then
             printf "     ${_g}✓${_0} %s\n" "$h"
         else
             printf "     ${_r}✗${_0} %s\n" "$h"
-            sed "s/^/       ${_d}│${_0} /" "$tmpdir/$h.log"
+            sed '/^__RC__=/d' "$tmpdir/$h.log" | sed "s/^/       ${_d}│${_0} /"
             ((++failed))
         fi
         ((++idx))
     done
 
-    set -m
+    set -m 2>/dev/null  # restore (may fail in non-interactive shells)
     rm -rf "$tmpdir"
 
     if (( failed )); then
