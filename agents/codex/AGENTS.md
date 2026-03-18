@@ -11,7 +11,8 @@
 
 ### Code
 
-- **Minimal changes**: No TYPE_CHECKING imports, unnecessary abstractions, or scope expansion. Prefer simple imports. No large dependencies for small features. Avoid cleverness unless it clearly helps. Don't refactor or reformat outside the task. When in doubt, do less.
+- **Skimmable code**: Write extremely easy to consume code. Optimize for how easy the code is to read—make it skimmable, avoid cleverness, use early returns.
+- **Minimal changes**: No TYPE_CHECKING imports, unnecessary abstractions, or scope expansion. Prefer simple imports. No large dependencies for small features. Don't refactor or reformat outside the task. When in doubt, do less.
 - **Don't regenerate**: Use `curl`/`wget` for remote content. Never manually recreate.
 
 ### Agent Coordination
