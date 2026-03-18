@@ -92,7 +92,7 @@ dfs() {
     set +m
 
     for h in "${hosts[@]}"; do
-        ssh "$h" "cd ~/dotfiles && git pull --ff-only 2>&1 && ./dotfiles.sh 2>&1" \
+        command ssh "$h" "cd ~/dotfiles && git pull --ff-only 2>&1 && ./dotfiles.sh 2>&1" \
             > "$tmpdir/$h.log" 2>&1 &
         pids+=($!)
     done
