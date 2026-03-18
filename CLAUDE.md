@@ -40,6 +40,7 @@ Never edit in `~/.claude/skills/` or `~/.codex/skills/` — those are symlinks. 
 
 - **Local skills** (`agents/extensions/skills/`): Edit in this repo
 - **Published/upstream skills**: Edit in source repo at `~/Developer/GitHub/<skill-name>/`
+- **Best practices**: Read `agents/extensions/references/skill-best-practices.md` before creating or improving skills
 
 Run `./dotfiles.sh` after changes to re-sync symlinks.
 
