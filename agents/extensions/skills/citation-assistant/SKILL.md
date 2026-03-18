@@ -16,6 +16,11 @@ Add verified citations to academic LaTeX documents. Identify citation gaps, sear
 - If you cannot verify a paper, mark it as `[CITATION NEEDED]` - do NOT guess
 - When in doubt, leave it out
 
+## Context
+
+- Bibliography files: !'find . -maxdepth 3 -name "*.bib" 2>/dev/null | head -20 || echo "No .bib files found"'
+- LaTeX sections: !'grep -rh "\\\\section{" *.tex 2>/dev/null | head -20 || echo "No .tex files found"'
+
 ## Invocation
 
 ```
