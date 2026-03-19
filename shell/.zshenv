@@ -47,7 +47,3 @@ export CLAUDE_CODE_HIDE_ACCOUNT_INFO=1
 
 # Unset CLAUDECODE inside tmux so claude can start fresh
 [[ -n "$TMUX" ]] && unset CLAUDECODE
-
-# Fix Bun's getColorDepth() short-circuiting on TMUX env var
-# (returns 256-color instead of truecolor). FORCE_COLOR is checked first.
-[[ -n "$TMUX" ]] && export FORCE_COLOR=3

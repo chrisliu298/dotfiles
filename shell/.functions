@@ -129,14 +129,17 @@ dfs() {
 # Fix qmd v2 broken bin wrapper (dirname doesn't resolve symlinks, so DIR is wrong)
 qmd(){ node "$(npm root -g)/@tobilu/qmd/dist/cli/qmd.js" "$@"; }
 
-c(){ command claude --dangerously-skip-permissions "$@"; }
-cc(){ command claude --dangerously-skip-permissions --continue "$@"; }
-cr(){ command claude --dangerously-skip-permissions --resume "$@"; }
-crc(){ command claude rc --dangerously-skip-permissions "$@"; }
+# Unset TMUX for Claude Code so Bun's getColorDepth() doesn't short-circuit
+# to 256-color (the `if (env.TMUX) return 8` check fires before COLORTERM).
+_claude(){ env -u TMUX COLORTERM=truecolor command claude "$@"; }
+c(){ _claude --dangerously-skip-permissions "$@"; }
+cc(){ _claude --dangerously-skip-permissions --continue "$@"; }
+cr(){ _claude --dangerously-skip-permissions --resume "$@"; }
+crc(){ _claude rc --dangerously-skip-permissions "$@"; }
 cu(){ command claude update "$@"; }
-cap(){ local prompt="/atomic-push"; (( $# )) && prompt+=" ${*}"; command claude -p --dangerously-skip-permissions "$prompt"; }
-cpu(){ local prompt="/push"; (( $# )) && prompt+=" ${*}"; command claude -p --dangerously-skip-permissions "$prompt"; }
-chl(){ (( $# )) || { echo 'Usage: chl "<prompt>"'; return 1; }; command claude -p --dangerously-skip-permissions "${*}"; }
+cap(){ local prompt="/atomic-push"; (( $# )) && prompt+=" ${*}"; _claude -p --dangerously-skip-permissions "$prompt"; }
+cpu(){ local prompt="/push"; (( $# )) && prompt+=" ${*}"; _claude -p --dangerously-skip-permissions "$prompt"; }
+chl(){ (( $# )) || { echo 'Usage: chl "<prompt>"'; return 1; }; _claude -p --dangerously-skip-permissions "${*}"; }
 
 x(){ command codex --yolo -m gpt-5.4 "$@"; }
 xl(){ command codex --yolo -m gpt-5.4 --config model_reasoning_effort=low "$@"; }
