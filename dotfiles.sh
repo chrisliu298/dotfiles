@@ -38,6 +38,7 @@ SKILLS=(
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex"
     "humanizer|blader/humanizer|claude,codex"
     "obsidian-cli|kepano/obsidian-skills/skills/obsidian-cli|claude,codex"
+    "runpodctl|runpod/skills/runpodctl|claude,codex"
 
     # Agent-specific (same name, different source per agent)
     "pdf|anthropics/skills/skills/pdf|claude"
