@@ -44,7 +44,7 @@ Override dispatch config with flags before the question, or use natural language
 **Flags:**
 - `-s<N>` — number of same-model subagents (default: 2)
 - `-p<N>` — number of Parallax agents (default: 1, `-p0` to opt out)
-- `-e <LEVEL>` — Parallax reasoning effort: `none`, `low`, `medium`, `high`, `xhigh` (default: per-lens)
+- `-e<LEVEL>` — Parallax reasoning effort: `none`, `low`, `medium`, `high`, `xhigh` (default: per-lens)
 
 Examples:
 - `/prism -s3 -p2 -ehigh Why does X happen?` — 3 sub, 2 parallax, high effort
@@ -72,7 +72,7 @@ If `/relay` is unavailable, replace Parallax with a subagent using a **structura
 
 The peer has no Prism context and will treat the task as a fresh request. Without explicit, redundant prohibitions, it will recurse.
 
-**Effort selection for Parallax:** If the user specified `-e <LEVEL>`, use that level for all Parallax agents. Otherwise, choose `--effort` based on the assigned lens:
+**Effort selection for Parallax:** If the user specified `-e<LEVEL>`, use that level for all Parallax agents. Otherwise, choose `--effort` based on the assigned lens:
 
 | Lens type | `--effort` | Rationale |
 |-----------|-----------|-----------|
