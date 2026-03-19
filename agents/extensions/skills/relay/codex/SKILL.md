@@ -19,13 +19,11 @@ task
 BODY
 ```
 
-The script auto-detects caller/peer from its install path — it looks for `.claude/` or `.codex/` in the resolved path. **Always invoke via `~/.codex/skills/relay/scripts/relay`**. Using any other copy of the script breaks auto-detection and causes the call to fail or mis-route.
+The script is available as `relay` in PATH. It auto-detects caller/peer from environment variables (`CODEX_SANDBOX` for Codex, `CLAUDECODE=1` for Claude Code) or from its install path.
 
 **All Claude interactions go through `relay call`.** Do not invoke the `claude` CLI directly, do not pass model flags (`--model`), and do not use `--dangerously-skip-permissions` yourself. The model and invocation method are hardcoded in the script.
 
 ### Common Mistakes
-
-- **Wrong script path**: The script must be invoked from `~/.codex/skills/relay/scripts/relay`. Any other copy will break peer auto-detection.
 - **Premature failure diagnosis**: If a relay call is running in a subagent, do not inspect `.relay` files or diagnose failure from the main agent before the subagent has returned. The subagent blocks until the relay call completes — wait for it.
 - **Empty heredoc body**: The `<<'BODY'` ... `BODY` block must contain text. An empty body causes an immediate error.
 - **Missing `--name`**: Every call requires `--name`. Omitting it is a script error, not a peer failure.
@@ -34,7 +32,7 @@ The script auto-detects caller/peer from its install path — it looks for `.cla
 ## Example
 
 ```bash
-~/.codex/skills/relay/scripts/relay call --name auth-review <<'BODY'
+relay call --name auth-review <<'BODY'
 Review src/auth.py for security issues. Run pytest to verify.
 BODY
 ```
@@ -57,7 +55,7 @@ Before raising effort, improve the prompt first — add output contracts, verifi
 
 ## Prompting Claude
 
-**Before composing the prompt body, read `~/.codex/skills/relay/references/prompting-claude.md`.** This is not optional — the guide contains model-specific patterns that materially affect output quality.
+**Before composing the prompt body, read `~/.codex/skills/relay/references/prompting-claude.md`.** (If not found, try `relay --help` to locate the install path.) This is not optional — the guide contains model-specific patterns that materially affect output quality.
 
 Be clear and direct. Use XML tags to separate concerns. Key patterns:
 
@@ -70,7 +68,7 @@ Don't over-prompt — Claude Opus is proactive; avoid excessive MUSTs/NEVERs.
 **Example:**
 
 ```bash
-~/.codex/skills/relay/scripts/relay call --name auth-hardening <<'BODY'
+relay call --name auth-hardening <<'BODY'
 <context>
 We're hardening auth before a security audit. The auth module has had
 significant changes in the last 6 months.

@@ -20,6 +20,7 @@ LINKS=(
     "agents/claude/hooks:.claude/hooks"
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
     "agents/codex/AGENTS.md:.codex/AGENTS.md"
+    "agents/extensions/skills/relay/scripts/relay:.local/bin/relay"
 )
 
 # name|source|agents
