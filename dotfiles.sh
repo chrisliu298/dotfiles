@@ -467,7 +467,7 @@ def write(data, f, prefix=""):
 path = os.path.expanduser("~/.codex/config.toml")
 desired = {
     "model": "gpt-5.4",
-    "model_reasoning_effort": "xhigh",
+    "model_reasoning_effort": "high",
     "personality": "pragmatic",
     "responses_websockets_v2": True,
     "suppress_unstable_features_warning": True,
