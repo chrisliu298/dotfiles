@@ -3,7 +3,7 @@
     {
       "context": "Task",
       "bindings": {
-        "ctrl+y": "task:background",
+        "ctrl+x ctrl+b": "task:background",
         "ctrl+b": null
       }
     }
