@@ -33,11 +33,28 @@ Every agent must receive the full question, analyze the full scope, and produce 
 |------|-------------|------|
 | Self | (none) | Your own independent analysis while agents run |
 | Subagents | **Agent** tool | Same-model agents, one Agent call each |
-| **Parallax** | **Bash** tool (`/relay`) | **ALWAYS included.** Cross-model agent via relay script — NOT an Agent call |
+| **Parallax** | **Bash** tool (`/relay`) | Cross-model agent via relay script — NOT an Agent call. Included by default; opt out with `-p0` |
 
 **Default: 4 perspectives** — self + 2 subagents + 1 Parallax. The required dispatch is **2 Agent calls + 1 Bash relay call** (3 total, or 1 Agent + 1 Bash relay in compact mode). Self does not count toward the dispatched total.
 
-**Parallax is MANDATORY.** Every Prism run MUST include exactly one Bash relay call for Parallax. This is non-negotiable — do not skip it, do not replace it with a subagent, do not "plan to add it later." The only exceptions are: (1) the user explicitly opts out, or (2) `/relay` is confirmed unavailable (in which case, substitute a same-model adversarial agent and note the degradation). If you are about to launch and your dispatch set contains only Agent calls, you have forgotten Parallax — stop and add the Bash relay call before proceeding.
+### Invocation Shorthand
+
+Override dispatch config with flags before the question, or use natural language — both work.
+
+**Flags:**
+- `-s<N>` — number of same-model subagents (default: 2)
+- `-p<N>` — number of Parallax agents (default: 1, `-p0` to opt out)
+- `-e <LEVEL>` — Parallax reasoning effort: `none`, `low`, `medium`, `high`, `xhigh` (default: per-lens)
+
+Examples:
+- `/prism -s3 -p2 -ehigh Why does X happen?` — 3 sub, 2 parallax, high effort
+- `/prism -s1 Quick take on X` — 1 sub, defaults for rest
+- `/prism -p0 Same-model only for this review` — no parallax
+- `/prism 3 subagents, 2 parallax, high effort: Why does X?` — natural language works too
+
+**Parsing:** Read tokens left-to-right from the start of args. A token is shorthand if it matches `-s<digit>`, `-p<digit>`, or `-e`/`-e<level>` (accept both `-ehigh` and `-e high`). Stop at the first non-shorthand token — everything from there is the question. Omitted flags use defaults. Natural language config (e.g., "2 subagents + 2 parallax high") is also understood.
+
+**Parallax is on by default.** Every Prism run MUST include at least one Bash relay call for Parallax (or the configured `-p<N>` count). This is non-negotiable — do not skip it, do not replace it with a subagent, do not "plan to add it later." The only exceptions are: (1) the user explicitly opts out (e.g., `-p0`), or (2) `/relay` is confirmed unavailable (in which case, substitute a same-model adversarial agent and note the degradation). If you are about to launch and your dispatch set contains only Agent calls, you have forgotten Parallax — stop and add the Bash relay call(s) before proceeding.
 
 ### Parallax (cross-model agent)
 
@@ -55,7 +72,7 @@ If `/relay` is unavailable, replace Parallax with a subagent using a **structura
 
 The peer has no Prism context and will treat the task as a fresh request. Without explicit, redundant prohibitions, it will recurse.
 
-**Effort selection for Parallax:** Choose `--effort` based on the assigned lens:
+**Effort selection for Parallax:** If the user specified `-e <LEVEL>`, use that level for all Parallax agents. Otherwise, choose `--effort` based on the assigned lens:
 
 | Lens type | `--effort` | Rationale |
 |-----------|-----------|-----------|
@@ -121,7 +138,7 @@ Run these three checks before launching. If any fails, rewrite and re-check.
 
 2. **Lens quality test:** Each lens name must be a weighing posture (1-3 words), never a task or role. For each lens, write one sentence explaining what unique axis it covers that no other lens does. If two lenses would produce the same emphasis, replace one. At least one lens must be structurally adversarial.
 
-3. **Dispatch-shape test (CRITICAL):** Dispatched agents (subagents + Parallax) equals the required count (default 3, or 2 in compact mode). Self does not count. Verify the tool types: **exactly 1 Bash relay call (Parallax) and the rest Agent calls (subagents)**. Enumerate your planned tool calls by type before launching — if the list contains zero Bash relay calls, Parallax is missing. Do not launch until this is fixed. Three Agent calls with zero relay calls is always wrong.
+3. **Dispatch-shape test (CRITICAL):** Dispatched agents (subagents + Parallax) equals the required count. Self does not count. Verify the tool types: **the configured number of Bash relay calls (Parallax, default 1) and the rest Agent calls (subagents)**. Enumerate your planned tool calls by type before launching — if the list contains zero Bash relay calls and Parallax was not explicitly opted out (`-p0`), Parallax is missing. Do not launch until this is fixed. All-Agent-calls with zero relay calls is always wrong unless `-p0` was specified.
 
 ### Division-of-labor diagnostic
 
@@ -154,7 +171,7 @@ Starting points — every lens still answers the full question:
 3. Run the three pre-launch checks. Fix failures before launch.
 4. Launch all dispatched agents concurrently in the background. **Dispatch checklist — verify before launching:**
    - Subagents: dispatched via the **Agent** tool.
-   - **Parallax (REQUIRED — do not skip):** dispatched via a **Bash** tool call to `/relay` (`run_in_background: true`). This is NOT an Agent call. Compose the Parallax relay call FIRST, before composing subagent calls, to prevent it from being forgotten. If your launch set contains only Agent calls and no Bash relay call, you have forgotten Parallax — do not launch until this is fixed.
+   - **Parallax (REQUIRED unless `-p0`):** dispatched via **Bash** tool call(s) to `/relay` (`run_in_background: true`). This is NOT an Agent call. Compose the Parallax relay call(s) FIRST, before composing subagent calls, to prevent them from being forgotten. If your launch set contains only Agent calls and no Bash relay call (and `-p0` was not specified), you have forgotten Parallax — do not launch until this is fixed.
    - Before launching Parallax, verify the relay command shape, heredoc body, and Bash timeout (`timeout: 600000`) to avoid wasting a perspective on an avoidable transport error.
 
 Do not poll or sleep-loop — the system notifies you when agents finish.
@@ -212,7 +229,7 @@ Re-read the user's original question. Verify your synthesis directly answers it.
 
 - **No recursion (HARD RULE):** Dispatched agents — both subagents and Parallax — must NEVER invoke /prism, /relay, or any skill, and must NEVER spawn subagents or child agents of any kind. This is the most critical guard. Violations produce recursive agent cascades that waste resources and corrupt analysis. The Constraints section of the agent prompt template enforces this — do not weaken, summarize, or omit it. For Parallax relay prompts, repeat the prohibition redundantly (see Constraint leakage risk).
 - **No contamination:** Compose all prompts before any launch. Do not revise later prompts after seeing early agent outputs.
-- **No all-same-model dispatch (HARD RULE):** Before launching, count your Bash relay calls. If the count is zero, you have dropped Parallax — stop immediately and add it. This is the single most common Prism failure mode. Three Agent calls with no relay call is never valid. Every Prism run produces exactly one Bash relay call unless the user explicitly opted out or `/relay` is confirmed unavailable.
+- **No all-same-model dispatch (HARD RULE):** Before launching, count your Bash relay calls. If the count is zero and Parallax was not explicitly opted out (`-p0`), you have dropped Parallax — stop immediately and add it. This is the single most common Prism failure mode. All-Agent-calls with no relay call is never valid unless `-p0` was specified. The number of Bash relay calls must match the configured Parallax count (default 1).
 - **No side effects:** Dispatched agents must not edit repository files, commit, push, or invoke any user-invocable skill. The only permitted write is the relay response file (.res.md). This is enforced in the agent prompt template and verified before synthesis.
 
 ## Degrees of Freedom
