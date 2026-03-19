@@ -131,7 +131,7 @@ qmd(){ node "$(npm root -g)/@tobilu/qmd/dist/cli/qmd.js" "$@"; }
 
 # Unset TMUX for Claude Code so Bun's getColorDepth() doesn't short-circuit
 # to 256-color (the `if (env.TMUX) return 8` check fires before COLORTERM).
-_claude(){ env -u TMUX COLORTERM=truecolor command claude "$@"; }
+_claude(){ env -u TMUX COLORTERM=truecolor "$(command -v claude)" "$@"; }
 c(){ _claude --dangerously-skip-permissions "$@"; }
 cc(){ _claude --dangerously-skip-permissions --continue "$@"; }
 cr(){ _claude --dangerously-skip-permissions --resume "$@"; }
