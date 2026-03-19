@@ -212,10 +212,12 @@ Since you composed the prompts and chose the lenses, your self-review is not ful
 
 **Do not synthesize until every dispatched agent has returned.**
 
-**Handling failures — diagnose before escalating:**
+**Parallax is slow — that is normal.** Relay calls take significantly longer than subagents. This is expected, not a sign of failure. Parallax fails extremely rarely in practice. Do not preemptively diagnose, retry, or report failure while the background task is still running. The system sends a completion notification — until that notification arrives, the call is in progress and healthy.
 
-- **Relay (Parallax) transport failure:** If the Bash relay call fails (missing response file), the peer failed before producing output. Read the `.log` sidecar printed in the error output, diagnose the cause, fix the invocation, and retry once. Common fixes: increase Bash timeout (`timeout: 600000` in Claude Code), fix heredoc formatting, correct the relay command. Do not escalate to the user until you have attempted a diagnosed retry.
-- **Subagent or answer-quality failure:** If an agent returns an unusable answer (empty, truncated, off-topic) after the call itself succeeded, report the issue and offer the user three options: (a) retry the failed agent, (b) proceed with reduced perspectives, or (c) abort. A missing perspective changes synthesis quality.
+**Handling failures (only after completion notification):**
+
+- **Relay (Parallax) transport failure:** If the completed Bash relay call reports a missing response file, read the `.log` sidecar, diagnose, fix, and retry once. Do not escalate to the user until you have attempted one diagnosed retry.
+- **Subagent or answer-quality failure:** If an agent returns an unusable answer (empty, truncated, off-topic), offer the user three options: (a) retry, (b) proceed with reduced perspectives, or (c) abort.
 
 ### Step 3.5: Safety check
 

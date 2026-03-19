@@ -103,7 +103,7 @@ Request and response files are saved in `.relay/` (auto-gitignored). Peer stderr
 
 **You must diagnose and retry — do not report failure to the user without attempting a fix first.**
 
-**Background-task guard:** If the relay call was launched with `run_in_background: true`, this diagnosis flow applies only after the background task's completion notification has arrived. Until that notification, the relay call is still in progress — do not read logs, check for the response file, or conclude the peer has failed.
+**Background-task guard:** If the relay call was launched with `run_in_background: true`, this diagnosis flow applies only after the background task's completion notification has arrived. Relay calls take significantly longer than subagents — this is normal, not a failure. Until the completion notification arrives, the call is in progress and healthy. Do not read logs or check for the response file.
 
 When a completed relay call reports a missing response file, the peer failed before producing output. Each call generates a new request ID, so retrying does not re-execute previous attempts.
 
