@@ -95,7 +95,7 @@ dfs() {
         ((++idx))
     done
 
-    set -m 2>/dev/null  # restore (may fail in non-interactive shells)
+    [[ -o interactive ]] && set -m  # restore only in interactive shells
     rm -rf "$tmpdir"
 
     if (( failed )); then
