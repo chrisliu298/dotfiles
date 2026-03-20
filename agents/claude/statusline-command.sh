@@ -5,43 +5,43 @@
 input=$(cat)
 
 # ── Rate limit usage (cached, fetched via OAuth API) ─────────────
-usage_cache="/tmp/claude-statusline-usage.json"
-usage_ttl=60
-
-fetch_usage() {
-  local token
-  # Try macOS Keychain first, then fall back to credentials file
-  if [ "$(uname)" = "Darwin" ]; then
-    token=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null \
-      | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
-  fi
-  [ -z "$token" ] && token=$(jq -r '.claudeAiOauth.accessToken // empty' ~/.claude/.credentials.json 2>/dev/null)
-  [ -z "$token" ] && return 1
-  curl -sf --max-time 5 \
-    -H "Authorization: Bearer $token" \
-    -H "anthropic-beta: oauth-2025-04-20" \
-    "https://api.anthropic.com/api/oauth/usage" > "$usage_cache.tmp" 2>/dev/null \
-    && mv "$usage_cache.tmp" "$usage_cache"
-}
-
-# Refresh cache if stale or missing
-if [ -f "$usage_cache" ]; then
-  file_mtime=$(stat -c %Y "$usage_cache" 2>/dev/null || stat -f %m "$usage_cache" 2>/dev/null || echo 0)
-  cache_age=$(( $(date +%s) - file_mtime ))
-  [ "$cache_age" -ge "$usage_ttl" ] && fetch_usage &
-else
-  fetch_usage &
-fi
-
-# Read cached values
-if [ -f "$usage_cache" ]; then
-  eval "$(jq -r '
-    @sh "rl_5h=\(.five_hour.utilization // "")",
-    @sh "rl_5h_reset=\(.five_hour.resets_at // "")",
-    @sh "rl_7d=\(.seven_day.utilization // "")",
-    @sh "rl_7d_reset=\(.seven_day.resets_at // "")"
-  ' "$usage_cache" 2>/dev/null)"
-fi
+# usage_cache="/tmp/claude-statusline-usage.json"
+# usage_ttl=60
+#
+# fetch_usage() {
+#   local token
+#   # Try macOS Keychain first, then fall back to credentials file
+#   if [ "$(uname)" = "Darwin" ]; then
+#     token=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null \
+#       | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
+#   fi
+#   [ -z "$token" ] && token=$(jq -r '.claudeAiOauth.accessToken // empty' ~/.claude/.credentials.json 2>/dev/null)
+#   [ -z "$token" ] && return 1
+#   curl -sf --max-time 5 \
+#     -H "Authorization: Bearer $token" \
+#     -H "anthropic-beta: oauth-2025-04-20" \
+#     "https://api.anthropic.com/api/oauth/usage" > "$usage_cache.tmp" 2>/dev/null \
+#     && mv "$usage_cache.tmp" "$usage_cache"
+# }
+#
+# # Refresh cache if stale or missing
+# if [ -f "$usage_cache" ]; then
+#   file_mtime=$(stat -c %Y "$usage_cache" 2>/dev/null || stat -f %m "$usage_cache" 2>/dev/null || echo 0)
+#   cache_age=$(( $(date +%s) - file_mtime ))
+#   [ "$cache_age" -ge "$usage_ttl" ] && fetch_usage &
+# else
+#   fetch_usage &
+# fi
+#
+# # Read cached values
+# if [ -f "$usage_cache" ]; then
+#   eval "$(jq -r '
+#     @sh "rl_5h=\(.five_hour.utilization // "")",
+#     @sh "rl_5h_reset=\(.five_hour.resets_at // "")",
+#     @sh "rl_7d=\(.seven_day.utilization // "")",
+#     @sh "rl_7d_reset=\(.seven_day.resets_at // "")"
+#   ' "$usage_cache" 2>/dev/null)"
+# fi
 
 # ── Colors (Codex CLI — ANSI named colors only) ───────────────────
 reset='\033[0m'
@@ -257,33 +257,5 @@ if [ -n "$lines_add" ] || [ -n "$lines_rm" ]; then
   [ -n "$changes" ] && parts+=("${changes}")
 fi
 
-# ── Output (wrap to 2 lines if over 130 visible chars) ───────────
-max_width=110
-sep_vis=3  # visible width of " | "
-
-# Single pass: compute total visible width and find split point
-split=${#parts[@]}
-line1_vis=0
-total_vis=0
-for i in "${!parts[@]}"; do
-  plen=$(visible_len "${parts[$i]}")
-  if [ "$i" -eq 0 ]; then
-    total_vis=$plen
-    cand=$plen
-  else
-    total_vis=$((total_vis + sep_vis + plen))
-    cand=$((line1_vis + sep_vis + plen))
-  fi
-  if [ "$split" -eq "${#parts[@]}" ] && [ "$cand" -gt "$max_width" ]; then
-    split=$i
-  else
-    line1_vis=$cand
-  fi
-done
-
-if [ "$total_vis" -le "$max_width" ]; then
-  printf '%b' "$(join_parts "$sep" "${parts[@]}")"
-else
-  [ "$split" -eq 0 ] && split=1
-  printf '%b\n%b' "$(join_parts "$sep" "${parts[@]:0:$split}")" "$(join_parts "$sep" "${parts[@]:$split}")"
-fi
+# ── Output (single line) ──────────────────────────────────────────
+printf '%b' "$(join_parts "$sep" "${parts[@]}")"
