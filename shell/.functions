@@ -17,22 +17,6 @@ disable_mouse_tracking() {
 # =============================================================================
 
 if (( IS_MACOS )); then
-    # Safe rm using trash (strips rm-specific flags that trash doesn't understand)
-    rm() {
-        local args=()
-        for arg in "$@"; do
-            # Skip common rm flags that trash doesn't support
-            [[ "$arg" =~ ^-[rRfivdP]+$ ]] && continue
-            [[ "$arg" == "--" ]] && continue
-            [[ "$arg" == "--recursive" ]] && continue
-            [[ "$arg" == "--force" ]] && continue
-            [[ "$arg" == "--interactive" ]] && continue
-            [[ "$arg" == "--verbose" ]] && continue
-            args+=("$arg")
-        done
-        [[ ${#args[@]} -gt 0 ]] && trash "${args[@]}"
-    }
-
     # Rename macOS device (hostname, local hostname, computer name)
     rename_device() {
         scutil --set HostName "$1"

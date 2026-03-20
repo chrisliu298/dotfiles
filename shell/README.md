@@ -28,4 +28,4 @@ See `.aliases` and `.functions` for the full list. Highlights:
 - **Claude Code**: `c` (auto-accept), `cc` (continue), `cr` (resume), `cap` (/atomic-push), `cpu` (/push)
 - **Codex**: `x` (default), `xl`/`xm`/`xh` (low/medium/high reasoning), `xc` (resume --last)
 - **Homebrew**: `bi`/`bu`/`bic` (install/uninstall/cask), `bupd`/`bupg` (update/upgrade)
-- **Functions**: `dfs` (pull + install + sync remote), `rm()` (safe delete via `trash`), `rename_device`
+- **Functions**: `dfs` (pull + install + sync remote), `rename_device`

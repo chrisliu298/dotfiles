@@ -28,7 +28,6 @@ dotfiles/
 - **Shell load order**: `shell/.zshenv` (platform detection, env, PATH) → `shell/.zshrc` (plugins, sources `.aliases` + `.functions`)
 - **Modern tools**: `fd` → find, `rg` → grep, `delta` → diff, `zoxide` → z (installed via Zinit, macOS ARM)
 - **Platform detection**: `IS_MACOS` set in `shell/.zshenv`, used for macOS-only code
-- **Safe rm**: `rm()` in `shell/.functions` uses `trash` instead of permanent deletion (macOS only)
 - **Python**: Use `uv` for virtual environments (`sv`, `us`, `ua`, `upi` aliases)
 - **Themes**: Ghostty (GitHub Dark), btop (GitHub Dark)
 
