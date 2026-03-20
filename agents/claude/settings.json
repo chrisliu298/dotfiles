@@ -28,7 +28,8 @@
     "feature-dev@claude-plugins-official": true,
     "playground@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
-    "nanoresearch@nanoresearch": true
+    "nanoresearch@nanoresearch": true,
+    "telegram@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "nanoresearch": {
