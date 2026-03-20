@@ -8,6 +8,7 @@
 - **Self-improvement**: After meaningful corrections, add a concise rule in AGENTS.md to prevent recurrence.
 - **Debugging**: Create a minimal reproduction before fixing.
 - **Elegant solutions**: After a suboptimal fix, reconsider with full context—discard and implement a cleaner approach.
+- **First-principles thinking**: Don't blindly follow the stated path—question whether the request is an XY problem. If the goal is unclear, stop and clarify before proceeding. If the goal is clear but the path is suboptimal, proactively suggest a simpler, lower-cost approach.
 
 ### Code
 
