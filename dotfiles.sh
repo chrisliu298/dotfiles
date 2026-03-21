@@ -158,7 +158,9 @@ install_skills() {
         local _rest="${source#*/}" _owner="${source%%/*}"
         local slug="$_owner/${_rest%%/*}"
         local already=false r
-        for r in ${repos[@]+"${repos[@]}"}; do [[ "$r" == "$slug" ]] && already=true && break; done
+        for r in ${repos[@]+"${repos[@]}"}; do
+            if [[ "$r" == "$slug" ]]; then already=true; break; fi
+        done
         $already || repos+=("$slug")
     done
     if (( ${#repos[@]} )); then
@@ -239,7 +241,9 @@ install_skills() {
             [[ -d "$cached" ]] || continue
             local cname="${cached%/}"; cname="${cname##*/}"
             local found=false
-            for r in ${repos[@]+"${repos[@]}"}; do [[ "${r//\//__}" == "$cname" ]] && found=true && break; done
+            for r in ${repos[@]+"${repos[@]}"}; do
+                if [[ "${r//\//__}" == "$cname" ]]; then found=true; break; fi
+            done
             $found || { rm -rf "$cached"; log "clean cache/$cname"; }
         done
     fi
@@ -301,8 +305,8 @@ PYEOF
 
 install_mcp_servers() {
     local has_claude=false has_codex=false
-    command -v claude &>/dev/null && has_claude=true
-    command -v codex &>/dev/null && has_codex=true
+    if command -v claude &>/dev/null; then has_claude=true; fi
+    if command -v codex &>/dev/null; then has_codex=true; fi
     $has_claude || $has_codex || { warn "neither claude nor codex CLI found"; return; }
 
     local entry name cmd args

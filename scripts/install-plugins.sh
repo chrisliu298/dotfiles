@@ -37,11 +37,16 @@ for slug in "${PLUGINS[@]}"; do
     fi
 
     # Register marketplace in known_marketplaces.json
+    py="$HOME/.venv/bin/python3"
+    if [[ ! -x "$py" ]]; then
+        warn "skip plugin/$name (no python at $py)"
+        continue
+    fi
     km_file="$HOME/.claude/plugins/known_marketplaces.json"
     mkdir -p "$(dirname "$km_file")"
     [[ -f "$km_file" ]] || echo '{}' > "$km_file"
     abs_dir="$(cd "$dir" && pwd)"
-    "$HOME/.venv/bin/python3" - "$km_file" "$name" "$abs_dir" << 'PYEOF'
+    "$py" - "$km_file" "$name" "$abs_dir" << 'PYEOF'
 import json, sys
 path, name, dir = sys.argv[1], sys.argv[2], sys.argv[3]
 with open(path) as f: data = json.load(f)
