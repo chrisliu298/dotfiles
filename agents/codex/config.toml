@@ -1,0 +1,23 @@
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+personality = "pragmatic"
+responses_websockets_v2 = true
+suppress_unstable_features_warning = true
+model_context_window = 1000000
+model_auto_compact_token_limit = 900000
+
+[agents]
+max_depth = 2
+max_threads = 12
+
+[features]
+multi_agent = true
+prevent_idle_sleep = true
+voice_transcription = true
+
+[tui]
+status_line = ["model-with-reasoning", "current-dir", "git-branch", "context-used", "weekly-limit", "context-window-size"]
+
+[mcp_servers.playwright]
+command = "npx"
+args = ["-y", "@playwright/mcp@latest", "--headless", "--codegen", "none", "--console-level", "error"]

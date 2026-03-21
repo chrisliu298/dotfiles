@@ -81,7 +81,7 @@ dfs() {
         pids+=($!)
     done
 
-    local failed=0 idx=1
+    local failed=0 idx=0
     for h in "${hosts[@]}"; do
         wait "${pids[$idx]}" 2>/dev/null
         # Check the embedded exit code rather than wait's return code

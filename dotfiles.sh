@@ -58,164 +58,71 @@ MCP_SERVERS=(
     "codex|codex|mcp-server"
 )
 
-PLUGINS=(
-    "chrisliu298/nanoresearch"
-)
-
-# Skills to sync from agents/extensions/skills/ → ~/Developer/GitHub/<name>/
-PUBLISH_SKILLS=(
-    "autoresearch"
-    "citation-assistant"
-    "deslop"
-    "interviewer"
-    "last-call"
-    "lbreview"
-    "nanorepl"
-    "note-gen"
-    "prism"
-    "prompt-engineer"
-    "recall"
-    "relay"
-    "vault-linker"
-)
-
 REPO_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-repos"
-PLUGIN_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-plugins"
 SKILL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/skills-src"
-MANIFEST="$HOME/.dotfiles-managed"
 
-# ── Output helpers ───────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────
 
-# ANSI colors (auto-disabled when stdout is not a terminal)
 if [[ -t 1 ]]; then
-    _DIM=$'\033[2m'    _BOLD=$'\033[1m'
-    _GRN=$'\033[32m'   _YLW=$'\033[33m'   _RED=$'\033[31m'   _CYN=$'\033[36m'
-    _RST=$'\033[0m'
+    _CYN=$'\033[1;36m' _YLW=$'\033[33m' _DIM=$'\033[2m' _RST=$'\033[0m'
 else
-    _DIM="" _BOLD="" _GRN="" _YLW="" _RED="" _CYN="" _RST=""
+    _CYN="" _YLW="" _DIM="" _RST=""
 fi
 
-# Per-section OK counter (batched, printed once via flush_ok)
-_sec_ok=0
-# Global totals for the final summary line
-_total_ok=0 _total_new=0 _total_skip=0 _total_clean=0 _total_fail=0
+section() { printf '\n  %s── %s ──%s\n' "$_CYN" "$1" "$_RST"; }
+log()     { printf '     %s\n' "$1"; }
+warn()    { printf '     %s%s%s\n' "$_YLW" "$1" "$_RST" >&2; }
 
-# ── Section header ───────────────────────────────
-section() {
-    local title="$1"
-    local total_width=60
-    local prefix="  ── $title "
-    local pad_width=$(( total_width - ${#prefix} ))
-    local pad="" i
-    (( pad_width < 4 )) && pad_width=4
-    for (( i = 0; i < pad_width; i++ )); do pad+="─"; done
-    printf '\n  %s── %s %s%s\n' "${_BOLD}${_CYN}" "$title" "$pad${_RST}" ""
-    _sec_ok=0
-}
-
-# Flush batched OK count as one compact line, then reset
-flush_ok() {
-    if (( _sec_ok > 0 )); then
-        printf '     %s✓ %d unchanged%s\n' "$_DIM" "$_sec_ok" "$_RST"
-        (( _total_ok += _sec_ok ))
-        _sec_ok=0
-    fi
-}
-
-# ── Status printers ──────────────────────────────
-# ok() is silent — it just increments the batch counter.
-# Everything else prints immediately so changes/errors are visible.
-ok()      { (( ++_sec_ok )); }
-new()     { (( ++_total_new ));   printf '     🔗 %s%s%s\n' "$_GRN" "$1" "$_RST"; }
-skip()    { (( ++_total_skip ));  printf '     %s⏭️  %s%s\n' "$_YLW" "$1" "$_RST"; }
-cleaned() { (( ++_total_clean )); printf '     %s🧹 %s%s\n' "$_DIM" "$1" "$_RST"; }
-fail()    { (( ++_total_fail ));  printf '     %s❌ %s%s\n' "$_RED" "$1" "$_RST" >&2; }
-added()   { (( ++_total_new ));   printf '     ➕ %s%s%s\n' "$_GRN" "$1" "$_RST"; }
-wrote()   { (( ++_total_new ));   printf '     🔀 %s%s%s\n' "$_CYN" "$1" "$_RST"; }
-
-# Final summary bar: "42 ok | 2 changed | 1 skipped"
-print_summary() {
-    local parts=()
-    (( _total_ok > 0 ))    && parts+=("${_GRN}${_total_ok} ok${_RST}")
-    (( _total_new > 0 ))   && parts+=("${_CYN}${_total_new} changed${_RST}")
-    (( _total_skip > 0 ))  && parts+=("${_YLW}${_total_skip} skipped${_RST}")
-    (( _total_clean > 0 )) && parts+=("${_YLW}${_total_clean} cleaned${_RST}")
-    (( _total_fail > 0 ))  && parts+=("${_RED}${_total_fail} failed${_RST}")
-    local result="" i
-    for (( i = 0; i < ${#parts[@]}; i++ )); do
-        (( i > 0 )) && result+="  ${_DIM}|${_RST}  "
-        result+="${parts[$i]}"
-    done
-    printf '\n  %s\n' "$result"
-}
-
-# ── Functions ────────────────────────────────────────────────────
-
-ensure_link() {
-    local src="$ROOT/$1" dest="$HOME/$2"
-    local label="~/$2"
-    if [[ ! -e "$src" ]]; then
-        skip "$label (source not found)"
-        return
-    fi
-    if [[ -L "$dest" && "$(readlink "$dest")" == "$src" ]]; then
-        ok "$label"
-        return
-    fi
+ensure_symlink() {
+    local src="$1" dest="$2"
+    [[ -L "$dest" && "$(readlink "$dest")" == "$src" ]] && return
     mkdir -p "$(dirname "$dest")"
     rm -rf "$dest"
     ln -s "$src" "$dest"
-    new "$label"
+    log "link ${dest/#$HOME/~}"
 }
 
-clean_stale_managed() {
-    [[ -f "$MANIFEST" ]] || return 0
+sync_git_checkout() {
+    local slug="$1" dir="$2"
+    if [[ -d "$dir/.git" ]]; then
+        git -C "$dir" fetch --depth=1 origin 2>/dev/null \
+            && git -C "$dir" reset --hard origin/HEAD 2>/dev/null \
+            || true
+    else
+        # Remove corrupt/partial cache before cloning
+        [[ -e "$dir" ]] && rm -rf "$dir"
+        mkdir -p "$(dirname "$dir")"
+        git clone --depth 1 "https://github.com/$slug.git" "$dir" 2>/dev/null || {
+            warn "fail clone $slug"; return 1
+        }
+    fi
+}
 
-    local current_links="" current_repos="" current_mcp=""
+# ── Install functions ────────────────────────────────────────────
+
+install_links() {
     local entry
-    for entry in "${LINKS[@]}"; do current_links+="${entry#*:}"$'\n'; done
-    for entry in ${REPOS[@]+"${REPOS[@]}"}; do current_repos+="${entry#*:}"$'\n'; done
-    for entry in ${MCP_SERVERS[@]+"${MCP_SERVERS[@]}"}; do
-        IFS='|' read -r name _ _ <<< "$entry"
-        current_mcp+="$name"$'\n'
+    for entry in "${LINKS[@]}"; do
+        local src="$ROOT/${entry%%:*}"
+        [[ -e "$src" ]] || { warn "skip ~/${entry#*:} (source missing)"; continue; }
+        ensure_symlink "$src" "$HOME/${entry#*:}"
     done
 
-    while IFS=: read -r type value; do
-        [[ -z "$type" || -z "$value" ]] && continue
-        case "$type" in
-            link|repo)
-                echo "$current_links$current_repos" | grep -qxF "$value" && continue
-                if [[ -L "$HOME/$value" ]]; then
-                    rm -f "$HOME/$value"
-                    cleaned "~/$value (stale $type)"
-                fi
-                ;;
-            mcp)
-                echo "$current_mcp" | grep -qxF "$value" && continue
-                local removed=false
-                if command -v claude &>/dev/null && claude mcp remove -s user "$value" 2>/dev/null; then
-                    removed=true
-                fi
-                if command -v codex &>/dev/null && codex mcp remove "$value" 2>/dev/null; then
-                    removed=true
-                fi
-                $removed && cleaned "mcp/$value (stale server)"
-                ;;
-        esac
-    done < "$MANIFEST"
-}
-
-write_manifest() {
-    local tmp="${MANIFEST}.tmp.$$"
-    local entry
-    : > "$tmp"
-    for entry in "${LINKS[@]}"; do echo "link:${entry#*:}"; done >> "$tmp"
-    for entry in ${REPOS[@]+"${REPOS[@]}"}; do echo "repo:${entry#*:}"; done >> "$tmp"
-    for entry in ${MCP_SERVERS[@]+"${MCP_SERVERS[@]}"}; do
-        IFS='|' read -r name _ _ <<< "$entry"
-        echo "mcp:$name"
-    done >> "$tmp"
-    mv "$tmp" "$MANIFEST"
+    # settings.json: copy with ~ expansion (Claude Code needs absolute paths)
+    local src="$ROOT/agents/claude/settings.json"
+    local dest="$HOME/.claude/settings.json"
+    if [[ -f "$src" ]]; then
+        local content
+        content=$(sed "s|~/|$HOME/|g" "$src")
+        if [[ -f "$dest" && ! -L "$dest" ]] && [[ "$(cat "$dest")" == "$content" ]]; then
+            : # unchanged
+        else
+            mkdir -p "$(dirname "$dest")"
+            rm -f "$dest"
+            printf '%s\n' "$content" > "$dest"
+            log "write ~/.claude/settings.json"
+        fi
+    fi
 }
 
 install_repos() {
@@ -224,60 +131,29 @@ install_repos() {
     for entry in "${REPOS[@]}"; do
         local slug="${entry%%:*}" dest_rel="${entry#*:}"
         local dir="$REPO_CACHE/${slug//\//__}"
-        local dest="$HOME/$dest_rel"
-        local label="~/$dest_rel"
         if [[ -d "$dir/.git" ]]; then
-            git -C "$dir" pull --ff-only -q 2>/dev/null || true
+            # Safe update: skip if dirty, fast-forward only
+            if ! git -C "$dir" diff --quiet 2>/dev/null; then
+                warn "skip $slug (dirty)"
+            else
+                git -C "$dir" pull --ff-only -q 2>/dev/null || true
+            fi
         else
+            mkdir -p "$(dirname "$dir")"
             git clone "https://github.com/$slug.git" "$dir" 2>/dev/null || {
-                fail "clone $slug"; continue
+                warn "fail clone $slug"; continue
             }
         fi
-        if [[ -L "$dest" && "$(readlink "$dest")" == "$dir" ]]; then
-            ok "$label"
-        else
-            mkdir -p "$(dirname "$dest")"
-            rm -rf "$dest"
-            ln -s "$dir" "$dest"
-            new "$label"
-        fi
+        ensure_symlink "$dir" "$HOME/$dest_rel"
     done
 }
 
-sync_repo() {
-    local slug="$1"
-    local dir="$SKILL_CACHE/${slug//\//__}"
-    if [[ -d "$dir/.git" ]]; then
-        git -C "$dir" fetch --depth=1 origin 2>/dev/null \
-            && git -C "$dir" reset --hard origin/HEAD 2>/dev/null \
-            || true
-    else
-        [[ -e "$dir" ]] && rm -rf "$dir"
-        mkdir -p "$SKILL_CACHE"
-        git clone --depth 1 "https://github.com/$slug.git" "$dir" 2>/dev/null || {
-            fail "clone $slug"; return 1
-        }
-    fi
-    echo "$dir"
-}
-
-ensure_skill_link() {
-    local src="$1" dest="$2"
-    if [[ -L "$dest" && "$(readlink "$dest")" == "$src" ]]; then
-        ok "~${dest#$HOME}"
-    else
-        rm -rf "$dest"
-        ln -s "$src" "$dest"
-        new "~${dest#$HOME}"
-    fi
-}
-
 install_skills() {
-    # Phase 0: Collect unique GitHub repo slugs and clone in parallel
+    # Clone unique GitHub repos in parallel
     local repos=()
     local entry
     for entry in "${SKILLS[@]}"; do
-        IFS='|' read -r name source agents <<< "$entry"
+        IFS='|' read -r _ source _ <<< "$entry"
         [[ "$source" == ./* ]] && continue
         local _rest="${source#*/}" _owner="${source%%/*}"
         local slug="$_owner/${_rest%%/*}"
@@ -287,38 +163,32 @@ install_skills() {
     done
     if (( ${#repos[@]} )); then
         mkdir -p "$SKILL_CACHE"
-        for r in "${repos[@]}"; do sync_repo "$r" >/dev/null & done
+        for r in "${repos[@]}"; do sync_git_checkout "$r" "$SKILL_CACHE/${r//\//__}" & done
         wait
     fi
 
-    # Phase 1: Resolve entries and create symlinks
+    # Resolve entries and create symlinks
     mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills"
     local claude_expected="" codex_expected=""
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name source agents <<< "$entry"
 
-        # Resolve source to a local path
-        local base_dir repo_name=""
+        local base_dir
         if [[ "$source" == ./* ]]; then
             base_dir="$ROOT/${source#./}"
         else
             local _rest="${source#*/}" _owner="${source%%/*}"
-            repo_name="${_rest%%/*}"
-            local slug="$_owner/$repo_name"
+            local slug="$_owner/${_rest%%/*}"
             base_dir="$SKILL_CACHE/${slug//\//__}"
             local subpath="${_rest#*/}"
             [[ "$subpath" != "$_rest" ]] && base_dir="$base_dir/$subpath"
         fi
-        if [[ ! -d "$base_dir" ]]; then
-            skip "$name (source not found: $source)"
-            continue
-        fi
+        [[ -d "$base_dir" ]] || { warn "skip $name (source not found: $source)"; continue; }
 
-        # Expand wildcard or resolve single skill
         local -a skill_entries=()
         if [[ "$name" == "*" ]]; then
             if [[ -f "$base_dir/SKILL.md" ]]; then
-                skill_entries+=("${repo_name:-$(basename "$base_dir")}:$base_dir")
+                skill_entries+=("$(basename "$base_dir"):$base_dir")
             else
                 local d
                 for d in "$base_dir"/*/; do
@@ -328,29 +198,26 @@ install_skills() {
                 done
             fi
         else
-            if [[ -f "$base_dir/SKILL.md" ]]; then
-                skill_entries+=("$name:$base_dir")
-            else
-                skip "$name (no SKILL.md at $source)"
-            fi
+            [[ -f "$base_dir/SKILL.md" ]] \
+                && skill_entries+=("$name:$base_dir") \
+                || warn "skip $name (no SKILL.md at $source)"
         fi
 
-        # Create symlinks for each resolved skill
         local se
         for se in ${skill_entries[@]+"${skill_entries[@]}"}; do
             local sname="${se%%:*}" spath="${se#*:}"
             if [[ "$agents" == *claude* ]]; then
-                ensure_skill_link "$spath" "$HOME/.claude/skills/$sname"
+                ensure_symlink "$spath" "$HOME/.claude/skills/$sname"
                 claude_expected+="$sname"$'\n'
             fi
             if [[ "$agents" == *codex* ]]; then
-                ensure_skill_link "$spath" "$HOME/.codex/skills/$sname"
+                ensure_symlink "$spath" "$HOME/.codex/skills/$sname"
                 codex_expected+="$sname"$'\n'
             fi
         done
     done
 
-    # Phase 2: Clean stale entries
+    # Clean stale skill symlinks
     local dir expected
     for dir in "$HOME/.claude/skills" "$HOME/.codex/skills"; do
         [[ -d "$dir" ]] || continue
@@ -360,24 +227,12 @@ install_skills() {
             local bname="${entry##*/}"
             [[ "$bname" == .* ]] && continue
             [[ $'\n'"$expected" == *$'\n'"$bname"$'\n'* ]] && continue
-            if [[ -L "$entry" ]]; then
-                rm -f "$entry"
-                cleaned "${entry/#$HOME/~}"
-            else
-                rm -rf "$entry"
-                cleaned "${entry/#$HOME/~} (unmanaged)"
-            fi
+            rm -rf "$entry"
+            log "clean ${entry/#$HOME/~}"
         done
     done
 
-    # One-time migration: clean old intermediate directories
-    if [[ -d "$HOME/.agents" ]]; then
-        rm -rf "$HOME/.agents/skills" "$HOME/.agents/skills-override" "$HOME/.agents/.dotfiles-managed"
-        rm -f "$HOME/.agents/.skill-lock.json"
-        rmdir "$HOME/.agents" 2>/dev/null || true
-    fi
-
-    # Prune stale cache repos no longer in SKILLS table
+    # Prune stale cache repos
     if [[ -d "$SKILL_CACHE" ]]; then
         local cached
         for cached in "$SKILL_CACHE"/*/; do
@@ -385,226 +240,85 @@ install_skills() {
             local cname="${cached%/}"; cname="${cname##*/}"
             local found=false
             for r in ${repos[@]+"${repos[@]}"}; do [[ "${r//\//__}" == "$cname" ]] && found=true && break; done
-            $found || { rm -rf "$cached"; cleaned "cache/$cname"; }
+            $found || { rm -rf "$cached"; log "clean cache/$cname"; }
         done
     fi
 }
 
-install_mcp_servers() {
-    local entry name cmd args
-
-    # Claude Code
-    if command -v claude &>/dev/null; then
-        for entry in "${MCP_SERVERS[@]}"; do
-            IFS='|' read -r name cmd args <<< "$entry"
-            if claude mcp list 2>/dev/null | grep -q "^$name:"; then
-                ok "claude/$name"
-            else
-                if claude mcp add --scope user "$name" -- $cmd $args 2>/dev/null; then
-                    added "claude/$name"
-                else
-                    fail "claude/$name"
-                fi
-            fi
-        done
-    else
-        skip "claude CLI not found"
-    fi
-
-    # Codex
-    if command -v codex &>/dev/null; then
-        for entry in "${MCP_SERVERS[@]}"; do
-            IFS='|' read -r name cmd args <<< "$entry"
-            [[ "$name" == "codex" ]] && continue
-            if codex mcp get "$name" &>/dev/null; then
-                ok "codex/$name"
-            else
-                if codex mcp add "$name" -- $cmd $args 2>/dev/null; then
-                    added "codex/$name"
-                else
-                    fail "codex/$name"
-                fi
-            fi
-        done
-    else
-        skip "codex CLI not found"
-    fi
-}
-
-write_codex_config() {
+install_codex_config() {
+    local src="$ROOT/agents/codex/config.toml"
+    local dest="$HOME/.codex/config.toml"
+    [[ -f "$src" ]] || return
     mkdir -p "$HOME/.codex"
-    if ! "$HOME/.venv/bin/python3" << 'PYEOF'
-import os, tomllib
-
+    # Merge managed keys into existing config (preserves user additions)
+    if ! "$HOME/.venv/bin/python3" - "$src" "$dest" << 'PYEOF' 2>/dev/null
+import sys, tomllib
+src, dest = sys.argv[1], sys.argv[2]
+with open(src, "rb") as f: desired = tomllib.load(f)
+existing = {}
+try:
+    with open(dest, "rb") as f: existing = tomllib.load(f)
+except FileNotFoundError: pass
 def merge(a, b):
     r = dict(a)
     for k, v in b.items():
         r[k] = merge(r[k], v) if k in r and isinstance(r[k], dict) and isinstance(v, dict) else v
     return r
-
+merged = merge(existing, desired)
+if merged == existing: sys.exit(0)
+# Write TOML (simple key=value and [section] format)
 def fmt(v):
     if isinstance(v, bool): return str(v).lower()
     if isinstance(v, int): return str(v)
     if isinstance(v, str): return f'"{v}"'
     if isinstance(v, list): return "[" + ", ".join(fmt(i) for i in v) + "]"
-
-def qk(k):
-    import re
-    return k if re.match(r'^[A-Za-z0-9_-]+$', k) else f'"{k}"'
-
 def write(data, f, prefix=""):
     for k, v in data.items():
-        if not isinstance(v, dict): f.write(f"{qk(k)} = {fmt(v)}\n")
+        if not isinstance(v, dict): f.write(f"{k} = {fmt(v)}\n")
     for k, v in data.items():
         if not isinstance(v, dict): continue
-        sec = f"{prefix}.{qk(k)}" if prefix else qk(k)
+        sec = f"{prefix}.{k}" if prefix else k
         direct = [(kk, vv) for kk, vv in v.items() if not isinstance(vv, dict)]
         nested = [(kk, vv) for kk, vv in v.items() if isinstance(vv, dict)]
         if direct or not nested:
             f.write(f"\n[{sec}]\n")
-            for kk, vv in direct: f.write(f"{qk(kk)} = {fmt(vv)}\n")
+            for kk, vv in direct: f.write(f"{kk} = {fmt(vv)}\n")
         for kk, vv in nested: write({kk: vv}, f, sec)
-
-path = os.path.expanduser("~/.codex/config.toml")
-desired = {
-    "model": "gpt-5.4",
-    "model_reasoning_effort": "high",
-    "personality": "pragmatic",
-    "responses_websockets_v2": True,
-    "suppress_unstable_features_warning": True,
-    "model_context_window": 1000000,
-    "model_auto_compact_token_limit": 900000,
-    "agents": {"max_depth": 2, "max_threads": 12},
-    "features": {"multi_agent": True, "prevent_idle_sleep": True, "voice_transcription": True},
-    "tui": {"status_line": ["model-with-reasoning", "current-dir", "git-branch", "context-used", "weekly-limit", "context-window-size"]},
-    "mcp_servers": {"playwright": {"command": "npx", "args": ["-y", "@playwright/mcp@latest", "--headless", "--codegen", "none", "--console-level", "error"]}},
-}
-existing = {}
-if os.path.isfile(path):
-    with open(path, "rb") as f: existing = tomllib.load(f)
-with open(path, "w") as f: write(merge(existing, desired), f)
+with open(dest, "w") as f: write(merged, f)
+sys.exit(2)
 PYEOF
     then
-        fail "~/.codex/config.toml (python3 with tomllib required)"
-        return
+        local rc=$?
+        if [[ $rc -eq 2 ]]; then
+            log "write ~/.codex/config.toml"
+        elif [[ $rc -ne 0 ]]; then
+            # Fallback: plain copy if Python unavailable
+            cp "$src" "$dest"
+            log "write ~/.codex/config.toml (fallback copy)"
+        fi
     fi
-    wrote "~/.codex/config.toml"
 }
 
-install_plugins() {
-    if ! command -v claude &>/dev/null; then
-        skip "claude CLI not found"
-        return
-    fi
+install_mcp_servers() {
+    local has_claude=false has_codex=false
+    command -v claude &>/dev/null && has_claude=true
+    command -v codex &>/dev/null && has_codex=true
+    $has_claude || $has_codex || { warn "neither claude nor codex CLI found"; return; }
 
-    mkdir -p "$PLUGIN_CACHE"
-    local slug
-    for slug in "${PLUGINS[@]}"; do
-        local name="${slug##*/}"
-        local dir="$PLUGIN_CACHE/${slug//\//__}"
-
-        # Clone or update (use gh for private repo auth)
-        if [[ -d "$dir/.git" ]]; then
-            git -C "$dir" fetch --depth=1 origin >/dev/null 2>&1 \
-                && git -C "$dir" reset --hard origin/HEAD >/dev/null 2>&1 \
-                || true
-        else
-            gh repo clone "$slug" "$dir" -- --depth 1 2>/dev/null || {
-                fail "clone $slug"; continue
-            }
-        fi
-
-        # Register marketplace in known_marketplaces.json so claude can discover the plugin
-        local km_file="$HOME/.claude/plugins/known_marketplaces.json"
-        mkdir -p "$(dirname "$km_file")"
-        [[ -f "$km_file" ]] || echo '{}' > "$km_file"
-        local abs_dir
-        abs_dir="$(cd "$dir" && pwd)"
-        "$HOME/.venv/bin/python3" - "$km_file" "$name" "$abs_dir" << 'PYEOF'
-import json, sys
-path, name, dir = sys.argv[1], sys.argv[2], sys.argv[3]
-with open(path) as f: data = json.load(f)
-if name not in data or data[name].get("installLocation") != dir:
-    data[name] = {"source": {"source": "directory", "path": dir}, "installLocation": dir, "lastUpdated": "2026-01-01T00:00:00.000Z"}
-    with open(path, "w") as f: json.dump(data, f, indent=2); f.write("\n")
-PYEOF
-
-        # Install plugin
-        if claude plugin list 2>/dev/null | grep -q "$name@$name"; then
-            ok "plugin/$name"
-        else
-            if claude plugin install "$name@$name" 2>/dev/null; then
-                added "plugin/$name"
-            else
-                fail "plugin/$name"
+    local entry name cmd args
+    for entry in "${MCP_SERVERS[@]}"; do
+        IFS='|' read -r name cmd args <<< "$entry"
+        if $has_claude; then
+            if ! claude mcp list 2>/dev/null | grep -q "^$name:"; then
+                claude mcp add --scope user "$name" -- $cmd $args 2>/dev/null \
+                    && log "add claude/$name" || warn "fail claude/$name"
             fi
         fi
-    done
-}
-
-install_claude_settings() {
-    local src="$ROOT/agents/claude/settings.json"
-    local dest="$HOME/.claude/settings.json"
-    local label="~/.claude/settings.json"
-    [[ -f "$src" ]] || { skip "$label (source not found)"; return; }
-    mkdir -p "$(dirname "$dest")"
-    # Expand ~ to $HOME so Claude Code resolves absolute paths correctly
-    local content
-    content=$(sed "s|~/|$HOME/|g" "$src")
-    if [[ -f "$dest" && ! -L "$dest" ]] && [[ "$(cat "$dest")" == "$content" ]]; then
-        ok "$label"
-    else
-        rm -f "$dest"
-        printf '%s\n' "$content" > "$dest"
-        wrote "$label"
-    fi
-}
-
-sync_published_skills() {
-    local dev_dir="$HOME/Developer/GitHub"
-    local skills_dir="$ROOT/agents/extensions/skills"
-    local name
-
-    for name in "${PUBLISH_SKILLS[@]}"; do
-        local repo_dir="$dev_dir/$name"
-        local skill_dir="$skills_dir/$name"
-
-        if ! git -C "$repo_dir" rev-parse --is-inside-work-tree &>/dev/null; then
-            skip "publish/$name (no repo)"
-            continue
-        fi
-        if [[ ! -d "$skill_dir" ]]; then
-            skip "publish/$name (no local skill)"
-            continue
-        fi
-
-        # Skip dirty repos to avoid overwriting uncommitted work
-        if ! git -C "$repo_dir" diff --quiet 2>/dev/null \
-            || ! git -C "$repo_dir" diff --cached --quiet 2>/dev/null \
-            || [[ -n "$(git -C "$repo_dir" ls-files --others --exclude-standard 2>/dev/null)" ]]; then
-            skip "publish/$name (repo dirty)"
-            continue
-        fi
-
-        if [[ "$name" == "relay" ]]; then
-            mkdir -p "$repo_dir/claude/skills/relay" "$repo_dir/codex/skills/relay" "$repo_dir/scripts"
-            rsync -a --delete --exclude='scripts/' \
-                "$skill_dir/claude/" "$repo_dir/claude/skills/relay/"
-            rsync -a --delete --exclude='scripts/' \
-                "$skill_dir/codex/" "$repo_dir/codex/skills/relay/"
-            rsync -a --delete "$skill_dir/scripts/" "$repo_dir/scripts/"
-        else
-            rsync -a --delete \
-                --exclude='.git' --exclude='LICENSE' --exclude='README.md' \
-                --exclude='.gitignore' --exclude='.relay' \
-                "$skill_dir/" "$repo_dir/"
-        fi
-
-        if git -C "$repo_dir" diff --quiet 2>/dev/null \
-            && [[ -z "$(git -C "$repo_dir" ls-files --others --exclude-standard 2>/dev/null)" ]]; then
-            ok "publish/$name"
-        else
-            wrote "publish/$name"
+        if $has_codex && [[ "$name" != "codex" ]]; then
+            if ! codex mcp get "$name" &>/dev/null; then
+                codex mcp add "$name" -- $cmd $args 2>/dev/null \
+                    && log "add codex/$name" || warn "fail codex/$name"
+            fi
         fi
     done
 }
@@ -614,73 +328,39 @@ sync_published_skills() {
 main() {
     cd "$ROOT"
 
-    printf '\n  %s%s dotfiles%s  %s%s%s\n' \
-        "${_BOLD}${_CYN}" "🔧" "$_RST" "$_DIM" "$ROOT" "$_RST"
+    # Dispatch subcommands to extracted scripts
+    case "${1:-}" in
+        publish) exec "$ROOT/scripts/publish-skills.sh" ;;
+        plugins) exec "$ROOT/scripts/install-plugins.sh" ;;
+    esac
 
-    # Cleanup stale managed items
-    section "Cleanup"
-    clean_stale_managed
-    flush_ok
+    printf '\n  %s🔧 dotfiles%s  %s%s%s\n' "$_CYN" "$_RST" "$_DIM" "$ROOT" "$_RST"
 
-    # Submodules
     section "Submodules"
     if [[ -f .gitmodules && -s .gitmodules ]]; then
-        git submodule sync --recursive >/dev/null 2>&1
-        git submodule update --init --recursive >/dev/null 2>&1
-        ok "synced"
-    else
-        skip "no submodules found"
+        git submodule sync --recursive -q 2>/dev/null || true
+        git submodule update --init --recursive -q 2>/dev/null || true
     fi
-    flush_ok
 
-    # Symlinks
-    section "Symlinks"
-    local entry
-    for entry in "${LINKS[@]}"; do
-        ensure_link "${entry%%:*}" "${entry#*:}"
-    done
-    install_claude_settings
-    flush_ok
+    section "Links"
+    install_links
 
-    # External repos
     section "Repos"
     install_repos
-    flush_ok
 
-    # Extensions
-    section "Extensions"
+    section "Skills"
     install_skills
-    flush_ok
 
-    # Codex config
-    section "Codex Config"
-    write_codex_config
-    flush_ok
+    section "Config"
+    install_codex_config
 
-    # MCP servers
-    section "MCP Servers"
+    section "MCP"
     install_mcp_servers
-    flush_ok
 
-    # Publish skills to repos (opt-in: ./dotfiles.sh publish)
-    if [[ "${1:-}" == "publish" ]]; then
-        section "Publish"
-        sync_published_skills
-        flush_ok
-    fi
-
-    # Plugins
     section "Plugins"
-    install_plugins
-    flush_ok
+    "$ROOT/scripts/install-plugins.sh"
 
-    # Record managed state for future cleanup
-    write_manifest
-
-    # Final summary
-    print_summary
-    printf '  ✨ %sDone.%s Restart your shell or %ssource ~/.zshrc%s\n\n' \
-        "$_BOLD" "$_RST" "$_DIM" "$_RST"
+    printf '\n  ✨ Done. Restart your shell or %ssource ~/.zshrc%s\n\n' "$_DIM" "$_RST"
 }
 
 main "$@"
