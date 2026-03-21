@@ -7,6 +7,7 @@ description: |
   of these changes", or invokes /lbreview. Do NOT use for session-end review; use /last-call
   instead.
 allowed-tools: Bash(git diff:*), Bash(git status:*), Bash(git log:*), Read, Grep, Glob
+effort: high
 ---
 
 ## Context

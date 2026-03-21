@@ -8,6 +8,7 @@ description: |
   "document this repo", or /update-readme. Do NOT use for non-README docs.
 user-invocable: true
 allowed-tools: Bash(find:*), Bash(ls:*), Bash(tree:*), Bash(wc:*), Bash(pwd:*), Bash(head:*), Bash(awk:*), Bash(git remote:*), Glob(*), Grep(*), Read(*), Edit(*), Write(*)
+effort: high
 ---
 
 # Update README

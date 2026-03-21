@@ -1,6 +1,7 @@
 ---
 name: note-gen
 description: Generate Obsidian notes from source materials or topics. Use when the user wants to create a new note in their Obsidian vault from a URL, file, pasted content, or a keyword/concept. Triggers on "take notes on", "create a note", "summarize into a note", "write a note about", or when a URL/paper/content/topic is provided with a note request. Invoke with /note-gen.
+effort: high
 ---
 
 # Note Gen

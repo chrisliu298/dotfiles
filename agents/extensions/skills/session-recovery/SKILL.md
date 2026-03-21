@@ -15,6 +15,7 @@ allowed-tools:
   - Glob
   - Grep
 user-invocable: true
+effort: medium
 ---
 
 # Session Recovery After Directory Rename

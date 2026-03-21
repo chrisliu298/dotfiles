@@ -14,6 +14,16 @@ One SKILL.md per skill, works in both Claude Code and Codex. All own skills live
 
 Published skills are synced to their standalone GitHub repos via `./dotfiles.sh publish`.
 
+### Effort Levels
+
+Each local skill sets an `effort` frontmatter key to control how long the model thinks before responding (Claude Code only — Codex ignores unknown frontmatter). Overrides the session default when the skill is invoked.
+
+| Level | Skills |
+|-------|--------|
+| **medium** | push, atomic-push, sync-upstream, publish-skill, session-recovery, recall, jina |
+| **high** | deslop, beautify, lbreview, last-call, update-readme, note-gen, vault-linker, prompt-engineer, interviewer, citation-assistant |
+| **max** | autoresearch, nanorepl, prism |
+
 ### Published Skills
 
 | Skill | Description |

@@ -6,6 +6,7 @@ description: |
   "publish skill", "publish <name>", "make <name> a public skill repo", "release skill",
   or invokes /publish-skill. Do NOT trigger for publishing npm packages or deploying apps.
 user-invocable: true
+effort: medium
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 ---
 

@@ -6,6 +6,7 @@ description: |
   "sync repo with upstream", or invokes /sync-upstream. Only applies to repos
   that are forks. Do NOT use for simple git pull on non-forked repos.
 user-invocable: true
+effort: medium
 allowed-tools: Bash(git remote:*), Bash(git fetch:*), Bash(git stash:*), Bash(git rebase:*), Bash(git log:*), Bash(git status:*), Bash(git push:*), Bash(git branch:*), Bash(gh repo:*)
 ---
 

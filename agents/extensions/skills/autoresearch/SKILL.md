@@ -4,6 +4,7 @@ description: >
   Autonomous experiment loop faithful to Karpathy's autoresearch. Set up a branch,
   establish a baseline, then loop forever: edit, commit, run, measure, keep or revert.
   Use when asked to "run autoresearch", "optimize X in a loop", or "start experiments".
+effort: max
 ---
 
 # Autoresearch

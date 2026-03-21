@@ -8,6 +8,7 @@ description: >-
   redundant judgment: non-trivial decisions, ambiguous tradeoffs, high-stakes
   changes, or anything where a single perspective might miss something.
 user-invocable: true
+effort: max
 allowed-tools:
   - Agent
   - Bash

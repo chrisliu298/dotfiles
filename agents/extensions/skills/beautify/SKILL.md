@@ -8,6 +8,7 @@ description: |
   (use /deslop) or for code review without editing (use /lbreview).
 user-invocable: true
 allowed-tools: Bash(git diff:*), Bash(git status:*), Bash(git log:*), Read, Edit, Grep, Glob
+effort: high
 ---
 
 # Beautify
