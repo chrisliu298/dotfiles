@@ -31,50 +31,38 @@ fi
 
 # Install dotfiles locally, then sync to remote machines
 dfs() {
-    local _d=$'\033[2m' _b=$'\033[1m' _c=$'\033[36m'
-    local _g=$'\033[32m' _r=$'\033[31m' _0=$'\033[0m'
+    local _c=$'\033[1;36m' _g=$'\033[32m' _r=$'\033[31m' _d=$'\033[2m' _0=$'\033[0m'
 
-    # Section header helper (matches dotfiles.sh: 60 visible chars)
-    _sec() {
-        local t="$1" total_width=60
-        local prefix="  ── $t "
-        local pad="" i len=$(( total_width - ${#prefix} ))
-        (( len < 4 )) && len=4
-        for (( i = 0; i < len; i++ )); do pad+="─"; done
-        printf '\n  %s── %s %s%s\n' "${_b}${_c}" "$t" "${pad}${_0}" ""
-    }
+    printf '\n  %s🔄 dfs%s  %ssync dotfiles everywhere%s\n' "$_c" "$_0" "$_d" "$_0"
 
-    # Pull latest changes
-    _sec "Pull"
+    # Pull
+    printf '\n  %s── Pull ──%s\n' "$_c" "$_0"
     if git -C ~/dotfiles pull --ff-only >/dev/null 2>&1; then
-        printf "     ✓ ${_d}up to date${_0}\n"
+        printf '     %s✓%s up to date\n' "$_g" "$_0"
     else
-        printf "     ${_r}✗ pull failed${_0}\n"
+        printf '     %s✗ pull failed%s\n' "$_r" "$_0"
         return 1
     fi
 
     # Local install
-    _sec "Install"
+    printf '\n  %s── Install ──%s\n' "$_c" "$_0"
     ~/dotfiles/dotfiles.sh
     local local_rc=$?
     if (( local_rc )); then
-        printf "     ${_r}✗ local install failed${_0}\n"
+        printf '     %s✗ local install failed%s\n' "$_r" "$_0"
         return $local_rc
     fi
 
-    # Remote sync (macOS only — requires SSH hosts)
+    # Remote sync (macOS only)
     (( IS_MACOS )) || return 0
 
     local hosts=(macmini l40s)
     local tmpdir=$(mktemp -d)
     local pids=()
-    local n=${#hosts[@]}
 
-    _sec "Sync ($n hosts)"
+    printf '\n  %s── Sync ──%s\n' "$_c" "$_0"
 
-    # Disable job control to suppress [1] PID / [1]+ Done noise
     set +m
-
     for h in "${hosts[@]}"; do
         command ssh "$h" "cd ~/dotfiles && git pull --ff-only 2>&1 && ./dotfiles.sh 2>&1; printf '\\n__RC__=%d\\n' \$?" \
             > "$tmpdir/$h.log" 2>&1 &
@@ -84,24 +72,23 @@ dfs() {
     local failed=0 idx=0
     for h in "${hosts[@]}"; do
         wait "${pids[$idx]}" 2>/dev/null
-        # Check the embedded exit code rather than wait's return code
         if tail -1 "$tmpdir/$h.log" | grep -q '^__RC__=0$'; then
-            printf "     ${_g}✓${_0} %s\n" "$h"
+            printf '     %s✓%s %s\n' "$_g" "$_0" "$h"
         else
-            printf "     ${_r}✗${_0} %s\n" "$h"
+            printf '     %s✗%s %s\n' "$_r" "$_0" "$h"
             sed '/^__RC__=/d' "$tmpdir/$h.log" | sed "s/^/       ${_d}│${_0} /"
             ((++failed))
         fi
         ((++idx))
     done
 
-    [[ -o interactive ]] && set -m  # restore only in interactive shells
+    [[ -o interactive ]] && set -m
     rm -rf "$tmpdir"
 
     if (( failed )); then
-        printf "\n  ${_r}${failed} failed${_0}\n\n"
+        printf '\n  %s✗ %d failed%s\n\n' "$_r" "$failed" "$_0"
     else
-        printf "\n  ${_g}✨ All synced.${_0}\n\n"
+        printf '\n  ✨ Done.\n\n'
     fi
     return $failed
 }
