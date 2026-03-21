@@ -21,13 +21,11 @@ PUBLISH_SKILLS=(
     "vault-linker"
 )
 
-log()  { printf '  %s\n' "$1"; }
-warn() { printf '  ⚠ %s\n' "$1" >&2; }
+log()  { printf '     %s\n' "$1"; }
+warn() { printf '     %s\n' "$1" >&2; }
 
 dev_dir="$HOME/Developer/GitHub"
 skills_dir="$ROOT/agents/extensions/skills"
-
-printf '\n  Publish skills → GitHub repos\n\n'
 
 for name in "${PUBLISH_SKILLS[@]}"; do
     repo_dir="$dev_dir/$name"
@@ -71,5 +69,3 @@ for name in "${PUBLISH_SKILLS[@]}"; do
         log "wrote $name"
     fi
 done
-
-printf '\n  Done.\n'

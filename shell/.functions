@@ -33,10 +33,9 @@ fi
 dfs() {
     local _c=$'\033[1;36m' _g=$'\033[32m' _r=$'\033[31m' _d=$'\033[2m' _0=$'\033[0m'
 
-    printf '\n  %s🔄 dfs%s  %ssync dotfiles everywhere%s\n' "$_c" "$_0" "$_d" "$_0"
+    printf '\n  %s🔄 dfs%s  %ssync dotfiles everywhere%s\n\n' "$_c" "$_0" "$_d" "$_0"
 
-    # Pull
-    printf '\n  %s── Pull ──%s\n' "$_c" "$_0"
+    printf '  %s── Pull ──%s\n' "$_c" "$_0"
     if git -C ~/dotfiles pull --ff-only >/dev/null 2>&1; then
         printf '     %s✓%s up to date\n' "$_g" "$_0"
     else
@@ -44,8 +43,7 @@ dfs() {
         return 1
     fi
 
-    # Local install
-    printf '\n  %s── Install ──%s\n' "$_c" "$_0"
+    printf '  %s── Install ──%s\n' "$_c" "$_0"
     ~/dotfiles/dotfiles.sh
     local local_rc=$?
     if (( local_rc )); then
@@ -53,13 +51,12 @@ dfs() {
         return $local_rc
     fi
 
-    # Remote sync (macOS only)
     (( IS_MACOS )) || return 0
 
     local hosts=(macmini l40s)
     local tmpdir=$(mktemp -d)
 
-    printf '\n  %s── Sync ──%s\n' "$_c" "$_0"
+    printf '  %s── Sync ──%s\n' "$_c" "$_0"
 
     set +m
     for h in "${hosts[@]}"; do

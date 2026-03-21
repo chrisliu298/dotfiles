@@ -69,7 +69,7 @@ else
     _CYN="" _YLW="" _DIM="" _RST=""
 fi
 
-section() { printf '\n  %s── %s ──%s\n' "$_CYN" "$1" "$_RST"; }
+section() { printf '  %s── %s ──%s\n' "$_CYN" "$1" "$_RST"; }
 log()     { printf '     %s\n' "$1"; }
 warn()    { printf '     %s%s%s\n' "$_YLW" "$1" "$_RST" >&2; }
 
@@ -85,8 +85,8 @@ ensure_symlink() {
 sync_git_checkout() {
     local slug="$1" dir="$2"
     if [[ -d "$dir/.git" ]]; then
-        git -C "$dir" fetch --depth=1 origin 2>/dev/null \
-            && git -C "$dir" reset --hard origin/HEAD 2>/dev/null \
+        git -C "$dir" fetch --depth=1 origin >/dev/null 2>&1 \
+            && git -C "$dir" reset --hard origin/HEAD >/dev/null 2>&1 \
             || true
     else
         # Remove corrupt/partial cache before cloning
@@ -338,29 +338,23 @@ main() {
         plugins) exec "$ROOT/scripts/install-plugins.sh" ;;
     esac
 
-    printf '\n  %s🔧 dotfiles%s  %s%s%s\n' "$_CYN" "$_RST" "$_DIM" "$ROOT" "$_RST"
+    printf '\n  %s🔧 dotfiles%s  %s%s%s\n\n' "$_CYN" "$_RST" "$_DIM" "$ROOT" "$_RST"
 
     section "Submodules"
     if [[ -f .gitmodules && -s .gitmodules ]]; then
         git submodule sync --recursive -q 2>/dev/null || true
         git submodule update --init --recursive -q 2>/dev/null || true
     fi
-
     section "Links"
     install_links
-
     section "Repos"
     install_repos
-
     section "Skills"
     install_skills
-
     section "Config"
     install_codex_config
-
     section "MCP"
     install_mcp_servers
-
     section "Plugins"
     "$ROOT/scripts/install-plugins.sh"
 

@@ -9,15 +9,12 @@ PLUGINS=(
 
 PLUGIN_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-plugins"
 
-log()  { printf '  %s\n' "$1"; }
-warn() { printf '  ⚠ %s\n' "$1" >&2; }
+log()  { printf '     %s\n' "$1"; }
+warn() { printf '     %s\n' "$1" >&2; }
 
 if ! command -v claude &>/dev/null; then
-    warn "claude CLI not found"
     exit 0
 fi
-
-printf '\n  Install Claude plugins\n\n'
 
 mkdir -p "$PLUGIN_CACHE"
 
@@ -66,5 +63,3 @@ PYEOF
         fi
     fi
 done
-
-printf '\n  Done.\n'
