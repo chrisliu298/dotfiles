@@ -64,6 +64,16 @@ Parallax is dispatched via `/relay` to a **different model**. Invoke `/relay` di
 
 Before writing any Parallax relay prompt, read the target model's prompt guide in the relay skill's `references/` directory (e.g., `prompting-codex.md` for Codex). Do this every time, not just once.
 
+**Relay call syntax (exact):**
+
+```bash
+relay call --name <slug> --effort <level> <<'BODY'
+<prompt content here>
+BODY
+```
+
+`--name` is required (lowercase slug, e.g., `prism-contrarian`). The heredoc body must not be empty. Do not pass model flags — the script handles model selection. For concurrency details (backgrounding, timeouts), follow the relay skill's Async / Parallel section for your platform.
+
 If `/relay` is unavailable, replace Parallax with a subagent using a **structurally adversarial lens** (Contrarian, Falsification, Disconfirming).
 
 **Constraint leakage risk (CRITICAL):** Relay peers may recurse unless the anti-recursion rule is explicit, early, and repeated. You MUST:
