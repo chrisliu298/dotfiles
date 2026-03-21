@@ -58,7 +58,6 @@ dfs() {
 
     local hosts=(macmini l40s)
     local tmpdir=$(mktemp -d)
-    local pids=()
 
     printf '\n  %s── Sync ──%s\n' "$_c" "$_0"
 
@@ -66,12 +65,11 @@ dfs() {
     for h in "${hosts[@]}"; do
         command ssh "$h" "cd ~/dotfiles && git pull --ff-only 2>&1 && ./dotfiles.sh 2>&1; printf '\\n__RC__=%d\\n' \$?" \
             > "$tmpdir/$h.log" 2>&1 &
-        pids+=($!)
     done
+    wait
 
-    local failed=0 idx=0
+    local failed=0
     for h in "${hosts[@]}"; do
-        wait "${pids[$idx]}" 2>/dev/null
         if tail -1 "$tmpdir/$h.log" | grep -q '^__RC__=0$'; then
             printf '     %s✓%s %s\n' "$_g" "$_0" "$h"
         else
@@ -79,7 +77,6 @@ dfs() {
             sed '/^__RC__=/d' "$tmpdir/$h.log" | sed "s/^/       ${_d}│${_0} /"
             ((++failed))
         fi
-        ((++idx))
     done
 
     [[ -o interactive ]] && set -m
