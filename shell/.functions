@@ -33,30 +33,34 @@ fi
 dfs() {
     local _c=$'\033[1;36m' _g=$'\033[32m' _r=$'\033[31m' _d=$'\033[2m' _0=$'\033[0m'
 
-    printf '\n  %s🔄 dfs%s  %ssync dotfiles everywhere%s\n\n' "$_c" "$_0" "$_d" "$_0"
+    printf '\n  %sdfs%s  %ssync dotfiles everywhere%s\n\n' "$_c" "$_0" "$_d" "$_0"
 
-    printf '  %s── Pull ──%s\n' "$_c" "$_0"
+    # Pull
     if git -C ~/dotfiles pull --ff-only >/dev/null 2>&1; then
-        printf '     %s✓%s up to date\n' "$_g" "$_0"
+        printf '  %sPull%s     %s✓%s up to date\n\n' "$_c" "$_0" "$_g" "$_0"
     else
-        printf '     %s✗ pull failed%s\n' "$_r" "$_0"
+        printf '  %sPull%s     %s✗%s pull failed\n\n' "$_c" "$_0" "$_r" "$_0"
+        printf '  %saborted.%s\n\n' "$_r" "$_0"
         return 1
     fi
 
-    printf '  %s── Install ──%s\n' "$_c" "$_0"
+    # Install
+    printf '  %sInstall%s\n' "$_c" "$_0"
     ~/dotfiles/dotfiles.sh
     local local_rc=$?
     if (( local_rc )); then
-        printf '     %s✗ local install failed%s\n' "$_r" "$_0"
+        printf '           %s✗%s local install failed\n\n' "$_r" "$_0"
+        printf '  %saborted.%s\n\n' "$_r" "$_0"
         return $local_rc
     fi
+    printf '           %s✓%s local\n\n' "$_g" "$_0"
 
-    (( IS_MACOS )) || return 0
+    (( IS_MACOS )) || { printf '  %s✨ all synced%s\n\n' "$_d" "$_0"; return 0; }
 
+    # Sync
     local hosts=(macmini l40s)
     local tmpdir=$(mktemp -d)
-
-    printf '  %s── Sync ──%s\n' "$_c" "$_0"
+    local failed_hosts=()
 
     set +m
     for h in "${hosts[@]}"; do
@@ -65,26 +69,39 @@ dfs() {
     done
     wait
 
-    local failed=0
+    # Pass 1: compact status line
+    printf '  %sSync%s    ' "$_c" "$_0"
     for h in "${hosts[@]}"; do
         if tail -1 "$tmpdir/$h.log" | grep -q '^__RC__=0$'; then
-            printf '     %s✓%s %s\n' "$_g" "$_0" "$h"
+            printf ' %s✓%s %s' "$_g" "$_0" "$h"
         else
-            printf '     %s✗%s %s\n' "$_r" "$_0" "$h"
-            sed '/^__RC__=/d' "$tmpdir/$h.log" | sed "s/^/       ${_d}│${_0} /"
-            ((++failed))
+            printf ' %s✗%s %s' "$_r" "$_0" "$h"
+            failed_hosts+=("$h")
         fi
     done
+    printf '\n'
+
+    # Pass 2: expand failed host logs
+    if (( ${#failed_hosts[@]} )); then
+        printf '\n'
+        for h in "${failed_hosts[@]}"; do
+            printf '  %s%s:%s\n' "$_d" "$h" "$_0"
+            sed '/^__RC__=/d' "$tmpdir/$h.log" | sed "s/^/     ${_d}│${_0} /"
+        done
+    fi
 
     [[ -o interactive ]] && set -m
     rm -rf "$tmpdir"
 
-    if (( failed )); then
-        printf '\n  %s✗ %d failed%s\n\n' "$_r" "$failed" "$_0"
+    if (( ${#failed_hosts[@]} )); then
+        local n=${#failed_hosts[@]}
+        local noun="host"; (( n > 1 )) && noun="hosts"
+        printf '\n  %s✗ %d %s failed%s\n\n' "$_r" "$n" "$noun" "$_0"
+        return $n
     else
-        printf '\n  ✨ Done.\n\n'
+        printf '\n  %s✨ all synced%s\n\n' "$_d" "$_0"
+        return 0
     fi
-    return $failed
 }
 
 # =============================================================================
