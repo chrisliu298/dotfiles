@@ -57,7 +57,7 @@ for name in "${PUBLISH_SKILLS[@]}"; do
         rsync -a --delete "$skill_dir/scripts/" "$repo_dir/scripts/"
     else
         rsync -a --delete \
-            --exclude='.git' --exclude='LICENSE' --exclude='README.md' \
+            --exclude='.git' --exclude='LICENSE' \
             --exclude='.gitignore' --exclude='.relay' \
             "$skill_dir/" "$repo_dir/"
     fi
