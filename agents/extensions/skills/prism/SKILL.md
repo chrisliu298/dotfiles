@@ -215,16 +215,19 @@ While agents run, form your own position independently. Your lens is **Integrato
 
 Since you composed the prompts and chose the lenses, your self-review is not fully independent. When dispatched agents diverge from your position, give their perspectives slightly more weight on points you may have anchored on during prompt design.
 
-### Step 3: Wait for ALL agents
+### Step 3: Wait for ALL agents (HARD GATE)
 
-**Do not synthesize until every dispatched agent has returned.**
+**Do not synthesize, summarize, or present results until EVERY dispatched agent — including Parallax — has returned.** This is a hard gate, not a suggestion. Having "enough" subagents is never a reason to skip the remaining agents. The whole point of Parallax is model diversity — proceeding without it defeats the purpose of Prism.
 
-**Parallax is slow — that is normal.** Do not diagnose, retry, or report failure while a background task is running. The system sends a completion notification; until it arrives, the call is healthy.
+**Parallax is slow — that is normal and expected.** Relay calls routinely take 2-5x longer than same-model subagents. Do not diagnose, retry, report failure, or proceed while a background task is running. The system sends a completion notification; until it arrives, the call is healthy. Do not tell the user you are "still waiting" or suggest proceeding without it.
+
+**What to do while waiting:** Work on your self-review (Step 2). If self-review is done, wait silently. Do not synthesize partial results.
 
 **Handling failures (after completion notification only):**
 
 - **Relay transport failure:** Read the `.log` sidecar, diagnose, fix, and retry once before escalating.
 - **Answer-quality failure** (empty, truncated, off-topic): Offer the user: (a) retry, (b) proceed with reduced perspectives, or (c) abort.
+- **Only these post-notification failures justify proceeding without Parallax.** "It's taking a long time" is never a failure.
 
 ### Step 3.5: Safety check
 
@@ -267,6 +270,7 @@ Optionally delete the shared context file (`/tmp/prism-<unique-id>.md`).
 - **No recursion (HARD RULE):** Dispatched agents must never invoke /prism, /relay, any skill, or spawn child agents. The Constraints section and launcher prompt both enforce this — do not weaken or omit either. For Parallax, keep the anti-recursion warning at the top of the heredoc.
 - **No contamination:** Write the shared context file and compose all launcher prompts before any launch. Do not modify the shared file or revise prompts after seeing early agent outputs.
 - **No all-same-model dispatch (HARD RULE):** Bash relay call count must match the configured Parallax count (default 1). If it is zero and parallax != `0`, fix before launching. This is the most common Prism failure mode.
+- **No early synthesis (HARD RULE):** Do not synthesize until every dispatched agent has returned its completion notification. "Subagents are done, relay is still running" is not a reason to proceed — it is the expected state. Proceeding without Parallax results voids the entire Prism run.
 - **No side effects:** Dispatched agents must not edit files, commit, push, or invoke skills. The only permitted write is the relay response file (.res.md).
 
 ## Degrees of Freedom
