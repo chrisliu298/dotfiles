@@ -40,6 +40,7 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 | [prompt-engineer](https://github.com/chrisliu298/prompt-engineer) | Write and refine prompts for Claude or Codex |
 | [recall](https://github.com/chrisliu298/recall) | Search past sessions and Obsidian notes for context |
 | [relay](https://github.com/chrisliu298/relay) | Bidirectional cross-agent relay between Claude Code and Codex |
+| [chatgpt](https://github.com/chrisliu298/chatgpt) | Send prompts to ChatGPT via Chrome and collect responses (Claude only) |
 | [vault-linker](https://github.com/chrisliu298/vault-linker) | Build wikilink connections across Obsidian vaults |
 
 ### Community Skills
