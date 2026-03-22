@@ -30,6 +30,9 @@ SKILLS=(
     # Local extensions (wildcard: all subdirs with SKILL.md)
     "*|./agents/extensions/skills|claude,codex"
 
+    # Claude-only local skills (explicit entries override the wildcard's agents setting)
+    "chatgpt|./agents/extensions/skills/chatgpt|claude"
+
     # Relay: agent-specific SKILL.md (not caught by wildcard — no top-level SKILL.md)
     "relay|./agents/extensions/skills/relay/claude|claude"
     "relay|./agents/extensions/skills/relay/codex|codex"
@@ -172,6 +175,13 @@ install_skills() {
 
     # Resolve entries and create symlinks
     mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills"
+    # Collect explicitly named skills so the wildcard skips them
+    local explicit_names=""
+    for entry in "${SKILLS[@]}"; do
+        IFS='|' read -r name _ _ <<< "$entry"
+        [[ "$name" != "*" ]] && explicit_names+="$name"$'\n'
+    done
+
     local claude_expected="" codex_expected=""
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name source agents <<< "$entry"
@@ -197,7 +207,10 @@ install_skills() {
                 for d in "$base_dir"/*/; do
                     [[ -f "$d/SKILL.md" ]] || continue
                     d="${d%/}"
-                    skill_entries+=("$(basename "$d"):$d")
+                    local dname="$(basename "$d")"
+                    # Skip skills that have explicit entries (they override the wildcard's agents)
+                    echo "$explicit_names" | grep -qx "$dname" && continue
+                    skill_entries+=("$dname:$d")
                 done
             fi
         else
