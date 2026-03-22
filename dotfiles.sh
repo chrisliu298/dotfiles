@@ -20,7 +20,6 @@ LINKS=(
     "agents/claude/hooks:.claude/hooks"
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
     "agents/codex/AGENTS.md:.codex/AGENTS.md"
-    "agents/extensions/skills/relay/scripts/relay:.local/bin/relay"
 )
 
 # name|source|agents
@@ -40,6 +39,7 @@ SKILLS=(
     "humanizer|blader/humanizer|claude,codex"
     "obsidian-bases|kepano/obsidian-skills/skills/obsidian-bases|claude,codex"
     "obsidian-cli|kepano/obsidian-skills/skills/obsidian-cli|claude,codex"
+    "browser-use|browser-use/browser-use/skills/browser-use|claude,codex"
     "runpodctl|runpod/skills/runpodctl|claude,codex"
 
     # Agent-specific (same name, different source per agent)
