@@ -46,10 +46,13 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 
 | Skill | Source | Agents |
 |-------|--------|--------|
+| browser-use | [browser-use/browser-use](https://github.com/browser-use/browser-use) | Both |
 | defuddle | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) | Both |
 | humanizer | [blader/humanizer](https://github.com/blader/humanizer) | Both |
+| obsidian-bases | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) | Both |
 | obsidian-cli | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) | Both |
 | pdf | [anthropics/skills](https://github.com/anthropics/skills) / [openai/skills](https://github.com/openai/skills) | Both |
+| runpodctl | [runpod/skills](https://github.com/runpod/skills) | Both |
 | skill-creator | [anthropics/skills](https://github.com/anthropics/skills) | Claude |
 
 ### Workflow Skills (Local)
@@ -63,6 +66,7 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 | push | Single-commit push to remote |
 | session-recovery | Recover sessions after directory rename/move |
 | sync-upstream | Sync forked repo with upstream remote |
+| typst | Write Typst documents correctly and idiomatically |
 | update-readme | Update or create README.md for repos |
 
 ## MCP Servers
