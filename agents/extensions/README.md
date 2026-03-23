@@ -21,8 +21,8 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 | Level | Skills |
 |-------|--------|
 | **medium** | push, atomic-push, sync-upstream, publish-skill, session-recovery, recall, jina |
-| **high** | deslop, beautify, lbreview, last-call, update-readme, note-gen, vault-linker, prompt-engineer, interviewer, citation-assistant |
-| **max** | autoresearch, nanorepl, prism |
+| **high** | deslop, beautify, lbreview, last-call, update-readme, note-gen, vault-linker, prompt-engineer, interviewer, citation-assistant, tdd, debug |
+| **max** | autoresearch, nanorepl, prism, subagent-executor |
 
 ### Published Skills
 
@@ -62,11 +62,14 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 |-------|-------------|
 | atomic-push | Atomic commits and push to remote |
 | beautify | Simplify and beautify code changes on the current branch |
+| debug | Structured debugging: investigate root cause before proposing fixes |
 | jina | Fetch web content and search via Jina AI (r.jina.ai / s.jina.ai) |
 | publish-skill | Publish local skill to standalone public GitHub repo |
 | push | Single-commit push to remote |
 | session-recovery | Recover sessions after directory rename/move |
+| subagent-executor | Execute multi-task plans via fresh subagents with review gates |
 | sync-upstream | Sync forked repo with upstream remote |
+| tdd | Test-driven development: write failing test before production code |
 | typst | Write Typst documents correctly and idiomatically |
 | update-readme | Update or create README.md for repos |
 
