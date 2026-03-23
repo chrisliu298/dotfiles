@@ -1,5 +1,6 @@
 ---
 name: deslop
+user-invocable: true
 description: |
   Remove AI-generated slop from code changes. Checks the diff against main and cleans up
   unnecessary comments, defensive checks, single-use variables, redundant casts, and style

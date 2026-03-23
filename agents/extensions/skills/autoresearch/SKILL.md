@@ -1,5 +1,6 @@
 ---
 name: autoresearch
+user-invocable: true
 description: >
   Autonomous experiment loop faithful to Karpathy's autoresearch. Set up a branch,
   establish a baseline, then loop forever: edit, commit, run, measure, keep or revert.

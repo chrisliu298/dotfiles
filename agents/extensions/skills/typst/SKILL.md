@@ -6,7 +6,7 @@ description: |
   user mentions Typst by name, asks to convert LaTeX to Typst, or wants help with Typst syntax,
   math equations, tables, templates, or styling. If the user says "write this up nicely" or
   "make a PDF" and Typst is a reasonable choice, suggest it.
-user-invocable: false
+user-invocable: true
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 

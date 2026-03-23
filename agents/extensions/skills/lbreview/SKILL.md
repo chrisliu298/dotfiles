@@ -1,5 +1,6 @@
 ---
 name: lbreview
+user-invocable: true
 description: |
   Careful and thorough code review of changes against main. Analyzes the diff to understand
   the goal, evaluates benefits, identifies pitfalls, and suggests simplifications. Use when
