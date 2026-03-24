@@ -15,6 +15,7 @@ LINKS=(
     ".config/btop:.config/btop"
     ".config/nvim:.config/nvim"
     ".config/tmux:.config/tmux"
+    ".config/ghostty:.config/ghostty"
     "agents/claude/CLAUDE.md:.claude/CLAUDE.md"
     "agents/claude/keybindings.json:.claude/keybindings.json"
     "agents/claude/hooks:.claude/hooks"
@@ -51,18 +52,12 @@ SKILLS=(
     "pdf|openai/skills/skills/.curated/pdf|codex"
 )
 
-# slug:dest (clone → symlink to ~/dest)
-REPOS=(
-    "chrisliu298/ghostty-config:.config/ghostty"
-)
-
 # name|command|args (user-scoped MCP servers for Claude Code)
 MCP_SERVERS=(
     "playwright|npx|@playwright/mcp@latest --headless --codegen none --console-level error"
     "codex|codex|mcp-server"
 )
 
-REPO_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-repos"
 SKILL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/skills-src"
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -127,29 +122,6 @@ install_links() {
             log "write ~/.claude/settings.json"
         fi
     fi
-}
-
-install_repos() {
-    mkdir -p "$REPO_CACHE"
-    local entry
-    for entry in "${REPOS[@]}"; do
-        local slug="${entry%%:*}" dest_rel="${entry#*:}"
-        local dir="$REPO_CACHE/${slug//\//__}"
-        if [[ -d "$dir/.git" ]]; then
-            # Safe update: skip if dirty, fast-forward only
-            if ! git -C "$dir" diff --quiet 2>/dev/null; then
-                warn "skip $slug (dirty)"
-            else
-                git -C "$dir" pull --ff-only -q 2>/dev/null || true
-            fi
-        else
-            mkdir -p "$(dirname "$dir")"
-            git clone "https://github.com/$slug.git" "$dir" 2>/dev/null || {
-                warn "fail clone $slug"; continue
-            }
-        fi
-        ensure_symlink "$dir" "$HOME/$dest_rel"
-    done
 }
 
 install_skills() {
@@ -361,8 +333,6 @@ main() {
     fi
     section "Links"
     install_links
-    section "Repos"
-    install_repos
     section "Skills"
     install_skills
     section "Config"
