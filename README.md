@@ -29,7 +29,7 @@ See [`shell/`](shell/README.md), [`.config/`](.config/README.md), and [`agents/e
 
 ## Extensions
 
-34 extensions across local and upstream sources. See [`agents/extensions/README.md`](agents/extensions/README.md) for full catalog.
+35 extensions across local and upstream sources. See [`agents/extensions/README.md`](agents/extensions/README.md) for full catalog.
 
 | Action | Command |
 |--------|---------|

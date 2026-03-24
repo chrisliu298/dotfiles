@@ -21,7 +21,7 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 | Level | Skills |
 |-------|--------|
 | **medium** | push, atomic-push, sync-upstream, publish-skill, session-recovery, recall, jina |
-| **high** | deslop, beautify, lbreview, last-call, update-readme, note-gen, vault-linker, prompt-engineer, interviewer, citation-assistant, tdd, debug |
+| **high** | arxiv-reader, deslop, beautify, lbreview, last-call, update-readme, note-gen, vault-linker, prompt-engineer, interviewer, citation-assistant, tdd, debug |
 | **max** | autoresearch, nanorepl, prism, subagent-executor |
 
 ### Published Skills
@@ -60,6 +60,7 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 
 | Skill | Description |
 |-------|-------------|
+| arxiv-reader | Read arxiv papers via TeX source, HF markdown, or HTML fallback |
 | atomic-push | Atomic commits and push to remote |
 | beautify | Simplify and beautify code changes on the current branch |
 | debug | Structured debugging: investigate root cause before proposing fixes |
