@@ -43,8 +43,8 @@ keybind = cmd+k=clear_screen
 keybind = cmd+r=prompt_surface_title
 keybind = cmd+shift+left=move_tab:-1
 keybind = cmd+shift+right=move_tab:1
-keybind = cmd+left=text:\x01
-keybind = cmd+right=text:\x05
+keybind = cmd+left=text:\x1bOH
+keybind = cmd+right=text:\x1bOF
 
 working-directory = home
 
