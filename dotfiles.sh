@@ -86,13 +86,16 @@ stamp_write() {
 compute_fingerprint() {
     # Hash HEAD + working-tree changes — captures any source modification
     { git -C "$ROOT" rev-parse HEAD 2>/dev/null
-      git -C "$ROOT" status --porcelain=v1 2>/dev/null; } | md5
+      git -C "$ROOT" status --porcelain=v1 2>/dev/null; } \
+        | md5 2>/dev/null || md5sum 2>/dev/null | cut -d' ' -f1
 }
 
 # Skip fetch if FETCH_HEAD was updated less than 300s ago
 _fetch_fresh() {
     local fh="$1/.git/FETCH_HEAD"
-    [[ -f "$fh" ]] && (( $(date +%s) - $(/usr/bin/stat -f %m "$fh") < 300 ))
+    [[ -f "$fh" ]] || return 1
+    local mtime; mtime=$(/usr/bin/stat -f %m "$fh" 2>/dev/null || stat -c %Y "$fh" 2>/dev/null) || return 1
+    (( $(date +%s) - mtime < 300 ))
 }
 
 sync_git_checkout() {

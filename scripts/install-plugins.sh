@@ -23,7 +23,9 @@ plugin_installed() {
 # Skip fetch if FETCH_HEAD was updated less than FETCH_TTL seconds ago
 fetch_is_fresh() {
     local fh="$1/.git/FETCH_HEAD"
-    [[ -f "$fh" ]] && (( $(/bin/date +%s) - $(/usr/bin/stat -f %m "$fh") < FETCH_TTL ))
+    [[ -f "$fh" ]] || return 1
+    local mtime; mtime=$(/usr/bin/stat -f %m "$fh" 2>/dev/null || stat -c %Y "$fh" 2>/dev/null) || return 1
+    (( $(date +%s) - mtime < FETCH_TTL ))
 }
 
 _plugin_fingerprint() {
