@@ -29,33 +29,24 @@ fi
 # Dotfiles
 # =============================================================================
 
-# Install dotfiles locally, then sync to remote machines
 dfs() {
     local _c=$'\033[1;36m' _g=$'\033[32m' _r=$'\033[31m' _d=$'\033[2m' _0=$'\033[0m'
-
     printf '\n  %sdfs%s  %ssync dotfiles everywhere%s\n\n' "$_c" "$_0" "$_d" "$_0"
 
-    # Pull
     if git -C ~/dotfiles pull --ff-only >/dev/null 2>&1; then
         printf '  %sPull%s     %s✓%s up to date\n\n' "$_c" "$_0" "$_g" "$_0"
     else
-        printf '  %sPull%s     %s✗%s pull failed\n\n' "$_c" "$_0" "$_r" "$_0"
-        printf '  %saborted.%s\n\n' "$_r" "$_0"
+        printf '  %sPull%s     %s✗%s pull failed\n\n  %saborted.%s\n\n' "$_c" "$_0" "$_r" "$_0" "$_r" "$_0"
         return 1
     fi
 
-    # Run local install and remote sync concurrently (both pull from origin)
-    local tmpdir=$(mktemp -d)
-    local local_rc=0
-    local hosts=() failed_hosts=()
-
+    # Run local install and remote sync concurrently
+    local tmpdir=$(mktemp -d) local_rc=0 hosts=() failed_hosts=()
     set +m
 
-    # Local install (background, capture output)
     ~/dotfiles/dotfiles.sh > "$tmpdir/local.log" 2>&1 &
     local local_pid=$!
 
-    # Remote sync (background, macOS only)
     if (( IS_MACOS )); then
         hosts=(macmini l40s)
         for h in "${hosts[@]}"; do
@@ -64,13 +55,9 @@ dfs() {
         done
     fi
 
-    wait $local_pid
-    local_rc=$?
-    wait
-
+    wait $local_pid; local_rc=$?; wait
     [[ -o interactive ]] && set -m
 
-    # Install results
     printf '  %sInstall%s\n' "$_c" "$_0"
     if (( local_rc )); then
         printf '           %s✗%s local install failed\n\n' "$_r" "$_0"
@@ -78,9 +65,7 @@ dfs() {
         printf '           %s✓%s local\n\n' "$_g" "$_0"
     fi
 
-    # Sync results (macOS only)
     if (( ${#hosts[@]} )); then
-        # Pass 1: compact status line
         printf '  %sSync%s    ' "$_c" "$_0"
         for h in "${hosts[@]}"; do
             if tail -1 "$tmpdir/$h.log" | grep -q '^__RC__=0$'; then
@@ -91,8 +76,6 @@ dfs() {
             fi
         done
         printf '\n'
-
-        # Pass 2: expand failed host logs
         if (( ${#failed_hosts[@]} )); then
             printf '\n'
             for h in "${failed_hosts[@]}"; do
@@ -101,27 +84,19 @@ dfs() {
             done
         fi
     fi
-
     rm -rf "$tmpdir"
 
-    # Summary: report all failures
-    if (( local_rc )); then
-        if (( ${#failed_hosts[@]} )); then
-            local n=${#failed_hosts[@]}
-            local noun="host"; (( n > 1 )) && noun="hosts"
-            printf '\n  %s✗ local + %d remote %s failed%s\n\n' "$_r" "$n" "$noun" "$_0"
-        else
-            printf '  %s✗ local install failed%s\n\n' "$_r" "$_0"
-        fi
-        return 1
-    elif (( ${#failed_hosts[@]} )); then
-        local n=${#failed_hosts[@]}
-        local noun="host"; (( n > 1 )) && noun="hosts"
-        printf '\n  %s✗ %d %s failed%s\n\n' "$_r" "$n" "$noun" "$_0"
-        return $n
+    # Summary
+    local n=${#failed_hosts[@]}
+    local noun="host"; (( n > 1 )) && noun="hosts"
+    if (( local_rc && n )); then
+        printf '\n  %s✗ local + %d remote %s failed%s\n\n' "$_r" "$n" "$noun" "$_0"; return 1
+    elif (( local_rc )); then
+        printf '  %s✗ local install failed%s\n\n' "$_r" "$_0"; return 1
+    elif (( n )); then
+        printf '\n  %s✗ %d %s failed%s\n\n' "$_r" "$n" "$noun" "$_0"; return $n
     else
-        printf '\n  %s✨ all synced%s\n\n' "$_d" "$_0"
-        return 0
+        printf '\n  %s✨ all synced%s\n\n' "$_d" "$_0"; return 0
     fi
 }
 

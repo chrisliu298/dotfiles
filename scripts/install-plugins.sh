@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Install Claude Code plugins.
-# Usage: ./scripts/install-plugins.sh
 set -euo pipefail
 
 PLUGINS=(
@@ -8,58 +7,42 @@ PLUGINS=(
     "chrisliu298/multi-autoresearch"
 )
 
-PLUGIN_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-plugins"
-PLUGIN_STAMP="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-plugins-stamp"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}"
+PLUGIN_CACHE="$CACHE_DIR/dotfiles-plugins"
+PLUGIN_STAMP="$CACHE_DIR/dotfiles-plugins-stamp"
 INSTALLED_JSON="$HOME/.claude/plugins/installed_plugins.json"
-FETCH_TTL=300  # seconds before re-fetching
+FETCH_TTL=300
 
 log()  { printf '     %s\n' "$1"; }
 warn() { printf '     %s\n' "$1" >&2; }
 
-# Check if plugin is already installed by reading JSON directly (avoids claude CLI)
 plugin_installed() {
-    local key="$1"
-    [[ -f "$INSTALLED_JSON" ]] || return 1
-    grep -q "\"${key}\"" "$INSTALLED_JSON"
+    [[ -f "$INSTALLED_JSON" ]] && grep -q "\"${1}\"" "$INSTALLED_JSON"
 }
 
-# Check if FETCH_HEAD is fresh enough to skip git fetch
+# Skip fetch if FETCH_HEAD was updated less than FETCH_TTL seconds ago
 fetch_is_fresh() {
-    local dir="$1"
-    local fh="$dir/.git/FETCH_HEAD"
-    [[ -f "$fh" ]] || return 1
-    local now mtime
-    now=$(/bin/date +%s)
-    mtime=$(/usr/bin/stat -f %m "$fh")
-    (( now - mtime < FETCH_TTL ))
+    local fh="$1/.git/FETCH_HEAD"
+    [[ -f "$fh" ]] && (( $(/bin/date +%s) - $(/usr/bin/stat -f %m "$fh") < FETCH_TTL ))
 }
 
-# Compute fingerprint from PLUGINS array + installed state
 _plugin_fingerprint() {
-    local input
-    input="$(printf '%s\n' "${PLUGINS[@]}")"
+    local input; input="$(printf '%s\n' "${PLUGINS[@]}")"
     [[ -f "$INSTALLED_JSON" ]] && input+=$'\n'"$(cat "$INSTALLED_JSON")"
     printf '%s' "$input" | shasum -a 256 | cut -d' ' -f1
 }
 
-if ! command -v claude &>/dev/null; then
-    exit 0
-fi
+command -v claude &>/dev/null || exit 0
 
-# Stamp check: skip everything when PLUGINS array + installed state unchanged
 _current_fp="$(_plugin_fingerprint)"
-if [[ -f "$PLUGIN_STAMP" ]] && [[ "$(cat "$PLUGIN_STAMP")" == "$_current_fp" ]]; then
-    exit 0
-fi
+[[ -f "$PLUGIN_STAMP" ]] && [[ "$(cat "$PLUGIN_STAMP")" == "$_current_fp" ]] && exit 0
 
 mkdir -p "$PLUGIN_CACHE"
 
 # Phase 1: Clone missing repos, fetch stale repos in parallel
 fetch_pids=()
 for slug in "${PLUGINS[@]}"; do
-    name="${slug##*/}"
     dir="$PLUGIN_CACHE/${slug//\//__}"
-
     if [[ -d "$dir/.git" ]]; then
         if ! fetch_is_fresh "$dir"; then
             ( git -C "$dir" fetch --depth=1 origin >/dev/null 2>&1 \
@@ -68,32 +51,24 @@ for slug in "${PLUGINS[@]}"; do
             fetch_pids+=($!)
         fi
     else
-        gh repo clone "$slug" "$dir" -- --depth 1 2>/dev/null || {
-            warn "fail clone $slug"
-        }
+        gh repo clone "$slug" "$dir" -- --depth 1 2>/dev/null \
+            || warn "fail clone $slug"
     fi
 done
-# Wait for all parallel fetches
 for pid in "${fetch_pids[@]+"${fetch_pids[@]}"}"; do
     wait "$pid" 2>/dev/null || true
 done
 
 # Phase 2: Register marketplaces and install plugins
 py="$HOME/.venv/bin/python3"
-if [[ ! -x "$py" ]]; then
-    py="$(command -v python3 2>/dev/null || true)"
-fi
+[[ -x "$py" ]] || py="$(command -v python3 2>/dev/null || true)"
 
 for slug in "${PLUGINS[@]}"; do
     name="${slug##*/}"
     dir="$PLUGIN_CACHE/${slug//\//__}"
     [[ -d "$dir/.git" ]] || continue
+    if [[ ! -x "${py:-}" ]]; then warn "skip plugin/$name (no python3)"; continue; fi
 
-    # Register marketplace in known_marketplaces.json
-    if [[ ! -x "${py:-}" ]]; then
-        warn "skip plugin/$name (no python3)"
-        continue
-    fi
     km_file="$HOME/.claude/plugins/known_marketplaces.json"
     mkdir -p "$(dirname "$km_file")"
     [[ -f "$km_file" ]] || echo '{}' > "$km_file"
@@ -107,18 +82,11 @@ if name not in data or data[name].get("installLocation") != dir:
     with open(path, "w") as f: json.dump(data, f, indent=2); f.write("\n")
 PYEOF
 
-    # Install plugin (check JSON directly instead of calling claude CLI)
-    if plugin_installed "$name@$name"; then
-        : # already installed
-    else
-        if claude plugin install "$name@$name" 2>/dev/null; then
-            log "add plugin/$name"
-        else
-            warn "fail plugin/$name"
-        fi
+    if ! plugin_installed "$name@$name"; then
+        claude plugin install "$name@$name" 2>/dev/null \
+            && log "add plugin/$name" || warn "fail plugin/$name"
     fi
 done
 
-# Write stamp after successful completion
 mkdir -p "$(dirname "$PLUGIN_STAMP")"
 printf '%s' "$_current_fp" > "$PLUGIN_STAMP"
