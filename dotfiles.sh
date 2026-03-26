@@ -325,11 +325,17 @@ install_mcp_servers() {
         return
     fi
 
+    # Capture claude mcp list once (avoid per-server invocation)
+    local claude_mcp_list=""
+    if $has_claude; then
+        claude_mcp_list="$(claude mcp list 2>/dev/null)" || true
+    fi
+
     local entry name cmd args
     for entry in "${MCP_SERVERS[@]}"; do
         IFS='|' read -r name cmd args <<< "$entry"
         if $has_claude; then
-            if ! claude mcp list 2>/dev/null | grep -q "^$name:"; then
+            if ! printf '%s\n' "$claude_mcp_list" | grep -q "^$name:"; then
                 claude mcp add --scope user "$name" -- $cmd $args 2>/dev/null \
                     && log "add claude/$name" || warn "fail claude/$name"
             fi
@@ -371,6 +377,9 @@ main() {
     local _fetch_pid=$!
     "$ROOT/scripts/install-plugins.sh" &
     local _plugins_pid=$!
+    local _mcp_out; _mcp_out=$(mktemp)
+    install_mcp_servers > "$_mcp_out" 2>&1 &
+    local _mcp_pid=$!
 
     # Run local-only sections while fetches proceed
     section "Links"
@@ -383,8 +392,11 @@ main() {
     section "Skills"
     install_skills
 
+    # Wait for background MCP and replay its output
     section "MCP"
-    install_mcp_servers
+    wait "$_mcp_pid" 2>/dev/null || true
+    [[ -s "$_mcp_out" ]] && cat "$_mcp_out"
+    rm -f "$_mcp_out"
 
     # Wait for plugins to finish
     section "Plugins"

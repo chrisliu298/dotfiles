@@ -48,3 +48,19 @@ Profiled bottlenecks:
 - `claude mcp list`: 1.65s
 - Submodules: 0.13s
 - Links + config: <0.1s
+
+### Wave 1 — MCP stamp file (keep)
+- MCP stamp (md5 fingerprint) skips 1.65s `claude mcp list`: 8.338s → 5.191s
+- Parallel network I/O: 8.338s → 6.054s (not kept, superseded by wave 2)
+- Plugin JSON check + fetch TTL: 8.338s → 5.034s (not kept, applied in wave 2)
+
+### Wave 2 — Parallel fetch + plugin JSON + dfs overlap (all keep)
+- Parallel fetch overlap + fetch TTL in dotfiles.sh: 5.191s → 4.504s
+- Plugin JSON check + fetch TTL in install-plugins.sh: 5.191s → 4.582s
+- dfs() overlap local install with remote SSH: code-only (verified syntax)
+- Combined: 0.452s warm
+
+### Wave 3 — Background MCP + plugin stamp (keep)
+- Background MCP + single `claude mcp list` call: cold 4.7s → 1.8s
+- Plugin stamp file: additional warm-path skip
+- Combined: 0.429s warm, 2.041s cold

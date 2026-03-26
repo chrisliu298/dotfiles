@@ -9,6 +9,7 @@ PLUGINS=(
 )
 
 PLUGIN_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-plugins"
+PLUGIN_STAMP="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-plugins-stamp"
 INSTALLED_JSON="$HOME/.claude/plugins/installed_plugins.json"
 FETCH_TTL=300  # seconds before re-fetching
 
@@ -33,7 +34,21 @@ fetch_is_fresh() {
     (( now - mtime < FETCH_TTL ))
 }
 
+# Compute fingerprint from PLUGINS array + installed state
+_plugin_fingerprint() {
+    local input
+    input="$(printf '%s\n' "${PLUGINS[@]}")"
+    [[ -f "$INSTALLED_JSON" ]] && input+=$'\n'"$(cat "$INSTALLED_JSON")"
+    printf '%s' "$input" | shasum -a 256 | cut -d' ' -f1
+}
+
 if ! command -v claude &>/dev/null; then
+    exit 0
+fi
+
+# Stamp check: skip everything when PLUGINS array + installed state unchanged
+_current_fp="$(_plugin_fingerprint)"
+if [[ -f "$PLUGIN_STAMP" ]] && [[ "$(cat "$PLUGIN_STAMP")" == "$_current_fp" ]]; then
     exit 0
 fi
 
@@ -103,3 +118,7 @@ PYEOF
         fi
     fi
 done
+
+# Write stamp after successful completion
+mkdir -p "$(dirname "$PLUGIN_STAMP")"
+printf '%s' "$_current_fp" > "$PLUGIN_STAMP"

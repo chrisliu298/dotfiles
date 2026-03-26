@@ -6,3 +6,6 @@
 4	2026-03-26T20:58:37	f803a13	4.582		keep	fast plugin check via JSON + fetch TTL [wave:2]
 5	2026-03-26T20:58:37	af51f40	4.504		keep	parallel fetch + local work overlap + fetch TTL [wave:2]
 6	2026-03-26T20:58:37	65169e2	NA		keep	overlap local install with remote SSH sync in dfs() [wave:2]
+7	2026-03-26T21:14:22	a8aa73f	1.784		keep	background MCP + single claude mcp list call [wave:3]
+8	2026-03-26T21:14:22	3c568d4	NA		discard	submodule TTL + config skip (marginal) [wave:3]
+9	2026-03-26T21:14:22	885816a	2.200		keep	plugin stamp file [wave:3]
