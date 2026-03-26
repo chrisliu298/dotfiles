@@ -20,8 +20,8 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 
 | Level | Skills |
 |-------|--------|
-| **medium** | push, atomic-push, sync-upstream, publish-skill, session-recovery, recall, jina, rlm |
-| **high** | arxiv-reader, deslop, beautify, lbreview, last-call, update-readme, note-gen, vault-linker, prompt-engineer, interviewer, citation-assistant, tdd, debug |
+| **medium** | push, atomic-push, sync-upstream, publish-skill, session-recovery, recall, jina, rlm, dump, chatgpt, relay |
+| **high** | arxiv-reader, deslop, beautify, lbreview, last-call, update-readme, note-gen, vault-linker, prompt-engineer, interviewer, citation-assistant, tdd, debug, typst |
 | **max** | autoresearch, nanorepl, prism, subagent-executor |
 
 ### Published Skills
@@ -65,6 +65,7 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 | atomic-push | Atomic commits and push to remote |
 | beautify | Simplify and beautify code changes on the current branch |
 | debug | Structured debugging: investigate root cause before proposing fixes |
+| dump | Dump session-derived knowledge to Obsidian vault |
 | jina | Fetch web content and search via Jina AI (r.jina.ai / s.jina.ai) |
 | publish-skill | Publish local skill to standalone public GitHub repo |
 | push | Single-commit push to remote |
