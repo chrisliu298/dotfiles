@@ -295,6 +295,15 @@ install_mcp_servers() {
     if command -v codex &>/dev/null; then has_codex=true; fi
     $has_claude || $has_codex || { warn "neither claude nor codex CLI found"; return; }
 
+    # Stamp file: skip expensive CLI calls when MCP_SERVERS config hasn't changed
+    local stamp_file="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-mcp-stamp"
+    local fingerprint
+    fingerprint=$(printf '%s\n' "${MCP_SERVERS[@]}" | md5 2>/dev/null \
+        || printf '%s\n' "${MCP_SERVERS[@]}" | md5sum 2>/dev/null | cut -d' ' -f1)
+    if [[ -f "$stamp_file" && "$(cat "$stamp_file")" == "$fingerprint" ]]; then
+        return
+    fi
+
     local entry name cmd args
     for entry in "${MCP_SERVERS[@]}"; do
         IFS='|' read -r name cmd args <<< "$entry"
@@ -311,6 +320,10 @@ install_mcp_servers() {
             fi
         fi
     done
+
+    # All servers processed successfully; write stamp
+    mkdir -p "$(dirname "$stamp_file")"
+    printf '%s' "$fingerprint" > "$stamp_file"
 }
 
 # ── Main ─────────────────────────────────────────────────────────
