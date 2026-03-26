@@ -59,6 +59,7 @@ MCP_SERVERS=(
 )
 
 SKILL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/skills-src"
+GLOBAL_STAMP="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-global-stamp"
 
 # ── Helpers ──────────────────────────────────────────────────────
 
@@ -79,6 +80,13 @@ ensure_symlink() {
     rm -rf "$dest"
     ln -s "$src" "$dest"
     log "link ${dest/#$HOME/~}"
+}
+
+compute_fingerprint() {
+    # Hash HEAD commit + working-tree changes — captures any source modification
+    { git -C "$ROOT" rev-parse HEAD 2>/dev/null
+      git -C "$ROOT" status --porcelain=v1 2>/dev/null; } \
+        | md5
 }
 
 sync_git_checkout() {
@@ -364,6 +372,14 @@ main() {
         plugins) exec "$ROOT/scripts/install-plugins.sh" ;;
     esac
 
+    # Global stamp: skip entire run if nothing changed
+    local fp
+    fp=$(compute_fingerprint)
+    if [[ -f "$GLOBAL_STAMP" ]] && [[ "$(cat "$GLOBAL_STAMP")" == "$fp" ]]; then
+        printf '\n  %s🔧 dotfiles%s  up to date %s(%s)%s\n\n' "$_CYN" "$_RST" "$_DIM" "$ROOT" "$_RST"
+        exit 0
+    fi
+
     printf '\n  %s🔧 dotfiles%s  %s%s%s\n\n' "$_CYN" "$_RST" "$_DIM" "$ROOT" "$_RST"
 
     section "Submodules"
@@ -401,6 +417,10 @@ main() {
     # Wait for plugins to finish
     section "Plugins"
     wait "$_plugins_pid" 2>/dev/null || true
+
+    # Write global stamp after successful run
+    mkdir -p "$(dirname "$GLOBAL_STAMP")"
+    compute_fingerprint > "$GLOBAL_STAMP"
 
     printf '\n  ✨ Done. Restart your shell or %ssource ~/.zshrc%s\n\n' "$_DIM" "$_RST"
 }
