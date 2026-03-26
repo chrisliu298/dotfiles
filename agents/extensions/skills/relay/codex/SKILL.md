@@ -1,5 +1,6 @@
 ---
 name: relay
+effort: medium
 description: |
   The ONLY way to call Claude Code. Use this skill whenever the user wants
   to ask, delegate to, or get a second opinion from Claude. Do NOT invoke
