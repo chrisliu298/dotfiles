@@ -1,10 +1,11 @@
 ---
 name: publish-skill
 description: |
-  Publish a local skill from `~/dotfiles/agents/extensions/skills/<name>/` to `chrisliu298/<name>`,
-  then update this dotfiles repo to reference the published source. Use when the user says
-  "publish skill", "publish <name>", "make <name> a public skill repo", "release skill",
-  or invokes /publish-skill. Do NOT trigger for publishing npm packages or deploying apps.
+  Publish a local skill from `~/dotfiles/agents/extensions/skills/<name>/` to `chrisliu298/<name>`.
+  The local copy remains the source of truth; the GitHub repo is a published copy. Use when
+  the user says "publish skill", "publish <name>", "make <name> a public skill repo",
+  "release skill", or invokes /publish-skill. Do NOT trigger for publishing npm packages or
+  deploying apps.
 user-invocable: true
 effort: medium
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
@@ -12,7 +13,7 @@ allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 
 # Publish Skill
 
-Publish a local skill from `~/dotfiles/agents/extensions/skills/<name>/` to a standalone public GitHub repo at `chrisliu298/<name>`, then update the dotfiles repo to reference the upstream source.
+Publish a local skill from `~/dotfiles/agents/extensions/skills/<name>/` to a standalone public GitHub repo at `chrisliu298/<name>`. The local copy stays as the source of truth — the GitHub repo is a published copy for others to install.
 
 ## Context
 
@@ -59,27 +60,13 @@ gh repo create chrisliu298/<name> --public --source . --push
 
 ### Phase 3: Update dotfiles
 
-All edits happen in `~/dotfiles/`. Read each file before editing.
+All edits happen in `~/dotfiles/`. Read each file before editing. The local skill directory is NOT removed — it remains the source of truth.
 
-9. **Update `dotfiles.sh`** — add an upstream entry to the SKILLS table. Place it alphabetically among the "Upstream shared" entries:
+9. **Update `agents/extensions/README.md`** — add the skill to the "Published skills" table in alphabetical order with Source set to `[chrisliu298/<name>](https://github.com/chrisliu298/<name>)`. Keep the skill in the "Workflow skills" table too (it's still local).
 
-- If the skill works with both agents (most common): `"*|chrisliu298/<name>|claude,codex"`
-- If agent-specific with separate SKILL.md files per agent, use two entries like relay does
+10. **Verify** — run `./dotfiles.sh` from `~/dotfiles/` and confirm the skill symlinks are created correctly. The wildcard entry `*|./agents/extensions/skills|claude,codex` already catches local skills — no SKILLS table change needed.
 
-10. **Update `CLAUDE.md`** — if any paths or descriptions under `## Structure` or `## Adding Extensions` reference the skill being published, update them to reflect the removal.
-
-11. **Update `agents/extensions/README.md`** — remove the skill from the "Workflow skills" table, then add it to the "Published skills" table in alphabetical order with Source set to `[chrisliu298/<name>](https://github.com/chrisliu298/<name>)`. Preserve the description and Enhanced marker.
-
-12. **Verify** — run `./dotfiles.sh` from `~/dotfiles/` and confirm the skill symlinks are created correctly.
-
-13. **Remove the local skill directory** — only after verification succeeds and `gh repo view chrisliu298/<name>` confirms the repo is accessible:
-
-```bash
-gh repo view chrisliu298/<name> --json url -q .url  # confirm repo exists
-rm -rf ~/dotfiles/agents/extensions/skills/<name>/
-```
-
-14. **Report** — show the user:
+11. **Report** — show the user:
     - The repo URL: `https://github.com/chrisliu298/<name>`
     - A summary of files in the repo
     - The dotfiles changes made
@@ -89,7 +76,9 @@ rm -rf ~/dotfiles/agents/extensions/skills/<name>/
 
 - Do NOT commit or push dotfiles changes — just make the edits. The user will commit when ready.
 - Do NOT modify the SKILL.md content when copying — the published version should be identical to the local version.
-- Do NOT publish skills that have `Local` as their source and are not in `~/dotfiles/agents/extensions/skills/` — they must be local skills managed by this dotfiles repo.
+- Do NOT remove the local skill directory — it is the source of truth. The GitHub repo is a published copy.
+- Do NOT add an upstream entry to the SKILLS table — the wildcard already catches local skills.
+- Do NOT publish skills that are not in `~/dotfiles/agents/extensions/skills/` — they must be local skills managed by this dotfiles repo.
 - If the skill has sub-dependencies (e.g., references another skill), note this in the README but do not publish the dependency.
 - Always use `cp` to copy files, never regenerate from memory.
 - If `gh repo create` fails, do NOT proceed to Phase 3. Diagnose the error and report to the user.
