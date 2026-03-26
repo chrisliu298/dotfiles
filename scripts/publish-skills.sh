@@ -19,6 +19,7 @@ PUBLISH_SKILLS=(
     "prompt-engineer"
     "recall"
     "relay"
+    "rlm"
     "vault-linker"
 )
 
