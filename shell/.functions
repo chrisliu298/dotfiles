@@ -44,56 +44,77 @@ dfs() {
         return 1
     fi
 
-    # Install
-    printf '  %sInstall%s\n' "$_c" "$_0"
-    ~/dotfiles/dotfiles.sh
-    local local_rc=$?
-    if (( local_rc )); then
-        printf '           %s✗%s local install failed\n\n' "$_r" "$_0"
-        printf '  %saborted.%s\n\n' "$_r" "$_0"
-        return $local_rc
-    fi
-    printf '           %s✓%s local\n\n' "$_g" "$_0"
-
-    (( IS_MACOS )) || { printf '  %s✨ all synced%s\n\n' "$_d" "$_0"; return 0; }
-
-    # Sync
-    local hosts=(macmini l40s)
+    # Run local install and remote sync concurrently (both pull from origin)
     local tmpdir=$(mktemp -d)
-    local failed_hosts=()
+    local local_rc=0
+    local hosts=() failed_hosts=()
 
     set +m
-    for h in "${hosts[@]}"; do
-        command ssh "$h" "cd ~/dotfiles && git pull --ff-only 2>&1 && ./dotfiles.sh 2>&1; printf '\\n__RC__=%d\\n' \$?" \
-            > "$tmpdir/$h.log" 2>&1 &
-    done
-    wait
 
-    # Pass 1: compact status line
-    printf '  %sSync%s    ' "$_c" "$_0"
-    for h in "${hosts[@]}"; do
-        if tail -1 "$tmpdir/$h.log" | grep -q '^__RC__=0$'; then
-            printf ' %s✓%s %s' "$_g" "$_0" "$h"
-        else
-            printf ' %s✗%s %s' "$_r" "$_0" "$h"
-            failed_hosts+=("$h")
-        fi
-    done
-    printf '\n'
+    # Local install (background, capture output)
+    ~/dotfiles/dotfiles.sh > "$tmpdir/local.log" 2>&1 &
+    local local_pid=$!
 
-    # Pass 2: expand failed host logs
-    if (( ${#failed_hosts[@]} )); then
-        printf '\n'
-        for h in "${failed_hosts[@]}"; do
-            printf '  %s%s:%s\n' "$_d" "$h" "$_0"
-            sed '/^__RC__=/d' "$tmpdir/$h.log" | sed "s/^/     ${_d}│${_0} /"
+    # Remote sync (background, macOS only)
+    if (( IS_MACOS )); then
+        hosts=(macmini l40s)
+        for h in "${hosts[@]}"; do
+            command ssh "$h" "cd ~/dotfiles && git pull --ff-only 2>&1 && ./dotfiles.sh 2>&1; printf '\\n__RC__=%d\\n' \$?" \
+                > "$tmpdir/$h.log" 2>&1 &
         done
     fi
 
+    wait $local_pid
+    local_rc=$?
+    wait
+
     [[ -o interactive ]] && set -m
+
+    # Install results
+    printf '  %sInstall%s\n' "$_c" "$_0"
+    if (( local_rc )); then
+        printf '           %s✗%s local install failed\n\n' "$_r" "$_0"
+    else
+        printf '           %s✓%s local\n\n' "$_g" "$_0"
+    fi
+
+    # Sync results (macOS only)
+    if (( ${#hosts[@]} )); then
+        # Pass 1: compact status line
+        printf '  %sSync%s    ' "$_c" "$_0"
+        for h in "${hosts[@]}"; do
+            if tail -1 "$tmpdir/$h.log" | grep -q '^__RC__=0$'; then
+                printf ' %s✓%s %s' "$_g" "$_0" "$h"
+            else
+                printf ' %s✗%s %s' "$_r" "$_0" "$h"
+                failed_hosts+=("$h")
+            fi
+        done
+        printf '\n'
+
+        # Pass 2: expand failed host logs
+        if (( ${#failed_hosts[@]} )); then
+            printf '\n'
+            for h in "${failed_hosts[@]}"; do
+                printf '  %s%s:%s\n' "$_d" "$h" "$_0"
+                sed '/^__RC__=/d' "$tmpdir/$h.log" | sed "s/^/     ${_d}│${_0} /"
+            done
+        fi
+    fi
+
     rm -rf "$tmpdir"
 
-    if (( ${#failed_hosts[@]} )); then
+    # Summary: report all failures
+    if (( local_rc )); then
+        if (( ${#failed_hosts[@]} )); then
+            local n=${#failed_hosts[@]}
+            local noun="host"; (( n > 1 )) && noun="hosts"
+            printf '\n  %s✗ local + %d remote %s failed%s\n\n' "$_r" "$n" "$noun" "$_0"
+        else
+            printf '  %s✗ local install failed%s\n\n' "$_r" "$_0"
+        fi
+        return 1
+    elif (( ${#failed_hosts[@]} )); then
         local n=${#failed_hosts[@]}
         local noun="host"; (( n > 1 )) && noun="hosts"
         printf '\n  %s✗ %d %s failed%s\n\n' "$_r" "$n" "$noun" "$_0"
