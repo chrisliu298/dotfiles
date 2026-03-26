@@ -6,7 +6,7 @@ Agent extensions managed by `dotfiles.sh`. Three types: **skills**, **MCP server
 |------|-------------|------------|
 | Skill | Injects domain knowledge via SKILL.md prompts | `SKILLS` table |
 | MCP server | Exposes external tools via Model Context Protocol | `MCP_SERVERS` table |
-| Plugin | Bundles commands, agents, hooks, and skills | `PLUGINS` table + `claude plugin install` |
+| Plugin | Bundles commands, agents, hooks, and skills | `scripts/install-plugins.sh` + `claude plugin install` |
 
 ## Skills
 
@@ -20,7 +20,7 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 
 | Level | Skills |
 |-------|--------|
-| **medium** | push, atomic-push, sync-upstream, publish-skill, session-recovery, recall, jina |
+| **medium** | push, atomic-push, sync-upstream, publish-skill, session-recovery, recall, jina, rlm |
 | **high** | arxiv-reader, deslop, beautify, lbreview, last-call, update-readme, note-gen, vault-linker, prompt-engineer, interviewer, citation-assistant, tdd, debug |
 | **max** | autoresearch, nanorepl, prism, subagent-executor |
 
@@ -40,6 +40,7 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 | [prompt-engineer](https://github.com/chrisliu298/prompt-engineer) | Write and refine prompts for Claude or Codex |
 | [recall](https://github.com/chrisliu298/recall) | Search past sessions and Obsidian notes for context |
 | [relay](https://github.com/chrisliu298/relay) | Bidirectional cross-agent relay between Claude Code and Codex |
+| [rlm](https://github.com/chrisliu298/rlm) | RLM-inspired externalize-and-recurse for data-scale tasks |
 | [chatgpt](https://github.com/chrisliu298/chatgpt) | Send prompts to ChatGPT via Chrome and collect responses (Claude only) |
 | [vault-linker](https://github.com/chrisliu298/vault-linker) | Build wikilink connections across Obsidian vaults |
 
@@ -83,10 +84,11 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 
 ## Plugins
 
-Cloned from GitHub via `PLUGINS` table, installed with `claude plugin install`. Claude Code only.
+Cloned from GitHub via `PLUGINS` table in `scripts/install-plugins.sh`, installed with `claude plugin install`.
 
 | Plugin | Description |
 |--------|-------------|
 | [nanoresearch](https://github.com/chrisliu298/nanoresearch) | Autonomous research pipeline (idea discovery, experiments, paper writing) |
+| [multi-autoresearch](https://github.com/chrisliu298/multi-autoresearch) | Parallel experiments via worktrees, multi-perspective ideation when stuck |
 
 Marketplace plugins (installed manually, not tracked in `dotfiles.sh`): claude-md-management, pr-review-toolkit, feature-dev, frontend-design, playground, plugin-dev, pyright-lsp.
