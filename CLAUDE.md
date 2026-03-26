@@ -37,8 +37,8 @@ dotfiles/
 
 Never edit in `~/.claude/skills/` or `~/.codex/skills/` — those are symlinks. Check `agents/extensions/README.md` for source.
 
-- **Local skills** (`agents/extensions/skills/`): Edit in this repo
-- **Published/upstream skills**: Edit in source repo at `~/Developer/GitHub/<skill-name>/`
+- **Own skills** (`agents/extensions/skills/`): Edit in this repo — this is the single source of truth. Published GitHub repos are synced copies via `./dotfiles.sh publish`.
+- **Third-party skills** (cloned from GitHub): Edit in the source repo or fork
 - **Best practices**: Read `agents/extensions/references/skill-best-practices.md` before creating or improving skills
 
 Run `./dotfiles.sh` after changes to re-sync symlinks.

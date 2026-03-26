@@ -21,8 +21,8 @@ This repository contains personal dotfiles and AI agent configurations for macOS
 ## Editing Skills
 Before modifying a skill, read `agents/extensions/README.md` to determine its source. Never edit files in `~/.claude/skills/` or `~/.codex/skills/` — those are symlinks.
 
-- **Local skills** (listed under `agents/extensions/skills/`): Edit in this repo
-- **Published/upstream skills** (cloned from GitHub): Edit in the source repo under `~/Developer/GitHub/<skill-name>/`
+- **Own skills** (listed under `agents/extensions/skills/`): Edit in this repo — this is the single source of truth. Published GitHub repos are synced copies via `./dotfiles.sh publish`.
+- **Third-party skills** (cloned from GitHub): Edit in the source repo or fork
 
 Run `./dotfiles.sh` after changes to re-sync symlinks.
 
