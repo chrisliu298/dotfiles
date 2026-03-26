@@ -1,0 +1,21 @@
+{
+  "status": "in_progress",
+  "phase": "between_waves",
+  "branch": "autoresearch/mar26",
+  "tag": "mar26",
+  "current_wave": 0,
+  "best_commit": "a88a26d",
+  "best_metric": 8.338,
+  "baseline_metric": 8.338,
+  "baseline_runtime_sec": 8.338,
+  "metric_direction": "lower",
+  "wave_size": 3,
+  "workload_class": "lightweight",
+  "ideation_mode": "on_trigger",
+  "parallax": false,
+  "budget_hours": null,
+  "consecutive_all_discard": 0,
+  "start_time": "2026-03-26T20:48:36",
+  "timestamp": "2026-03-26T20:48:36",
+  "in_flight": []
+}

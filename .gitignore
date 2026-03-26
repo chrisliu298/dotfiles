@@ -5,3 +5,4 @@ __pycache__/
 .venv/
 agents/claude/plugins/installed_plugins.json
 .relay/
+run.log
