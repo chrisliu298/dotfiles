@@ -5,6 +5,7 @@ set -euo pipefail
 
 PLUGINS=(
     "chrisliu298/nanoresearch"
+    "chrisliu298/multi-autoresearch"
 )
 
 PLUGIN_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-plugins"

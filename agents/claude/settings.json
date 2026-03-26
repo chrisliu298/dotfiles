@@ -30,13 +30,20 @@
     "feature-dev@claude-plugins-official": true,
     "playground@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
-    "nanoresearch@nanoresearch": true
+    "nanoresearch@nanoresearch": true,
+    "multi-autoresearch@multi-autoresearch": true
   },
   "extraKnownMarketplaces": {
     "nanoresearch": {
       "source": {
         "source": "directory",
         "path": "~/.cache/dotfiles-plugins/chrisliu298__nanoresearch"
+      }
+    },
+    "multi-autoresearch": {
+      "source": {
+        "source": "directory",
+        "path": "~/.cache/dotfiles-plugins/chrisliu298__multi-autoresearch"
       }
     }
   },
