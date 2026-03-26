@@ -1,1 +1,0 @@
-{"experiment_id": 2, "metric": 4.785, "status": "candidate", "description": "bypass claude mcp list with stamp file", "base_commit": "HEAD~1", "changed_files": ["dotfiles.sh"]}
