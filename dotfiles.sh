@@ -84,6 +84,16 @@ ensure_symlink() {
 sync_git_checkout() {
     local slug="$1" dir="$2"
     if [[ -d "$dir/.git" ]]; then
+        # Skip fetch if FETCH_HEAD was updated less than 300s ago
+        local fh="$dir/.git/FETCH_HEAD"
+        if [[ -f "$fh" ]]; then
+            local now mtime
+            now=$(date +%s)
+            mtime=$(/usr/bin/stat -f %m "$fh")
+            if (( now - mtime < 300 )); then
+                return 0
+            fi
+        fi
         git -C "$dir" fetch --depth=1 origin >/dev/null 2>&1 \
             && git -C "$dir" reset --hard origin/HEAD >/dev/null 2>&1 \
             || true
@@ -124,8 +134,8 @@ install_links() {
     fi
 }
 
-install_skills() {
-    # Clone unique GitHub repos in parallel
+_skills_repos() {
+    # Collect unique GitHub repo slugs from SKILLS table
     local repos=()
     local entry
     for entry in "${SKILLS[@]}"; do
@@ -139,13 +149,22 @@ install_skills() {
         done
         $already || repos+=("$slug")
     done
+    echo "${repos[@]+"${repos[@]}"}"
+}
+
+_fetch_skills_repos() {
+    # Clone/update unique GitHub repos in parallel
+    local repos
+    read -ra repos <<< "$(_skills_repos)"
     if (( ${#repos[@]} )); then
         mkdir -p "$SKILL_CACHE"
         for r in "${repos[@]}"; do sync_git_checkout "$r" "$SKILL_CACHE/${r//\//__}" & done
         wait
     fi
+}
 
-    # Resolve entries and create symlinks
+install_skills() {
+    # Resolve entries and create symlinks (assumes repos already fetched)
     mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills"
     # Collect explicitly named skills so the wildcard skips them
     local explicit_names=""
@@ -222,6 +241,8 @@ install_skills() {
 
     # Prune stale cache repos
     if [[ -d "$SKILL_CACHE" ]]; then
+        local repos
+        read -ra repos <<< "$(_skills_repos)"
         local cached
         for cached in "$SKILL_CACHE"/*/; do
             [[ -d "$cached" ]] || continue
@@ -344,16 +365,30 @@ main() {
         git submodule sync --recursive -q 2>/dev/null || true
         git submodule update --init --recursive -q 2>/dev/null || true
     fi
+
+    # Start network-dependent tasks in background
+    _fetch_skills_repos &
+    local _fetch_pid=$!
+    "$ROOT/scripts/install-plugins.sh" &
+    local _plugins_pid=$!
+
+    # Run local-only sections while fetches proceed
     section "Links"
     install_links
-    section "Skills"
-    install_skills
     section "Config"
     install_codex_config
+
+    # Wait for skills fetches, then symlink
+    wait "$_fetch_pid" 2>/dev/null || true
+    section "Skills"
+    install_skills
+
     section "MCP"
     install_mcp_servers
+
+    # Wait for plugins to finish
     section "Plugins"
-    "$ROOT/scripts/install-plugins.sh"
+    wait "$_plugins_pid" 2>/dev/null || true
 
     printf '\n  ✨ Done. Restart your shell or %ssource ~/.zshrc%s\n\n' "$_DIM" "$_RST"
 }
