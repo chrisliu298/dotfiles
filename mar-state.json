@@ -1,11 +1,11 @@
 {
-  "status": "in_progress",
-  "phase": "between_waves",
+  "status": "completed",
+  "phase": "done",
   "branch": "autoresearch/mar26",
   "tag": "mar26",
-  "current_wave": 3,
-  "best_commit": "120c323",
-  "best_metric": 0.429,
+  "current_wave": 4,
+  "best_commit": "169dfdd",
+  "best_metric": 0.035,
   "baseline_metric": 8.338,
   "baseline_runtime_sec": 8.338,
   "metric_direction": "lower",
@@ -16,6 +16,6 @@
   "budget_hours": null,
   "consecutive_all_discard": 0,
   "start_time": "2026-03-26T20:42:00",
-  "timestamp": "2026-03-26T21:14:22",
+  "timestamp": "2026-03-26T21:31:45",
   "in_flight": []
 }

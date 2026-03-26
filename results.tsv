@@ -9,3 +9,6 @@
 7	2026-03-26T21:14:22	a8aa73f	1.784		keep	background MCP + single claude mcp list call [wave:3]
 8	2026-03-26T21:14:22	3c568d4	NA		discard	submodule TTL + config skip (marginal) [wave:3]
 9	2026-03-26T21:14:22	885816a	2.200		keep	plugin stamp file [wave:3]
+10	2026-03-26T21:31:45	7d5708a	0.323		keep	submodule stamp + skip background forks + fast config [wave:4]
+11	2026-03-26T21:31:45	501aa62	NA		keep	skills grep to pattern match + basename to param expansion [wave:4]
+12	2026-03-26T21:31:45	169dfdd	0.035		keep	global stamp for full script skip [wave:4]

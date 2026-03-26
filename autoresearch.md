@@ -64,3 +64,14 @@ Profiled bottlenecks:
 - Background MCP + single `claude mcp list` call: cold 4.7s → 1.8s
 - Plugin stamp file: additional warm-path skip
 - Combined: 0.429s warm, 2.041s cold
+
+### Wave 4 — Global stamp + micro-optimizations (all keep)
+- Global stamp (git HEAD + status fingerprint): 0.429s → 0.035s warm
+- Submodule stamp (md5 of .gitmodules): saves 130ms on non-cached path
+- Fast codex config (cmp -s before Python): saves 20ms on non-cached path
+- Skills grep→pattern match + basename→param expansion: saves 100ms on install_skills
+
+### Final Results
+- Baseline: 8.338s
+- Cold (all caches expired): 1.999s (76% faster, 4.2x)
+- Warm (nothing changed): 0.035s (99.6% faster, 241x)

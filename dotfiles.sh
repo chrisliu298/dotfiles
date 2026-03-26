@@ -175,7 +175,7 @@ install_skills() {
     # Resolve entries and create symlinks (assumes repos already fetched)
     mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills"
     # Collect explicitly named skills so the wildcard skips them
-    local explicit_names=""
+    local explicit_names=$'\n'
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name _ _ <<< "$entry"
         [[ "$name" != "*" ]] && explicit_names+="$name"$'\n'
@@ -206,9 +206,9 @@ install_skills() {
                 for d in "$base_dir"/*/; do
                     [[ -f "$d/SKILL.md" ]] || continue
                     d="${d%/}"
-                    local dname="$(basename "$d")"
+                    local dname="${d##*/}"
                     # Skip skills that have explicit entries (they override the wildcard's agents)
-                    echo "$explicit_names" | grep -qx "$dname" && continue
+                    [[ "$explicit_names" == *$'\n'"$dname"$'\n'* ]] && continue
                     skill_entries+=("$dname:$d")
                 done
             fi
@@ -269,6 +269,8 @@ install_codex_config() {
     local dest="$HOME/.codex/config.toml"
     [[ -f "$src" ]] || return
     mkdir -p "$HOME/.codex"
+    # Fast path: skip Python if source and dest are byte-identical
+    cmp -s "$src" "$dest" 2>/dev/null && return
     # Merge managed keys into existing config (preserves user additions)
     if ! "$HOME/.venv/bin/python3" - "$src" "$dest" << 'PYEOF' 2>/dev/null
 import sys, tomllib
@@ -384,8 +386,16 @@ main() {
 
     section "Submodules"
     if [[ -f .gitmodules && -s .gitmodules ]]; then
-        git submodule sync --recursive -q 2>/dev/null || true
-        git submodule update --init --recursive -q 2>/dev/null || true
+        local _sub_stamp="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-submodule-stamp"
+        local _sub_fp; _sub_fp=$(md5 < .gitmodules 2>/dev/null || md5sum < .gitmodules 2>/dev/null | cut -d' ' -f1)
+        if [[ -f "$_sub_stamp" && "$(cat "$_sub_stamp")" == "$_sub_fp" ]]; then
+            : # unchanged
+        else
+            git submodule sync --recursive -q 2>/dev/null || true
+            git submodule update --init --recursive -q 2>/dev/null || true
+            mkdir -p "$(dirname "$_sub_stamp")"
+            printf '%s' "$_sub_fp" > "$_sub_stamp"
+        fi
     fi
 
     # Start network-dependent tasks in background
