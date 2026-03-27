@@ -49,5 +49,6 @@
   },
   "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
-  "autoInstallIdeExtension": false
+  "autoInstallIdeExtension": false,
+  "voiceEnabled": true
 }
