@@ -1,4 +1,5 @@
 ---
+name: chatgpt
 effort: medium
 description: |
   Send prompts to ChatGPT via Chrome browser automation and collect responses. Use this skill

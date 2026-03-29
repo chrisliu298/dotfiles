@@ -10,7 +10,7 @@ Agent extensions managed by `dotfiles.sh`. Three types: **skills**, **MCP server
 
 ## Skills
 
-One SKILL.md per skill, works in both Claude Code and Codex. All own skills live in `agents/extensions/skills/` as the single source of truth. Community/third-party skills are cloned to `~/.cache/skills-src/`. Both are symlinked to `~/.claude/skills/` and `~/.codex/skills/`.
+Most skills use one `SKILL.md` that works in both Claude Code and Codex. Agent-specific variants such as `relay` and `chatgpt` use explicit per-agent subdirectories instead. All own skills live in `agents/extensions/skills/` as the single source of truth. Community/third-party skills are cloned to `~/.cache/skills-src/`. Both are symlinked to `~/.claude/skills/` and `~/.codex/skills/`.
 
 Published skills are synced to their standalone GitHub repos via `./dotfiles.sh publish`.
 
@@ -41,7 +41,7 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 | [recall](https://github.com/chrisliu298/recall) | Search past sessions and Obsidian notes for context |
 | [relay](https://github.com/chrisliu298/relay) | Bidirectional cross-agent relay between Claude Code and Codex |
 | [rlm](https://github.com/chrisliu298/rlm) | RLM-inspired externalize-and-recurse for data-scale tasks |
-| [chatgpt](https://github.com/chrisliu298/chatgpt) | Send prompts to ChatGPT via Chrome and collect responses (Claude only) |
+| [chatgpt](https://github.com/chrisliu298/chatgpt) | Send prompts to ChatGPT via Chrome and collect responses (Claude via Claude in Chrome, Codex via browser-use) |
 | [vault-linker](https://github.com/chrisliu298/vault-linker) | Build wikilink connections across Obsidian vaults |
 
 ### Community Skills

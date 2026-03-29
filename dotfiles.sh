@@ -26,7 +26,9 @@ LINKS=(
 # source: ./path (local) or owner/repo[/subpath] (GitHub)
 SKILLS=(
     "*|./agents/extensions/skills|claude,codex"
-    "chatgpt|./agents/extensions/skills/chatgpt|claude"
+    # ChatGPT: agent-specific SKILL.md (no top-level SKILL.md, so wildcard skips it)
+    "chatgpt|./agents/extensions/skills/chatgpt/claude|claude"
+    "chatgpt|./agents/extensions/skills/chatgpt/codex|codex"
     # Relay: agent-specific SKILL.md (no top-level SKILL.md, so wildcard skips it)
     "relay|./agents/extensions/skills/relay/claude|claude"
     "relay|./agents/extensions/skills/relay/codex|codex"
