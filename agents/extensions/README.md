@@ -41,7 +41,7 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 | [recall](https://github.com/chrisliu298/recall) | Search past sessions and Obsidian notes for context |
 | [relay](https://github.com/chrisliu298/relay) | Bidirectional cross-agent relay between Claude Code and Codex |
 | [rlm](https://github.com/chrisliu298/rlm) | RLM-inspired externalize-and-recurse for data-scale tasks |
-| [chatgpt](https://github.com/chrisliu298/chatgpt) | Send prompts to ChatGPT via Chrome and collect responses (Claude via Claude in Chrome, Codex via browser-use) |
+| [chatgpt](https://github.com/chrisliu298/chatgpt) | Send prompts to ChatGPT via Chrome and collect responses (Claude via Claude in Chrome, Codex via chrome-devtools-mcp) |
 | [vault-linker](https://github.com/chrisliu298/vault-linker) | Build wikilink connections across Obsidian vaults |
 
 ### Community Skills

@@ -18,6 +18,6 @@ voice_transcription = true
 [tui]
 status_line = ["model-with-reasoning", "current-dir", "git-branch", "context-used", "weekly-limit", "context-window-size"]
 
-[mcp_servers.playwright]
+[mcp_servers.chrome-devtools]
 command = "npx"
-args = ["-y", "@playwright/mcp@latest", "--headless", "--codegen", "none", "--console-level", "error"]
+args = ["-y", "chrome-devtools-mcp@latest", "--autoConnect", "--channel", "stable", "--no-usage-statistics"]

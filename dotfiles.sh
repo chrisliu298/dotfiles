@@ -44,7 +44,7 @@ SKILLS=(
 )
 
 MCP_SERVERS=(  # name|command|args (user-scoped MCP servers)
-    "playwright|npx|@playwright/mcp@latest --headless --codegen none --console-level error"
+    "chrome-devtools|npx|chrome-devtools-mcp@latest --autoConnect --channel stable --no-usage-statistics"
     "codex|codex|mcp-server"
 )
 
