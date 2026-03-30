@@ -5,7 +5,7 @@ description: |
   extracts verified facts, preserves strong user-written content, and produces
   a README that helps a new reader succeed quickly without inventing details.
   Triggers on "update the readme", "improve the readme", "create a readme",
-  "document this repo", or /update-readme. Do NOT use for non-README docs.
+  "document this repo", or "update-readme". Do NOT use for non-README docs.
 user-invocable: true
 allowed-tools: Bash(find:*), Bash(ls:*), Bash(tree:*), Bash(wc:*), Bash(pwd:*), Bash(head:*), Bash(awk:*), Bash(git remote:*), Glob(*), Grep(*), Read(*), Edit(*), Write(*)
 effort: high

@@ -4,7 +4,7 @@ description: |
   Publish a local skill from `~/dotfiles/agents/extensions/skills/<name>/` to `chrisliu298/<name>`.
   The local copy remains the source of truth; the GitHub repo is a published copy. Use when
   the user says "publish skill", "publish <name>", "make <name> a public skill repo",
-  "release skill", or invokes /publish-skill. Do NOT trigger for publishing npm packages or
+  "release skill", or invokes "publish-skill". Do NOT trigger for publishing npm packages or
   deploying apps.
 user-invocable: true
 effort: medium
@@ -23,7 +23,7 @@ Publish a local skill from `~/dotfiles/agents/extensions/skills/<name>/` to a st
 
 ## Arguments
 
-The skill name is passed as an argument: `/publish-skill <skill-name>`. If no argument is given, ask the user which skill to publish.
+The skill name is passed as an argument: `publish-skill <skill-name>`. If no argument is given, ask the user which skill to publish.
 
 ## Workflow
 

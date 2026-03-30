@@ -1,7 +1,7 @@
 ---
 name: citation-assistant
 user-invocable: true
-description: Add verified citations to academic papers and proposals. Use when working on LaTeX documents that need citations, finding papers for a specific section, verifying existing citations, or when user mentions "cite", "citation", "references", "bibliography", or asks to find related work. Supports Semantic Scholar API, Exa MCP, and DOI-based BibTeX retrieval. Never hallucinate citations. Invoke with /citation-assistant or /citation-assistant [section].
+description: Add verified citations to academic papers and proposals. Use when working on LaTeX documents that need citations, finding papers for a specific section, verifying existing citations, or when user mentions "cite", "citation", "references", "bibliography", or asks to find related work. Supports Semantic Scholar API, Exa MCP, and DOI-based BibTeX retrieval. Never hallucinate citations. Invoke with "citation-assistant" or "citation-assistant [section]".
 effort: high
 ---
 
@@ -26,9 +26,9 @@ Add verified citations to academic LaTeX documents. Identify citation gaps, sear
 ## Invocation
 
 ```
-/citation-assistant                     # Ask user which section needs citations
-/citation-assistant [section]           # Add citations to specified section (e.g., "introduction", "related work")
-/citation-assistant verify              # Verify all existing citations in the document
+citation-assistant                     # Ask user which section needs citations
+citation-assistant [section]           # Add citations to specified section (e.g., "introduction", "related work")
+citation-assistant verify              # Verify all existing citations in the document
 ```
 
 ## Workflow

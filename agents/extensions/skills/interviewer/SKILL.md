@@ -3,7 +3,7 @@ name: interviewer
 description: |
   Conducts mock technical interviews for AI/ML topics. Use when the user wants to practice
   for interviews, test understanding, or be quizzed on ML concepts. Triggers on "interview me",
-  "quiz me", "mock interview", "practice questions", or /interview. Supports topic-based or
+  "quiz me", "mock interview", "practice questions", or "interview". Supports topic-based or
   material-based questioning with multiple difficulty levels.
 user-invocable: true
 effort: high
@@ -16,12 +16,12 @@ A mock interview system that helps users practice technical concepts through str
 ## Invocation
 
 ```
-/interview                      # Start new session or list existing
-/interview [session-name]       # Resume or create named session
-/interview replay [session]     # Re-practice weak questions
-/interview history              # List past sessions
-/interview stats                # Overall progress across sessions
-/interview bookmarks            # Review saved favorite/tricky questions
+interview                      # Start new session or list existing
+interview [session-name]       # Resume or create named session
+interview replay [session]     # Re-practice weak questions
+interview history              # List past sessions
+interview stats                # Overall progress across sessions
+interview bookmarks            # Review saved favorite/tricky questions
 ```
 
 ## Session Workflow
@@ -208,7 +208,7 @@ Duration: [total time]
 
 ## History Commands
 
-### `/interview history`
+### `interview history`
 List all sessions in `~/.local/share/interviewer/history/`:
 - Session name
 - Date
@@ -216,7 +216,7 @@ List all sessions in `~/.local/share/interviewer/history/`:
 - Overall score
 - Key topics
 
-### `/interview stats`
+### `interview stats`
 Aggregate across all sessions:
 - Total sessions completed
 - Total questions answered
@@ -225,7 +225,7 @@ Aggregate across all sessions:
 - Consistent weak areas
 - Improvement trends
 
-### `/interview replay [session-name]`
+### `interview replay [session-name]`
 Load questions from past session where user:
 - Scored below 3/5 on any dimension
 - Skipped the question
@@ -233,7 +233,7 @@ Load questions from past session where user:
 
 Re-ask these questions with fresh scoring.
 
-### `/interview bookmarks`
+### `interview bookmarks`
 Show all bookmarked questions across sessions:
 - Question text
 - Original session
@@ -272,7 +272,7 @@ Ensure variety within a session - don't repeat the same pattern consecutively.
 ## Example Session Flow
 
 ```
-User: /interview
+User: interview
 
 Claude: [Lists existing sessions if any]
         What would you like to name this session?

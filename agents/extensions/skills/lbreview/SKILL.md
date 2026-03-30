@@ -5,7 +5,7 @@ description: |
   Careful and thorough code review of changes against main. Analyzes the diff to understand
   the goal, evaluates benefits, identifies pitfalls, and suggests simplifications. Use when
   user asks for code review, says "review my changes", "check the diff", "what do you think
-  of these changes", or invokes /lbreview. Do NOT use for session-end review; use /last-call
+  of these changes", or invokes "lbreview". Do NOT use for session-end review; use last-call
   instead.
 allowed-tools: Bash(git diff:*), Bash(git status:*), Bash(git log:*), Read, Grep, Glob
 effort: high

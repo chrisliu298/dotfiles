@@ -3,7 +3,7 @@ description: |
   Execute a multi-task implementation plan by dispatching fresh subagents per task
   with review gates. Use when the user has multiple mostly-independent tasks and
   says "execute the plan", "implement these tasks", "dispatch subagents", "run
-  through the plan", or invokes /subagent-executor. Also trigger when the user
+  through the plan", or invokes "subagent-executor". Also trigger when the user
   explicitly asks to start building after a plan was created. Best for tasks
   with disjoint write scopes that can be specified independently. Do NOT use for
   single-task work, tightly-coupled changes, or when the user wants to review
@@ -77,7 +77,7 @@ After all tasks are complete, verify the pieces fit together:
 - Does the full implementation match the original plan's intent, not just individual task specs?
 - Run the full test suite if one exists.
 
-For small plans (3-4 low-risk tasks), a quick manual check may suffice. For larger or riskier plans, dispatch a final reviewer or use `/lbreview` on the combined diff.
+For small plans (3-4 low-risk tasks), a quick manual check may suffice. For larger or riskier plans, dispatch a final reviewer or use `lbreview` on the combined diff.
 
 ## Gotchas
 

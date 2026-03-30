@@ -60,9 +60,9 @@ Recovery document so a fresh agent can continue the loop. Keep it concise.
 
 ## The Loop
 
-**LOOP FOREVER** (unless bounded by `/loop N`). Do NOT ask "should I continue?", "is this a good stopping point?", or any variation. The user may be asleep or away from their computer. They expect you to work indefinitely until manually stopped.
+**LOOP FOREVER** (unless bounded by `loop N`). Do NOT ask "should I continue?", "is this a good stopping point?", or any variation. The user may be asleep or away from their computer. They expect you to work indefinitely until manually stopped.
 
-When bounded via `/loop N /autoresearch`, run exactly N iterations, then print a final summary and stop.
+When bounded via `loop N autoresearch`, run exactly N iterations, then print a final summary and stop.
 
 Maximize throughput. Planning and editing time should be a small fraction of run time. For 5-minute runs, target ~10 experiments/hour.
 
@@ -87,7 +87,7 @@ Each iteration, in this order:
 
 ### Bounded Loop Summary
 
-When running under `/loop N`, print this after the final iteration:
+When running under `loop N`, print this after the final iteration:
 
 ```
 === Autoresearch Complete (N iterations) ===
@@ -183,4 +183,4 @@ Once the loop has begun, do NOT pause to ask the human if you should continue. D
 
 **Unbounded mode** (default): The loop runs until the human interrupts you, period.
 
-**Bounded mode** (`/loop N /autoresearch`): Run exactly N iterations, print the final summary (see Bounded Loop Summary), then stop.
+**Bounded mode** (`loop N autoresearch`): Run exactly N iterations, print the final summary (see Bounded Loop Summary), then stop.

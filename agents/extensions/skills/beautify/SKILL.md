@@ -2,10 +2,10 @@
 description: |
   Simplify and beautify code changes on the current branch. Use when the user says "beautify",
   "make it simple", "clean up the code", "simplify my branch", "make this more readable",
-  "reduce complexity", or invokes /beautify. Also trigger when reviewing code that feels
+  "reduce complexity", or invokes "beautify". Also trigger when reviewing code that feels
   overengineered, has too many arguments, nests too deeply, or uses try-catch where asserts
   belong — even if the user doesn't say "beautify" explicitly. Do NOT use for removing AI slop
-  (use /deslop) or for code review without editing (use /lbreview).
+  (use deslop) or for code review without editing (use lbreview).
 user-invocable: true
 allowed-tools: Bash(git diff:*), Bash(git status:*), Bash(git log:*), Read, Edit, Grep, Glob
 effort: high

@@ -1,7 +1,7 @@
 ---
 name: arxiv-reader
 user-invocable: true
-description: Read arxiv papers by fetching their original TeX source for full-fidelity access to math, tables, and figures. Use whenever the user shares an arxiv URL or paper ID and wants to discuss, understand, or ask questions about the paper — even if they don't say "read". Triggers on arxiv URLs (abs, pdf, html), bare arxiv IDs like "2401.12345", or phrases like "read this paper", "what does this paper say", "explain this arxiv paper", "go through this paper". Also use when the user pastes an arxiv link alongside a question. Do NOT use for generating Obsidian notes (use /note-gen instead) or for citation management (use /citation-assistant).
+description: Read arxiv papers by fetching their original TeX source for full-fidelity access to math, tables, and figures. Use whenever the user shares an arxiv URL or paper ID and wants to discuss, understand, or ask questions about the paper — even if they don't say "read". Triggers on arxiv URLs (abs, pdf, html), bare arxiv IDs like "2401.12345", or phrases like "read this paper", "what does this paper say", "explain this arxiv paper", "go through this paper". Also use when the user pastes an arxiv link alongside a question. Do NOT use for generating Obsidian notes (use note-gen instead) or for citation management (use citation-assistant).
 effort: high
 allowed-tools: Bash(curl:*), Bash(file:*), Bash(tar:*), Bash(mkdir:*), Bash(mv:*), Bash(rm:*), Bash(head:*), Bash(defuddle:*), Read, Grep
 ---
@@ -140,6 +140,6 @@ After the conversation with a paper is done, clean up temp files: `rm -rf /tmp/{
 
 ## What This Skill Does NOT Do
 
-- **Generate Obsidian notes** — use `/note-gen` for that. If the user asks to turn the paper into notes, answer the reading/explanation part here, then suggest `/note-gen` for the note.
-- **Manage citations/BibTeX** — use `/citation-assistant` for that
+- **Generate Obsidian notes** — use `note-gen` for that. If the user asks to turn the paper into notes, answer the reading/explanation part here, then suggest `note-gen` for the note.
+- **Manage citations/BibTeX** — use `citation-assistant` for that
 - **Read non-arxiv papers** — this skill is specifically for arxiv. For other PDFs, read them directly.

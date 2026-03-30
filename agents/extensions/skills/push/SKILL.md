@@ -2,8 +2,8 @@
 name: push
 description: |
   Commit all changes in a single commit and push to the remote. This is the default
-  skill for "commit and push", "push this", "ship it", "save and push", or /push.
-  For multiple atomic commits per logical change, use /atomic-push instead.
+  skill for "commit and push", "push this", "ship it", "save and push", or "push".
+  For multiple atomic commits per logical change, use atomic-push instead.
   Do NOT create a pull request.
 user-invocable: true
 effort: medium

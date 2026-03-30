@@ -4,7 +4,7 @@ description: |
   Use when encountering bugs, test failures, flaky tests, unexpected behavior,
   build failures, or performance regressions. Also trigger when the user says
   "debug this", "investigate", "why is this failing", "what's wrong", "figure
-  out why", "it broke", or invokes /debug. Especially important after a fix
+  out why", "it broke", or invokes "debug". Especially important after a fix
   attempt that didn't work — stop guessing and follow the process. Do NOT use
   for feature implementation or code review.
 user-invocable: true
@@ -84,7 +84,7 @@ Before writing any fix, summarize: root cause, evidence, rejected hypotheses, an
 3. **Verify** — test passes, no regressions, issue actually resolved
 4. **Remove diagnostic instrumentation** — temporary logging or probes must be cleaned up
 
-If the `/tdd` skill is active, Phase 3 follows the TDD cycle: the failing test is your RED step, the fix is GREEN, then REFACTOR.
+If the `tdd` skill is active, Phase 3 follows the TDD cycle: the failing test is your RED step, the fix is GREEN, then REFACTOR.
 
 ### When fixes keep failing
 

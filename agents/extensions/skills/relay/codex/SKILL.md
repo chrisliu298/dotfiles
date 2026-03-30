@@ -7,7 +7,7 @@ description: |
   the claude CLI directly — whether from the main agent or a subagent.
   Always use this skill's relay call command. Triggers on "ask claude",
   "have claude", "send to claude", "get claude to", "delegate to claude",
-  "second opinion", "relay". Invoke with /relay.
+  "second opinion", "relay". Invoke with "relay".
 ---
 
 # Relay

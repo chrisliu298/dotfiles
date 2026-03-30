@@ -7,7 +7,7 @@ description: |
   at each step. Works for any domain. Triggers on "build a minimal version of", "nanorepl",
   "reimplement from scratch", "strip down to the core", "build a micro/nano/mini version",
   or when a project URL is provided with a request to understand or rebuild its core.
-  Invoke with /nanorepl.
+  Invoke with "nanorepl".
 user-invocable: true
 effort: max
 ---
@@ -47,9 +47,9 @@ Two independent dials control the output:
 ## Invocation
 
 ```
-/nanorepl                           # Start new project
-/nanorepl <url>                     # Analyze a specific project
-/nanorepl <concept> <level>-<scale> # Quick start with parameters
+nanorepl                           # Start new project
+nanorepl <url>                     # Analyze a specific project
+nanorepl <concept> <level>-<scale> # Quick start with parameters
 ```
 
 ## Workflow
@@ -73,7 +73,7 @@ Use AskUserQuestion to gather parameters:
 
 **Q4 -- Output location:** "Where to create the project?" (default: `./nanorepl-{name}/`)
 
-If the user provided arguments with `/nanorepl`, skip already-answered questions.
+If the user provided arguments with `nanorepl`, skip already-answered questions.
 
 ### Step 2: Source Analysis
 

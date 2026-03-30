@@ -6,21 +6,21 @@ description: Dump session-derived knowledge into the user's Obsidian vault. Use 
   architectural discoveries, decisions, explanations, or anything worth preserving. Triggers on
   "dump this to obsidian", "dump to vault", "save to vault", "capture what we learned", "write up
   the debugging insight", "save our findings", "turn this into a note in obsidian", "dump what you
-  learned", "save what we figured out", or /dump. Supports targeted ("dump this specific thing")
+  learned", "save what we figured out", or "dump". Supports targeted ("dump this specific thing")
   and session-wide ("dump everything notable") modes. Also trigger when the user says "dump" at
   the end of a session and is clearly referring to saving session knowledge. Do NOT trigger on
   "dump" in engineering contexts (database dumps, log dumps, core dumps). Do NOT use when the
   primary source is an external URL, paper, file, pasted article, or a topic requiring fresh
-  research — use /note-gen instead.
+  research — use note-gen instead.
 ---
 
 # Dump
 
 Save session-derived knowledge to the Obsidian vault. This captures things that emerged during a session — debugging insights, architectural discoveries, TILs, decisions, explanations, or anything the user wants preserved before the conversation ends.
 
-The difference from `/note-gen`: note-gen creates notes **from** external sources (URLs, papers, concepts). This skill saves things **from the current session** to the vault. Choose based on where the knowledge came from, not the note's topic.
+The difference from `note-gen`: note-gen creates notes **from** external sources (URLs, papers, concepts). This skill saves things **from the current session** to the vault. Choose based on where the knowledge came from, not the note's topic.
 
-**Hybrid sessions**: If the session involved analyzing an external source (paper, blog post), the source itself belongs in `/note-gen`. But session-specific insights, interpretations, or connections drawn during discussion are fair game for `/dump`. When in doubt: note-gen for the source, dump for the original analysis layered on top.
+**Hybrid sessions**: If the session involved analyzing an external source (paper, blog post), the source itself belongs in `note-gen`. But session-specific insights, interpretations, or connections drawn during discussion are fair game for `dump`. When in doubt: note-gen for the source, dump for the original analysis layered on top.
 
 **Vault**: `/Users/chrisliu298/Documents/Obsidian/chrisliu298/`
 **Location**: All notes go at the vault root.

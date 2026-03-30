@@ -14,8 +14,8 @@ Help users write effective prompts — either from scratch or by refining existi
 
 This skill covers two model families. The user specifies which one:
 
-- **`/prompt-engineer claude`** — Anthropic Claude prompting best practices
-- **`/prompt-engineer codex`** — OpenAI GPT prompting best practices
+- **`prompt-engineer claude`** — Anthropic Claude prompting best practices
+- **`prompt-engineer codex`** — OpenAI GPT prompting best practices
 
 If the user doesn't specify, ask which model family the prompt targets. If it's obvious from context (e.g., they mention "Claude", "Anthropic", "GPT", "OpenAI", "Codex"), use that.
 

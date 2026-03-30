@@ -3,7 +3,7 @@ name: sync-upstream
 description: |
   Sync a forked repository with its upstream remote. Use when the user says
   "sync upstream", "update from upstream", "sync fork", "rebase on upstream",
-  "sync repo with upstream", or invokes /sync-upstream. Only applies to repos
+  "sync repo with upstream", or invokes "sync-upstream". Only applies to repos
   that are forks. Do NOT use for simple git pull on non-forked repos.
 user-invocable: true
 effort: medium

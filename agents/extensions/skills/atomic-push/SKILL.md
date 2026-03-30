@@ -4,7 +4,7 @@ description: |
   Commit and push changes to remote as separate logical commits (one commit per
   feature/fix/refactor). Use when the user explicitly wants "atomic commits",
   "separate commits", "split into commits", "one commit per change", or invokes
-  /atomic-push. For simple single-commit pushes, use /push instead.
+  "atomic-push". For simple single-commit pushes, use push instead.
   Do NOT create a pull request.
 user-invocable: true
 effort: medium
