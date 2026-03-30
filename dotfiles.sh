@@ -36,7 +36,6 @@ SKILLS=(
     "humanizer|blader/humanizer|claude,codex"
     "obsidian-bases|kepano/obsidian-skills/skills/obsidian-bases|claude,codex"
     "obsidian-cli|kepano/obsidian-skills/skills/obsidian-cli|claude,codex"
-    "browser-use|browser-use/browser-use/skills/browser-use|claude,codex"
     "runpodctl|runpod/skills/runpodctl|claude,codex"
     "pdf|anthropics/skills/skills/pdf|claude"
     "skill-creator|anthropics/skills/skills/skill-creator|claude"

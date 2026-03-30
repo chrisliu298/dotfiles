@@ -14,7 +14,7 @@ export COLORTERM=truecolor
 # =============================================================================
 # PATH
 # =============================================================================
-export PATH="$HOME/.browser-use-env/bin:$HOME/.browser-use/bin:$HOME/.claude/skills/relay/scripts:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/.local/bin:$PATH"
+export PATH="$HOME/.claude/skills/relay/scripts:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/.local/bin:$PATH"
 if (( IS_MACOS )); then
     eval "$(/opt/homebrew/bin/brew shellenv)"
     export PATH="/opt/homebrew/opt/curl/bin:$PATH"

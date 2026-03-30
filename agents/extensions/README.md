@@ -48,7 +48,6 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 
 | Skill | Source | Agents |
 |-------|--------|--------|
-| browser-use | [browser-use/browser-use](https://github.com/browser-use/browser-use) | Both |
 | defuddle | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) | Both |
 | humanizer | [blader/humanizer](https://github.com/blader/humanizer) | Both |
 | obsidian-bases | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) | Both |
