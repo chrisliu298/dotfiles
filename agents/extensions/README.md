@@ -21,7 +21,7 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 | Level | Skills |
 |-------|--------|
 | **medium** | push, atomic-push, sync-upstream, publish-skill, session-recovery, recall, jina, rlm, dump, chatgpt, relay |
-| **high** | arxiv-reader, deslop, beautify, lbreview, last-call, update-readme, note-gen, vault-linker, prompt-engineer, interviewer, citation-assistant, tdd, debug, typst |
+| **high** | arxiv-reader, deslop, beautify, lbreview, last-call, update-readme, prompt-engineer, interviewer, citation-assistant, tdd, debug, typst |
 | **max** | autoresearch, nanorepl, prism, subagent-executor |
 
 ### Published Skills
@@ -35,14 +35,23 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 | [last-call](https://github.com/chrisliu298/last-call) | Session-end quality review of all changes |
 | [lbreview](https://github.com/chrisliu298/lbreview) | Thorough code review of changes against main |
 | [nanorepl](https://github.com/chrisliu298/nanorepl) | Minimal reimplementations following Karpathy's nano philosophy |
-| [note-gen](https://github.com/chrisliu298/note-gen) | Generate Obsidian notes from source materials |
 | [prism](https://github.com/chrisliu298/prism) | Multi-perspective review through parallel agent deliberation |
 | [prompt-engineer](https://github.com/chrisliu298/prompt-engineer) | Write and refine prompts for Claude or Codex |
 | [recall](https://github.com/chrisliu298/recall) | Search past sessions and Obsidian notes for context |
 | [relay](https://github.com/chrisliu298/relay) | Bidirectional cross-agent relay between Claude Code and Codex |
 | [rlm](https://github.com/chrisliu298/rlm) | RLM-inspired externalize-and-recurse for data-scale tasks |
 | [chatgpt](https://github.com/chrisliu298/chatgpt) | Send prompts to ChatGPT via Chrome and collect responses (Claude via Claude in Chrome, Codex via chrome-devtools-mcp) |
+
+### Vault-Scoped Skills
+
+These skills live in the Obsidian vault's `_claude/skills/` (not in dotfiles):
+
+| Skill | Description |
+|-------|-------------|
+| [note-gen](https://github.com/chrisliu298/note-gen) | Generate Obsidian notes from source materials |
 | [vault-linker](https://github.com/chrisliu298/vault-linker) | Build wikilink connections across Obsidian vaults |
+| obsidian-bases | Create and edit Obsidian Bases (.base files) |
+| obsidian-cli | Interact with Obsidian vaults via the CLI |
 
 ### Community Skills
 
@@ -50,8 +59,6 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 |-------|--------|--------|
 | defuddle | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) | Both |
 | humanizer | [blader/humanizer](https://github.com/blader/humanizer) | Both |
-| obsidian-bases | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) | Both |
-| obsidian-cli | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) | Both |
 | pdf | [anthropics/skills](https://github.com/anthropics/skills) / [openai/skills](https://github.com/openai/skills) | Both |
 | runpodctl | [runpod/skills](https://github.com/runpod/skills) | Both |
 | skill-creator | [anthropics/skills](https://github.com/anthropics/skills) | Claude |
