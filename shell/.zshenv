@@ -29,7 +29,8 @@ fi
 # Editor
 # =============================================================================
 if (( IS_MACOS )); then
-    export EDITOR="open -We"
+    # export EDITOR="open -We"
+    export EDITOR="code --wait"
 else
     export EDITOR="code --wait"
 fi

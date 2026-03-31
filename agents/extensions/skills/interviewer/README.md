@@ -6,7 +6,7 @@
 
 Interviewer turns your agent into a technical interviewer. Pick your topics, choose a difficulty mode, and answer questions one by one. Each answer gets scored on accuracy, completeness, and clarity. When you're done, you get a summary of strengths, weak areas, and what to study next. Sessions are saved so you can track progress over time and replay questions you struggled with.
 
-Invoke with `/interview` (Claude Code) or `$interview` (Codex).
+Invoke with `interview`.
 
 ## Table of Contents
 

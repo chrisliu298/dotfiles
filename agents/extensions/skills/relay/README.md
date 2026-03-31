@@ -51,7 +51,7 @@ When you run one agent, you get one model's strengths. Relay lets you compose bo
 
 ### Why not subagents?
 
-Subagents spawn copies of the same model. Relay calls a different model — different training, different reasoning, different blind spots. A cross-model review catches more. Subagents can also invoke Relay (`/relay` in Claude Code, `$relay` in Codex), combining same-model parallelism with cross-model depth.
+Subagents spawn copies of the same model. Relay calls a different model — different training, different reasoning, different blind spots. A cross-model review catches more. Subagents can also invoke Relay (`relay`), combining same-model parallelism with cross-model depth.
 
 ---
 
@@ -147,7 +147,7 @@ Tell your agent to delegate work:
 
 > "Send this to Claude for a second opinion on the caching strategy"
 
-Or invoke directly with `/relay` (Claude Code) or `$relay` (Codex) — also available to subagents.
+Or invoke directly with `relay` — also available to subagents.
 
 ---
 

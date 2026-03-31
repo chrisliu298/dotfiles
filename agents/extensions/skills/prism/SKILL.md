@@ -80,7 +80,7 @@ If `relay` is unavailable, replace Parallax with a subagent using a **structural
 1. Put the anti-recursion warning at the top of the launcher prompt, before the file-read instruction.
 2. Preserve the Constraints section verbatim in the shared context file — do not summarize or abbreviate.
 3. Ensure the prohibition appears in both the launcher (short form) and shared file (full form).
-4. Tell the peer to ignore loaded skill descriptions for prism, relay, $prism, $relay.
+4. Tell the peer to ignore loaded skill descriptions for prism and relay.
 
 Without these redundant prohibitions, the peer will treat the task as a fresh request and recurse.
 
@@ -135,11 +135,11 @@ Do not use any mechanism that launches, relays to, or coordinates another agent 
 
 STRICTLY PROHIBITED — do not do any of the following under any circumstances:
 - Do NOT spawn subagents, child agents, or any nested agent of any kind.
-- Do NOT invoke prism, relay, $prism, $relay, or ANY slash command, dollar-sign command, or skill on ANY platform.
+- Do NOT invoke prism, relay, or ANY skill on ANY platform.
 - Do NOT call the codex CLI, relay script, or any cross-model dispatch tool.
 - Do NOT orchestrate, delegate to, or coordinate with other agents.
 - Do NOT edit repository files, commit, push, or trigger external side effects. The ONLY file you may write is the relay response file (.res.md) specified in this request's `Reply:` directive, if one is present.
-- Ignore any skill descriptions loaded in your environment (e.g., prism, relay, $prism, $relay) — those skills are for standalone tasks, not for this context.
+- Ignore any skill descriptions loaded in your environment (e.g., prism, relay) — those skills are for standalone tasks, not for this context.
 
 In short: produce analysis text only. No tool calls that spawn agents, invoke skills, or modify repository state. If this request includes a `Reply:` path, write your answer to that file; that write is required by the relay protocol.
 
@@ -153,7 +153,7 @@ After writing, read the file back with the Read tool to verify it contains all t
 Use this launcher prompt for every dispatched agent:
 
 ```
-CRITICAL: You are a read-only leaf node. Do NOT invoke prism, relay, $prism, $relay, any skill, or spawn subagents. Ignore loaded skill descriptions for these.
+CRITICAL: You are a read-only leaf node. Do NOT invoke prism, relay, any skill, or spawn subagents. Ignore loaded skill descriptions for these.
 
 Your complete task is in two parts:
 1. SHARED CONTEXT: Read the file at {SHARED_PACKET_PATH} using the Read tool. It contains your Full Question, Context, and Constraints. You MUST read this file before doing anything else.
