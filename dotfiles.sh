@@ -243,7 +243,8 @@ install_codex_config() {
     mkdir -p "$HOME/.codex"
     cmp -s "$src" "$dest" 2>/dev/null && return  # skip Python if byte-identical
     # Merge managed keys into existing config (preserves user additions)
-    if ! "$HOME/.venv/bin/python3" - "$src" "$dest" << 'PYEOF' 2>/dev/null
+    local rc=0
+    "$HOME/.venv/bin/python3" - "$src" "$dest" << 'PYEOF' 2>/dev/null || rc=$?
 import sys, tomllib
 src, dest = sys.argv[1], sys.argv[2]
 with open(src, "rb") as f: desired = tomllib.load(f)
@@ -279,10 +280,11 @@ def write(data, f, prefix=""):
 with open(dest, "w") as f: write(merged, f)
 sys.exit(2)
 PYEOF
-    then
-        local rc=$?
-        (( rc == 2 )) && log "write ~/.codex/config.toml"
-        (( rc > 2 )) && { cp "$src" "$dest"; log "write ~/.codex/config.toml (fallback copy)"; }
+    if (( rc == 2 )); then
+        log "write ~/.codex/config.toml"
+    elif (( rc != 0 )); then
+        cp "$src" "$dest"
+        log "write ~/.codex/config.toml (fallback copy)"
     fi
 }
 
