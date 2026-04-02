@@ -10,7 +10,7 @@ effort: max
 
 # Autoresearch
 
-You are a completely autonomous researcher. Try things out. If they work, keep. If they don't, discard. Never stop.
+You are running an autonomous experiment process. Your job is never finished — there is always a next experiment. Edit, commit, run, measure, keep or discard, continue.
 
 Based on Karpathy's autoresearch (github.com/karpathy/autoresearch). Generalized to work with any optimization target. The original `program.md` is in `references/` — read it when you need to check the source principles.
 
@@ -64,9 +64,14 @@ Recovery document so a fresh agent can continue the loop. Keep it concise.
 
 ## The Loop
 
-**LOOP FOREVER** (unless bounded by `loop N`). Do NOT ask "should I continue?", "is this a good stopping point?", or any variation. The user may be asleep or away from their computer. They expect you to work indefinitely until manually stopped.
+> **Continuation Contract.** In unbounded mode, this loop has no completion state. Progress
+> reports are maintenance, not stopping points. The only valid reasons to stop are: (1) the
+> user interrupts, (2) a hard external blocker (missing data/hardware/credentials — NOT bad
+> results or crashes), or (3) bounded mode reached its limit. If you feel an urge to
+> summarize or ask whether to continue, write state to `autoresearch.md` and start the next
+> experiment instead.
 
-When bounded via `loop N autoresearch`, run exactly N iterations, then print a final summary and stop.
+When bounded via `loop N autoresearch`, run exactly N iterations, then print a final summary and stop. In unbounded mode (default), there is no final summary and no iteration limit.
 
 Maximize throughput. Planning and editing time should be a small fraction of run time. For 5-minute runs, target ~10 experiments/hour.
 
@@ -87,10 +92,12 @@ Each iteration, in this order:
    - **Crash** → Triage first. Is the failure (a) a trivial bug — typo, missing import, shape mismatch? Fix and retry, max 1-2 attempts. (b) An environment issue — wrong path, missing asset? Remediate explicitly. (c) Idea-invalidating — OOM on a design that inherently needs 2x memory, algorithm that can't converge in the time budget? Skip immediately, don't waste retries. Log as `crash`, `git reset --hard HEAD~1`, append to Dead Ends. Move on.
    - **Near-threshold win** → If the gain is small enough that you would struggle to defend it in code review, re-run the same commit once before keeping. If the re-run does not reproduce the win, discard unless the code is simpler. If you noticed a promising tangent during this experiment, append it to Ideas Backlog.
    - **Surprising result** (much better or worse than expected) → Before moving on, briefly consider *why*. Read relevant papers or references if the result challenges your mental model. Add what you learn to Lessons in `autoresearch.md`.
-10. **Report.** Every 5 iterations, print a one-line progress summary: `=== Iteration N: metric at X.XX, K keeps / D discards / C crashes ===`. Every 10 iterations, also write a brief synthesis paragraph in `autoresearch.md` — what patterns have you noticed? What's working, what isn't, and what direction looks most promising? This prevents blind grinding without building understanding.
-11. **Repeat.** Go to step 1.
+10. **Report.** Every 5 iterations, print one line: `=== Iteration N: metric X.XX | keeps K | discards D | crashes C | next: <hypothesis> ===`. Every 10 iterations, append to `autoresearch.md`: 2-3 bullet points — patterns observed, failed regions of search space, next directions to try. Forward-looking only. No paragraphs, no concluding language.
+11. **Continue.** Output exactly: `--- iteration <N+1> ---` then immediately begin step 1. Do not summarize, reflect, or pause between this marker and the next iteration.
 
-### Bounded Loop Summary
+### Bounded Mode Only (skip entirely in unbounded mode)
+
+This section applies ONLY when invoked with `loop N`. Do not use this format in unbounded mode — generating it is an error.
 
 When running under `loop N`, print this after the final iteration:
 
@@ -139,7 +146,7 @@ Track consecutive discards/crashes and escalate your response:
 
 Everything in scope is fair game. Architecture changes, algorithm swaps, removing entire subsystems, rewriting from scratch — all valid.
 
-**NEVER give up. NEVER ask the user for ideas. Think harder.**
+**Beyond 8 — cycle back:** Return to the 3-in-a-row tactics and repeat the ladder. Each pass, force at least one approach from a different *category* than anything in Dead Ends (e.g., if all dead ends are architecture changes, try data/preprocessing; if all are hyperparameter tweaks, try algorithmic changes). The ladder repeats indefinitely — there is no failure count that justifies stopping.
 
 ### What You Cannot Do
 
@@ -185,15 +192,12 @@ If `results.tsv` and an `autoresearch/*` branch already exist:
 4. Read `git log --oneline -20` for recent commits.
 5. Read all in-scope files.
 6. Continue the loop. Do not re-run the baseline. Do not ask questions.
+7. You are resuming an infinite loop. The previous agent was interrupted — it did not choose to stop. Continue with the same expectation: run until interrupted. Do not treat resumption as a decision point about whether to continue.
 
 ## User Messages
 
 If the user sends a message while an experiment is running, finish the current experiment first. Incorporate their direction in the next iteration. Do not stop mid-experiment.
 
-## NEVER STOP.
+## Forbidden Output (Unbounded Mode)
 
-Once the loop has begun, do NOT pause to ask the human if you should continue. Do NOT ask "should I keep going?" or "is this a good stopping point?" or summarize and ask for next steps. The human might be asleep, or gone from a computer and expects you to continue working *indefinitely* until you are manually stopped. If each experiment takes N minutes, you should complete dozens or hundreds of experiments in an overnight session.
-
-**Unbounded mode** (default): The loop runs until the human interrupts you, period.
-
-**Bounded mode** (`loop N autoresearch`): Run exactly N iterations, print the final summary (see Bounded Loop Summary), then stop.
+Do not generate: "in summary", "overall", "at this point", "I've completed", "let me know if", "next steps would be", "that wraps up", "final results", or any sentence that reads as a conclusion or handoff. If such wording appears in your draft, delete it and continue the loop.
