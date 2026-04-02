@@ -55,7 +55,11 @@ Recovery document so a fresh agent can continue the loop. Keep it concise.
 ## Off Limits — what must not be touched
 ## Constraints — hard rules
 ## Guard — command that must always pass (or "none")
-## What's Been Tried — key wins, dead ends, insights (update every ~5 experiments)
+## Current Best — commit, metric, delta vs baseline, why it won
+## Dead Ends — approach, why it failed (one line each; DO NOT retry unless the reason no longer applies)
+## Near Misses — approaches within ~1% of best but discarded (candidates for combination)
+## Lessons — reusable insights about the problem (e.g. "memory-bound, not compute-bound", "batch_size>=64 required for stability")
+## Ideas Backlog — promising directions to try later (consume when planning)
 ```
 
 ## The Loop
@@ -69,20 +73,21 @@ Maximize throughput. Planning and editing time should be a small fraction of run
 Each iteration, in this order:
 
 1. **Check git state.** Note the current branch and commit. Working tree should be clean.
-2. **Plan.** One hypothesis, one line. Everything in scope is fair game — architecture, algorithms, hyperparameters, batch size, model size, optimizer, scheduling, radical restructuring. Do not over-deliberate.
+2. **Plan.** Scan Dead Ends in `autoresearch.md` — never retry listed approaches. Check Ideas Backlog for promising untried ideas. Then pick one hypothesis, one line. Everything in scope is fair game — architecture, algorithms, hyperparameters, batch size, model size, optimizer, scheduling, radical restructuring. Do not over-deliberate.
 3. **Edit.** Modify only in-scope files.
-4. **Commit.** `git add <files> && git commit -m "<description>"` — commit BEFORE running (so the change is recorded even if the experiment crashes or the agent is interrupted).
+4. **Commit.** If `autoresearch.md` has pending updates (dead ends, ideas, state), commit it first: `git add autoresearch.md && git commit -m "update autoresearch state"`. Then commit the experiment: `git add <files> && git commit -m "<description>"`. Commit BEFORE running (so the change is recorded even if the experiment crashes or the agent is interrupted). The separate `autoresearch.md` commit ensures experiment memory survives `git reset --hard HEAD~1`.
 5. **Run.** `<command> > run.log 2>&1` — redirect everything. Do NOT use `tee`. Do NOT let output flood your context.
 6. **Extract.** Run the extraction command. If it produces no output, the run crashed or did not complete — `tail -n 50 run.log` for the stack trace. Also extract resource metrics (memory, runtime) if available.
 7. **Record.** Append the result to `results.tsv`. Do NOT commit `results.tsv`.
 8. **Guard.** If a guard command was defined, run it now (only when the metric improved — no point guarding a discard). If the guard fails, the optimization broke existing behavior. Rework: revert (`git reset --hard HEAD~1`), re-implement the same idea differently to avoid the regression, commit, re-run verify + guard. Max 2 rework attempts. If it still fails, discard. **Never modify guard/test files** — always adapt the implementation.
 9. **Decide.** Compare against the current best (find the last `keep` row in `results.tsv`, or the baseline if no improvements yet):
-   - **Improved** (and guard passed, if any) → `keep`. The commit stays. Branch advances.
-   - **Equal or worse** → `discard`. `git reset --hard HEAD~1` to revert. Exception: if the metric is equal but the code is meaningfully simpler, treat as `keep` per the simplicity criterion.
-   - **Improved but guard failed** (after rework attempts) → `discard`. Log reason.
-   - **Crash** → Triage first. Is the failure (a) a trivial bug — typo, missing import, shape mismatch? Fix and retry, max 1-2 attempts. (b) An environment issue — wrong path, missing asset? Remediate explicitly. (c) Idea-invalidating — OOM on a design that inherently needs 2x memory, algorithm that can't converge in the time budget? Skip immediately, don't waste retries. Log as `crash`, `git reset --hard HEAD~1`, move on.
-   - **Near-threshold win** → If the improvement is small enough that it could be noise, re-run to confirm or document why you believe the gain is real before keeping.
-10. **Report.** Every 5 iterations, print a one-line progress summary: `=== Iteration N: metric at X.XX, K keeps / D discards / C crashes ===`
+   - **Improved** (and guard passed, if any) → `keep`. The commit stays. Branch advances. Update Current Best in `autoresearch.md`.
+   - **Equal or worse** → `discard`. `git reset --hard HEAD~1` to revert. Append one line to Dead Ends in `autoresearch.md` (what was tried, why it failed). If the metric was within ~1% of the best, also add to Near Misses. Exception: if the metric is equal but the code is meaningfully simpler, treat as `keep` per the simplicity criterion.
+   - **Improved but guard failed** (after rework attempts) → `discard`. Append to Dead Ends with reason. Log reason.
+   - **Crash** → Triage first. Is the failure (a) a trivial bug — typo, missing import, shape mismatch? Fix and retry, max 1-2 attempts. (b) An environment issue — wrong path, missing asset? Remediate explicitly. (c) Idea-invalidating — OOM on a design that inherently needs 2x memory, algorithm that can't converge in the time budget? Skip immediately, don't waste retries. Log as `crash`, `git reset --hard HEAD~1`, append to Dead Ends. Move on.
+   - **Near-threshold win** → If the gain is small enough that you would struggle to defend it in code review, re-run the same commit once before keeping. If the re-run does not reproduce the win, discard unless the code is simpler. If you noticed a promising tangent during this experiment, append it to Ideas Backlog.
+   - **Surprising result** (much better or worse than expected) → Before moving on, briefly consider *why*. Read relevant papers or references if the result challenges your mental model. Add what you learn to Lessons in `autoresearch.md`.
+10. **Report.** Every 5 iterations, print a one-line progress summary: `=== Iteration N: metric at X.XX, K keeps / D discards / C crashes ===`. Every 10 iterations, also write a brief synthesis paragraph in `autoresearch.md` — what patterns have you noticed? What's working, what isn't, and what direction looks most promising? This prevents blind grinding without building understanding.
 11. **Repeat.** Go to step 1.
 
 ### Bounded Loop Summary
@@ -115,16 +120,24 @@ Apply this to every keep/discard decision. The threshold for "small improvement"
 
 ### When Stuck
 
-If you've reverted 3+ experiments in a row, your current strategy isn't working. Step back and change approach entirely:
+Track consecutive discards/crashes and escalate your response:
 
-- Re-read the source files with fresh eyes. What is the code *actually* doing?
+**3 in a row — shift tactics:**
+- Re-read source files with fresh eyes. What is the code *actually* doing?
+- If recent failures were parameter tweaks, try structural changes (or vice versa).
+- Check Dead Ends in `autoresearch.md` to confirm you're not circling.
+
+**5 in a row — combine and ablate:**
+- Check Near Misses in `autoresearch.md`. Try combining elements from two near-miss approaches.
+- Try *removing* components from the current best — ablation often reveals dead weight that crept in.
+- Reason about execution environment bottlenecks (memory access, compute, cache behavior).
+
+**8 in a row — radical pivot:**
 - Read papers or references relevant to the optimization target.
-- Combine elements from previous near-misses.
-- Try radical structural changes, not incremental parameter tweaks.
-- Reason about what the execution environment is doing (memory access, compute bottlenecks, cache behavior).
-- As a last resort, rewind to an earlier successful commit (`git log` to find it, `git reset --hard <hash>`) and try a completely different direction. This discards all intermediate commits. Use very sparingly — almost never.
+- Try a fundamentally different approach (different architecture family, different algorithm class).
+- As a last resort, rewind to an earlier successful commit (`git log` to find it, `git reset --hard <hash>`) and try a completely different direction. Use very sparingly.
 
-Remember: everything in scope is fair game. Do not limit yourself to parameter tuning. Architecture changes, algorithm swaps, removing entire subsystems, rewriting from scratch — all are valid experiments.
+Everything in scope is fair game. Architecture changes, algorithm swaps, removing entire subsystems, rewriting from scratch — all valid.
 
 **NEVER give up. NEVER ask the user for ideas. Think harder.**
 
@@ -167,8 +180,8 @@ d4e5f6g	NA	0.0	crash	double model width (OOM)
 If `results.tsv` and an `autoresearch/*` branch already exist:
 
 1. `git checkout autoresearch/<tag>` — switch to the existing experiment branch.
-2. Read `autoresearch.md` for context.
-3. Read `results.tsv` — only the last `keep` row to find the current best, not the entire file.
+2. Read `autoresearch.md` — especially Dead Ends (do not retry), Near Misses (combination candidates), Lessons (reusable insights), and Ideas Backlog (promising untried directions).
+3. Read `results.tsv` — the last 10-20 rows for recent context, and the last `keep` row for current best.
 4. Read `git log --oneline -20` for recent commits.
 5. Read all in-scope files.
 6. Continue the loop. Do not re-run the baseline. Do not ask questions.
