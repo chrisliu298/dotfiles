@@ -28,20 +28,20 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 
 ### Published Skills
 
-| Skill | Description |
-|-------|-------------|
-| [autoresearch](https://github.com/chrisliu298/autoresearch) | Autonomous experiment loop faithful to Karpathy's autoresearch |
-| [citation-assistant](https://github.com/chrisliu298/citation-assistant) | Add verified citations to LaTeX papers |
-| [deslop](https://github.com/chrisliu298/deslop) | Remove AI-generated slop from code changes |
-| [interviewer](https://github.com/chrisliu298/interviewer) | Mock technical interviews for AI/ML |
-| [last-call](https://github.com/chrisliu298/last-call) | Session-end quality review of all changes |
-| [nanorepl](https://github.com/chrisliu298/nanorepl) | Minimal reimplementations following Karpathy's nano philosophy |
-| [prism](https://github.com/chrisliu298/prism) | Multi-perspective review through parallel agent deliberation |
-| [prompt-engineer](https://github.com/chrisliu298/prompt-engineer) | Write and refine prompts for Claude or Codex |
-| [recall](https://github.com/chrisliu298/recall) | Search past sessions and Obsidian notes for context |
-| [relay](https://github.com/chrisliu298/relay) | Bidirectional cross-agent relay between Claude Code and Codex |
-| [rlm](https://github.com/chrisliu298/rlm) | RLM-inspired externalize-and-recurse for data-scale tasks |
-| [chatgpt](https://github.com/chrisliu298/chatgpt) | Send prompts to ChatGPT via Chrome and collect responses (Claude via Claude in Chrome, Codex via chrome-devtools-mcp) |
+| Skill | Description | Default |
+|-------|-------------|---------|
+| [autoresearch](https://github.com/chrisliu298/autoresearch) | Autonomous experiment loop faithful to Karpathy's autoresearch | on |
+| [citation-assistant](https://github.com/chrisliu298/citation-assistant) | Add verified citations to LaTeX papers | manual |
+| [deslop](https://github.com/chrisliu298/deslop) | Remove AI-generated slop from code changes | manual |
+| [interviewer](https://github.com/chrisliu298/interviewer) | Mock technical interviews for AI/ML | manual |
+| [last-call](https://github.com/chrisliu298/last-call) | Session-end quality review of all changes | on |
+| [nanorepl](https://github.com/chrisliu298/nanorepl) | Minimal reimplementations following Karpathy's nano philosophy | manual |
+| [prism](https://github.com/chrisliu298/prism) | Multi-perspective review through parallel agent deliberation | on |
+| [prompt-engineer](https://github.com/chrisliu298/prompt-engineer) | Write and refine prompts for Claude or Codex | on |
+| [recall](https://github.com/chrisliu298/recall) | Search past sessions and Obsidian notes for context | on |
+| [relay](https://github.com/chrisliu298/relay) | Bidirectional cross-agent relay between Claude Code and Codex | on |
+| [rlm](https://github.com/chrisliu298/rlm) | RLM-inspired externalize-and-recurse for data-scale tasks | manual |
+| [chatgpt](https://github.com/chrisliu298/chatgpt) | Send prompts to ChatGPT via Chrome and collect responses | manual |
 
 ### Vault-Scoped Skills
 
@@ -56,29 +56,29 @@ These skills live in the Obsidian vault's `_claude/skills/` (not in dotfiles):
 
 ### Community Skills
 
-| Skill | Source | Agents |
-|-------|--------|--------|
-| defuddle | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) | Both |
-| humanizer | [blader/humanizer](https://github.com/blader/humanizer) | Both |
-| pdf | [anthropics/skills](https://github.com/anthropics/skills) / [openai/skills](https://github.com/openai/skills) | Both |
-| runpodctl | [runpod/skills](https://github.com/runpod/skills) | Both |
-| skill-creator | [anthropics/skills](https://github.com/anthropics/skills) | Claude |
+| Skill | Source | Agents | Default |
+|-------|--------|--------|---------|
+| defuddle | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) | Both | on |
+| humanizer | [blader/humanizer](https://github.com/blader/humanizer) | Both | manual |
+| pdf | [anthropics/skills](https://github.com/anthropics/skills) / [openai/skills](https://github.com/openai/skills) | Both | on |
+| runpodctl | [runpod/skills](https://github.com/runpod/skills) | Both | manual |
+| skill-creator | [anthropics/skills](https://github.com/anthropics/skills) | Claude | on |
 
 ### Workflow Skills (Local)
 
-| Skill | Description |
-|-------|-------------|
-| arxiv-reader | Read arxiv papers via TeX source, HF markdown, or HTML fallback |
-| atomic-push | Atomic commits and push to remote |
-| beautify | Simplify and beautify code changes on the current branch |
-| debug | Structured debugging: investigate root cause before proposing fixes |
-| dump | Dump session-derived knowledge to Obsidian vault |
-| jina | Fetch web content and search via Jina AI (r.jina.ai / s.jina.ai) |
-| push | Single-commit push to remote |
-| subagent-executor | Execute multi-task plans via fresh subagents with review gates |
-| tdd | Test-driven development: write failing test before production code |
-| typst | Write Typst documents correctly and idiomatically |
-| update-readme | Update or create README.md for repos |
+| Skill | Description | Default |
+|-------|-------------|---------|
+| arxiv-reader | Read arxiv papers via TeX source, HF markdown, or HTML fallback | on |
+| atomic-push | Atomic commits and push to remote | on |
+| beautify | Simplify and beautify code changes on the current branch | manual |
+| debug | Structured debugging: investigate root cause before proposing fixes | on |
+| dump | Dump session-derived knowledge to Obsidian vault | manual |
+| jina | Fetch web content and search via Jina AI (r.jina.ai / s.jina.ai) | on |
+| push | Single-commit push to remote | on |
+| subagent-executor | Execute multi-task plans via fresh subagents with review gates | on |
+| tdd | Test-driven development: write failing test before production code | on |
+| typst | Write Typst documents correctly and idiomatically | on |
+| update-readme | Update or create README.md for repos | on |
 
 ### Project-Local Skills
 
