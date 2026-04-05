@@ -12,6 +12,8 @@ Agent extensions managed by `dotfiles.sh`. Three types: **skills**, **MCP server
 
 Most skills use one `SKILL.md` that works in both Claude Code and Codex. Agent-specific variants such as `relay` and `chatgpt` use explicit per-agent subdirectories instead. All own skills live in `agents/extensions/skills/` as the single source of truth. Community/third-party skills are cloned to `~/.cache/skills-src/`. Both are symlinked to `~/.claude/skills/` and `~/.codex/skills/`.
 
+Skills in `MANUAL_SKILLS` are not auto-installed. Toggle with `./dotfiles.sh enable/disable <name>`. List status with `./dotfiles.sh skills`. Project-local skills (e.g., `publish-skill`) live in `.claude/skills/` and are available only in the dotfiles repo.
+
 Published skills are synced to their standalone GitHub repos via `./dotfiles.sh publish`.
 
 ### Effort Levels
@@ -20,8 +22,8 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 
 | Level | Skills |
 |-------|--------|
-| **medium** | push, atomic-push, sync-upstream, publish-skill, session-recovery, recall, jina, rlm, dump, chatgpt, relay |
-| **high** | arxiv-reader, deslop, beautify, lbreview, last-call, update-readme, prompt-engineer, interviewer, citation-assistant, tdd, debug, typst |
+| **medium** | push, atomic-push, recall, jina, rlm, dump, chatgpt, relay |
+| **high** | arxiv-reader, deslop, beautify, last-call, update-readme, prompt-engineer, interviewer, citation-assistant, tdd, debug, typst, humanizer, runpodctl |
 | **max** | autoresearch, nanorepl, prism, subagent-executor |
 
 ### Published Skills
@@ -33,7 +35,6 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 | [deslop](https://github.com/chrisliu298/deslop) | Remove AI-generated slop from code changes |
 | [interviewer](https://github.com/chrisliu298/interviewer) | Mock technical interviews for AI/ML |
 | [last-call](https://github.com/chrisliu298/last-call) | Session-end quality review of all changes |
-| [lbreview](https://github.com/chrisliu298/lbreview) | Thorough code review of changes against main |
 | [nanorepl](https://github.com/chrisliu298/nanorepl) | Minimal reimplementations following Karpathy's nano philosophy |
 | [prism](https://github.com/chrisliu298/prism) | Multi-perspective review through parallel agent deliberation |
 | [prompt-engineer](https://github.com/chrisliu298/prompt-engineer) | Write and refine prompts for Claude or Codex |
@@ -73,14 +74,17 @@ These skills live in the Obsidian vault's `_claude/skills/` (not in dotfiles):
 | debug | Structured debugging: investigate root cause before proposing fixes |
 | dump | Dump session-derived knowledge to Obsidian vault |
 | jina | Fetch web content and search via Jina AI (r.jina.ai / s.jina.ai) |
-| publish-skill | Publish local skill to standalone public GitHub repo |
 | push | Single-commit push to remote |
-| session-recovery | Recover sessions after directory rename/move |
 | subagent-executor | Execute multi-task plans via fresh subagents with review gates |
-| sync-upstream | Sync forked repo with upstream remote |
 | tdd | Test-driven development: write failing test before production code |
 | typst | Write Typst documents correctly and idiomatically |
 | update-readme | Update or create README.md for repos |
+
+### Project-Local Skills
+
+| Skill | Description |
+|-------|-------------|
+| publish-skill | Publish local skill to standalone public GitHub repo (dotfiles only) |
 
 ## MCP Servers
 

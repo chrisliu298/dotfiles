@@ -29,11 +29,14 @@ See [`shell/`](shell/README.md), [`.config/`](.config/README.md), and [`agents/e
 
 ## Extensions
 
-34 extensions across local and upstream sources. See [`agents/extensions/README.md`](agents/extensions/README.md) for full catalog. 4 additional Obsidian-specific skills live in the vault's `_claude/skills/`.
+31 extensions across local and upstream sources. See [`agents/extensions/README.md`](agents/extensions/README.md) for full catalog. 4 additional Obsidian-specific skills live in the vault's `_claude/skills/`.
 
 | Action | Command |
 |--------|---------|
 | Install/update all | `./dotfiles.sh` |
+| List manual skills | `./dotfiles.sh skills` |
+| Enable a manual skill | `./dotfiles.sh enable <name>` |
+| Disable a manual skill | `./dotfiles.sh disable <name>` |
 | Sync skills to published repos | `./dotfiles.sh publish` |
 | Add a local skill | Create `agents/extensions/skills/<name>/SKILL.md`, run `./dotfiles.sh` |
 | Add an upstream skill | Add `name\|owner/repo/subpath\|agents` to `SKILLS` table in `dotfiles.sh` |

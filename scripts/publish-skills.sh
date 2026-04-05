@@ -12,7 +12,6 @@ PUBLISH_SKILLS=(
     "deslop"
     "interviewer"
     "last-call"
-    "lbreview"
     "nanorepl"
     "note-gen"
     "prism"

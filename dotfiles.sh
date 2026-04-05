@@ -40,6 +40,20 @@ SKILLS=(
     "pdf|openai/skills/skills/.curated/pdf|codex"
 )
 
+# Skills not auto-installed. Toggle with: ./dotfiles.sh enable/disable <name>
+MANUAL_SKILLS=(
+    beautify
+    chatgpt
+    citation-assistant
+    deslop
+    dump
+    humanizer
+    interviewer
+    nanorepl
+    runpodctl
+    rlm
+)
+
 MCP_SERVERS=(  # name|command|args (user-scoped MCP servers)
     "chrome-devtools|npx|chrome-devtools-mcp@latest --autoConnect --channel stable --no-usage-statistics"
     "codex|codex|mcp-server"
@@ -113,6 +127,36 @@ sync_git_checkout() {
     fi
 }
 
+_is_manual() {
+    local name="$1" m
+    for m in "${MANUAL_SKILLS[@]}"; do [[ "$m" == "$name" ]] && return 0; done
+    return 1
+}
+
+_resolve_source() {
+    local source="$1"
+    if [[ "$source" == ./* ]]; then
+        printf '%s' "$ROOT/${source#./}"
+    else
+        local _rest="${source#*/}"
+        local slug="${source%%/*}/${_rest%%/*}"
+        local dir="$SKILL_CACHE/${slug//\//__}"
+        local subpath="${_rest#*/}"
+        [[ "$subpath" != "$_rest" ]] && dir="$dir/$subpath"
+        printf '%s' "$dir"
+    fi
+}
+
+_ensure_source() {
+    local source="$1"
+    [[ "$source" == ./* ]] && return
+    local _rest="${source#*/}"
+    local slug="${source%%/*}/${_rest%%/*}"
+    [[ -d "$SKILL_CACHE/${slug//\//__}/.git" ]] && return
+    mkdir -p "$SKILL_CACHE"
+    sync_git_checkout "$slug" "$SKILL_CACHE/${slug//\//__}"
+}
+
 # ── Install functions ────────────────────────────────────────────
 
 install_links() {
@@ -168,17 +212,9 @@ install_skills() {
     local claude_expected="" codex_expected=""
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name source agents <<< "$entry"
-        local base_dir
-        if [[ "$source" == ./* ]]; then
-            base_dir="$ROOT/${source#./}"
-        else
-            local _rest="${source#*/}"
-        local slug="${source%%/*}/${_rest%%/*}"
-            base_dir="$SKILL_CACHE/${slug//\//__}"
-            local subpath="${_rest#*/}"
-            [[ "$subpath" != "$_rest" ]] && base_dir="$base_dir/$subpath"
-        fi
+        local base_dir; base_dir=$(_resolve_source "$source")
         [[ -d "$base_dir" ]] || { warn "skip $name (source not found: $source)"; continue; }
+        [[ "$name" != "*" ]] && _is_manual "$name" && continue
 
         local -a skill_entries=()
         if [[ "$name" == "*" ]]; then
@@ -191,6 +227,7 @@ install_skills() {
                     d="${d%/}"; local dname="${d##*/}"
                     # Explicit entries override wildcard's agents setting
                     [[ "$explicit_names" == *$'\n'"$dname"$'\n'* ]] && continue
+                    _is_manual "$dname" && continue
                     skill_entries+=("$dname:$d")
                 done
             fi
@@ -218,6 +255,7 @@ install_skills() {
             local bname="${entry##*/}"
             [[ "$bname" == .* ]] && continue
             [[ $'\n'"$expected" == *$'\n'"$bname"$'\n'* ]] && continue
+            _is_manual "$bname" && [[ -e "$entry" ]] && continue
             rm -rf "$entry"; log "clean ${entry/#$HOME/~}"
         done
     done
@@ -319,6 +357,60 @@ install_mcp_servers() {
     stamp_write "$stamp_file" "$fingerprint"
 }
 
+# ── Skill toggle commands ────────────────────────────────────────
+
+cmd_enable() {
+    local name="${1:?usage: dotfiles.sh enable <name>}"
+    _is_manual "$name" || { warn "'$name' is not a manual skill"; return 1; }
+    local found=false
+    # Check explicit entries first
+    for entry in "${SKILLS[@]}"; do
+        IFS='|' read -r ename source agents <<< "$entry"
+        [[ "$ename" == "$name" ]] || continue
+        _ensure_source "$source"
+        local base_dir; base_dir=$(_resolve_source "$source")
+        [[ -f "$base_dir/SKILL.md" ]] || { warn "skip $name (no SKILL.md at $source)"; continue; }
+        [[ "$agents" == *claude* ]] && ensure_symlink "$base_dir" "$HOME/.claude/skills/$name"
+        [[ "$agents" == *codex* ]]  && ensure_symlink "$base_dir" "$HOME/.codex/skills/$name"
+        found=true
+    done
+    # Fall back to wildcard discovery
+    if ! $found; then
+        for entry in "${SKILLS[@]}"; do
+            IFS='|' read -r ename source agents <<< "$entry"
+            [[ "$ename" == "*" ]] || continue
+            local base_dir; base_dir=$(_resolve_source "$source")
+            local skill_dir="$base_dir/$name"
+            [[ -f "$skill_dir/SKILL.md" ]] || continue
+            [[ "$agents" == *claude* ]] && ensure_symlink "$skill_dir" "$HOME/.claude/skills/$name"
+            [[ "$agents" == *codex* ]]  && ensure_symlink "$skill_dir" "$HOME/.codex/skills/$name"
+            found=true
+        done
+    fi
+    $found || { warn "skill '$name' not found"; return 1; }
+}
+
+cmd_disable() {
+    local name="${1:?usage: dotfiles.sh disable <name>}"
+    _is_manual "$name" || warn "'$name' is not a manual skill — next run will re-create it"
+    local removed=false
+    for dir in "$HOME/.claude/skills/$name" "$HOME/.codex/skills/$name"; do
+        [[ -L "$dir" ]] && { rm "$dir"; log "removed ${dir/#$HOME/~}"; removed=true; }
+    done
+    $removed || log "$name is not currently enabled"
+}
+
+cmd_skills() {
+    printf '\n  %sManual skills%s  (toggle with: ./dotfiles.sh enable/disable <name>)\n\n' "$_CYN" "$_RST"
+    local m
+    for m in "${MANUAL_SKILLS[@]}"; do
+        local status="${_DIM}off${_RST}"
+        [[ -L "$HOME/.claude/skills/$m" || -L "$HOME/.codex/skills/$m" ]] && status="on "
+        printf '    %-22s %s\n' "$m" "$status"
+    done
+    printf '\n'
+}
+
 # ── Main ─────────────────────────────────────────────────────────
 
 main() {
@@ -326,6 +418,9 @@ main() {
     case "${1:-}" in
         publish) exec "$ROOT/scripts/publish-skills.sh" ;;
         plugins) exec "$ROOT/scripts/install-plugins.sh" ;;
+        enable)  cmd_enable "${2:-}"; exit ;;
+        disable) cmd_disable "${2:-}"; exit ;;
+        skills)  cmd_skills; exit ;;
     esac
 
     local fp; fp=$(compute_fingerprint)

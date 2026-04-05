@@ -11,10 +11,11 @@ dotfiles/
 ├── dotfiles.sh              # Single entrypoint: setup
 ├── shell/                   # Zsh config (.zshrc, .zshenv, .aliases, .functions, .p10k.zsh)
 ├── .config/                 # App configs (Neovim, tmux, btop)
+├── .claude/skills/          # Project-local skills (dotfiles-only)
 └── agents/
     ├── claude/              # Claude Code (~/.claude/) — CLAUDE.md, settings (copied), keybindings, hooks, statusline
     ├── codex/               # Codex (~/.codex/) — AGENTS.md
-    └── extensions/skills/   # Local skills (SKILL.md per skill)
+    └── extensions/skills/   # Global skills (SKILL.md per skill)
 ```
 
 ## Setup
@@ -54,6 +55,8 @@ Managed by `SKILLS` table in `dotfiles.sh` (git-clone + symlink, no `npx skills`
 - **Local**: Add `<name>/SKILL.md` under `agents/extensions/skills/`, run `./dotfiles.sh`
 - **Upstream**: Add `name|owner/repo/subpath|agents` entry to `SKILLS` table
 - **Agent-specific**: Separate table entries per agent (e.g., `pdf` has different sources for claude vs codex)
+- **Manual skills**: Add name to `MANUAL_SKILLS` array — skipped during auto-install, toggled with `./dotfiles.sh enable/disable <name>`
+- **Project-local skills**: Place in `.claude/skills/<name>/` — available only in this repo, not globally
 - **Install/update all**: `./dotfiles.sh`
 
 Single SKILL.md per skill works in both agents. Include Claude-specific frontmatter (`allowed-tools`, `user-invocable`) — Codex ignores unknown keys.
