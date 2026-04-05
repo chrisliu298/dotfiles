@@ -218,7 +218,12 @@ cmd_call() {
   # Build peer invocation
   local -a peer_cmd
   if [ "$to" = "codex" ]; then
-    peer_cmd=(codex exec --model gpt-5.4 -c "model_reasoning_effort=\"$effort\"" --skip-git-repo-check --full-auto --add-dir "$RELAY_DIR" "Read and execute $req_path")
+    peer_cmd=(codex exec --model gpt-5.4
+      -c "model_reasoning_effort=\"$effort\""
+      --skip-git-repo-check --full-auto --color never
+      --disable plugins
+      --add-dir "$RELAY_DIR"
+      "Read and execute $req_path")
   elif [ "$to" = "claude" ]; then
     [ "$effort" = "medium" ] || echo "relay: note: --effort is informational when calling claude" >&2
     peer_cmd=(env -u CLAUDECODE claude --model opus -p --dangerously-skip-permissions "Read and execute $req_path")
