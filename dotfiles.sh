@@ -283,7 +283,9 @@ install_codex_config() {
     # Merge managed keys into existing config (preserves user additions)
     local rc=0
     "$HOME/.venv/bin/python3" - "$src" "$dest" << 'PYEOF' 2>/dev/null || rc=$?
-import sys, tomllib
+import sys, re, tomllib
+_BARE_KEY = re.compile(r'[A-Za-z0-9_-]+$')
+def qk(k): return k if _BARE_KEY.match(k) else '"' + k.replace('\\', '\\\\').replace('"', '\\"') + '"'
 src, dest = sys.argv[1], sys.argv[2]
 with open(src, "rb") as f: desired = tomllib.load(f)
 existing = {}
@@ -305,15 +307,15 @@ def fmt(v):
     if isinstance(v, list): return "[" + ", ".join(fmt(i) for i in v) + "]"
 def write(data, f, prefix=""):
     for k, v in data.items():
-        if not isinstance(v, dict): f.write(f"{k} = {fmt(v)}\n")
+        if not isinstance(v, dict): f.write(f"{qk(k)} = {fmt(v)}\n")
     for k, v in data.items():
         if not isinstance(v, dict): continue
-        sec = f"{prefix}.{k}" if prefix else k
+        sec = f"{prefix}.{qk(k)}" if prefix else qk(k)
         direct = [(kk, vv) for kk, vv in v.items() if not isinstance(vv, dict)]
         nested = [(kk, vv) for kk, vv in v.items() if isinstance(vv, dict)]
         if direct or not nested:
             f.write(f"\n[{sec}]\n")
-            for kk, vv in direct: f.write(f"{kk} = {fmt(vv)}\n")
+            for kk, vv in direct: f.write(f"{qk(kk)} = {fmt(vv)}\n")
         for kk, vv in nested: write({kk: vv}, f, sec)
 with open(dest, "w") as f: write(merged, f)
 sys.exit(2)
