@@ -76,9 +76,9 @@ zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'm:{a-zA-Z}={A-Za-z} l
 zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 zstyle ':completion:*' menu no
 
-# OpenClaw Completion
-if (( IS_MACOS )) && [[ "$HOST" == "macmini" ]]; then
-    source <(openclaw completion --shell zsh)
+# OpenClaw Completion (source from file — openclaw update can overwrite this safely)
+if (( IS_MACOS )) && [[ "$HOST" == "macmini" ]] && [[ -f ~/.openclaw/completions/openclaw.zsh ]]; then
+    source ~/.openclaw/completions/openclaw.zsh
 fi
 
 # =============================================================================
