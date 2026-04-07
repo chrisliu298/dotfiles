@@ -353,15 +353,54 @@ def is_subagent_session(messages: list) -> bool:
     return True
 
 
+_ERROR_PATTERNS = (
+    "API Error:",
+    "OAuth token has expired",
+    "Please run /login",
+    "Not logged in",
+    "Failed to authenticate",
+    "Invalid API key",
+    "Invalid authenticat",
+    "Internal server error",
+    "Unknown skill:",
+)
+
+
+def _has_real_question(turns: list) -> bool:
+    """Check if any user turn contains a substantive question."""
+    for role, content in turns:
+        if role == "user" and "?" in content and len(content.strip()) > 20:
+            return True
+    return False
+
+
+def _is_error_only_session(turns: list) -> bool:
+    """Check if every assistant response is just an error message."""
+    has_assistant = False
+    for role, content in turns:
+        if role == "assistant":
+            has_assistant = True
+            if not any(p in content for p in _ERROR_PATTERNS):
+                return False
+    return has_assistant
+
+
 def is_low_quality_session(meta: dict, turns: list) -> bool:
     """Detect low-quality sessions that add noise to search results."""
     summary = meta.get("summary", "")
-    for pattern in ("API Error:", "OAuth token has expired", "Please run /login"):
+    # Summary-level error check (original scope)
+    for pattern in _ERROR_PATTERNS:
         if pattern in summary:
             return True
+    # Error-only sessions: every assistant response is an error
+    if _is_error_only_session(turns) and not _has_real_question(turns):
+        return True
     # Quality gate: few messages, no files, no tools, minimal content
     msg_count = meta.get("message_count", 0)
     if msg_count <= 2 and not meta.get("files_modified") and not meta.get("tools_used"):
+        # Exempt sessions with real questions — concise Q&A is still valuable
+        if _has_real_question(turns):
+            return False
         total_content = sum(len(content) for _, content in turns)
         if total_content < 500:
             return True
