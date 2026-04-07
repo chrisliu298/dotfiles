@@ -98,7 +98,7 @@ The script prints the response file content to stdout. The response has YAML fro
 
 Use `--body-only` to strip the frontmatter and get just the markdown body.
 
-Request and response files are saved in `.relay/` (auto-gitignored). Peer stderr is logged to a `.log` sidecar file alongside the request.
+Request and response files are saved in `.relay/` (auto-gitignored). Peer stderr is logged to a `.log` sidecar file alongside the request. **Never read the `.log` file** — it contains the peer's full stderr output, which is extremely long and token-heavy. Only inspect the `.res.md` response file.
 
 ### When a relay call fails
 
@@ -108,13 +108,13 @@ Request and response files are saved in `.relay/` (auto-gitignored). Peer stderr
 
 When a completed relay call reports a missing response file, the peer failed before producing output. Each call generates a new request ID, so retrying does not re-execute previous attempts.
 
-1. **Read the log.** Use the Read tool on the `.log` sidecar path printed in the error output (`relay: peer log  → <path>`). The log contains the peer's stderr — the actual error message.
+1. **Check the Bash output.** The relay script prints diagnostic information (exit code, error summary) to stdout/stderr. Use this — visible in the Bash tool result — to identify the cause. **Do not read the `.log` sidecar file** — it contains the peer's full stderr and is extremely long and token-heavy.
 2. **Diagnose.** Common causes and fixes:
    - *Peer binary not found* → verify the peer CLI is installed and in PATH
    - *Empty body / malformed heredoc* → verify the heredoc has content and a matching terminator
    - *Peer exited non-zero but response file exists* → not a failure; read the response file
 3. **Fix and retry once.** Correct the invocation based on the diagnosis and re-run the relay call.
-4. **If the retry also fails**, read the log again. Only then report the failure to the user with the diagnosed cause.
+4. **If the retry also fails**, report the failure to the user with the diagnosed cause from the Bash output.
 
 The first failure is information, not a stop signal.
 

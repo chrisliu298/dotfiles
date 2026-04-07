@@ -77,6 +77,8 @@ BODY
 
 `--name` is required (lowercase slug, e.g., `prism-contrarian`). The heredoc body must not be empty. Do not pass model flags — the script handles model selection. For concurrency details (backgrounding, timeouts), follow the relay skill's Async / Parallel section for your platform.
 
+**Inspecting Parallax results:** Only read the `.res.md` response file. Never read the `.log` sidecar — it contains the peer's full stderr, which is extremely long and token-heavy. The relay script's Bash output already surfaces diagnostic information for failure cases.
+
 If `relay` is unavailable, replace Parallax with a subagent using a **structurally adversarial lens** (Contrarian, Falsification, Disconfirming).
 
 **Constraint leakage risk (CRITICAL):** Relay peers may recurse unless the anti-recursion rule is explicit, early, and repeated. You MUST:
@@ -318,7 +320,7 @@ Since you composed the prompts and chose the lenses, your self-review is not ful
 
 **Handling failures (after completion notification only):**
 
-- **Relay transport failure:** Read the `.log` sidecar, diagnose, fix, and retry once before escalating.
+- **Relay transport failure:** Check the Bash tool's output for diagnostic information, fix the invocation, and retry once before escalating. Do not read the `.log` sidecar — it is extremely long and token-heavy.
 - **Answer-quality failure** (empty, truncated, off-topic): Offer the user: (a) retry, (b) proceed with reduced perspectives, or (c) abort.
 - **Only these post-notification failures justify proceeding without Parallax.** "It's taking a long time" is never a failure.
 
