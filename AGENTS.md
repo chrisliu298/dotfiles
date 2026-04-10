@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 This repository contains personal dotfiles and AI agent configurations for macOS with zsh.
 
-- `shell/.aliases`, `shell/.functions`, `shell/.zshrc`, `shell/.zshenv`, `shell/.p10k.zsh`: Shell dotfiles
+- `shell/.aliases`, `shell/.functions`, `shell/.zshrc`, `shell/.zshenv`: Shell dotfiles
 - `.config/`: Application configs kept in-repo (`tmux`, `btop`, `nvim`)
 - `~/.config/ghostty`: Ghostty config installed from the external `chrisliu298/ghostty-config` repo via `dotfiles.sh`
 - `agents/extensions/skills/`: Local skills (one SKILL.md per skill, symlinked via `dotfiles.sh`)

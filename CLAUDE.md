@@ -9,7 +9,7 @@ Personal dotfiles and AI agent configurations for macOS with zsh. Managed by `do
 ```
 dotfiles/
 ├── dotfiles.sh              # Single entrypoint: setup
-├── shell/                   # Zsh config (.zshrc, .zshenv, .aliases, .functions, .p10k.zsh)
+├── shell/                   # Zsh config (.zshrc, .zshenv, .aliases, .functions)
 ├── .config/                 # App configs (Neovim, tmux, btop)
 ├── .claude/skills/          # Project-local skills (dotfiles-only)
 └── agents/
@@ -30,6 +30,7 @@ dotfiles/
 - **Modern tools**: `fd` → find, `rg` → grep, `delta` → diff, `zoxide` → z (installed via Zinit, macOS ARM)
 - **Platform detection**: `IS_MACOS` set in `shell/.zshenv`, used for macOS-only code
 - **Python**: Use `uv` for virtual environments (`sv`, `us`, `ua`, `upi` aliases)
+- **Prompt**: Starship (custom GitHub Dark gradient palette, config in `.config/starship/`)
 - **Themes**: Ghostty (GitHub Dark), btop (GitHub Dark)
 
 <important if="you are editing or creating skills">

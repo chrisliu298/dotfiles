@@ -11,6 +11,9 @@ export DISABLE_MAGIC_FUNCTIONS=true
 # Terminal color support
 export COLORTERM=truecolor
 
+# Starship prompt config
+export STARSHIP_CONFIG="$HOME/.config/starship/starship.toml"
+
 # =============================================================================
 # PATH
 # =============================================================================

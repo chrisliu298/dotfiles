@@ -1,6 +1,6 @@
 # Shell
 
-Zsh with Zinit plugin manager and Powerlevel10k prompt.
+Zsh with Zinit plugin manager and Starship prompt.
 
 ## Files
 
@@ -10,7 +10,6 @@ Zsh with Zinit plugin manager and Powerlevel10k prompt.
 | `.zshrc` | Plugin manager, completions, keybindings, history |
 | `.aliases` | Command shortcuts |
 | `.functions` | Shell utility functions |
-| `.p10k.zsh` | Powerlevel10k prompt configuration |
 
 Load order: `.zshenv` → `.zshrc` (sources `.aliases` and `.functions`).
 

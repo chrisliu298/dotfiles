@@ -17,7 +17,7 @@ Syncs submodules, symlinks dotfiles and agent configs to `~`, installs AI agent 
 ```text
 dotfiles/
 ├── dotfiles.sh              # Single entrypoint: submodules + symlinks + extensions
-├── shell/                   # Zsh config (Zinit, Powerlevel10k, fzf)
+├── shell/                   # Zsh config (Zinit, Starship, fzf)
 ├── .config/                 # App configs (Neovim, tmux, btop)
 └── agents/                  # AI agent configurations
     ├── claude/              # Claude Code config (CLAUDE.md, settings, hooks)

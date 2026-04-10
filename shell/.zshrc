@@ -1,11 +1,6 @@
 # =============================================================================
-# Powerlevel10k Instant Prompt
+# Starship Prompt (config: ~/.config/starship/starship.toml)
 # =============================================================================
-# Must stay close to the top. Initialization code requiring console input
-# (password prompts, [y/n] confirmations, etc.) must go above this block.
-if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-    source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
-fi
 
 # =============================================================================
 # Source Local Config Files
@@ -29,10 +24,6 @@ source "${ZINIT_HOME}/zinit.zsh"
 # =============================================================================
 # Theme & Plugins
 # =============================================================================
-# Powerlevel10k theme
-zinit ice depth=1
-zinit light romkatv/powerlevel10k
-
 # Zsh plugins
 zinit light zsh-users/zsh-syntax-highlighting
 zinit light zsh-users/zsh-completions
@@ -127,8 +118,8 @@ setopt NO_BEEP
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd disable_mouse_tracking
 
-# Powerlevel10k configuration
-[[ -f ~/.p10k.zsh ]] && source ~/.p10k.zsh
+# Starship prompt
+eval "$(starship init zsh)"
 
 # Fix prompt duplication in cmux (https://github.com/manaflow-ai/cmux/issues/1236)
 if [[ -n "$CMUX_SHELL_INTEGRATION" ]]; then
