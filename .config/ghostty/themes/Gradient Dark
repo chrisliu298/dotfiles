@@ -1,0 +1,31 @@
+# Gradient Dark - Based on GitHub Dark with Starship gradient in bright colors
+# Normal ANSI (0-7): GitHub Dark originals for TUI app compatibility
+# Bright ANSI (8-15): Starship gradient (#5966ff → #56aff7 → #5eeeec → #5dee88 → #b4f652 → #ffa447)
+
+# ANSI Normal (0-7) — unchanged from GitHub Dark
+palette = 0=#484f58
+palette = 1=#ff7b72
+palette = 2=#3fb950
+palette = 3=#d29922
+palette = 4=#58a6ff
+palette = 5=#bc8cff
+palette = 6=#39c5cf
+palette = 7=#b1bac4
+
+# ANSI Bright (8-15) — Starship gradient palette
+palette = 8=#6e7681
+palette = 9=#ffa447
+palette = 10=#5dee88
+palette = 11=#b4f652
+palette = 12=#5966ff
+palette = 13=#d2a8ff
+palette = 14=#5eeeec
+palette = 15=#e6edf3
+
+# Base colors
+background = #0d1117
+foreground = #e6edf3
+cursor-color = #56aff7
+cursor-text = #0d1117
+selection-background = #1b3a5c
+selection-foreground = #e6edf3
