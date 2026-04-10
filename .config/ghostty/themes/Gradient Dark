@@ -3,20 +3,20 @@
 
 # ANSI Normal (0-7)
 palette = 0=#484f58
-palette = 1=#5966ff
+palette = 1=#ff7b72
 palette = 2=#5dee88
 palette = 3=#ffa447
-palette = 4=#56aff7
+palette = 4=#5966ff
 palette = 5=#d2a8ff
 palette = 6=#5eeeec
 palette = 7=#b1bac4
 
 # ANSI Bright (8-15)
 palette = 8=#6e7681
-palette = 9=#7b8aff
+palette = 9=#ffa198
 palette = 10=#b4f652
 palette = 11=#ffbe73
-palette = 12=#79c0ff
+palette = 12=#56aff7
 palette = 13=#e0c1ff
 palette = 14=#8af4f4
 palette = 15=#e6edf3
