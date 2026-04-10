@@ -101,6 +101,52 @@ dfs() {
 }
 
 # =============================================================================
+# Arxiv
+# =============================================================================
+
+# Download arxiv paper PDF with [LastName] [Year] [Title].pdf filename
+arxiv() {
+    if (( $# == 0 )); then
+        printf 'Usage: arxiv <url> [url ...]\n' >&2; return 1
+    fi
+
+    local dest="$HOME/Documents/Sync/Readings/Papers"
+    local ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    local rc=0 n=0
+
+    for url in "$@"; do
+        (( n++ > 0 )) && sleep 3
+
+        local id=$(printf '%s' "$url" | sed -E 's|.*/([0-9]{4}\.[0-9]{4,5})(v[0-9]+)?.*|\1|')
+        if [[ -z "$id" ]]; then
+            printf 'Error: could not extract arxiv ID from %s\n' "$url" >&2; rc=1; continue
+        fi
+
+        local xml=$(curl -sL --retry 2 --retry-delay 3 -A "$ua" "http://export.arxiv.org/api/query?id_list=$id" | tr '\n' ' ' | sed 's/  */ /g')
+        if [[ "$xml" != *"<entry>"* ]]; then
+            printf 'Error: arxiv API returned no entry for %s\n' "$id" >&2; rc=1; continue
+        fi
+        local entry=$(printf '%s' "$xml" | sed -E 's/.*<entry>//' | sed -E 's/<\/entry>.*//')
+
+        local title=$(printf '%s' "$entry" | sed -E 's/.*<title> *([^<]*)<\/title>.*/\1/' | sed 's/^ *//;s/ *$//')
+        local author=$(printf '%s' "$entry" | grep -oE '<name>[^<]*</name>' | head -1 | sed -E 's/<name> *([^<]*) *<\/name>/\1/')
+        local year=$(printf '%s' "$entry" | sed -E 's/.*<published>([0-9]{4}).*/\1/')
+
+        if [[ -z "$title" || -z "$author" || -z "$year" ]]; then
+            printf 'Error: could not parse metadata for %s\n' "$id" >&2; rc=1; continue
+        fi
+
+        local last_name="${author##* }"
+        title="${title//:/ -}"
+
+        local filename="${last_name} ${year} ${title}.pdf"
+        curl -sL -A "$ua" "https://arxiv.org/pdf/${id}" -o "${dest}/${filename}"
+        printf 'Downloaded: %s/%s\n' "$dest" "$filename"
+    done
+    return $rc
+}
+
+# =============================================================================
 # Claude Code / Codex
 # =============================================================================
 
