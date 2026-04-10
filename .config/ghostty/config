@@ -12,7 +12,7 @@ macos-non-native-fullscreen = true
 macos-titlebar-style = transparent
 macos-option-as-alt = true
 
-theme = GitHub Dark
+theme = Gradient Dark
 background-blur = 16
 minimum-contrast = 1.1
 
