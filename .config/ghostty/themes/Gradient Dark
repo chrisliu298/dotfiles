@@ -12,12 +12,12 @@ palette = 5=#bc8cff
 palette = 6=#39c5cf
 palette = 7=#b1bac4
 
-# ANSI Bright (8-15) — Starship gradient palette
+# ANSI Bright (8-15) — lighter versions of normal, tinted toward gradient
 palette = 8=#6e7681
-palette = 9=#ffa447
+palette = 9=#ffa198
 palette = 10=#5dee88
-palette = 11=#b4f652
-palette = 12=#5966ff
+palette = 11=#e3b341
+palette = 12=#79c0ff
 palette = 13=#d2a8ff
 palette = 14=#5eeeec
 palette = 15=#e6edf3
