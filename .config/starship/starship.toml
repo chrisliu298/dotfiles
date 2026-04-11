@@ -46,13 +46,6 @@ format = ' [$path]($style) '
 truncate_to_repo = false
 truncation_length = 255
 
-[directory.substitutions]
-"Documents" = "󰈙 "
-"Downloads" = " "
-"Music" = "󰝚 "
-"Pictures" = " "
-"Developer" = "󰲋 "
-
 [git_branch]
 symbol = ""
 style = "fg:yellow"
