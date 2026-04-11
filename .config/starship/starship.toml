@@ -49,7 +49,7 @@ truncation_length = 255
 [git_branch]
 symbol = ""
 style = "fg:yellow"
-format = ' [$symbol $branch]($style)'
+format = '[ $symbol$branch]($style)'
 
 [git_state]
 style = "fg:yellow"
@@ -117,7 +117,7 @@ format = ' [$symbol $context]($style)'
 
 [cmd_duration]
 show_milliseconds = true
-style = "fg:lavender"
+style = "fg:rosewater"
 format = ' [$duration]($style)'
 disabled = false
 show_notifications = true
@@ -154,7 +154,7 @@ mauve = "#d2a8ff"
 pink = "#d2a8ff"
 flamingo = "#56aff7"
 maroon = "#5966ff"
-rosewater = "#ffa447"
+rosewater = "#ffc891"
 teal = "#5eeeec"
 sky = "#5eeeec"
 blue = "#56aff7"

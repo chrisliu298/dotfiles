@@ -50,7 +50,7 @@ dfs() {
     if (( IS_MACOS )); then
         hosts=(macmini l40s)
         for h in "${hosts[@]}"; do
-            command ssh "$h" "cd ~/dotfiles && git pull --ff-only 2>&1 && ./dotfiles.sh 2>&1; printf '\\n__RC__=%d\\n' \$?" \
+            command ssh -o ConnectTimeout=10 -o BatchMode=yes "$h" "cd ~/dotfiles && git pull --ff-only 2>&1 && ./dotfiles.sh 2>&1; printf '\\n__RC__=%d\\n' \$?" \
                 > "$tmpdir/$h.log" 2>&1 &
         done
     fi
