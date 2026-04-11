@@ -42,14 +42,14 @@ format = '[@$hostname]($style)'
 
 [directory]
 style = "fg:peach"
-format = ' [$path]($style) '
+format = ' [$path]($style)'
 truncate_to_repo = false
 truncation_length = 255
 
 [git_branch]
 symbol = ""
 style = "fg:yellow"
-format = '[$symbol $branch]($style)'
+format = ' [$symbol $branch]($style)'
 
 [git_state]
 style = "fg:yellow"
