@@ -198,6 +198,48 @@ Structure tasks to enable Codex to parallelize independent steps while sequencin
 </parallel_tool_calling>
 ```
 
+## User Updates
+
+For tool-heavy or multi-step relay tasks, include an update spec so Codex reports progress without narrating every tool call:
+
+```xml
+<user_updates_spec>
+- Only update the user when starting a new major phase or when something
+  changes the plan.
+- Each update: 1 sentence on outcome + 1 sentence on next step.
+- Do not narrate routine tool calls.
+- Keep the user-facing status short; keep the work exhaustive.
+</user_updates_spec>
+```
+
+## Small-Model Prompting (gpt-5.4-mini and gpt-5.4-nano)
+
+If the relay target is a smaller model, prompts need to be more explicit. These models are highly steerable but less likely to infer missing steps, resolve ambiguity, or package outputs as intended.
+
+**Prompting gpt-5.4-mini:**
+- Put critical rules first
+- Specify the full execution order when tool use or side effects matter
+- Don't rely on "you MUST" alone — use structural scaffolding: numbered steps, decision rules, explicit action definitions
+- Separate "do the action" from "report the action"
+- Show the correct flow, not just the final format
+- Define ambiguity behavior explicitly: when to ask, abstain, or proceed
+- Specify packaging directly: answer length, follow-up questions, citation style, section order
+- Prefer scoped instructions (`after the final JSON, output nothing further`) over `output nothing else`
+
+**Prompting gpt-5.4-nano:**
+- Use only for narrow, well-bounded tasks
+- Prefer closed outputs: labels, enums, short JSON, fixed templates
+- Avoid multi-step orchestration unless extremely constrained
+- Route ambiguous or planning-heavy tasks to a stronger model
+
+**Good default pattern for small models:**
+1. Task
+2. Critical rule
+3. Exact step order
+4. Edge cases or clarification behavior
+5. Output format
+6. One correct example
+
 ## Keep Durable Rules Out of the Prompt
 
 Use the prompt body for task-specific instructions. If a rule applies to most Codex tasks in the repo — build commands, coding conventions, directory layout — put it in `AGENTS.md` instead. Codex is designed to load `AGENTS.md` from the repo root before each task. Repeating durable rules in each prompt adds length without signal.

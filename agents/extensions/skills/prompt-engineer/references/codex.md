@@ -287,7 +287,72 @@ If the model still stops at the first plausible answer, add an initiative nudge:
 </dig_deeper_nudge>
 ```
 
+#### Reasoning effort defaults
+
+Recommended starting points:
+
+- `none`: Fast, cost-sensitive, latency-sensitive tasks where the model doesn't need to think. For GPT-5.4 specifically, `none` can already perform well on action-selection and tool-discipline tasks.
+- `low`: Latency-sensitive tasks where a small amount of thinking produces meaningful accuracy gain, especially with complex instructions.
+- `medium` or `high`: Tasks that truly require stronger reasoning and can absorb the latency/cost tradeoff. Start here for research-heavy workloads: long-context synthesis, multi-document review, conflict resolution, strategy writing.
+- `xhigh`: Avoid as a default unless evals show clear benefits. Best for long, agentic, reasoning-heavy tasks where maximum intelligence matters more than speed or cost.
+
+Most teams should default to the `none`, `low`, or `medium` range.
+
+#### Migration starting points
+
+Use one-change-at-a-time discipline: switch model first, pin `reasoning_effort`, run evals, then iterate.
+
+| Current setup | Suggested GPT-5.4 start | Notes |
+|---|---|---|
+| `gpt-5.2` | Match the current reasoning effort | Preserve latency and quality profile first, then tune. |
+| `gpt-5.3-codex` | Match the current reasoning effort | For coding workflows, keep the reasoning effort the same. |
+| `gpt-4.1` or `gpt-4o` | `none` | Keep snappy behavior, increase only if evals regress. |
+| Research-heavy assistants | `medium` or `high` | Use explicit research multi-pass and citation gating. |
+| Long-horizon agents | `medium` or `high` | Add tool persistence and completeness accounting. |
+
+#### Small-model guidance (gpt-5.4-mini and gpt-5.4-nano)
+
+These models are highly steerable but less likely to infer missing steps, resolve ambiguity implicitly, or package outputs as intended unless specified directly. Prompts for smaller models are often longer and more explicit.
+
+**Prompting gpt-5.4-mini:**
+- Put critical rules first
+- Specify the full execution order when tool use or side effects matter
+- Don't rely on "you MUST" alone — use structural scaffolding: numbered steps, decision rules, explicit action definitions
+- Separate "do the action" from "report the action"
+- Show the correct flow, not just the final format
+- Define ambiguity behavior explicitly: when to ask, abstain, or proceed
+- Specify packaging directly: answer length, follow-up questions, citation style, section order
+- Prefer scoped instructions (`after the final JSON, output nothing further`) over `output nothing else`
+
+**Prompting gpt-5.4-nano:**
+- Use only for narrow, well-bounded tasks
+- Prefer closed outputs: labels, enums, short JSON, fixed templates
+- Avoid multi-step orchestration unless extremely constrained
+- Route ambiguous or planning-heavy tasks to a stronger model
+
+**Good default pattern for small models:**
+1. Task
+2. Critical rule
+3. Exact step order
+4. Edge cases or clarification behavior
+5. Output format
+6. One correct example
+
 ### Step 7: Add specialized workflow patterns (as needed)
+
+#### User updates (general)
+
+```xml
+<user_updates_spec>
+- Only update the user when starting a new major phase or when something
+  changes the plan.
+- Each update: 1 sentence on outcome + 1 sentence on next step.
+- Do not narrate routine tool calls.
+- Keep the user-facing status short; keep the work exhaustive.
+</user_updates_spec>
+```
+
+For coding agents, use the more detailed version below instead.
 
 #### Coding agent autonomy
 
@@ -458,6 +523,26 @@ Separate persistent personality from per-response writing controls:
 - Synthesize across documents rather than summarizing each one independently.
 </memo_mode>
 ```
+
+#### Phase parameter (API integration)
+
+For long-running or tool-heavy agents that may emit commentary before tool calls or before a final answer, use the `phase` field on assistant messages:
+
+- `phase` is optional at the API level but highly recommended — explicit round-tripping is strictly better than relying on server-side inference
+- Use `phase` for agents that may emit commentary before tool calls or before a final answer
+- Preserve `phase` when replaying prior assistant items so the model can distinguish working commentary from the completed answer
+- Do not add `phase` to user messages
+- If using `previous_response_id`, OpenAI can often recover prior state without manual replay
+- Missing or dropped `phase` can cause preambles to be interpreted as final answers
+
+#### Long-session compaction
+
+When using Compaction in the Responses API:
+
+- Compact after major milestones
+- Treat compacted items as opaque state
+- Keep prompts functionally identical after compaction
+- GPT-5.4 tends to remain more coherent and reliable over longer, multi-turn conversations with fewer breakdowns as sessions grow
 
 ---
 
