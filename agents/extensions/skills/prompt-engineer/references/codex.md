@@ -27,6 +27,13 @@ The Codex-Max prompt is the recommended baseline. Start here and make tactical a
 7. **Frontend tasks** — avoid AI slop, bold intentional design
 8. **Presenting work** — concise collaborative tone, structured final messages
 
+**Before using this prompt:** Do not paste it unchanged into a non-codex-cli harness. You must customize at minimum:
+1. Tool names (replace `read_file`, `list_dir`, `apply_patch`, etc. with your actual tool names)
+2. Editing constraints (adapt apply_patch guidance to your edit mechanism)
+3. Plan tool section (remove if you don't have a plan/todo tool)
+4. Frontend tasks section (remove for backend-only agents)
+5. Presenting work section (adapt formatting rules to your harness's rendering)
+
 The full starter prompt:
 
 ```

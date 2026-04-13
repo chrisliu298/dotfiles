@@ -1,6 +1,6 @@
-# Codex Prompt Craft
+# GPT-5.4 Prompt Craft
 
-Help users write effective prompts for OpenAI GPT models — either from scratch or by refining existing prompts. Based on OpenAI's official prompt guidance.
+Help users write effective prompts for OpenAI GPT models — either from scratch or by refining existing prompts. Based on OpenAI's official prompt guidance. For Codex coding agents, see `references/codex.md` instead.
 
 ## Writing a prompt from scratch
 
@@ -354,7 +354,9 @@ These models are highly steerable but less likely to infer missing steps, resolv
 
 For coding agents, use the more detailed version below instead.
 
-#### Coding agent autonomy
+#### Coding agent autonomy (non-Codex GPT agents)
+
+These patterns are from the GPT-5.4 guide for general GPT-based coding agents. For Codex-specific agent patterns (starter prompt, preambles, tools), use `references/codex.md` instead.
 
 ```xml
 <autonomy_and_persistence>
