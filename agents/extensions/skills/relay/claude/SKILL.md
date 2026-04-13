@@ -56,7 +56,7 @@ Before raising effort, improve the prompt first — add output contracts, verifi
 
 ## Prompting Codex
 
-**Before composing the prompt body, read `~/.claude/skills/relay/references/prompting-codex.md`.** (If not found, try `relay --help` to locate the install path.) This is not optional — the guide contains model-specific patterns that materially affect output quality.
+**Before composing the prompt body, read the references in `~/.claude/skills/relay/references/`** — `gpt.md` for cross-cutting GPT-5.4 prompt patterns, `codex.md` for Codex coding agent patterns. (If not found, try `relay --help` to locate the install path.) This is not optional — the guides contain model-specific patterns that materially affect output quality.
 
 Use XML tags for structure. Key patterns:
 
