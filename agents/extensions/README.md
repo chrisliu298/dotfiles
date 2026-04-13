@@ -23,7 +23,7 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 | Level | Skills |
 |-------|--------|
 | **medium** | push, atomic-push, recall, jina, rlm, dump, chatgpt, relay |
-| **high** | arxiv-reader, deslop, beautify, last-call, update-readme, prompt-engineer, interviewer, citation-assistant, tdd, debug, typst, humanizer, runpodctl |
+| **high** | arxiv-reader, deslop, beautify, last-call, update-readme, prompt-engineer, interviewer, citation-assistant, tdd, diagnose, typst, humanizer, runpodctl |
 | **max** | autoresearch, nanorepl, prism, subagent-executor |
 
 ### Published Skills
@@ -71,7 +71,7 @@ These skills live in the Obsidian vault's `_claude/skills/` (not in dotfiles):
 | arxiv-reader | Read arxiv papers via TeX source, HF markdown, or HTML fallback | on |
 | atomic-push | Atomic commits and push to remote | on |
 | beautify | Simplify and beautify code changes on the current branch | manual |
-| debug | Structured debugging: investigate root cause before proposing fixes | on |
+| diagnose | Structured debugging: investigate root cause before proposing fixes | on |
 | dump | Dump session-derived knowledge to Obsidian vault | manual |
 | jina | Fetch web content and search via Jina AI (r.jina.ai / s.jina.ai) | on |
 | push | Single-commit push to remote | on |

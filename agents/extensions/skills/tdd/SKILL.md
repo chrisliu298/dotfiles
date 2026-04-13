@@ -96,4 +96,4 @@ These are the real failure points when doing TDD with an AI agent:
 - **Using mocks when real code is available.** Mocking hides real behavior. If the database is available, test against it. Only mock external services you can't control or that are prohibitively slow.
 - **Refactoring while RED.** If tests are failing, get to GREEN first. Refactoring with a failing test means you're changing two things at once.
 
-For bug fixes, use `debug` to establish the root cause first, then enter the TDD cycle: the failing test is your RED step, the fix is GREEN.
+For bug fixes, use `diagnose` to establish the root cause first, then enter the TDD cycle: the failing test is your RED step, the fix is GREEN.
