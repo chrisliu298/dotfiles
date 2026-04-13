@@ -4,7 +4,7 @@
 
 Prompt Engineer guides you through writing prompts from scratch or diagnosing and fixing existing ones. It carries two complete reference guides -- one for Claude/Anthropic, one for GPT/OpenAI -- distilled from each vendor's official documentation into ready-to-paste XML blocks, diagnostic tables, and step-by-step workflows.
 
-Invoke with `/prompt-engineer claude` or `/prompt-engineer codex`, or just ask your agent to help you write a prompt and it will pick the right reference automatically.
+Invoke with `/prompt-engineer claude`, `/prompt-engineer gpt`, or `/prompt-engineer codex`, or just ask your agent to help you write a prompt and it will pick the right reference automatically.
 
 ## What It Does
 
@@ -17,7 +17,8 @@ Invoke with `/prompt-engineer claude` or `/prompt-engineer codex`, or just ask y
 | Argument | Reference | Covers |
 |----------|-----------|--------|
 | `claude` | `references/claude.md` | Clarity, roles, XML structure, examples, output format, thinking guidance, safety controls, agentic patterns, frontend aesthetics |
-| `codex` | `references/codex.md` | Output contracts, follow-through policies, tool persistence, completeness verification, citation/grounding, reasoning effort, coding agent autonomy |
+| `gpt` | `references/gpt.md` | Output contracts, follow-through policies, tool persistence, completeness verification, citation/grounding, reasoning effort, small-model guidance |
+| `codex` | `references/codex.md` | Codex-Max starter prompt, autonomy/persistence, preambles and personality, tool configuration, plan hygiene, metaprompting |
 
 ## Installation
 
