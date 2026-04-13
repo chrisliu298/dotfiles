@@ -29,95 +29,101 @@ palette = 'github_dark'
 [fill]
 symbol = ' '
 
+# --- Identity (present but quiet, like p10k's tan user@host) ---
 [username]
 show_always = true
-style_user = "fg:red"
-style_root = "fg:red"
+style_user = "fg:gh_muted"
+style_root = "fg:gh_red"
 format = '[$user]($style)'
 
 [hostname]
 ssh_only = true
-style = "fg:red"
+style = "fg:gh_muted"
 format = '[@$hostname]($style)'
 
+# --- Navigation (primary — blue, the most-read segment) ---
 [directory]
-style = "fg:peach"
+style = "fg:gh_blue"
 format = ' [$path]($style)'
 truncate_to_repo = false
 truncation_length = 255
 
+# --- Version control (green = clean, yellow = dirty) ---
 [git_branch]
 symbol = ""
-style = "fg:yellow"
+style = "fg:gh_green"
 format = '[ $symbol$branch]($style)'
 
 [git_state]
-style = "fg:yellow"
+style = "fg:gh_yellow"
 format = '\([$state( $progress_current/$progress_total)]($style)\)'
 
 [git_status]
-style = "fg:yellow"
+style = "fg:gh_yellow"
 format = '[ $all_status$ahead_behind]($style)'
 
+# --- Language runtimes (muted cyan — visible but secondary) ---
 [c]
 symbol = ""
-style = "fg:green"
+style = "fg:gh_cyan"
 format = ' [$symbol $version]($style)'
 
 [rust]
 symbol = ""
-style = "fg:green"
+style = "fg:gh_cyan"
 format = ' [$symbol $version]($style)'
 
 [golang]
 symbol = ""
-style = "fg:green"
+style = "fg:gh_cyan"
 format = ' [$symbol $version]($style)'
 
 [nodejs]
 symbol = ""
-style = "fg:green"
+style = "fg:gh_cyan"
 format = ' [$symbol $version]($style)'
 
 [php]
 symbol = ""
-style = "fg:green"
+style = "fg:gh_cyan"
 format = ' [$symbol $version]($style)'
 
 [java]
 symbol = ""
-style = "fg:green"
+style = "fg:gh_cyan"
 format = ' [$symbol $version]($style)'
 
 [kotlin]
 symbol = ""
-style = "fg:green"
+style = "fg:gh_cyan"
 format = ' [$symbol $version]($style)'
 
 [haskell]
 symbol = ""
-style = "fg:green"
+style = "fg:gh_cyan"
 format = ' [$symbol $version]($style)'
 
 [python]
 symbol = ""
-style = "fg:green"
+style = "fg:gh_cyan"
 format = ' [$symbol $version(\($virtualenv\))]($style)'
 
+# --- Infrastructure (purple — distinct from runtimes) ---
 [conda]
 symbol = ""
-style = "fg:sapphire"
+style = "fg:gh_purple"
 format = ' [$symbol $environment]($style)'
 ignore_base = false
 
 [docker_context]
 symbol = ""
-style = "fg:sapphire"
+style = "fg:gh_purple"
 format = ' [$symbol $context]($style)'
 
+# --- Meta (dimmed — shouldn't compete for attention) ---
 [cmd_duration]
 show_milliseconds = true
-style = "fg:rosewater"
+style = "fg:gh_dimmed"
 format = ' [$duration]($style)'
 disabled = false
 show_notifications = true
@@ -126,47 +132,30 @@ min_time_to_notify = 45000
 [time]
 disabled = false
 time_format = "%I:%M %p"
-style = "fg:lavender"
+style = "fg:gh_dimmed"
 format = ' [$time]($style)'
 
 [line_break]
 disabled = false
 
+# --- Prompt character (only place saturated red/green appear) ---
 [character]
 disabled = false
-success_symbol = '[❯](fg:green)'
-error_symbol = '[❯](fg:red)'
-vimcmd_symbol = '[❮](fg:green)'
-vimcmd_replace_one_symbol = '[❮](fg:lavender)'
-vimcmd_replace_symbol = '[❮](fg:lavender)'
-vimcmd_visual_symbol = '[❮](fg:yellow)'
+success_symbol = '[❯](fg:gh_green)'
+error_symbol = '[❯](fg:gh_red)'
+vimcmd_symbol = '[❮](fg:gh_green)'
+vimcmd_replace_one_symbol = '[❮](fg:gh_purple)'
+vimcmd_replace_symbol = '[❮](fg:gh_purple)'
+vimcmd_visual_symbol = '[❮](fg:gh_yellow)'
 
-# Custom gradient: #4e5eff → #62eac8 → #ffa447 (HSL interpolation)
-# Segment flow: user → directory → git  ···fill···  languages → conda → time
+# GitHub Dark palette — primer/github-vscode-theme
+# Hierarchy: blue (dir) > green/yellow (git) > cyan (langs) > purple (infra) > dimmed (meta)
 [palettes.github_dark]
-red = "#5966ff"
-peach = "#56aff7"
-yellow = "#5eeeec"
-green = "#5dee88"
-sapphire = "#b4f652"
-lavender = "#ffa447"
-mauve = "#d2a8ff"
-pink = "#d2a8ff"
-flamingo = "#56aff7"
-maroon = "#5966ff"
-rosewater = "#ffc891"
-teal = "#5eeeec"
-sky = "#5eeeec"
-blue = "#56aff7"
-text = "#e6edf3"
-subtext1 = "#b1bac4"
-subtext0 = "#8b949e"
-overlay2 = "#6e7681"
-overlay1 = "#484f58"
-overlay0 = "#30363d"
-surface2 = "#21262d"
-surface1 = "#161b22"
-surface0 = "#0d1117"
-base = "#0d1117"
-mantle = "#010409"
-crust = "#010409"
+gh_red = "#ff7b72"       # root user, errors, prompt error
+gh_green = "#3fb950"     # git clean, prompt ok
+gh_yellow = "#d29922"    # git dirty/state, vim visual
+gh_blue = "#58a6ff"      # directory — primary navigation
+gh_cyan = "#39c5cf"      # language runtimes — secondary info
+gh_purple = "#bc8cff"    # infrastructure, vim replace
+gh_muted = "#8b949e"     # user@host — present but quiet
+gh_dimmed = "#6e7681"    # time, cmd_duration — ambient
