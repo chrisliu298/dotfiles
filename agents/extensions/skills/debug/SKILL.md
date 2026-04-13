@@ -18,6 +18,8 @@ Find the root cause before attempting any fix. Symptom-level patches waste time,
 
 The instinct to "just try something" is strongest under pressure — and that's exactly when it's most expensive. A systematic 15-minute investigation beats 2 hours of guess-and-check.
 
+**Write everything to `DEBUG.md`.** Observations, hypotheses, evidence, experiment results, and root cause all go in this file. Context compaction will eat reasoning that only lives in the conversation — DEBUG.md is the durable record. Create it at the repo root when Phase 1 begins.
+
 ## Phase 1: Investigate
 
 Complete this phase before proposing any fix.
@@ -33,6 +35,8 @@ Before diving into code, verify: correct dependency versions installed? Required
 ### Reproduce and minimize
 
 Can you trigger the bug reliably? Reduce to the smallest failing test, command, or script. If it's intermittent, gather timestamps, inputs, and environment details — intermittent bugs have deterministic causes (usually race conditions, state pollution, or environment variance). For flaky tests, run the failing test in isolation first; if it passes alone but fails in the suite, the cause is usually shared state between tests.
+
+Record all findings in `DEBUG.md` under `## Observations` — exact error messages, stack traces, environment details, what works vs. what doesn't.
 
 ### Check recent changes
 
@@ -59,7 +63,7 @@ Find similar working code in the same codebase. List every difference between wo
 
 ### Form one hypothesis
 
-State it clearly: "X is causing this because Y." Be specific — vague hypotheses ("something's wrong with the config") lead to vague fixes. Keep multiple candidate hypotheses in mind, but test one change at a time.
+State it clearly: "X is causing this because Y." Be specific — vague hypotheses ("something's wrong with the config") lead to vague fixes. Keep multiple candidate hypotheses in mind, but test one change at a time. Write each hypothesis to `DEBUG.md` under `## Hypotheses` with supporting evidence, conflicting evidence, and the planned experiment.
 
 ### Test minimally
 
@@ -68,14 +72,15 @@ Make the smallest possible change to test your hypothesis. One variable at a tim
 ### Evaluate
 
 - Hypothesis confirmed → Phase 3
-- Hypothesis rejected → **revert the change**, form a new hypothesis based on what you learned
+- Hypothesis rejected → **revert the change**, record the rejection and evidence in `DEBUG.md`, form a new hypothesis based on what you learned
+- Same direction fails twice → the hypothesis is dead, move on
 - Don't stack more changes on top of a failed attempt
 
 ## Phase 3: Fix
 
 ### Report diagnosis first
 
-Before writing any fix, summarize: root cause, evidence, rejected hypotheses, and why the chosen fix addresses the source rather than the symptom. This prevents "investigated" claims without actual investigation.
+Before writing any fix, summarize: root cause, evidence, rejected hypotheses, and why the chosen fix addresses the source rather than the symptom. Write the root cause to `DEBUG.md` under `## Root Cause` and the fix rationale under `## Fix`. This prevents "investigated" claims without actual investigation.
 
 ### Implement the fix
 
