@@ -4,7 +4,7 @@ description: |
   Use when encountering bugs, test failures, flaky tests, unexpected behavior,
   build failures, or performance regressions. Also trigger when the user says
   "debug this", "investigate", "why is this failing", "what's wrong", "figure
-  out why", "it broke", or invokes "debug". Especially important after a fix
+  out why", "it broke", or invokes "diagnose". Especially important after a fix
   attempt that didn't work — stop guessing and follow the process. Do NOT use
   for feature implementation or code review.
 user-invocable: true
