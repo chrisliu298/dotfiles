@@ -1,6 +1,6 @@
-# How to Prompt Codex (GPT-5.4) Effectively
+# How to Prompt Codex Effectively
 
-Read this before composing complex relay tasks for Codex. These patterns come from the official GPT-5.4 prompt guidance and improve reliability, completeness, and token efficiency.
+Read this before composing complex relay tasks for Codex. These patterns are mostly adapted from the official GPT-5.4 prompt guidance for Codex relay tasks, and improve reliability, completeness, and token efficiency.
 
 ## Use XML Tags for Structure
 
