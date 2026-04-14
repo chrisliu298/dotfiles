@@ -4,7 +4,7 @@
 
 ### Planning & Problem-Solving
 
-- **Plan and review**: For multi-step tasks, maintain a plan; re-plan when assumptions break.
+- **Plan and review**: For multi-step tasks, state a plan with verification steps (`[Step] → verify: [check]`); re-plan when assumptions break.
 - **Self-improvement**: After meaningful corrections, add a concise rule in CLAUDE.md to prevent recurrence.
 - **Debugging**: Create a minimal reproduction before fixing.
 - **Elegant solutions**: After a suboptimal fix, reconsider with full context—discard and implement a cleaner approach.
@@ -15,6 +15,9 @@
 
 - **Skimmable code**: Write extremely easy to consume code. Optimize for how easy the code is to read—make it skimmable, avoid cleverness, use early returns.
 - **Minimal changes**: No TYPE_CHECKING imports, unnecessary abstractions, or scope expansion. Prefer simple imports. No large dependencies for small features. Don't refactor or reformat outside the task. When in doubt, do less.
+- **Match existing style**: Conform to surrounding code's conventions (quotes, spacing, naming), even if you'd do it differently. Actively match, don't just avoid changing.
+- **Surgical cleanup**: Remove imports/variables/functions that YOUR changes made unused. Don't remove pre-existing dead code—mention it, don't delete it.
+- **Simplicity test**: If you write 200 lines and it could be 50, rewrite it. Would a senior engineer say this is overcomplicated? If yes, simplify.
 - **Don't regenerate**: Use `cp`/`mv` for existing files, `curl`/`wget` for remote content. Never recreate from scratch—copy/move first, then edit in place.
 
 <important if="you are spawning or coordinating subagents">
