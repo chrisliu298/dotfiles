@@ -65,7 +65,7 @@ Examples:
 
 Parallax is dispatched via `relay` to a **different model**. Invoke `relay` directly — not via a subagent that calls relay. Its value is model diversity: different training, different blind spots, different reasoning patterns. Assign it a lens that maximizes diversity (e.g., give Parallax a Contrarian or Disconfirming lens when subagents have Correctness and Simplicity).
 
-Before writing any Parallax relay prompt, read the target model's prompt guides in the relay skill's `references/` directory (e.g., `gpt.md` and `codex.md` for Codex). Do this every time, not just once.
+Before writing any Parallax relay prompt, read the target model's prompt guides in `~/.claude/skills/relay/references/` (e.g., `gpt.md` and `codex.md` for Codex). Do this every time, not just once.
 
 **Relay call syntax (exact):**
 
@@ -192,17 +192,19 @@ Only the shared packet path and lens vary between launcher prompts. Agent names 
 
 Run these checks before launching. If any fails, rewrite and re-check.
 
-0. **Shared-file test:** Verify the shared context file was written and read back successfully. Confirm every rendered launcher references the same absolute file path. The shared file must be frozen before any dispatch.
+0. **Relay availability test (if parallax > 0):** Run `command -v relay` to check if the relay command is in PATH. This is the sole test — do not glob for relay files or references to determine availability. If the command exists, relay is available.
 
-1. **Slot-completion test:** After rendering all launcher prompts via `sed`, verify no `{{` placeholder tokens survive: `grep -c '{{' rendered_launcher`. Also confirm the shared packet path is absolute and identical across all rendered prompts, and that the anti-recursion warning is the first line of every launcher. For relay prompts, verify the XML skeleton is well-formed (`<goal>`, `<context>`, `<constraints>`, `<your_lens>` tags present).
+1. **Shared-file test:** Verify the shared context file was written and read back successfully. Confirm every rendered launcher references the same absolute file path. The shared file must be frozen before any dispatch.
 
-2. **Redundancy test:** Swap any two agents' lenses. If the prompts become incoherent, you have divided labor.
+2. **Slot-completion test:** After rendering all launcher prompts via `sed`, verify no `{{` placeholder tokens survive: `grep -c '{{' rendered_launcher`. Also confirm the shared packet path is absolute and identical across all rendered prompts, and that the anti-recursion warning is the first line of every launcher. For relay prompts, verify the XML skeleton is well-formed (`<goal>`, `<context>`, `<constraints>`, `<your_lens>` tags present).
 
-3. **Lens quality test:** Each lens name must be a weighing posture (1-3 words), never a task or role. For each lens, write one sentence explaining what unique axis it covers that no other lens does. If two lenses would produce the same emphasis, replace one. At least one lens must be structurally adversarial.
+3. **Redundancy test:** Swap any two agents' lenses. If the prompts become incoherent, you have divided labor.
 
-4. **Dispatch-shape test (CRITICAL):** Total dispatched agents (subagents + Parallax) must match the required count. Self does not count. Enumerate planned calls by type: Bash relay calls must equal the configured Parallax count (default 1); the rest are Agent calls. If the list contains zero relay calls and parallax != `0`, Parallax is missing — fix before launching.
+4. **Lens quality test:** Each lens name must be a weighing posture (1-3 words), never a task or role. For each lens, write one sentence explaining what unique axis it covers that no other lens does. If two lenses would produce the same emphasis, replace one. At least one lens must be structurally adversarial.
 
-5. **Effort test:** If the user specified an effort level, confirm every Parallax relay call uses that exact `--effort` level. If effort was omitted, confirm each Parallax call uses the effort from the lens-based table (Effort selection for Parallax). State the effort level being applied.
+5. **Dispatch-shape test (CRITICAL):** Total dispatched agents (subagents + Parallax) must match the required count. Self does not count. Enumerate planned calls by type: Bash relay calls must equal the configured Parallax count (default 1); the rest are Agent calls. If the list contains zero relay calls and parallax != `0`, Parallax is missing — fix before launching.
+
+6. **Effort test:** If the user specified an effort level, confirm every Parallax relay call uses that exact `--effort` level. If effort was omitted, confirm each Parallax call uses the effort from the lens-based table (Effort selection for Parallax). State the effort level being applied.
 
 ### Division-of-labor diagnostic
 
