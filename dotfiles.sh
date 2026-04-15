@@ -49,14 +49,18 @@ MANUAL_SKILLS=(
     dump
     humanizer
     interviewer
+    last-call
     nanorepl
-    runpodctl
     rlm
+    runpodctl
+    tdd
+    typst
+    update-readme
 )
 
-MCP_SERVERS=(  # name|command|args (user-scoped MCP servers)
-    "chrome-devtools|npx|chrome-devtools-mcp@latest --autoConnect --channel stable --no-usage-statistics"
-    "codex|codex|mcp-server"
+MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: claude,codex or omit for both)
+    "chrome-devtools|npx|chrome-devtools-mcp@latest --autoConnect --channel stable --no-usage-statistics|codex"
+    "codex|codex|mcp-server|codex"
 )
 
 SKILL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/skills-src"
@@ -343,14 +347,17 @@ install_mcp_servers() {
     local claude_mcp_list=""
     $has_claude && { claude_mcp_list="$(claude mcp list 2>/dev/null)" || true; }
 
-    local entry name cmd args
+    local entry name cmd args agents
     for entry in "${MCP_SERVERS[@]}"; do
-        IFS='|' read -r name cmd args <<< "$entry"
-        if $has_claude && ! printf '%s\n' "$claude_mcp_list" | grep -q "^$name:"; then
+        IFS='|' read -r name cmd args agents <<< "$entry"
+        [[ -z "$agents" ]] && agents="claude,codex"
+        if $has_claude && [[ ",$agents," == *,claude,* ]] \
+            && ! printf '%s\n' "$claude_mcp_list" | grep -q "^$name:"; then
             claude mcp add --scope user "$name" -- $cmd $args 2>/dev/null \
                 && log "add claude/$name" || warn "fail claude/$name"
         fi
-        if $has_codex && [[ "$name" != "codex" ]] && ! codex mcp get "$name" &>/dev/null; then
+        if $has_codex && [[ ",$agents," == *,codex,* ]] && [[ "$name" != "codex" ]] \
+            && ! codex mcp get "$name" &>/dev/null; then
             codex mcp add "$name" -- $cmd $args 2>/dev/null \
                 && log "add codex/$name" || warn "fail codex/$name"
         fi

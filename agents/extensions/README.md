@@ -90,16 +90,16 @@ These skills live in the Obsidian vault's `_claude/skills/` (not in dotfiles):
 
 | Server | Purpose | Agents |
 |--------|---------|--------|
-| playwright | Headless Chromium for JS-rendered pages | Both |
-| codex | Codex MCP server for cross-agent tool access | Claude |
+| chrome-devtools | Chrome DevTools bridge for browser automation | Codex |
+| codex | Codex MCP server for cross-agent tool access | Codex |
 
 ## Plugins
 
 Cloned from GitHub via `PLUGINS` table in `scripts/install-plugins.sh`, installed with `claude plugin install`.
 
-| Plugin | Description |
-|--------|-------------|
-| [nanoresearch](https://github.com/chrisliu298/nanoresearch) | Autonomous research pipeline (idea discovery, experiments, paper writing) |
-| [multi-autoresearch](https://github.com/chrisliu298/multi-autoresearch) | Parallel experiments via worktrees, multi-perspective ideation when stuck |
+| Plugin | Description | Status |
+|--------|-------------|--------|
+| [nanoresearch](https://github.com/chrisliu298/nanoresearch) | Autonomous research pipeline (idea discovery, experiments, paper writing) | disabled |
+| [multi-autoresearch](https://github.com/chrisliu298/multi-autoresearch) | Parallel experiments via worktrees, multi-perspective ideation when stuck | disabled |
 
-Marketplace plugins (installed manually, not tracked in `dotfiles.sh`): claude-md-management, pr-review-toolkit, feature-dev, frontend-design, playground, plugin-dev, pyright-lsp.
+Marketplace plugins (installed manually, not tracked in `dotfiles.sh`): claude-md-management, code-review, pr-review-toolkit, feature-dev, frontend-design, pyright-lsp.
