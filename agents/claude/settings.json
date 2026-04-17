@@ -52,5 +52,9 @@
   "effortLevel": "xhigh",
   "skipDangerousModePermissionPrompt": true,
   "autoInstallIdeExtension": false,
-  "voiceEnabled": true
+  "voiceEnabled": true,
+  "skipAutoPermissionPrompt": true,
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  }
 }
