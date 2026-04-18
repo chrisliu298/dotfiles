@@ -170,6 +170,7 @@ x(){ command codex --yolo -m gpt-5.4 --config model_reasoning_effort=high "$@"; 
 xl(){ command codex --yolo -m gpt-5.4 --config model_reasoning_effort=low "$@"; }
 xm(){ command codex --yolo -m gpt-5.4 --config model_reasoning_effort=medium "$@"; }
 xh(){ command codex --yolo -m gpt-5.4 --config model_reasoning_effort=high "$@"; }
+xx(){ command codex --yolo -m gpt-5.4 --config model_reasoning_effort=xhigh "$@"; }
 xc(){ command codex resume --last --yolo "$@"; }
 xr(){ command codex resume --yolo "$@"; }
 xu(){ npm install -g @openai/codex@latest "$@"; }
