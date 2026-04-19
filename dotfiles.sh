@@ -12,6 +12,7 @@ LINKS=(
     "shell/.zshrc:.zshrc"
     ".config/starship:.config/starship"
     ".config/btop:.config/btop"
+    ".config/fastfetch:.config/fastfetch"
     ".config/nvim:.config/nvim"
     ".config/tmux:.config/tmux"
     ".config/ghostty:.config/ghostty"
