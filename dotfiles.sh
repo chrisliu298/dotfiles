@@ -43,10 +43,10 @@ SKILLS=(
 
 # Skills not auto-installed. Toggle with: ./dotfiles.sh enable/disable <name>
 MANUAL_SKILLS=(
-    beautify
     chatgpt
     citation-assistant
     deslop
+    diagnose
     dump
     humanizer
     interviewer
