@@ -102,9 +102,11 @@ stamp_write() {
 }
 
 compute_fingerprint() {
-    # Hash HEAD + working-tree changes — captures any source modification
+    # Hash HEAD + tracked diff content + status so edits inside already-dirty
+    # files still invalidate the cache stamp.
     { git -C "$ROOT" rev-parse HEAD 2>/dev/null
-      git -C "$ROOT" status --porcelain=v1 2>/dev/null; } \
+      git -C "$ROOT" status --porcelain=v1 2>/dev/null
+      git -C "$ROOT" diff --no-ext-diff --no-color HEAD -- . 2>/dev/null; } \
         | md5 2>/dev/null || md5sum 2>/dev/null | cut -d' ' -f1
 }
 
@@ -285,7 +287,10 @@ install_codex_config() {
     [[ -f "$src" ]] || return
     mkdir -p "$HOME/.codex"
     cmp -s "$src" "$dest" 2>/dev/null && return  # skip Python if byte-identical
-    # Merge managed keys into existing config (preserves user additions)
+    # Merge managed keys into existing config.
+    # The tracked config is authoritative for keys it declares, so removing a
+    # managed key from agents/codex/config.toml should also remove it from the
+    # live ~/.codex/config.toml on the next sync.
     local rc=0
     "$HOME/.venv/bin/python3" - "$src" "$dest" << 'PYEOF' 2>/dev/null || rc=$?
 import sys, re, tomllib
@@ -297,12 +302,37 @@ existing = {}
 try:
     with open(dest, "rb") as f: existing = tomllib.load(f)
 except FileNotFoundError: pass
-def merge(a, b):
-    r = dict(a)
-    for k, v in b.items():
-        r[k] = merge(r[k], v) if k in r and isinstance(r[k], dict) and isinstance(v, dict) else v
-    return r
-merged = merge(existing, desired)
+managed_root_direct_keys = {
+    key for key, value in desired.items() if not isinstance(value, dict)
+} | {
+    "responses_websockets_v2",
+    "model_context_window",
+    "model_auto_compact_token_limit",
+}
+def merge_managed(existing, desired, *, managed_direct_keys):
+    if not isinstance(existing, dict) or not isinstance(desired, dict):
+        return desired
+    result = dict(existing)
+    if managed_direct_keys == "__all__":
+        for key, value in list(result.items()):
+            if isinstance(value, dict):
+                continue
+            if key not in desired:
+                result.pop(key)
+    elif managed_direct_keys:
+        for key, value in list(result.items()):
+            if isinstance(value, dict):
+                continue
+            if key in managed_direct_keys and key not in desired:
+                result.pop(key)
+    for key, value in desired.items():
+        current = result.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            result[key] = merge_managed(current, value, managed_direct_keys="__all__")
+        else:
+            result[key] = value
+    return result
+merged = merge_managed(existing, desired, managed_direct_keys=managed_root_direct_keys)
 if merged == existing: sys.exit(0)
 # Write TOML (simple key=value and [section] format)
 def fmt(v):
