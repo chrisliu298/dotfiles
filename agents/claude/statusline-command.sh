@@ -177,7 +177,7 @@ rl_reset_fmt() {
 }
 
 # ── Build single-line output ──────────────────────────────────────
-sep="${dim} | ${reset}"
+sep="${dim} · ${reset}"
 parts=()
 
 # Session info
