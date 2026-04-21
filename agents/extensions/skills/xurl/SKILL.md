@@ -10,7 +10,6 @@ description: |
   or engage with it. Do NOT trigger on bare "X" when the user means something else
   (variable names, unknowns, the letter). Invoke with "xurl".
 user-invocable: true
-effort: medium
 allowed-tools: Bash(xurl:*)
 ---
 

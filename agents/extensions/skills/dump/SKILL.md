@@ -1,6 +1,5 @@
 ---
 user-invocable: true
-effort: medium
 description: Dump session-derived knowledge into the user's Obsidian vault. Use when the content
   to save was created or distilled during the current conversation — debugging insights, TILs,
   architectural discoveries, decisions, explanations, or anything worth preserving. Triggers on

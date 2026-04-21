@@ -1,5 +1,4 @@
 ---
-effort: high
 description: |
   How to write Typst documents correctly and idiomatically. Use this skill whenever the user
   asks you to write, generate, edit, or convert Typst (.typ) files — including academic papers,

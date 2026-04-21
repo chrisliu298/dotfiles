@@ -6,7 +6,6 @@ description: >-
   Use for non-trivial decisions, ambiguous tradeoffs, or high-stakes changes
   where a single perspective might miss something.
 user-invocable: true
-effort: max
 allowed-tools:
   - Agent
   - Bash

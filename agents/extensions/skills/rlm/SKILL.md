@@ -7,7 +7,6 @@ description: |
   in-context handling would overflow, degrade quality, or miss coverage.
   Do NOT use for small tasks, single-file edits, or tasks solvable by one grep.
 user-invocable: true
-effort: medium
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent
 ---
 

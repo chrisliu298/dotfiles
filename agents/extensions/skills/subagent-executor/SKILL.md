@@ -10,7 +10,6 @@ description: |
   each task manually.
 user-invocable: true
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
-effort: max
 ---
 
 # Subagent Executor

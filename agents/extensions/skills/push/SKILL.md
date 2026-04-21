@@ -6,7 +6,6 @@ description: |
   For multiple atomic commits per logical change, use atomic-push instead.
   Do NOT create a pull request.
 user-invocable: true
-effort: medium
 allowed-tools: Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(git branch:*)
 ---
 

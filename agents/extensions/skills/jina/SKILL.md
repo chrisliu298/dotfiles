@@ -10,7 +10,6 @@ description: |
   Do NOT use for URLs that WebFetch already handles well (simple static HTML).
 user-invocable: false
 allowed-tools: Bash(curl:*)
-effort: medium
 ---
 
 # Jina

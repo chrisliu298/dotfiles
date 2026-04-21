@@ -6,7 +6,6 @@ description: |
   "quiz me", "mock interview", "practice questions", or "interview". Supports topic-based or
   material-based questioning with multiple difficulty levels.
 user-invocable: true
-effort: high
 ---
 
 # Technical Interview Skill

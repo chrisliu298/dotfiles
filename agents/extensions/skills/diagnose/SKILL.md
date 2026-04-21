@@ -9,7 +9,6 @@ description: |
   for feature implementation or code review.
 user-invocable: true
 allowed-tools: Bash, Read, Edit, Grep, Glob
-effort: high
 ---
 
 # Systematic Debugging

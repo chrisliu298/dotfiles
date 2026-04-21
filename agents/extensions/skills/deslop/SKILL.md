@@ -8,7 +8,6 @@ description: |
   or when user says "clean up", "remove slop", "deslop", "simplify the diff", or invokes
   "deslop". Do NOT use for deliberate refactoring or feature changes.
 allowed-tools: Bash(git diff:*), Bash(git status:*), Bash(git log:*), Read, Edit, Grep, Glob
-effort: high
 ---
 
 ## Context

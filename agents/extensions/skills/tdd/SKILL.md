@@ -9,7 +9,6 @@ description: |
   "skip tests" or "no tests needed".
 user-invocable: true
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
-effort: high
 ---
 
 # Test-Driven Development

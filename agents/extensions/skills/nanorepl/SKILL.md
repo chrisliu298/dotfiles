@@ -9,7 +9,6 @@ description: |
   or when a project URL is provided with a request to understand or rebuild its core.
   Invoke with "nanorepl".
 user-invocable: true
-effort: max
 ---
 
 # nanorepl

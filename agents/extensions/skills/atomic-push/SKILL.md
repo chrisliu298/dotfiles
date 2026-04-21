@@ -7,7 +7,6 @@ description: |
   "atomic-push". For simple single-commit pushes, use push instead.
   Do NOT create a pull request.
 user-invocable: true
-effort: medium
 allowed-tools: Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(git branch:*)
 ---
 

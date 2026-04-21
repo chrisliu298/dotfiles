@@ -7,7 +7,6 @@ description: |
   "last-call". Do NOT use mid-session for incremental reviews; use /review-pr instead.
 allowed-tools: Read, Edit, Grep, Glob, Agent, Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git stash list:*), Bash(git rev-parse:*), Bash(git show:*)
 user-invocable: true
-effort: high
 ---
 
 # Last Call — Session-End Quality Review
