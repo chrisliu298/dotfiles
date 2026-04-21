@@ -282,87 +282,6 @@ install_skills() {
     done
 }
 
-install_codex_config() {
-    local src="$ROOT/agents/codex/config.toml" dest="$HOME/.codex/config.toml"
-    [[ -f "$src" ]] || return
-    mkdir -p "$HOME/.codex"
-    cmp -s "$src" "$dest" 2>/dev/null && return  # skip Python if byte-identical
-    # Merge managed keys into existing config.
-    # The tracked config is authoritative for keys it declares, so removing a
-    # managed key from agents/codex/config.toml should also remove it from the
-    # live ~/.codex/config.toml on the next sync.
-    local rc=0
-    "$HOME/.venv/bin/python3" - "$src" "$dest" << 'PYEOF' 2>/dev/null || rc=$?
-import sys, re, tomllib
-_BARE_KEY = re.compile(r'[A-Za-z0-9_-]+$')
-def qk(k): return k if _BARE_KEY.match(k) else '"' + k.replace('\\', '\\\\').replace('"', '\\"') + '"'
-src, dest = sys.argv[1], sys.argv[2]
-with open(src, "rb") as f: desired = tomllib.load(f)
-existing = {}
-try:
-    with open(dest, "rb") as f: existing = tomllib.load(f)
-except FileNotFoundError: pass
-managed_root_direct_keys = {
-    key for key, value in desired.items() if not isinstance(value, dict)
-} | {
-    "responses_websockets_v2",
-    "model_context_window",
-    "model_auto_compact_token_limit",
-}
-def merge_managed(existing, desired, *, managed_direct_keys):
-    if not isinstance(existing, dict) or not isinstance(desired, dict):
-        return desired
-    result = dict(existing)
-    if managed_direct_keys == "__all__":
-        for key, value in list(result.items()):
-            if isinstance(value, dict):
-                continue
-            if key not in desired:
-                result.pop(key)
-    elif managed_direct_keys:
-        for key, value in list(result.items()):
-            if isinstance(value, dict):
-                continue
-            if key in managed_direct_keys and key not in desired:
-                result.pop(key)
-    for key, value in desired.items():
-        current = result.get(key)
-        if isinstance(current, dict) and isinstance(value, dict):
-            result[key] = merge_managed(current, value, managed_direct_keys="__all__")
-        else:
-            result[key] = value
-    return result
-merged = merge_managed(existing, desired, managed_direct_keys=managed_root_direct_keys)
-if merged == existing: sys.exit(0)
-# Write TOML (simple key=value and [section] format)
-def fmt(v):
-    if isinstance(v, bool): return str(v).lower()
-    if isinstance(v, int): return str(v)
-    if isinstance(v, str): return f'"{v}"'
-    if isinstance(v, list): return "[" + ", ".join(fmt(i) for i in v) + "]"
-def write(data, f, prefix=""):
-    for k, v in data.items():
-        if not isinstance(v, dict): f.write(f"{qk(k)} = {fmt(v)}\n")
-    for k, v in data.items():
-        if not isinstance(v, dict): continue
-        sec = f"{prefix}.{qk(k)}" if prefix else qk(k)
-        direct = [(kk, vv) for kk, vv in v.items() if not isinstance(vv, dict)]
-        nested = [(kk, vv) for kk, vv in v.items() if isinstance(vv, dict)]
-        if direct or not nested:
-            f.write(f"\n[{sec}]\n")
-            for kk, vv in direct: f.write(f"{qk(kk)} = {fmt(vv)}\n")
-        for kk, vv in nested: write({kk: vv}, f, sec)
-with open(dest, "w") as f: write(merged, f)
-sys.exit(2)
-PYEOF
-    if (( rc == 2 )); then
-        log "write ~/.codex/config.toml"
-    elif (( rc != 0 )); then
-        cp "$src" "$dest"
-        log "write ~/.codex/config.toml (fallback copy)"
-    fi
-}
-
 install_mcp_servers() {
     local has_claude=false has_codex=false
     command -v claude &>/dev/null && has_claude=true
@@ -492,7 +411,6 @@ main() {
 
     # Foreground: local-only sections
     section "Links";  install_links
-    section "Config"; install_codex_config
 
     wait "$_fetch_pid" 2>/dev/null || true
     section "Skills"; install_skills
