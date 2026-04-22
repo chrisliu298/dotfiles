@@ -141,8 +141,8 @@ disabled = false
 # --- Prompt character (only place saturated red/green appear) ---
 [character]
 disabled = false
-success_symbol = '[❯](fg:gh_green)'
-error_symbol = '[❯](fg:gh_red)'
+success_symbol = '[>](bold fg:gh_green)'
+error_symbol = '[>](bold fg:gh_red)'
 vimcmd_symbol = '[❮](fg:gh_green)'
 vimcmd_replace_one_symbol = '[❮](fg:gh_purple)'
 vimcmd_replace_symbol = '[❮](fg:gh_purple)'
