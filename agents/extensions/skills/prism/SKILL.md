@@ -364,28 +364,52 @@ Skip this step if peer review was not requested.
 
 ### Step 4: Synthesize
 
-Lead with the answer. Organize findings by decision relevance, not agreement pattern.
+Write a decision brief, not a lens-by-lens report. The user should understand the recommendation and next action in seconds, not minutes.
 
-1. **Recommendation** — Your integrated conclusion, stated first. Answer the user's question directly and commit to a position before hedging. For deliverable questions (code, plan, document), this section IS the deliverable — produce it, don't just comment on agents' deliverables.
+**Default budget: ~150-300 words.** If you're writing more, you're hedging or scaffolding — compress. Deliverables are bounded by the artifact, not commentary.
 
-2. **Confidence and basis** — Why this recommendation over the alternatives. State your confidence level (high / moderate / low) and what drives it. Weight evidence by independence:
-   - Same-model convergence is signal but discounted — agents sharing a model share blind spots. "3 same-model agents agreed; the cross-model agent also confirmed" is stronger than "all 4 agreed" when 3 share a model.
-   - Where the Parallax (cross-model) agent confirmed or dissented, give this outsized weight — model diversity is the reason it exists.
-   - Single-agent points backed by strong reasoning can warrant high confidence; multi-agent consensus driven by shared training may not.
+**Default structure (in this order):**
 
-3. **Key dissent** — The strongest argument against the recommendation, stated as persuasively as the dissenter stated it. Do not strawman. Then explain specifically why you weighed it lower. If you cannot articulate why the dissent is wrong, downgrade your confidence level in section 2. If no meaningful dissent exists, skip this section — don't manufacture disagreement.
+1. **Answer** — 1-3 sentences stating the recommendation or conclusion directly. For deliverable questions (code, plan, document), the artifact is the answer — put it here, before rationale.
 
-4. **Contingencies** — Concrete, observable conditions under which the recommendation should be revisited. Not vague hedges ("if requirements change") but specific triggers ("if write volume exceeds 10k/s, the single-node assumption breaks"). If peer review ran, this section MUST incorporate the reviewers' "Collective gap" answers — these surface assumptions and gaps that reframe as actionable watch-items.
+2. **Do now** — 1-3 ranked actions, verb-first. Only immediate actions worth ranking. No "consider" or "maybe" unless tied to a concrete trigger.
 
-**Noise rejection:** Discard suggestions that add unrequested scope, are unsupported single-agent hedging, or restate context without adding analysis. Err toward a shorter, sharper synthesis.
+3. **Why** — 2-4 bullets of decisive reasoning. Fold confidence inline when it helps ("Moderate confidence — Parallax dissented on X"). Surface cross-model agreement or dissent here only when it materially changes confidence.
 
-**Category adaptation:** These categories are defaults for analysis-type questions. Adapt them to the task: for deliverable questions, the Recommendation section carries the artifact and the remaining sections provide design rationale. For simple questions with strong consensus, sections 3-4 may be empty — that is fine. The integrator should select the synthesis frame that best serves the user's decision, not rigidly fill every section.
+4. **Watch / Dissent** — 0-3 concrete triggers that would change the recommendation, or the single strongest dissent stated fairly with how you weighed it. Skip entirely if nothing is decision-relevant. Never manufacture caveats.
 
-The synthesis reflects your judgment as integrator — agents are advisors, not a voting bloc.
+**Mode adaptation (pick before writing):**
+
+- **Converged** (lenses + Parallax agree): Answer + Do now + short Why only. Skip Watch/Dissent.
+- **Material disagreement**: Add `Tradeoff` or `Decision point` after Why — name the two options, what each optimizes, why you chose. Dissent stays in Watch/Dissent.
+- **Cross-model break** (subagents converge, Parallax dissents): cap confidence at moderate. Lead Watch/Dissent with the Parallax argument — cross-model disagreement is the highest-signal finding and must not be buried.
+- **Deliverable**: artifact in Answer; Why becomes design rationale; Do now covers integration/review steps.
+
+**Banned in the main path:**
+
+- Per-lens attribution ("Agent A said…", "The Simplicity lens noted…"). Move to an optional `<details>Per-lens notes</details>` appendix at the very bottom only if the user asked, or if disagreement is deep enough to require lens-level audit.
+- Synthesis narration ("Weighing the perspectives…", "After considering the arguments…"). The recommendation carries the reasoning.
+- Generic contingencies ("if requirements change"). Only concrete, observable triggers.
+- Standalone `Confidence and basis` / `Key dissent` / `Contingencies` sections. Their content folds into Why and Watch/Dissent, and only when decision-relevant.
+
+**Cross-model weighting (internal — surfaces through Why):**
+
+- Same-model convergence is signal but discounted — shared training = shared blind spots.
+- Parallax (cross-model) confirmation or dissent carries outsized weight — model diversity is prism's entire point.
+- A single well-reasoned point can beat multi-agent consensus driven by shared priors.
+
+If you cannot articulate why dissent is wrong, downgrade confidence in Why rather than expanding dissent into a paragraph.
+
+The synthesis reflects your judgment as integrator — agents are advisors, not a voting bloc. Convergence is evidence, not a vote.
 
 ### Step 5: Grounding check
 
-Re-read the user's original question. Verify your synthesis answers it directly. If they asked for a deliverable, verify you produced one.
+Re-read the user's original question. Verify:
+
+- Your synthesis answers it directly. If they asked for a deliverable, you produced one.
+- The first section tells the user what to do.
+- No lens-by-lens summary appears outside an optional appendix.
+- Every retained dissent, caveat, or trigger changes a decision, confidence level, or next action.
 
 Optionally delete all Prism temp files: shared context (`/tmp/prism-<unique-id>.md`), perspective files (`/tmp/prism-<unique-id>-perspective-*.md`), and review index (`/tmp/prism-<unique-id>-review.md`).
 
