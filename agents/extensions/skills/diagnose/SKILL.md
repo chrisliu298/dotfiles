@@ -19,6 +19,8 @@ The instinct to "just try something" is strongest under pressure — and that's 
 
 **Write everything to `DEBUG.md`.** Observations, hypotheses, evidence, experiment results, and root cause all go in this file. Context compaction will eat reasoning that only lives in the conversation — DEBUG.md is the durable record. Create it at the repo root when Phase 1 begins.
 
+The phases below are investigative methodology, not delivery phases — the output is a single integrated fix (per **One-shot delivery** in CLAUDE.md).
+
 ## Phase 1: Investigate
 
 Complete this phase before proposing any fix.

@@ -5,6 +5,7 @@
 ### Planning & Problem-Solving
 
 - **Plan and review**: For multi-step tasks, state a plan with verification steps (`[Step] → verify: [check]`); re-plan when assumptions break.
+- **One-shot delivery**: Ship features and bug fixes as one complete change—no "Phase 1/Phase 2", "Priority 1/Priority 2", or mid-task approval checkpoints. Plan internally in steps if needed, but deliver one reviewable diff. Phasing is only for genuinely large/risky work (multi-PR migrations, cross-cutting refactors)—state the reason before splitting.
 - **Self-improvement**: After meaningful corrections, add a concise rule in CLAUDE.md to prevent recurrence.
 - **Debugging**: Create a minimal reproduction before fixing.
 - **Elegant solutions**: After a suboptimal fix, reconsider with full context—discard and implement a cleaner approach.

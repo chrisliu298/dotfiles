@@ -18,6 +18,8 @@ Execute an implementation plan by dispatching a fresh subagent per task. Each ta
 
 The value of fresh subagents is **context isolation**. An implementer carrying accumulated conversation history from previous tasks makes worse decisions — it conflates context, carries forward mistakes, and drifts from the plan. A fresh subagent with curated context stays focused.
 
+This skill is the deliberate exception to **One-shot delivery** (CLAUDE.md) — invoke only for genuinely multi-task work with disjoint write scopes. Single features and bug fixes should ship in one pass without this skill.
+
 ## The process
 
 ### 1. Prepare
