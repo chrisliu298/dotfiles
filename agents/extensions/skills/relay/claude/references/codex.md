@@ -2,7 +2,7 @@
 
 Help users write effective prompts for OpenAI Codex coding agents — either from scratch or by refining existing prompts. Based on OpenAI's official Codex prompting guide.
 
-The Codex model (`gpt-5.3-codex`) is a coding-agent-tuned variant of GPT-5. This reference covers Codex-specific prompt patterns. For general GPT-5.4 prompt patterns (output contracts, follow-through policies, citation rules, etc.), see `references/gpt.md`.
+The Codex model (`gpt-5.3-codex`) is a coding-agent-tuned variant of GPT-5. This reference covers Codex-specific prompt patterns. For general GPT-5.5 prompt patterns (output contracts, follow-through policies, citation rules, etc.), see `references/gpt.md`.
 
 ## Writing a Codex agent prompt
 

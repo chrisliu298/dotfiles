@@ -166,12 +166,12 @@ cpu(){ local prompt="/push"; (( $# )) && prompt+=" ${*}"; _claude -p --dangerous
 chl(){ (( $# )) || { echo 'Usage: chl "<prompt>"'; return 1; }; _claude -p --dangerously-skip-permissions "${*}"; }
 cch(){ tmux new-session -ds claude-channels "env -u TMUX COLORTERM=truecolor $(command -v claude) --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official $*" 2>/dev/null; tmux attach -t claude-channels; }
 
-x(){ command codex --yolo -m gpt-5.4 --config model_reasoning_effort=high "$@"; }
-xl(){ command codex --yolo -m gpt-5.4 --config model_reasoning_effort=low "$@"; }
-xm(){ command codex --yolo -m gpt-5.4 --config model_reasoning_effort=medium "$@"; }
-xh(){ command codex --yolo -m gpt-5.4 --config model_reasoning_effort=high "$@"; }
-xx(){ command codex --yolo -m gpt-5.4 --config model_reasoning_effort=xhigh "$@"; }
-xc(){ command codex resume --last --yolo -m gpt-5.4 --config model_reasoning_effort=high "$@"; }
-xr(){ command codex resume --yolo -m gpt-5.4 --config model_reasoning_effort=high "$@"; }
+x(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=high "$@"; }
+xl(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=low "$@"; }
+xm(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=medium "$@"; }
+xh(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=high "$@"; }
+xx(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=xhigh "$@"; }
+xc(){ command codex resume --last --yolo -m gpt-5.5 --config model_reasoning_effort=high "$@"; }
+xr(){ command codex resume --yolo -m gpt-5.5 --config model_reasoning_effort=high "$@"; }
 xu(){ npm install -g @openai/codex@latest "$@"; }
-xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.4 --config model_reasoning_effort=high "${*}"; }
+xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.5 --config model_reasoning_effort=high "${*}"; }

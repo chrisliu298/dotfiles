@@ -1,7 +1,7 @@
 ---
 name: prompt-engineer
 description: |
-  Guide for writing and refining prompts for Claude or GPT/Codex models, distilled from each vendor's official best practices. Use this skill whenever the user wants to write a new prompt, improve or debug an existing prompt, or learn model-specific prompting techniques. Also trigger when the user mentions "prompt engineering", "system prompt", "Claude prompt", "GPT prompt", "Codex prompt", "OpenAI prompt", or asks how to get better results from any LLM. Accepts an argument: "claude" for Claude/Anthropic guidance, "gpt" for GPT-5.4 guidance, "codex" for Codex agent guidance.
+  Guide for writing and refining prompts for Claude or GPT/Codex models, distilled from each vendor's official best practices. Use this skill whenever the user wants to write a new prompt, improve or debug an existing prompt, or learn model-specific prompting techniques. Also trigger when the user mentions "prompt engineering", "system prompt", "Claude prompt", "GPT prompt", "Codex prompt", "OpenAI prompt", or asks how to get better results from any LLM. Accepts an argument: "claude" for Claude/Anthropic guidance, "gpt" for GPT-5.5 guidance, "codex" for Codex agent guidance.
 user-invocable: true
 ---
 
@@ -14,10 +14,10 @@ Help users write effective prompts — either from scratch or by refining existi
 This skill covers three model families. The user specifies which one:
 
 - **`prompt-engineer claude`** — Anthropic Claude prompting best practices
-- **`prompt-engineer gpt`** — OpenAI GPT-5.4 general prompting best practices
+- **`prompt-engineer gpt`** — OpenAI GPT-5.5 general prompting best practices
 - **`prompt-engineer codex`** — OpenAI Codex coding agent best practices
 
-If the user doesn't specify, ask which model family the prompt targets. If it's obvious from context (e.g., they mention "Claude", "Anthropic", "GPT", "OpenAI", "Codex"), use that. If the user says "GPT" or "OpenAI" without specifying further, ask whether the prompt is for a general GPT-5.4 application or a Codex coding agent — the guidance differs significantly.
+If the user doesn't specify, ask which model family the prompt targets. If it's obvious from context (e.g., they mention "Claude", "Anthropic", "GPT", "OpenAI", "Codex"), use that. If the user says "GPT" or "OpenAI" without specifying further, ask whether the prompt is for a general GPT-5.5 application or a Codex coding agent — the guidance differs significantly.
 
 ## Workflow
 

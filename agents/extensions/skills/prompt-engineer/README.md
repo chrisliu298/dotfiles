@@ -2,7 +2,7 @@
 
 **A skill for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex](https://github.com/openai/codex) that helps you write and refine LLM prompts using vendor-specific best practices.**
 
-Prompt Engineer guides you through writing prompts from scratch or diagnosing and fixing existing ones. It carries three reference guides -- Claude (XML blocks and patterns), GPT-5.4 (cross-cutting prompt patterns), and Codex (coding agent starter prompt and customization) -- distilled from each vendor's official documentation into diagnostic tables and step-by-step workflows.
+Prompt Engineer guides you through writing prompts from scratch or diagnosing and fixing existing ones. It carries three reference guides -- Claude (XML blocks and patterns), GPT-5.5 (cross-cutting prompt patterns), and Codex (coding agent starter prompt and customization) -- distilled from each vendor's official documentation into diagnostic tables and step-by-step workflows.
 
 Invoke with `/prompt-engineer claude`, `/prompt-engineer gpt`, or `/prompt-engineer codex`, or just ask your agent to help you write a prompt and it will pick the right reference automatically.
 

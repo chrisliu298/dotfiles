@@ -1,4 +1,4 @@
-# GPT-5.4 Prompt Craft
+# GPT-5.5 Prompt Craft
 
 Help users write effective prompts for OpenAI GPT models — either from scratch or by refining existing prompts. Based on OpenAI's official prompt guidance. For Codex coding agents, see `references/codex.md` instead.
 
@@ -291,7 +291,7 @@ If the model still stops at the first plausible answer, add an initiative nudge:
 
 Recommended starting points:
 
-- `none`: Fast, cost-sensitive, latency-sensitive tasks where the model doesn't need to think. For GPT-5.4 specifically, `none` can already perform well on action-selection and tool-discipline tasks.
+- `none`: Fast, cost-sensitive, latency-sensitive tasks where the model doesn't need to think. For GPT-5.5 specifically, `none` can already perform well on action-selection and tool-discipline tasks.
 - `low`: Latency-sensitive tasks where a small amount of thinking produces meaningful accuracy gain, especially with complex instructions.
 - `medium` or `high`: Tasks that truly require stronger reasoning and can absorb the latency/cost tradeoff. Start here for research-heavy workloads: long-context synthesis, multi-document review, conflict resolution, strategy writing.
 - `xhigh`: Avoid as a default unless evals show clear benefits. Best for long, agentic, reasoning-heavy tasks where maximum intelligence matters more than speed or cost.
@@ -302,7 +302,7 @@ Most teams should default to the `none`, `low`, or `medium` range.
 
 Use one-change-at-a-time discipline: switch model first, pin `reasoning_effort`, run evals, then iterate.
 
-| Current setup | Suggested GPT-5.4 start | Notes |
+| Current setup | Suggested GPT-5.5 start | Notes |
 |---|---|---|
 | `gpt-5.2` | Match the current reasoning effort | Preserve latency and quality profile first, then tune. |
 | `gpt-5.3-codex` | Match the current reasoning effort | For coding workflows, keep the reasoning effort the same. |
@@ -310,11 +310,11 @@ Use one-change-at-a-time discipline: switch model first, pin `reasoning_effort`,
 | Research-heavy assistants | `medium` or `high` | Use explicit research multi-pass and citation gating. |
 | Long-horizon agents | `medium` or `high` | Add tool persistence and completeness accounting. |
 
-#### Small-model guidance (gpt-5.4-mini and gpt-5.4-nano)
+#### Small-model guidance (gpt-5.5-mini and gpt-5.5-nano)
 
 These models are highly steerable but less likely to infer missing steps, resolve ambiguity implicitly, or package outputs as intended unless specified directly. Prompts for smaller models are often longer and more explicit.
 
-**Prompting gpt-5.4-mini:**
+**Prompting gpt-5.5-mini:**
 - Put critical rules first
 - Specify the full execution order when tool use or side effects matter
 - Don't rely on "you MUST" alone — use structural scaffolding: numbered steps, decision rules, explicit action definitions
@@ -324,7 +324,7 @@ These models are highly steerable but less likely to infer missing steps, resolv
 - Specify packaging directly: answer length, follow-up questions, citation style, section order
 - Prefer scoped instructions (`after the final JSON, output nothing further`) over `output nothing else`
 
-**Prompting gpt-5.4-nano:**
+**Prompting gpt-5.5-nano:**
 - Use only for narrow, well-bounded tasks
 - Prefer closed outputs: labels, enums, short JSON, fixed templates
 - Avoid multi-step orchestration unless extremely constrained
@@ -356,7 +356,7 @@ For coding agents, use the more detailed version below instead.
 
 #### Coding agent autonomy (non-Codex GPT agents)
 
-These patterns are from the GPT-5.4 guide for general GPT-based coding agents. For Codex-specific agent patterns (starter prompt, preambles, tools), use `references/codex.md` instead.
+These patterns are from the GPT-5.5 guide for general GPT-based coding agents. For Codex-specific agent patterns (starter prompt, preambles, tools), use `references/codex.md` instead.
 
 ```xml
 <autonomy_and_persistence>
@@ -544,7 +544,7 @@ When using Compaction in the Responses API:
 - Compact after major milestones
 - Treat compacted items as opaque state
 - Keep prompts functionally identical after compaction
-- GPT-5.4 tends to remain more coherent and reliable over longer, multi-turn conversations with fewer breakdowns as sessions grow
+- GPT-5.5 tends to remain more coherent and reliable over longer, multi-turn conversations with fewer breakdowns as sessions grow
 
 ---
 
