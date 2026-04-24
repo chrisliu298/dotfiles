@@ -57,34 +57,31 @@ Before raising effort, improve the prompt first — add output contracts, verifi
 
 **Before composing the prompt body, read the references in `~/.claude/skills/relay/references/`** — `gpt.md` for cross-cutting GPT-5.5 prompt patterns, `codex.md` for Codex coding agent patterns. (If not found, try `relay --help` to locate the install path.) This is not optional — the guides contain model-specific patterns that materially affect output quality.
 
-Use XML tags for structure. Key patterns:
+Lead with the outcome, not the procedure. GPT-5.5 responds best to outcome-first prompts — state the goal, success criteria, and stop rules, then let Codex pick the path. Reach for XML scaffolding only when a specific failure mode needs it:
 
-- `<output_contract>` — exact format and structure expected
-- `<completeness_contract>` — what "done" means explicitly
-- `<verification_loop>` — check correctness before finalizing
+- `<output_contract>` — when format precision matters
+- `<completeness_contract>` — when the task has discrete items that must all be covered
+- `<verification_loop>` — when post-change validation is required
 
 **Example:**
 
 ```bash
 relay call --name pool-refactor --effort medium <<'BODY'
-Refactor src/db/pool.py to add connection timeouts.
+Add connection timeouts and stale-connection recovery to src/db/pool.py.
 
-1. Add timeout_seconds param to ConnectionPool.__init__
-2. Implement auto-reconnection for stale connections
-3. Add reclaim_stale() method
-4. Keep backward compatibility
+Success criteria:
+- ConnectionPool accepts a timeout_seconds parameter at construction
+- stale connections are auto-reconnected on use
+- a reclaim_stale() method exists for explicit cleanup
+- existing callers keep working without changes
+
+<verification_loop>
+Run pytest tests/test_pool.py — all tests must pass. No new lint errors.
+</verification_loop>
 
 <output_contract>
 Summary of changes, one per line, with file path and description.
 </output_contract>
-
-<verification_loop>
-Run pytest tests/test_pool.py — all tests must pass.
-</verification_loop>
-
-<completeness_contract>
-Done means: all 4 requirements implemented, tests pass, no new lint errors.
-</completeness_contract>
 BODY
 ```
 

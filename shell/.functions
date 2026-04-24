@@ -166,7 +166,7 @@ cpu(){ local prompt="/push"; (( $# )) && prompt+=" ${*}"; _claude -p --dangerous
 chl(){ (( $# )) || { echo 'Usage: chl "<prompt>"'; return 1; }; _claude -p --dangerously-skip-permissions "${*}"; }
 cch(){ tmux new-session -ds claude-channels "env -u TMUX COLORTERM=truecolor $(command -v claude) --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official $*" 2>/dev/null; tmux attach -t claude-channels; }
 
-x(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=high "$@"; }
+x(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=medium "$@"; }
 xl(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=low "$@"; }
 xm(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=medium "$@"; }
 xh(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=high "$@"; }

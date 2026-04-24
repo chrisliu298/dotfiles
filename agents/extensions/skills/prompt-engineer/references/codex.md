@@ -2,7 +2,7 @@
 
 Help users write effective prompts for OpenAI Codex coding agents — either from scratch or by refining existing prompts. Based on OpenAI's official Codex prompting guide.
 
-The Codex model (`gpt-5.3-codex`) is a coding-agent-tuned variant of GPT-5. This reference covers Codex-specific prompt patterns. For general GPT-5.5 prompt patterns (output contracts, follow-through policies, citation rules, etc.), see `references/gpt.md`.
+This reference covers Codex CLI prompt patterns (starter prompt, autonomy, preambles, plan tool, presenting work). For general GPT-5.5 prompt patterns (output contracts, follow-through policies, citation rules, etc.), see `references/gpt.md`.
 
 ## Writing a Codex agent prompt
 
@@ -37,7 +37,7 @@ The Codex-Max prompt is the recommended baseline. Start here and make tactical a
 The full starter prompt:
 
 ```
-You are Codex, based on GPT-5. You are running as a coding agent in the
+You are Codex, based on GPT-5.5. You are running as a coding agent in the
 Codex CLI on a user's computer.
 
 # General
@@ -258,7 +258,7 @@ The starter prompt sections that most commonly need customization:
 
 ### Step 4: Configure preambles and personality
 
-Codex supports mid-rollout user updates (preambles) — short progress messages sent alongside tool calls. For `gpt-5.3-codex` and later, preambles are promptable.
+Codex supports mid-rollout user updates (preambles) — short progress messages sent alongside tool calls. Preambles are promptable.
 
 **Preamble defaults:**
 - Acknowledge then plan before any tool calls (1 sentence acknowledgement, 1-2 sentence plan)
@@ -322,7 +322,7 @@ responsibility — never correction.
 
 **agents.md** — put durable rules (build commands, coding conventions, directory layout) in `AGENTS.md` at the repo root, not in the prompt. Codex automatically loads these files from `~/.codex` plus each directory from repo root to CWD. Reserve the prompt body for what changes from task to task.
 
-**Phase parameter (required for gpt-5.3-codex)** — the Responses API includes a `phase` field on assistant output items (`"commentary"` or `"final_answer"`). Your integration must persist `phase` on assistant items and pass them back in subsequent requests. Dropping `phase` causes significant performance degradation — preambles may be treated as final answers, causing early stopping.
+**Phase parameter** — the Responses API includes a `phase` field on assistant output items (`"commentary"` or `"final_answer"`). Your integration must persist `phase` on assistant items and pass them back in subsequent requests. Dropping `phase` causes significant performance degradation — preambles may be treated as final answers, causing early stopping.
 
 **Compaction** — for long-running agents, use the `/responses/compact` endpoint after major milestones. This enables multi-hour reasoning without hitting context limits. Treat compacted items as opaque state.
 
@@ -378,8 +378,6 @@ time?
 ```
 
 When metaprompting, generate responses a few times and look for common themes. Some suggestions may be overly specific to one situation — simplify them into general improvements.
-
-- **Remove preamble instructions for older models** — for Codex versions prior to `gpt-5.3-codex`, mid-rollout updates are system-generated, not promptable. Remove any preamble instructions from the prompt.
 
 ### 3. Present the revision
 
