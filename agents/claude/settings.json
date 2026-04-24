@@ -24,23 +24,15 @@
   "enabledPlugins": {
     "pyright-lsp@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true,
-    "pr-review-toolkit@claude-plugins-official": true,
-    "feature-dev@claude-plugins-official": true,
-    "frontend-design@claude-plugins-official": true,
-    "nanoresearch@nanoresearch": false,
-    "multi-autoresearch@multi-autoresearch": false
+    "code-review@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "nanoresearch@nanoresearch": false
   },
   "extraKnownMarketplaces": {
     "nanoresearch": {
       "source": {
         "source": "directory",
         "path": "~/.cache/dotfiles-plugins/chrisliu298__nanoresearch"
-      }
-    },
-    "multi-autoresearch": {
-      "source": {
-        "source": "directory",
-        "path": "~/.cache/dotfiles-plugins/chrisliu298__multi-autoresearch"
       }
     }
   },

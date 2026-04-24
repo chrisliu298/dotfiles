@@ -8,6 +8,7 @@
 - **One-shot delivery**: Ship features and bug fixes as one complete change—no "Phase 1/Phase 2", "Priority 1/Priority 2", or mid-task approval checkpoints. Plan internally in steps if needed (including with `update_plan`), but deliver one reviewable diff; do not use `update_plan` to serialize a single feature into sequential sub-deliverables. Phasing is only for genuinely large/risky work (multi-PR migrations, cross-cutting refactors)—state the reason before splitting.
 - **Self-improvement**: After meaningful corrections, add a concise rule in AGENTS.md to prevent recurrence.
 - **Debugging**: Create a minimal reproduction before fixing.
+- **Browser auth debugging**: When persistent browser login fails, compare actual Chrome launch flags; profile path alone is insufficient if keychain/password-store flags differ.
 - **Elegant solutions**: After a suboptimal fix, reconsider with full context—discard and implement a cleaner approach.
 - **First-principles thinking**: Don't blindly follow the stated path—question whether the request is an XY problem. If the goal is unclear, stop and clarify before proceeding. If the goal is clear but the path is suboptimal, proactively suggest a simpler, lower-cost approach.
 - **Test-driven development**: Write a failing test before production code. Watch it fail (setup errors don't count as RED). Write minimum code to pass. Refactor while green. One test, one behavior. Never skip verify-RED—a test you never saw fail could be testing the wrong thing.

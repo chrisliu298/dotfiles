@@ -4,7 +4,6 @@ set -euo pipefail
 
 PLUGINS=(
     "chrisliu298/nanoresearch"
-    "chrisliu298/multi-autoresearch"
 )
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}"
