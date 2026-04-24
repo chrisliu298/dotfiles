@@ -11,11 +11,13 @@
 - **Elegant solutions**: After a suboptimal fix, reconsider with full context—discard and implement a cleaner approach.
 - **First-principles thinking**: Don't blindly follow the stated path—question whether the request is an XY problem. If the goal is unclear, stop and clarify before proceeding. If the goal is clear but the path is suboptimal, proactively suggest a simpler, lower-cost approach.
 - **Test-driven development**: Write a failing test before production code. Watch it fail (setup errors don't count as RED). Write minimum code to pass. Refactor while green. One test, one behavior. Never skip verify-RED—a test you never saw fail could be testing the wrong thing.
+- **Measure before optimizing**: For "did this make it better?" claims (agent quality, prompt changes, perf+accuracy tradeoffs), build the evaluation harness before iterating. Distinct from TDD: that's correctness, this is regression detection on fuzzy outputs. Without a number, every "improvement" is just changing posture.
+- **Stop-the-line for missing infra**: When you hit a regression you can't bisect or a "did this help?" you can't answer, halt feature work and build the harness/CI first. The cost of not having it compounds faster than the cost of building it.
 
 ### Code
 
 - **Skimmable code**: Write extremely easy to consume code. Optimize for how easy the code is to read—make it skimmable, avoid cleverness, use early returns.
-- **Minimal changes**: No TYPE_CHECKING imports, unnecessary abstractions, or scope expansion. Prefer simple imports. No large dependencies for small features. Don't refactor or reformat outside the task. When in doubt, do less.
+- **Minimal changes**: No TYPE_CHECKING imports, unnecessary abstractions, or scope expansion. Prefer simple imports. No large dependencies for small features. Don't refactor or reformat outside the task. Three similar lines beats a premature abstraction. When in doubt, do less.
 - **Match existing style**: Conform to surrounding code's conventions (quotes, spacing, naming), even if you'd do it differently. Actively match, don't just avoid changing.
 - **Surgical cleanup**: Remove imports/variables/functions that YOUR changes made unused. Don't remove pre-existing dead code—mention it, don't delete it.
 - **Simplicity test**: If you write 200 lines and it could be 50, rewrite it. Would a senior engineer say this is overcomplicated? If yes, simplify.
