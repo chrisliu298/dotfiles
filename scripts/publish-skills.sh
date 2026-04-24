@@ -93,10 +93,13 @@ for name in "${PUBLISH_SKILLS[@]}"; do
     fi
 
     if [[ "$name" == "relay" ]]; then
+        # --copy-unsafe-links materializes symlinks pointing outside the source
+        # tree (e.g. references/*.md -> prompt-engineer/references/) into real
+        # files, so the published repo stays self-contained.
         mkdir -p "$repo_dir/claude/skills/relay" "$repo_dir/codex/skills/relay" "$repo_dir/scripts"
-        rsync -a --delete --exclude='scripts/' \
+        rsync -a --delete --copy-unsafe-links --exclude='scripts/' \
             "$skill_dir/claude/" "$repo_dir/claude/skills/relay/"
-        rsync -a --delete --exclude='scripts/' \
+        rsync -a --delete --copy-unsafe-links --exclude='scripts/' \
             "$skill_dir/codex/" "$repo_dir/codex/skills/relay/"
         rsync -a --delete "$skill_dir/scripts/" "$repo_dir/scripts/"
     else
