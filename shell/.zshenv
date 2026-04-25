@@ -14,6 +14,10 @@ export COLORTERM=truecolor
 # Starship prompt config
 export STARSHIP_CONFIG="$HOME/.config/starship/starship.toml"
 
+# Disable Claude Code auto-update (set at shell level so the updater sees it
+# before any settings.json env block is applied)
+export DISABLE_AUTOUPDATER=1
+
 # =============================================================================
 # PATH
 # =============================================================================
