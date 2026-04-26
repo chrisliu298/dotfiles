@@ -18,7 +18,6 @@ LINKS=(
     ".config/ghostty:.config/ghostty"
     "agents/claude/CLAUDE.md:.claude/CLAUDE.md"
     "agents/claude/keybindings.json:.claude/keybindings.json"
-    "agents/claude/hooks:.claude/hooks"
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
     "agents/codex/AGENTS.md:.codex/AGENTS.md"
 )
