@@ -97,9 +97,6 @@ if (( IS_MACOS )); then
     alias td="tailscale down"
     alias ts="tailscale status"
 
-    # Recall
-    alias recall-sync="bash ~/.claude/skills/recall/sync_remotes.sh"
-
     # Miscellaneous
     alias update_user_js="$HOME/Documents/Sync/Apps/Betterfox/update_user_js.py"
 fi
