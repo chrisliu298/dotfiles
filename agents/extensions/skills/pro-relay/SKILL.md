@@ -34,6 +34,32 @@ PROMPT
 
 Use a heredoc, never `echo "$prompt"` — bare echo mangles `$`, backticks, and quotes.
 
+## Output: stdout or file
+
+By default the response is on stdout. If you'd rather end up with a markdown file (for `Read`, large responses, or to keep your own stdout pipeline clean), two patterns work:
+
+**Shell redirect** — simpler, file lives on the *caller's* machine:
+
+```bash
+ssh -o ServerAliveInterval=30 macmini \
+    /Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro ask --run-id "$RUN_ID" <<'PROMPT' > /tmp/response-$RUN_ID.md
+... the prompt ...
+PROMPT
+```
+
+**`--output PATH`** — file lives on macmini (the gpt-pro host); stdout is empty; terminal stderr JSON gains `"output": "<resolved-path>"`:
+
+```bash
+ssh macmini /Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro \
+    ask --run-id "$RUN_ID" --output ~/responses/$RUN_ID.md <<'PROMPT'
+... the prompt ...
+PROMPT
+# Read it back from macmini if the caller needs the contents locally:
+ssh macmini cat ~/responses/$RUN_ID.md
+```
+
+Use shell redirect when you want the file on the caller's machine — one fewer hop. Use `--output` when driving gpt-pro from the same host (e.g. an agent running directly on macmini), where the file can be `Read` directly. `fetch` accepts `--output` too.
+
 ## Cost gate
 
 Pro Extended runs cost real Pro quota and take 5–20 minutes per prompt. Confirm with the user before invoking *unless* they explicitly named gpt-pro:
