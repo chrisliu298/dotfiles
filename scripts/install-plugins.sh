@@ -23,7 +23,7 @@ plugin_installed() {
 fetch_is_fresh() {
     local fh="$1/.git/FETCH_HEAD"
     [[ -f "$fh" ]] || return 1
-    local mtime; mtime=$(/usr/bin/stat -f %m "$fh" 2>/dev/null || stat -c %Y "$fh" 2>/dev/null) || return 1
+    local mtime; mtime=$(stat -c %Y "$fh" 2>/dev/null || /usr/bin/stat -f %m "$fh" 2>/dev/null) || return 1
     (( $(date +%s) - mtime < FETCH_TTL ))
 }
 
