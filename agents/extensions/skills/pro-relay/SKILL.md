@@ -1,7 +1,7 @@
 ---
 name: pro-relay
 description: |
-  Send a prompt to ChatGPT Pro Extended via the gpt-pro service running on macmini, over SSH.
+  Send a prompt to ChatGPT Pro Extended via gpt-pro-relay running on macmini, over SSH.
   Use this whenever the user wants a deep ChatGPT Pro response from a machine that's not their
   primary Chrome session — triggers on "ask gpt-pro", "send to gpt-pro", "use gpt-pro", "get a
   Pro Extended take", "ask the deep model", "second opinion from chatgpt pro". Different from
@@ -17,11 +17,13 @@ One prompt in, one response out. The browser automation runs on macmini behind S
 
 ## The command
 
+> **About the bare `gpt-pro-relay` command:** it's not a system tool. The remote shell finds it because the project ships a console script (in `.venv/bin/gpt-pro-relay`) that's symlinked into a directory on the SSH non-interactive `PATH` (`~/.local/bin/gpt-pro-relay` here, picked up via `~/.zshenv`). If you ever see `gpt-pro-relay: command not found`, the symlink got removed — fall back to the absolute venv path or recreate `~/.local/bin/gpt-pro-relay`.
+
 ```bash
 RUN_ID="ask-$(date -u +%Y%m%dT%H%M%SZ)-$(uuidgen | tr '[:upper:]' '[:lower:]')"
 
 ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 macmini \
-    /Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro ask --run-id "$RUN_ID" <<'PROMPT'
+    gpt-pro-relay ask --run-id "$RUN_ID" <<'PROMPT'
 ... the prompt ...
 PROMPT
 ```
@@ -42,15 +44,15 @@ By default the response is on stdout. If you'd rather end up with a markdown fil
 
 ```bash
 ssh -o ServerAliveInterval=30 macmini \
-    /Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro ask --run-id "$RUN_ID" <<'PROMPT' > /tmp/response-$RUN_ID.md
+    gpt-pro-relay ask --run-id "$RUN_ID" <<'PROMPT' > /tmp/response-$RUN_ID.md
 ... the prompt ...
 PROMPT
 ```
 
-**`--output PATH`** — file lives on macmini (the gpt-pro host); stdout is empty; terminal stderr JSON gains `"output": "<resolved-path>"`:
+**`--output PATH`** — file lives on macmini (the gpt-pro-relay host); stdout is empty; terminal stderr JSON gains `"output": "<resolved-path>"`:
 
 ```bash
-ssh macmini /Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro \
+ssh macmini gpt-pro-relay \
     ask --run-id "$RUN_ID" --output ~/responses/$RUN_ID.md <<'PROMPT'
 ... the prompt ...
 PROMPT
@@ -58,7 +60,7 @@ PROMPT
 ssh macmini cat ~/responses/$RUN_ID.md
 ```
 
-Use shell redirect when you want the file on the caller's machine — one fewer hop. Use `--output` when driving gpt-pro from the same host (e.g. an agent running directly on macmini), where the file can be `Read` directly. `fetch` accepts `--output` too.
+Use shell redirect when you want the file on the caller's machine — one fewer hop. Use `--output` when driving gpt-pro-relay from the same host (e.g. an agent running directly on macmini), where the file can be `Read` directly. `fetch` accepts `--output` too.
 
 ## Cost gate
 
@@ -70,7 +72,7 @@ If they invoked the skill directly or named gpt-pro in their request, they've co
 
 ## Background and timeout
 
-`gpt-pro ask` blocks for the full reasoning duration. Always:
+`gpt-pro-relay ask` blocks for the full reasoning duration. Always:
 
 - `run_in_background: true`
 - `timeout: 1800000` (30 min, well above typical max)
@@ -83,7 +85,7 @@ If the background task completes with a non-zero exit AND you have the `run_id`,
 
 ```bash
 ssh -o ServerAliveInterval=30 macmini \
-    /Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro fetch "$RUN_ID"
+    gpt-pro-relay fetch "$RUN_ID"
 ```
 
 The detached worker on macmini survived the SSH drop. `fetch` polls `result.json` and prints the response on stdout when ready. Same exit codes as `ask`.
@@ -91,7 +93,7 @@ The detached worker on macmini survived the SSH drop. `fetch` polls `result.json
 Quick "is it done yet" check (non-blocking):
 
 ```bash
-ssh macmini /Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro fetch "$RUN_ID" --timeout 0
+ssh macmini gpt-pro-relay fetch "$RUN_ID" --timeout 0
 ```
 
 Exit 124 means still running. Exit 4 means `not_found` — the run never reached macmini (SSH died before the parent read stdin).
@@ -100,7 +102,7 @@ Exit 124 means still running. Exit 4 means `not_found` — the run never reached
 
 Re-running `ask` with the **same `--run-id` and the same prompt bytes** attaches to the existing run instead of submitting a new one. The `submitted` JSONL line will include `"attached": true`. Useful when you want a single command that handles both fresh and recovery cases without branching.
 
-Re-running with the same `run_id` but a **different** prompt exits 2 with `run_id_conflict` — gpt-pro refuses to overwrite, by design.
+Re-running with the same `run_id` but a **different** prompt exits 2 with `run_id_conflict` — gpt-pro-relay refuses to overwrite, by design.
 
 ## Concurrency
 
@@ -112,7 +114,7 @@ The terminal stderr JSON's `reason` field tells you what failed:
 
 | reason | meaning | what to do |
 |---|---|---|
-| `needs_reauth` | session cookie missing or expired | Tell the user to run `gpt-pro login` on macmini |
+| `needs_reauth` | session cookie missing or expired | Tell the user to run `gpt-pro-relay login` on macmini |
 | `model_select_failed` | couldn't get Pro selected in the picker | Selectors drifted; surface `run_dir` to the user |
 | `reasoning_mismatch` | Extended Pro chip absent after model select | Same — selectors drifted |
 | `worker_exception` | Python exception in the worker | Inspect `run_dir/worker.stderr` (structured stage trace) — the last `stage` before the error tells you where it died |
