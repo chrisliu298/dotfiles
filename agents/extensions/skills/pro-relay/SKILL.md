@@ -6,35 +6,41 @@ description: |
   primary Chrome session — triggers on "ask gpt-pro", "send to gpt-pro", "use gpt-pro", "get a
   Pro Extended take", "ask the deep model", "second opinion from chatgpt pro". Different from
   the `chatgpt` skill, which drives live Chrome via in-chrome MCP. Returns response on stdout.
-allowed-tools: Bash(ssh:*), Read, Write
+  Resilient to SSH drops via caller-supplied `--run-id` plus a `fetch` recovery command.
+allowed-tools: Bash(ssh:*), Bash(uuidgen:*), Bash(date:*), Read, Write
 user-invocable: true
 ---
 
 # pro-relay
 
-One prompt in, one response out. The actual ChatGPT browser automation runs on macmini behind SSH — no local Chrome, no extension required, just SSH access to macmini and a logged-in dedicated profile there.
+One prompt in, one response out. The browser automation runs on macmini behind SSH against a dedicated logged-in profile. The work is done by a detached worker so SSH drops don't kill it — you can reconnect and `fetch` the result.
 
 ## The command
 
 ```bash
-ssh macmini /Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro ask <<'PROMPT'
+RUN_ID="ask-$(date -u +%Y%m%dT%H%M%SZ)-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+
+ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 macmini \
+    /Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro ask --run-id "$RUN_ID" <<'PROMPT'
 ... the prompt ...
 PROMPT
 ```
 
-- **stdout** = the ChatGPT response
-- **stderr** = JSON status: `{"status":"ok","url":"...","run_dir":"...","response_chars":N}`
-- **exit 0** = success. Anything else = read stderr for the structured reason.
+- **stdout** = the ChatGPT response (markdown, captured via the page's Copy button when possible)
+- **stderr** = newline-delimited JSON: a `submitted` line first, then a terminal `ok` / `error` / `timeout` line. The `ok` line includes `extraction: "copy_button" | "innertext"` so you can audit which capture path won.
+- **exit 0** = success. Other codes mean inspect stderr.
 
-Use a heredoc, not `echo "$prompt"` — bare echo mangles prompts containing `$`, backticks, or quotes.
+**Always pass `--run-id`.** A caller-supplied id is the recovery handle if SSH drops. Use a UUID or timestamp+UUID — anything matching `[A-Za-z0-9._-]+`.
+
+Use a heredoc, never `echo "$prompt"` — bare echo mangles `$`, backticks, and quotes.
 
 ## Cost gate
 
-Pro Extended runs cost real Pro quota and take 5–20 minutes per prompt. Before invoking, ask the user unless they explicitly named gpt-pro in their request:
+Pro Extended runs cost real Pro quota and take 5–20 minutes per prompt. Confirm with the user before invoking *unless* they explicitly named gpt-pro:
 
 > "Send this to gpt-pro? It'll take ~5–20 min and use your Pro quota."
 
-If they explicitly invoked the skill or named it, they've consented — just go.
+If they invoked the skill directly or named gpt-pro in their request, they've consented — just go.
 
 ## Background and timeout
 
@@ -43,21 +49,74 @@ If they explicitly invoked the skill or named it, they've consented — just go.
 - `run_in_background: true`
 - `timeout: 1800000` (30 min, well above typical max)
 
-Wait for the completion notification — do NOT poll the output file.
+Wait for the completion notification. Do NOT poll the output file.
+
+## SSH-drop recovery
+
+If the background task completes with a non-zero exit AND you have the `run_id`, do NOT re-run `ask` — that submits a fresh prompt and burns another 5–20 min of Pro reasoning. Instead:
+
+```bash
+ssh -o ServerAliveInterval=30 macmini \
+    /Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro fetch "$RUN_ID"
+```
+
+The detached worker on macmini survived the SSH drop. `fetch` polls `result.json` and prints the response on stdout when ready. Same exit codes as `ask`.
+
+Quick "is it done yet" check (non-blocking):
+
+```bash
+ssh macmini /Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro fetch "$RUN_ID" --timeout 0
+```
+
+Exit 124 means still running. Exit 4 means `not_found` — the run never reached macmini (SSH died before the parent read stdin).
+
+## Idempotent re-attach
+
+Re-running `ask` with the **same `--run-id` and the same prompt bytes** attaches to the existing run instead of submitting a new one. The `submitted` JSONL line will include `"attached": true`. Useful when you want a single command that handles both fresh and recovery cases without branching.
+
+Re-running with the same `run_id` but a **different** prompt exits 2 with `run_id_conflict` — gpt-pro refuses to overwrite, by design.
+
+## Concurrency
+
+Two simultaneous `ask` calls to macmini serialize on a file lock — the second worker waits for the first to release Chrome before launching its own. From the caller's perspective, this just looks like the second run took longer than usual. The wait is recorded in `worker.stderr` as `{"stage":"lock_acquired","waited_secs":N}`. Pro Extended runs are 5–20 min, so an extra wait is in the same magnitude — don't add caller-side timeouts shorter than that.
 
 ## Errors
 
-The stderr JSON's `reason` field tells you what failed:
+The terminal stderr JSON's `reason` field tells you what failed:
 
 | reason | meaning | what to do |
 |---|---|---|
 | `needs_reauth` | session cookie missing or expired | Tell the user to run `gpt-pro login` on macmini |
 | `model_select_failed` | couldn't get Pro selected in the picker | Selectors drifted; surface `run_dir` to the user |
 | `reasoning_mismatch` | Extended Pro chip absent after model select | Same — selectors drifted |
-| `timeout` | no completion within 35 min | Inspect `run_dir/streaming-*.png` for what got stuck |
+| `worker_exception` | Python exception in the worker | Inspect `run_dir/worker.stderr` (structured stage trace) — the last `stage` before the error tells you where it died |
+| `timeout` | no completion within 35 min | Inspect `run_dir/streaming-*.png` |
 | `empty_prompt` | nothing on stdin | You forgot the heredoc |
+| `run_id_conflict` | same run_id, different prompt | Pick a fresh run_id |
+| `not_found` | fetch couldn't find run_dir | The `ask` parent died before submission; re-submit fresh |
 
-`run_dir` lives on macmini at `~/.gpt-pro/runs/<ts>-ask/` — screenshots, DOM snapshot, network log. Reach for it via `ssh macmini ls/cat <run_dir>/...` when diagnosing.
+## Exit codes
+
+| code | meaning |
+|---|---|
+| 0 | response on stdout, status ok |
+| 1 | error — read stderr `reason` |
+| 2 | usage error (empty prompt, conflict, invalid run_id) |
+| 3 | worker `timeout` (didn't finish within 35 min) |
+| 4 | run_dir not found (fetch only) |
+| 124 | wait timed out, run still pending |
+
+## Run artifacts
+
+`run_dir` lives on macmini at `~/.gpt-pro/runs/<run_id>/`:
+
+- `prompt.md`, `response.md`, `meta.json`, `result.json`
+- `pre-send.png`, `streaming-NNN.png`, `final.png`, `error-*.png`
+- `final.html`, `network.json`
+- `worker.stdout` — detached worker's stdout (usually empty)
+- `worker.stderr` — **structured JSONL stage trace**: one line per stage (`start`, `lock_acquired`, `chrome_launched`, `logged_in`, `model_selected`, `prompt_typed`, `sent`, `completion_detected`, `extracted`, `finished`, plus `error` / `orphan_kill_*`). When something fails mid-run, this is the fastest path to the failure point.
+
+Reach for them via `ssh macmini cat <run_dir>/<file>` or `ssh macmini ls <run_dir>` when diagnosing.
 
 ## When to use vs the `chatgpt` skill
 
@@ -66,11 +125,8 @@ The stderr JSON's `reason` field tells you what failed:
 | Pro Extended, from any machine with SSH to macmini | `pro-relay` |
 | Any model + any effort, driving your local live Chrome | `chatgpt` |
 | Multi-turn follow-ups in the same chat | `chatgpt` (pro-relay is one-shot) |
+| Tolerate flaky network on a 15-min reasoning run | `pro-relay` (drop-recovery) |
 
 ## Multi-turn
 
 pro-relay is one-shot per invocation — every call is a fresh ChatGPT conversation. To continue a thread, paste the prior response into the next prompt yourself. The dedicated profile retains login but does not persist conversation context across calls.
-
-## Why this exists
-
-The `chatgpt` skill is great when you're at the desk where Chrome is. pro-relay is the SSH-shaped variant: anywhere → macmini → ChatGPT Pro → response. No tunnel, no daemon, no API surface beyond SSH itself.
