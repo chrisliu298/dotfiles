@@ -144,14 +144,14 @@ The terminal stderr JSON's `reason` field tells you what failed:
 
 Reach for them via `ssh macmini cat <run_dir>/<file>` or `ssh macmini ls <run_dir>` when diagnosing.
 
-## When to use vs the `chatgpt` skill
+## When pro-relay fits
 
-| Want | Use |
+| Situation | Verdict |
 |---|---|
-| Pro Extended, from any machine with SSH to macmini | `pro-relay` |
-| Any model + any effort, driving your local live Chrome | `chatgpt` |
-| Multi-turn follow-ups in the same chat | `chatgpt` (pro-relay is one-shot) |
-| Tolerate flaky network on a 15-min reasoning run | `pro-relay` (drop-recovery) |
+| Pro Extended reasoning, from any machine with SSH to macmini | Yes |
+| Tolerating a flaky network on a 5–20 min reasoning run | Yes (drop-recovery via `fetch`) |
+| Driving your local live Chrome with any model + effort | Use a local Chrome-driving skill instead |
+| Multi-turn follow-ups in the same chat | Doesn't fit — pro-relay is one-shot per invocation |
 
 ## Multi-turn
 
