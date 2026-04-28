@@ -51,6 +51,7 @@ MANUAL_SKILLS=(
     interviewer
     last-call
     nanorepl
+    pro-relay
     rlm
     runpodctl
     tdd
