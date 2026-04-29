@@ -14,6 +14,7 @@
 - **Test-driven development**: Write a failing test before production code. Watch it fail (setup errors don't count as RED). Write minimum code to pass. Refactor while green. One test, one behavior. Never skip verify-RED—a test you never saw fail could be testing the wrong thing.
 - **Measure before optimizing**: For "did this make it better?" claims (agent quality, prompt changes, perf+accuracy tradeoffs), build the evaluation harness before iterating. Distinct from TDD: that's correctness, this is regression detection on fuzzy outputs. Without a number, every "improvement" is just changing posture.
 - **Stop-the-line for missing infra**: When you hit a regression you can't bisect or a "did this help?" you can't answer, halt feature work and build the harness/CI first. The cost of not having it compounds faster than the cost of building it.
+- **Current vendor guidance**: Before updating skills with vendor/model guidance, verify against official current docs. Do not preserve unsupported model names or stale API parameters.
 
 ### Code
 
@@ -23,6 +24,7 @@
 - **Surgical cleanup**: Remove imports/variables/functions that YOUR changes made unused. Don't remove pre-existing dead code—mention it, don't delete it.
 - **Simplicity test**: If you write 200 lines and it could be 50, rewrite it. Would a senior engineer say this is overcomplicated? If yes, simplify.
 - **Don't regenerate**: Use `curl`/`wget` for remote content. Never manually recreate.
+- **Validate referenced paths**: When skill docs reference installed paths or symlinked paths, verify they exist after `./dotfiles.sh`.
 
 ### Agent Coordination
 
