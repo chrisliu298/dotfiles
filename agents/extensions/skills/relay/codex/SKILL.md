@@ -43,15 +43,15 @@ Choose `--effort` based on the task:
 
 | Level | When to use |
 |-------|-------------|
-| `none` | No thinking needed: reformat, extract fields, find-and-replace |
-| `low` | Light thinking: triage, classify, apply a well-defined migration |
-| `medium` | **Default.** Code review, writing tests, fixing bugs |
-| `high` | Deeper reasoning: security audit, complex refactoring |
-| `xhigh` | Avoid unless necessary. Multi-file architectural redesign |
+| `none` | Latency-critical tasks that do not need reasoning or multi-step tool use |
+| `low` | Efficient reasoning for triage, classification, or simple migrations |
+| `medium` | **Default.** Balanced starting point for code review, tests, and bug fixes |
+| `high` | Complex agentic tasks, security review, or broad refactoring |
+| `xhigh` | Hard asynchronous architecture work or eval-bound tasks |
 
 The `--effort` flag controls Codex's reasoning effort directly. When calling Claude (the peer direction), `--effort` is accepted by `relay call` but omitted from the request metadata — Claude does not expose a reasoning effort parameter.
 
-Before raising effort, improve the prompt first — add output contracts, verification steps, completeness criteria.
+Evaluate `low` before `none` when planning, search, tool use, or multi-step decisions still matter. Before raising effort, improve the prompt first — add outcome-first success criteria, stop rules, verification steps, and completeness criteria.
 
 ## Prompting Claude
 

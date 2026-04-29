@@ -17,7 +17,7 @@ Invoke with `/prompt-engineer claude`, `/prompt-engineer gpt`, or `/prompt-engin
 | Argument | Reference | Covers |
 |----------|-----------|--------|
 | `claude` | `references/claude.md` | Clarity, roles, XML structure, examples, output format, thinking guidance, safety controls, agentic patterns, frontend aesthetics |
-| `gpt` | `references/gpt.md` | Output contracts, follow-through policies, tool persistence, completeness verification, citation/grounding, reasoning effort, small-model guidance |
+| `gpt` | `references/gpt.md` | Outcome-first prompting, output contracts, follow-through policies, tool persistence, completeness verification, citation/grounding, reasoning effort, verbosity |
 | `codex` | `references/codex.md` | Codex-Max starter prompt, autonomy/persistence, preambles and personality, tool configuration, plan hygiene, metaprompting |
 
 ## Installation

@@ -159,7 +159,7 @@ Each direction pins a specific model. Do **not** substitute other models — the
 
 | Direction | Model flag | Reasoning effort | Notes |
 |---|---|---|---|
-| Claude Code → Codex | `--model gpt-5.5` | Dynamic (`none`–`xhigh`) | Claude selects effort per task |
+| Claude Code → Codex | `--model gpt-5.5` | Dynamic (`low`–`xhigh`; `none` only for latency-critical non-reasoning tasks) | Claude selects effort per task; default is `medium` |
 | Codex → Claude Code | `--model opus` | N/A | No effort parameter in Claude CLI |
 
 ### Call

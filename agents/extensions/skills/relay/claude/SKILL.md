@@ -45,17 +45,17 @@ Choose `--effort` based on the task:
 
 | Level | When to use |
 |-------|-------------|
-| `none` | No thinking needed: reformat, extract fields, find-and-replace |
-| `low` | Light thinking: triage, classify, apply a well-defined migration |
-| `medium` | **Default.** Code review, writing tests, fixing bugs |
-| `high` | Deeper reasoning: security audit, complex refactoring |
-| `xhigh` | Avoid unless necessary. Multi-file architectural redesign |
+| `none` | Latency-critical tasks that do not need reasoning or multi-step tool use |
+| `low` | Efficient reasoning for triage, classification, or simple migrations |
+| `medium` | **Default.** Balanced starting point for code review, tests, and bug fixes |
+| `high` | Complex agentic tasks, security review, or broad refactoring |
+| `xhigh` | Hard asynchronous architecture work or eval-bound tasks |
 
-Before raising effort, improve the prompt first — add output contracts, verification steps, completeness criteria.
+Evaluate `low` before `none` when planning, search, tool use, or multi-step decisions still matter. Before raising effort, improve the prompt first — add outcome-first success criteria, stop rules, verification steps, and completeness criteria.
 
 ## Prompting Codex
 
-**Before composing the prompt body, read the references in `~/.claude/skills/relay/references/`** — `gpt.md` for cross-cutting GPT-5.5 prompt patterns, `codex.md` for Codex coding agent patterns. (If not found, try `relay --help` to locate the install path.) This is not optional — the guides contain model-specific patterns that materially affect output quality.
+**Before composing the prompt body, read the prompt-engineer references** — `~/.claude/skills/prompt-engineer/references/gpt.md` for cross-cutting GPT-5.5 prompt patterns and `~/.claude/skills/prompt-engineer/references/codex.md` for Codex coding agent patterns. If those symlinks are unavailable, use the repo copies at `agents/extensions/skills/prompt-engineer/references/`. This is not optional — the guides contain model-specific patterns that materially affect output quality.
 
 Lead with the outcome, not the procedure. GPT-5.5 responds best to outcome-first prompts — state the goal, success criteria, and stop rules, then let Codex pick the path. Reach for XML scaffolding only when a specific failure mode needs it:
 

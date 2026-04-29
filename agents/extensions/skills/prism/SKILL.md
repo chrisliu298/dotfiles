@@ -43,7 +43,7 @@ Override dispatch config with positional args before the question, or use natura
 **Positional:** `<subagents> <parallax> <effort> <r> <question>`
 - **subagents** — number of same-model subagents (default: 2)
 - **parallax** — number of Parallax agents (default: 1, `0` to opt out)
-- **effort** — Parallax reasoning effort: `n` none, `l` low, `m` medium, `h` high, `x` xhigh (default: per-lens)
+- **effort** — Parallax reasoning effort: `n` none, `l` low, `m` medium, `h` high, `x` xhigh. Default: per-lens. Use `n` only for latency-critical questions that do not need reasoning.
 - **r** — enable anonymous peer review round (default: off)
 
 Trailing args are optional — omitted values use defaults.
@@ -64,7 +64,7 @@ Examples:
 
 Parallax is dispatched via `relay` to a **different model**. Invoke `relay` directly — not via a subagent that calls relay. Its value is model diversity: different training, different blind spots, different reasoning patterns. Assign it a lens that maximizes diversity (e.g., give Parallax a Contrarian or Disconfirming lens when subagents have Correctness and Simplicity).
 
-Before writing any Parallax relay prompt, read the target model's prompt guides in `~/.claude/skills/relay/references/` (e.g., `gpt.md` and `codex.md` for Codex). Do this every time, not just once.
+Before writing any Parallax relay prompt to Codex, read the prompt-engineer guides in `~/.claude/skills/prompt-engineer/references/` (specifically `gpt.md` and `codex.md`). If those symlinks are unavailable, use the repo copies at `agents/extensions/skills/prompt-engineer/references/`. Do this every time, not just once.
 
 **Relay call syntax (exact):**
 

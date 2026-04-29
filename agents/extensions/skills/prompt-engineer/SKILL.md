@@ -48,7 +48,7 @@ Regardless of model family, the overall process is the same:
 After determining the target model family, read the corresponding reference file for the full set of patterns, XML blocks, and diagnostic tables:
 
 - **Claude** → `references/claude.md` — covers clarity, roles, XML structure, examples, output format, thinking guidance, safety controls, agentic patterns, and Claude-specific failure modes.
-- **GPT** → `references/gpt.md` — covers output contracts, follow-through policies, tool persistence, completeness verification, citation/grounding, reasoning effort, small-model guidance, and GPT-specific failure modes.
+- **GPT** → `references/gpt.md` — covers outcome-first prompting, output contracts, follow-through policies, tool persistence, completeness verification, citation/grounding, reasoning effort, verbosity, and GPT-specific failure modes.
 - **Codex** → `references/codex.md` — covers the Codex-Max starter prompt, autonomy/persistence, preambles and personality, tool configuration, plan hygiene, and Codex-specific failure modes.
 
 The Claude and GPT references contain ready-to-paste XML blocks. The Codex reference contains a full starter prompt to customize.

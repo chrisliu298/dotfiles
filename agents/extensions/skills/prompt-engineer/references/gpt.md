@@ -117,6 +117,9 @@ State what the output should look like. Keep this block short — lean on the su
 - Keep progress updates brief.
 - Do not shorten the answer so aggressively that required evidence, reasoning,
   or completion checks are omitted.
+- In API integrations, use `text.verbosity` for output length control. Keep
+  it at the default `medium` unless concise responses are desired; use `low`
+  as the first knob for shorter final answers.
 </verbosity_controls>
 ```
 
@@ -141,6 +144,12 @@ Preserve the requested artifact, length, structure, and genre first. Quietly
 improve clarity, flow, and correctness. Do not add new claims, extra
 sections, or a more promotional tone unless explicitly requested.
 ```
+
+**API structured outputs** — when an application needs machine-validated JSON
+or another strict schema, prefer the API's Structured Outputs feature over
+long schema descriptions in the prompt. Keep prompt-level output instructions
+for human-readable shape, section order, style, and constraints that the schema
+cannot express.
 
 ### Step 5: Set a follow-through policy
 
@@ -205,6 +214,11 @@ Rules for this turn:
 ```
 
 ### Step 7: Tool use guidance (if applicable)
+
+Put most tool-specific instructions in the tool definitions themselves: what
+the tool does, when to use it, required inputs, side effects, retry safety, and
+common error modes. Keep system instructions for cross-tool policy and
+workflow-level rules.
 
 #### Preamble pattern (streaming / tool-heavy agents)
 
@@ -349,6 +363,14 @@ Use for research, review, and synthesis tasks (not short execution tasks):
 </research_mode>
 ```
 
+#### Prompt caching and date hygiene
+
+For repeated API traffic, keep stable prompt content first and dynamic
+user-specific context near the end so prompt caching can do useful work. Do
+not include the current date solely to tell GPT-5.5 what day it is; provide
+dates only when the task logic, business rules, or user-facing answer depends
+on them.
+
 ### Step 9: Completeness and verification
 
 Address common failure modes in multi-step workflows — incomplete execution, false negatives from empty results, unverified output.
@@ -442,41 +464,29 @@ If the model still stops at the first plausible answer, add an initiative nudge:
 
 #### Reasoning effort defaults
 
-Start lower than you might expect — GPT-5.5 is efficient enough that `none`, `low`, and `medium` cover most workloads. Only escalate on measured regressions.
+Start from `medium`, the GPT-5.5 default and recommended balanced point for
+quality, reliability, latency, and cost. Evaluate `low` before `none` when tool
+use, planning, search, or multi-step decision making still matters. Increase to
+`high` or `xhigh` only when evals show a measurable quality gain that justifies
+the extra latency and cost.
 
-- `none`: Fast, cost-sensitive, latency-sensitive tasks where the model doesn't need to think. Already strong on action-selection and tool-discipline.
-- `low`: Latency-sensitive tasks where a small amount of thinking produces meaningful accuracy gain, especially with complex instructions.
-- `medium`: Default for most interactive assistants and moderately complex workflows.
-- `high`: Research-heavy workloads — long-context synthesis, multi-document review, conflict resolution, strategy writing.
-- `xhigh`: Long, agentic, reasoning-heavy tasks where maximum intelligence matters more than speed or cost. Avoid as a default unless evals show clear benefits.
+- `none`: Reserve for latency-critical tasks that do not need reasoning or
+  multi-chained tool calls, such as lightweight voice turns, fast information
+  retrieval, and classification.
+- `low`: Efficient reasoning for latency-sensitive workflows that still need
+  tool use, planning, search, or multi-step decision making.
+- `medium`: Default for most interactive assistants, tool workflows, and
+  moderately complex tasks.
+- `high`: Complex agentic tasks, research-heavy workloads, long-context
+  synthesis, multi-document review, conflict resolution, and strategy writing
+  where latency matters less.
+- `xhigh`: The hardest asynchronous agentic tasks or evals that test the
+  bounds of model intelligence. Avoid as a default unless evals show clear
+  benefits.
 
-#### Small-model guidance (gpt-5.5-mini and gpt-5.5-nano)
-
-Smaller models are highly steerable but less likely to infer missing steps, resolve ambiguity implicitly, or package outputs as intended unless specified directly. Prompts for smaller models are often longer and more explicit — the outcome-first minimalism that works on GPT-5.5 may underperform here.
-
-**Prompting gpt-5.5-mini:**
-- Put critical rules first
-- Specify the full execution order when tool use or side effects matter
-- Don't rely on "you MUST" alone — use structural scaffolding: numbered steps, decision rules, explicit action definitions
-- Separate "do the action" from "report the action"
-- Show the correct flow, not just the final format
-- Define ambiguity behavior explicitly: when to ask, abstain, or proceed
-- Specify packaging directly: answer length, follow-up questions, citation style, section order
-- Prefer scoped instructions (`after the final JSON, output nothing further`) over `output nothing else`
-
-**Prompting gpt-5.5-nano:**
-- Use only for narrow, well-bounded tasks
-- Prefer closed outputs: labels, enums, short JSON, fixed templates
-- Avoid multi-step orchestration unless extremely constrained
-- Route ambiguous or planning-heavy tasks to a stronger model
-
-**Good default pattern for small models:**
-1. Task
-2. Critical rule
-3. Exact step order
-4. Edge cases or clarification behavior
-5. Output format
-6. One correct example
+Higher effort is not automatically better. If the task has conflicting
+instructions, weak stopping criteria, or open-ended tool access, higher effort
+can increase overthinking, unnecessary searching, or output regressions.
 
 ### Step 13: Specialized workflow patterns (as needed)
 
@@ -617,10 +627,18 @@ established patterns.
 
 #### Vision and image detail
 
-Specify the image `detail` level explicitly rather than relying on auto:
-- `high` — standard high-fidelity image understanding
-- `original` — large, dense, or spatially sensitive images (computer use, localization, OCR, click-accuracy tasks)
-- `low` — only when speed and cost matter more than fine detail
+GPT-5.5 preserves more visual detail by default: when `image_detail` is unset
+or `auto`, it uses `original` behavior up to the documented size limits. Still
+set the image detail explicitly when precision, cost, or latency matter:
+- `auto` / unset — good default for GPT-5.5 vision and computer-use workflows
+  when preserving visual detail is acceptable.
+- `high` — standard high-fidelity image understanding with tighter resizing
+  limits than `original`.
+- `original` — large, dense, or spatially sensitive images (computer use,
+  localization, OCR, click-accuracy tasks), especially on GPT-5.4 and future
+  models.
+- `low` — only when speed and context efficiency matter more than fine detail;
+  GPT-5.5 resizes aggressively at this setting.
 
 #### Bounding box extraction (OCR / document localization)
 
@@ -668,14 +686,19 @@ Separate persistent personality from per-response writing controls:
 
 #### Phase parameter (API integration)
 
-For long-running, tool-heavy Responses API workflows, preambles, `phase` handling, and assistant-item replay are important.
+For long-running, tool-heavy Responses API workflows, preambles, `phase`
+handling, and assistant-item replay are important.
 
-- `phase` is optional at the API level but highly recommended — explicit round-tripping is strictly better than relying on server-side inference
-- Use `phase: "commentary"` for intermediate user-visible updates, `phase: "final_answer"` for the completed answer
-- Preserve `phase` exactly when replaying prior assistant items so the model can distinguish working commentary from the completed answer
-- Do not add `phase` to user messages
-- If using `previous_response_id`, OpenAI can often recover prior state without manual replay
-- Missing or dropped `phase` can cause preambles to be interpreted as final answers
+- If the application uses `previous_response_id`, OpenAI can often recover
+  prior state without manual replay.
+- If the application manually replays returned output items, preserve `phase`
+  exactly on assistant items and pass it back unchanged.
+- Use `phase: "commentary"` for intermediate user-visible updates and
+  `phase: "final_answer"` for the completed answer when creating or preserving
+  assistant items.
+- Do not add `phase` to user messages.
+- Missing or dropped `phase` can cause preambles to be interpreted as final
+  answers.
 
 #### Long-session compaction
 
