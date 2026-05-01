@@ -32,7 +32,8 @@ scrollback-limit = 134217728
 
 link-url = true
 
-keybind = shift+enter=text:\x1b\r
+keybind = shift+enter=text:\x0a
+keybind = opt+enter=text:\x0a
 keybind = cmd+d=new_split:right
 keybind = cmd+shift+d=new_split:down
 keybind = cmd+opt+arrow_left=goto_split:left
