@@ -149,6 +149,18 @@ xurl search "from:elonmusk" -n 20
 xurl search "#buildinpublic lang:en" -n 15
 ```
 
+**Reading X long-form articles.** When a post contains a long-form X article (the body is just a `t.co` link to `x.com/i/article/...`), `xurl read` returns only the title and a 500-status link — the article body isn't in the default response. Use raw mode and request the `article` tweet field:
+
+```bash
+xurl "/2/tweets/POST_ID?tweet.fields=article"
+```
+
+The response includes `data.article` with:
+- `title` — article headline
+- `preview_text` — short snippet
+- `plain_text` — full article body (this is what `read` is missing)
+- `cover_media`, `media_entities` — embedded image media keys; resolve via `?expansions=attachments.media_keys&media.fields=url`
+
 ### Users, Timeline, Mentions
 
 ```bash
