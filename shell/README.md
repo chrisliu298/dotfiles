@@ -25,6 +25,6 @@ See `.aliases` and `.functions` for the full list. Highlights:
 - **Tmux**: `t`, `ta`, `tl`, `tn`, `tk`, `to` (new/attach to `$PWD` name), `tka` (kill all)
 - **Python/uv**: `sv` (source venv), `us` (sync), `ua` (add)
 - **Claude Code**: `c` (auto-accept), `cc` (continue), `cr` (resume), `cap` (/atomic-push), `cpu` (/push)
-- **Codex**: `x` (default), `xl`/`xm`/`xh` (low/medium/high reasoning), `xc` (resume --last)
+- **Codex**: `x` (default), `xn`/`xl`/`xm`/`xh` (none/low/medium/high reasoning), `xc` (resume --last)
 - **Homebrew**: `bi`/`bu`/`bic` (install/uninstall/cask), `bupd`/`bupg` (update/upgrade)
 - **Functions**: `dfs` (pull + install + sync remote), `rename_device`
