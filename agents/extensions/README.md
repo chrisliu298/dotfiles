@@ -23,7 +23,7 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 | Level | Skills |
 |-------|--------|
 | **medium** | push, atomic-push, recall, jina, rlm, dump, chatgpt, relay |
-| **high** | arxiv-reader, deslop, last-call, update-readme, prompt-engineer, interviewer, citation-assistant, tdd, diagnose, typst, humanizer, runpodctl |
+| **high** | arxiv-reader, deslop, last-call, update-readme, prompt-engineer, interviewer, citation-assistant, tdd, diagnose, typst, humanizer, runpodctl, goal-elicit |
 | **max** | autoresearch, nanorepl, prism, subagent-executor |
 
 ### Published Skills
@@ -72,6 +72,7 @@ These skills live in the Obsidian vault's `_claude/skills/` (not in dotfiles):
 | atomic-push | Atomic commits and push to remote | on |
 | diagnose | Structured debugging: investigate root cause before proposing fixes | manual |
 | dump | Dump session-derived knowledge to Obsidian vault | manual |
+| goal-elicit | Multi-round interview that produces a verifiable Goal Contract before action | on |
 | jina | Fetch web content and search via Jina AI (r.jina.ai / s.jina.ai) | on |
 | pro-relay | Send a prompt to ChatGPT Pro Extended on macmini over SSH | manual |
 | push | Single-commit push to remote | on |
