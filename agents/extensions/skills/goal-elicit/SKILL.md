@@ -1,18 +1,15 @@
 ---
 name: goal-elicit
 description: |
-  Conduct a structured multi-round interview that converts an ambiguous, high-impact,
-  multi-step, delegated, autonomous, or execution-bound request into a verifiable Goal
-  Contract before any planning, coding, subagent dispatch, or Codex /goal invocation.
-  Use when the user asks to "clarify what I actually want", "define a goal/spec/done_when/
-  acceptance criteria", "prepare this for /goal", "make this unambiguous", "interview me
-  before we build", or "figure out what I'm building"; when the request looks like an XY
-  problem; when success cannot yet be tested; or before atomic-push, subagent-executor,
-  plan mode, /goal, or any long-running autonomous run on a request whose scope or
-  verification is not already pinned down. Do NOT use for trivial reversible edits, simple
-  factual questions, routine command execution, ordinary code review, or when the user has
-  already supplied exact output and verification commands. The skill produces GOAL.md and
-  either marks it ready_for_handoff or not_ready_blocked with open decisions listed.
+  Convert an ambiguous, multi-step, or autonomous request into a verifiable Goal Contract
+  (GOAL.md) before any planning, coding, subagent dispatch, or Codex /goal invocation.
+  Use when the user asks to "clarify what I want", "define a goal/spec/done_when/acceptance
+  criteria", "prepare this for /goal", "make this unambiguous", or "interview me before we
+  build"; when the request looks like an XY problem; when success cannot yet be tested; or
+  before atomic-push, subagent-executor, plan mode, /goal, or long autonomous runs whose
+  scope is not pinned down. Do NOT use for trivial edits, factual questions, routine
+  commands, ordinary code review, or when exact output and verification commands are given.
+  Produces GOAL.md marked either ready_for_handoff or not_ready_blocked.
 user-invocable: true
 allowed-tools: Read, Write, Edit, Bash(git:*), Bash(date:*), AskUserQuestion
 ---
