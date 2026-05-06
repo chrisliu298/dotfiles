@@ -103,11 +103,14 @@ stamp_write() {
 
 compute_fingerprint() {
     # Hash HEAD + tracked diff content + status so edits inside already-dirty
-    # files still invalidate the cache stamp.
-    { git -C "$ROOT" rev-parse HEAD 2>/dev/null
-      git -C "$ROOT" status --porcelain=v1 2>/dev/null
-      git -C "$ROOT" diff --no-ext-diff --no-color HEAD -- . 2>/dev/null; } \
-        | md5 2>/dev/null || md5sum 2>/dev/null | cut -d' ' -f1
+    # files still invalidate the cache stamp. Capture once so the md5sum
+    # fallback re-pipes the data instead of hashing empty stdin on Linux.
+    local data
+    data=$({ git -C "$ROOT" rev-parse HEAD 2>/dev/null
+             git -C "$ROOT" status --porcelain=v1 2>/dev/null
+             git -C "$ROOT" diff --no-ext-diff --no-color HEAD -- . 2>/dev/null; })
+    printf '%s' "$data" | md5 2>/dev/null \
+        || printf '%s' "$data" | md5sum 2>/dev/null | cut -d' ' -f1
 }
 
 # Skip fetch if FETCH_HEAD was updated less than 300s ago
