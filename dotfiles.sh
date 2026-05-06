@@ -47,7 +47,6 @@ MANUAL_SKILLS=(
     deslop
     diagnose
     dump
-    humanizer
     interviewer
     last-call
     nanorepl
