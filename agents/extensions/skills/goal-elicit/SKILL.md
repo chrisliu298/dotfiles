@@ -1,15 +1,12 @@
 ---
 name: goal-elicit
 description: |
-  Convert an ambiguous, multi-step, or autonomous request into a verifiable Goal Contract
-  (GOAL.md) before any planning, coding, subagent dispatch, or Codex /goal invocation.
-  Use when the user asks to "clarify what I want", "define a goal/spec/done_when/acceptance
-  criteria", "prepare this for /goal", "make this unambiguous", or "interview me before we
-  build"; when the request looks like an XY problem; when success cannot yet be tested; or
-  before atomic-push, subagent-executor, plan mode, /goal, or long autonomous runs whose
-  scope is not pinned down. Do NOT use for trivial edits, factual questions, routine
-  commands, ordinary code review, or when exact output and verification commands are given.
-  Produces GOAL.md marked either ready_for_handoff or not_ready_blocked.
+  Convert ambiguous, multi-step, or autonomous requests into a verifiable Goal Contract
+  (GOAL.md) before planning, coding, subagent dispatch, or /goal invocation. Use for
+  "clarify what I want", "define done_when/acceptance criteria", "make this unambiguous",
+  XY-problem requests, untestable success, or before atomic-push, subagent-executor, plan
+  mode, /goal, or long autonomous runs whose scope is not pinned. Skip trivial edits,
+  factual questions, routine commands, and ordinary code review.
 user-invocable: true
 allowed-tools: Read, Write, Edit, Bash(git:*), Bash(date:*), AskUserQuestion
 ---

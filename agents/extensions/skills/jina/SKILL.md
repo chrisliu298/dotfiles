@@ -1,13 +1,10 @@
 ---
 description: |
-  Fetch web page content or search the web via Jina AI (r.jina.ai / s.jina.ai).
-  Use this skill when the built-in WebFetch tool fails, returns empty/garbage content,
-  or when fetching from sites that need JS rendering: x.com/Twitter, Notion pages,
-  SPAs, JS-heavy sites, PDFs at a URL, or any page behind Cloudflare. Also use when
-  the user asks to search the web and you need grounded results with full page content
-  (not just snippets). Triggers on "fetch this URL", "read this page", "search for",
-  "what does this page say", or when you get a WebFetch error/empty result.
-  Do NOT use for URLs that WebFetch already handles well (simple static HTML).
+  Fetch web pages or search the web via Jina AI (r.jina.ai / s.jina.ai). Use when WebFetch
+  fails, returns empty/garbage, or for JS-heavy sites: x.com, Notion, SPAs, PDFs at a URL,
+  Cloudflare-gated pages. Also use for grounded web search with full-page content.
+  Triggers on "fetch this URL", "read this page", "search for", or after a WebFetch
+  error. Do NOT use for simple static HTML.
 user-invocable: false
 allowed-tools: Bash(curl:*)
 ---

@@ -1,13 +1,9 @@
 ---
 description: |
-  Execute a multi-task implementation plan by dispatching fresh subagents per task
-  with review gates. Use when the user has multiple mostly-independent tasks and
-  says "execute the plan", "implement these tasks", "dispatch subagents", "run
-  through the plan", or invokes "subagent-executor". Also trigger when the user
-  explicitly asks to start building after a plan was created. Best for tasks
-  with disjoint write scopes that can be specified independently. Do NOT use for
-  single-task work, tightly-coupled changes, or when the user wants to review
-  each task manually.
+  Execute a multi-task plan by dispatching fresh subagents per task with review gates.
+  Use when the user has multiple mostly-independent tasks and says "execute the plan",
+  "implement these tasks", "dispatch subagents", or invokes "subagent-executor". Best
+  for disjoint write scopes. Do NOT use for single-task or tightly-coupled work.
 user-invocable: true
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 ---

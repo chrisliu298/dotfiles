@@ -1,14 +1,11 @@
 ---
 name: xurl
 description: |
-  Interact with X (Twitter) via xurl, the official X API CLI. Use for posting,
-  replying, quoting, deleting, searching, reading timelines/mentions, liking,
-  reposting, bookmarking, following, DMs, media upload, and raw v2 endpoint access.
-  Triggers on "post to X", "tweet this", "reply to [X/Twitter post]", "search X for",
-  "my mentions on X", "X timeline", "send a DM on X", "xurl", or any request that
-  names an X/Twitter post URL (x.com/.../status/...) and asks to read, react to,
-  or engage with it. Do NOT trigger on bare "X" when the user means something else
-  (variable names, unknowns, the letter). Invoke with "xurl".
+  Interact with X (Twitter) via xurl, the official X API CLI: post, reply, quote, delete,
+  search, read timelines/mentions, like, repost, bookmark, follow, DM, upload media, raw
+  v2 endpoints. Triggers on "post to X", "tweet this", "reply to [X post]", "search X for",
+  any x.com/status URL, or "xurl". Do NOT trigger on bare "X" meaning the letter, a
+  variable, or an unknown.
 user-invocable: true
 allowed-tools: Bash(xurl:*)
 ---

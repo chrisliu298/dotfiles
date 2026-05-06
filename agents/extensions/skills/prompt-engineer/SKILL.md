@@ -1,7 +1,10 @@
 ---
 name: prompt-engineer
 description: |
-  Guide for writing and refining prompts for Claude or GPT/Codex models, distilled from each vendor's official best practices. Use this skill whenever the user wants to write a new prompt, improve or debug an existing prompt, or learn model-specific prompting techniques. Also trigger when the user mentions "prompt engineering", "system prompt", "Claude prompt", "GPT prompt", "Codex prompt", "OpenAI prompt", or asks how to get better results from any LLM. Accepts an argument: "claude" for Claude/Anthropic guidance, "gpt" for GPT-5.5 guidance, "codex" for Codex agent guidance.
+  Guide for writing or refining prompts for Claude, GPT, or Codex, distilled from each
+  vendor's official best practices. Use for new prompts, debugging an existing prompt, or
+  "prompt engineering", "system prompt", "Claude/GPT/Codex/OpenAI prompt". Accepts arg:
+  "claude", "gpt", or "codex".
 user-invocable: true
 ---
 

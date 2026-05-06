@@ -1,14 +1,10 @@
 ---
 name: pro-relay
 description: |
-  Send a prompt to ChatGPT Pro Extended via gpt-pro-relay running on macmini, over SSH.
-  Use this whenever the user wants a deep ChatGPT Pro response from a machine that's not their
-  primary Chrome session — triggers on "ask gpt-pro", "send to gpt-pro", "use gpt-pro", "get a
-  Pro Extended take", "ask the deep model", "second opinion from chatgpt pro". Different from
-  the `chatgpt` skill, which drives live Chrome via in-chrome MCP. Returns response on stdout.
-  Resilient to flaky networks via a short-session polling pattern (`ask --no-wait` followed
-  by `fetch --timeout 60` in a retry loop) — no single SSH session ever sits idle for the
-  full 5–20 min reasoning duration.
+  Send a prompt to ChatGPT Pro Extended via gpt-pro-relay on macmini over SSH. Use for
+  "ask gpt-pro", "send to gpt-pro", "use gpt-pro", "Pro Extended take", "ask the deep
+  model", or "second opinion from chatgpt pro". Different from the `chatgpt` skill
+  (live Chrome via MCP). Resilient to flaky networks via short-session polling.
 allowed-tools: Bash(ssh:*), Bash(uuidgen:*), Bash(date:*), Read, Write
 user-invocable: true
 ---
