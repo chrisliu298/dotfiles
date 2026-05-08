@@ -43,5 +43,11 @@ fi
 # =============================================================================
 export QMD_EMBED_MODEL="hf:Qwen/Qwen3-Embedding-0.6B-GGUF/Qwen3-Embedding-0.6B-Q8_0.gguf"
 
+# =============================================================================
+# Claude Code
+# =============================================================================
+export ENABLE_PROMPT_CACHING_1H=1
+export DISABLE_TELEMETRY=1
+
 # Unset CLAUDECODE inside tmux so claude can start fresh
 [[ -n "$TMUX" ]] && unset CLAUDECODE

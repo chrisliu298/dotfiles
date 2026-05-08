@@ -2,7 +2,6 @@
   "env": {
     "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1",
     "CLAUDE_CODE_NO_FLICKER": "1",
-    "CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL": "1",
     "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1"
   },
   "statusLine": {
@@ -18,22 +17,15 @@
     "pyright-lsp@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
-    "code-simplifier@claude-plugins-official": true,
-    "nanoresearch@nanoresearch": false
-  },
-  "extraKnownMarketplaces": {
-    "nanoresearch": {
-      "source": {
-        "source": "directory",
-        "path": "~/.cache/dotfiles-plugins/chrisliu298__nanoresearch"
-      }
-    }
+    "code-simplifier@claude-plugins-official": true
   },
   "effortLevel": "xhigh",
   "showThinkingSummaries": true,
   "skipDangerousModePermissionPrompt": true,
   "autoInstallIdeExtension": false,
-  "voiceEnabled": true,
+  "voice": {
+    "enabled": true
+  },
   "skipAutoPermissionPrompt": true,
   "permissions": {
     "defaultMode": "bypassPermissions"
