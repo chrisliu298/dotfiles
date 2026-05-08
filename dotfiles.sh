@@ -53,7 +53,6 @@ MANUAL_SKILLS=(
     rlm
     runpodctl
     tdd
-    todo
     typst
     update-readme
 )
