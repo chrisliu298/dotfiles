@@ -173,3 +173,53 @@ xc(){ command codex resume --last --yolo -m gpt-5.5 --config model_reasoning_eff
 xr(){ command codex resume --yolo -m gpt-5.5 --config model_reasoning_effort=high "$@"; }
 xu(){ npm install -g @openai/codex@latest "$@"; }
 xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.5 --config model_reasoning_effort=high "${*}"; }
+
+# Show Claude + Codex account emails on local, macmini, and l40s.
+ae() {
+    local _c=$'\033[1;36m' _d=$'\033[2m' _r=$'\033[31m' _0=$'\033[0m'
+    local probe='
+        claude=$(jq -r ".oauthAccount.emailAddress // empty" ~/.claude.json 2>/dev/null)
+        codex=$(jq -r ".tokens.id_token // empty" ~/.codex/auth.json 2>/dev/null \
+            | cut -d. -f2 | tr "_-" "/+" \
+            | { read -r p; pad=$((4 - ${#p} % 4)); [ $pad -lt 4 ] && p="$p$(printf "=%.0s" $(seq 1 $pad))"; printf "%s" "$p"; } \
+            | base64 -d 2>/dev/null | jq -r ".email // empty" 2>/dev/null)
+        printf "claude=%s\ncodex=%s\n" "${claude:--}" "${codex:--}"
+    '
+
+    local tmpdir=$(mktemp -d) hosts=(local)
+    (( IS_MACOS )) && hosts+=(macmini l40s)
+    set +m
+
+    sh -c "$probe" > "$tmpdir/local.log" 2>&1 &
+    if (( IS_MACOS )); then
+        for h in macmini l40s; do
+            command ssh -o ConnectTimeout=10 -o BatchMode=yes "$h" "$probe" > "$tmpdir/$h.log" 2>&1 &
+        done
+    fi
+    wait
+    [[ -o interactive ]] && set -m
+
+    local TW=44 efield=31 first=1
+    local bot_bar=$(printf '─%.0s' $(seq 1 $((TW - 2))))
+    printf '\n'
+    for h in "${hosts[@]}"; do
+        (( first )) || printf '\n'
+        first=0
+
+        local claude=$(sed -n 's/^claude=//p' "$tmpdir/$h.log")
+        local codex=$(sed -n 's/^codex=//p' "$tmpdir/$h.log")
+        local top_bar=$(printf '─%.0s' $(seq 1 $((TW - 5 - ${#h}))))
+
+        printf '  %s╭─%s %s%s%s %s%s╮%s\n' "$_d" "$_0" "$_c" "$h" "$_0" "$_d" "$top_bar" "$_0"
+        for prov in claude codex; do
+            local val="" color="$_0"
+            [[ "$prov" == "claude" ]] && val="$claude" || val="$codex"
+            [[ -z "$val" ]] && { val="(none)"; color="$_r"; }
+            printf '  %s│%s  %s%-6s%s  %s%-*s%s %s│%s\n' \
+                "$_d" "$_0" "$_d" "$prov" "$_0" "$color" "$efield" "$val" "$_0" "$_d" "$_0"
+        done
+        printf '  %s╰%s╯%s\n' "$_d" "$bot_bar" "$_0"
+    done
+    printf '\n'
+    rm -rf "$tmpdir"
+}
