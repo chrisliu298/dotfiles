@@ -16,7 +16,6 @@ PUBLISH_SKILLS=(
     "note-gen"
     "prism"
     "prompt-engineer"
-    "recall"
     "relay"
     "rlm"
     "vault-linker"

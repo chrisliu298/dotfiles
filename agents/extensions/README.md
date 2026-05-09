@@ -22,7 +22,7 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 
 | Level | Skills |
 |-------|--------|
-| **medium** | push, atomic-push, recall, jina, rlm, dump, chatgpt, relay |
+| **medium** | push, atomic-push, jina, rlm, dump, chatgpt, relay |
 | **high** | arxiv-reader, deslop, last-call, update-readme, prompt-engineer, interviewer, citation-assistant, tdd, diagnose, typst, humanizer, runpodctl, goal-elicit |
 | **max** | autoresearch, nanorepl, prism, subagent-executor |
 
@@ -38,7 +38,6 @@ Each local skill sets an `effort` frontmatter key to control how long the model 
 | [nanorepl](https://github.com/chrisliu298/nanorepl) | Minimal reimplementations following Karpathy's nano philosophy | manual |
 | [prism](https://github.com/chrisliu298/prism) | Multi-perspective review through parallel agent deliberation | on |
 | [prompt-engineer](https://github.com/chrisliu298/prompt-engineer) | Write and refine prompts for Claude or Codex | on |
-| [recall](https://github.com/chrisliu298/recall) | Search past sessions and Obsidian notes for context | on |
 | [relay](https://github.com/chrisliu298/relay) | Bidirectional cross-agent relay between Claude Code and Codex | on |
 | [rlm](https://github.com/chrisliu298/rlm) | RLM-inspired externalize-and-recurse for data-scale tasks | manual |
 | [chatgpt](https://github.com/chrisliu298/chatgpt) | Send prompts to ChatGPT via Chrome and collect responses | manual |
