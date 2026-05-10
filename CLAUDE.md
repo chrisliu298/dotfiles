@@ -42,6 +42,8 @@ Never edit in `~/.claude/skills/` or `~/.codex/skills/` — those are symlinks. 
 - **Own skills** (`agents/extensions/skills/`): Edit in this repo — this is the single source of truth. Published GitHub repos are synced copies via `./dotfiles.sh publish`.
 - **Third-party skills** (cloned from GitHub): Edit in the source repo or fork
 - **Best practices**: Read `agents/extensions/references/skill-best-practices.md` before creating or improving skills
+- **Verify vendor guidance**: Before updating skills with vendor/model guidance, check against official current docs—don't preserve stale model names or deprecated API parameters.
+- **Validate referenced paths**: When skill docs reference installed or symlinked paths, verify they exist after `./dotfiles.sh`.
 
 Run `./dotfiles.sh` after changes to re-sync symlinks.
 
