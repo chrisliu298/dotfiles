@@ -166,7 +166,9 @@ Same `run_id` with a **different** prompt exits 2 with `run_id_conflict` — gpt
 
 ## Concurrency
 
-Two simultaneous `ask` calls to macmini serialize on a file lock — the second worker waits for the first to release Chrome before launching its own. From the caller's perspective, this just looks like the second run took longer than usual. The wait is recorded in `worker.stderr` as `{"stage":"lock_acquired","waited_secs":N}`. Pro Extended runs are 5–20 min, so an extra wait is in the same magnitude — don't add caller-side timeouts shorter than that.
+Up to `GPT_PRO_MAX_PARALLEL` (default 3) `ask` calls to macmini run in parallel — each worker gets its own tab in a single shared Chrome process. Beyond the cap, additional workers queue on a file-lock semaphore in `~/.gpt-pro/slots/` and wait for a slot to free up. The wait is recorded in `worker.stderr` as `{"stage":"slot_queued","max_parallel":N}` followed by `{"stage":"slot_acquired","slot_id":I,"waited_secs":N}`. Pro Extended runs are 5–20 min each, so a queued run can be in that same magnitude — don't add caller-side timeouts shorter than that.
+
+Chrome stays alive between runs (no per-call launch cost after the first). Tear it down explicitly with `ssh macmini gpt-pro-relay close-chrome` — it refuses by default if any worker is in flight, pass `--force` to kill anyway. Raising `GPT_PRO_MAX_PARALLEL` above the default is a knob, not a free upgrade: parallel bursts on one ChatGPT Pro session are an account-side anti-abuse signal. If `network.json` starts showing 429s, captcha redirects, or unexplained `needs_reauth` after parallel use, drop it back to `1`.
 
 ## Errors
 
@@ -204,7 +206,7 @@ The terminal stderr JSON's `reason` field tells you what failed:
 - `pre-send.png`, `streaming-NNN.png`, `final.png`, `error-*.png`
 - `final.html`, `network.json`
 - `worker.stdout` — detached worker's stdout (usually empty)
-- `worker.stderr` — **structured JSONL stage trace**: one line per stage (`start`, `lock_acquired`, `chrome_launched`, `logged_in`, `model_selected`, `prompt_typed`, `sent`, `completion_detected`, `extracted`, `finished`, plus `error` / `orphan_kill_*`). When something fails mid-run, this is the fastest path to the failure point.
+- `worker.stderr` — **structured JSONL stage trace**: one line per stage (`start`, `slot_queued`/`slot_acquired`, `chrome_cdp_ready`/`chrome_connected`/`chrome_activated`, `logged_in`, `model_verified`, `prompt_typed`, `sent`, `extracted`, `finished`, plus `error` / `orphan_kill_*` / `*_skipped`). When something fails mid-run, this is the fastest path to the failure point — the last stage before the `error` line tells you where it died.
 
 Reach for them via `ssh macmini cat <run_dir>/<file>` or `ssh macmini ls <run_dir>` when diagnosing.
 
