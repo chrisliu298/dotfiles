@@ -200,7 +200,9 @@ $ accent(x, dot) $     // ẋ
 $ accent(x, macron) $  // x̄  — or $overline(x)$
 ```
 
-Common accent shorthands: `hat(x)`, `tilde(x)`, `dot(x)`, `dot.double(x)`, `macron(x)`, `vec(x)` (arrow accent).
+Common accent shorthands: `hat(x)`, `tilde(x)`, `dot(x)`, `dot.double(x)`, `macron(x)`, `arrow(x)` (for `\vec{x}`).
+
+Do not use `vec(x)` for an arrow accent — `vec(...)` constructs a column vector.
 
 ### op (custom operators)
 

@@ -97,7 +97,8 @@ Typst is Unicode-native — no `fontenc`/`inputenc` packages needed.
 | `\bar{x}` | `$ macron(x) $` (NOT `bar`) |
 | `\overline{x}` | `$ overline(x) $` |
 | `\hat{x}`, `\dot{x}`, `\vec{x}` | `$ hat(x) $`, `$ dot(x) $`, `$ arrow(x) $` |
-| `\partial` | `$ partial $` (NOT `diff` — `diff` is the differential d) |
+| `\partial` | `$ partial $` (∂). `diff` is a deprecated alias since Typst 0.14 |
+| `\,dx` (differential d) | `$ dif x $` (upright differential in integrals/derivatives) |
 | `\cdot` | `$ dot.c $` (NOT `dot` — `dot` is the accent) |
 | `\times` | `$ times $` |
 | `\leq`, `\geq`, `\neq` | `$ <= $`, `$ >= $`, `$ != $` |
@@ -107,7 +108,7 @@ Typst is Unicode-native — no `fontenc`/`inputenc` packages needed.
 | `\eqref{eq:x}` | `@eq:x` |
 | `\nonumber` | Numbering is off by default; enable with `#set math.equation(numbering: ...)` |
 
-Most Greek letters and symbols use the same name without backslash: `alpha`, `beta`, `infinity`, `nabla`, `forall`, `exists`, `subset`, `union`, `sect`.
+Most Greek letters and symbols use the same name without backslash: `alpha`, `beta`, `infinity`, `nabla`, `forall`, `exists`, `subset`, `union`, `inter` (`sect` is a deprecated alias in 0.14+; use `inter` for ∩, `section` for the § sign).
 
 ## Figures and images
 

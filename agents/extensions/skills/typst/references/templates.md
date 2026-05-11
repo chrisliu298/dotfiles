@@ -281,7 +281,7 @@ Use `import` for functions/templates. Use `include` for content (chapters, secti
 ### Presentation (with touying package)
 
 ```typst
-#import "@preview/touying:0.5.0": *
+#import "@preview/touying:0.7.3": *   // check Universe for current version
 #import themes.simple: *
 
 #show: simple-theme.with(aspect-ratio: "16-9")
@@ -324,6 +324,287 @@ In multi-file projects, shift heading levels in included files:
 #include "chapter1.typ"
 ```
 
+## Quick patterns
+
+Small recipes that are common in templates and ad-hoc documents.
+
+### Paragraph spacing
+
+```typst
+// leading = between lines within a paragraph
+// spacing = between paragraphs
+#set par(leading: 0.65em, spacing: 1.2em)
+
+// "Double spacing" for homework/papers
+#set par(leading: 1.3em, spacing: 1.3em)
+
+// First-line indent (all paragraphs including after headings)
+#set par(first-line-indent: (amount: 1.8em, all: true))
+```
+
+### List and enum customization
+
+```typst
+#set enum(numbering: "a)")        // a) b) c)
+#set enum(numbering: "(1)")       // (1) (2) (3)
+#set enum(numbering: "i.")        // i. ii. iii.
+#set enum(numbering: "1.a)")      // nested: top 1., inner a)
+#set enum(start: 3)               // begin at 3
+#set list(marker: ([--], [\*]))   // per nesting level — escape * to avoid strong parsing
+```
+
+### Footnotes
+
+```typst
+See here#footnote[Footnote text.]
+
+#set footnote(numbering: "*")     // symbols instead of numbers
+#set footnote.entry(
+  separator: line(length: 30%, stroke: 0.5pt),
+  gap: 0.5em,
+)
+```
+
+### Cross-reference customization
+
+```typst
+#set heading(supplement: [Sec.])  // @intro → "Sec. 1"
+#set figure(supplement: [Fig.])   // @fig:x → "Fig. 1"
+@intro[Chapter]                   // one-off: "Chapter 1"
+```
+
+### Citation forms
+
+```typst
+@smith2024                              // [1] or (Smith, 2024); style-dependent
+#cite(<smith2024>, form: "prose")       // Smith (2024)
+#cite(<smith2024>, form: "author")      // Smith
+#cite(<smith2024>, form: "year")        // 2024
+@smith2024[pp.~1--10]                   // with supplement
+
+// Use #cite(label("...")) when the key contains characters that <label> can't parse.
+```
+
+### Bibliography
+
+```typst
+// Hayagriva YAML (Typst-native — preferred for non-trivial entry types)
+#bibliography("refs.yml", style: "apa")
+
+// BibLaTeX .bib (works out of the box — no biber/biblatex required)
+#bibliography("refs.bib", style: "ieee")
+```
+
+Built-in CSL styles include `"ieee"`, `"apa"`, `"chicago-author-date"`,
+`"chicago-notes"`, `"mla"`, `"nature"`, `"acm"`, `"vancouver"`,
+`"harvard-cite-them-right"`. Pass a path to a `.csl` file for anything else.
+
+### Custom numbered blocks (theorems, definitions)
+
+Use `figure(kind:)` as the default so `@thm:...` references work. Manual
+`counter()` + `block` is fine only when the block does not need referencing.
+
+```typst
+#let theorem(body, title: none) = figure(
+  kind: "theorem",
+  supplement: [Theorem],
+  numbering: "1",
+  caption: none,
+  block(
+    width: 100%, inset: 10pt,
+    stroke: (left: 2pt + navy),
+    fill: navy.lighten(95%),
+  )[
+    #if title != none [*#title.* ]
+    #body
+  ],
+)
+
+#show figure.where(kind: "theorem"): it => block[
+  *#it.supplement #context it.counter.display(it.numbering).* #it.body
+]
+
+#theorem[$a^2 + b^2 = c^2$] <thm:pyth>
+See @thm:pyth.
+```
+
+## Safe-copy skeletons
+
+Complete, compileable starting points. Copy one, replace the placeholders, and
+add content. They compile under Typst 0.14.2 except for any image paths you add
+yourself.
+
+### article
+
+```typst
+#set document(title: [Title], author: ("Author Name",))
+#set text(font: "Libertinus Serif", size: 11pt, lang: "en")
+#set par(justify: true, leading: 0.65em)
+#set page("us-letter", margin: (x: 1in, y: 1in), numbering: "1")
+#set heading(numbering: "1.1")
+#set math.equation(numbering: "(1)")
+
+#align(center)[
+  #text(size: 18pt, weight: "bold")[Title] \
+  #v(0.4em)
+  Author Name · #datetime.today().display("[month repr:long] [day], [year]")
+]
+#v(1em)
+
+#align(center)[
+  #block(width: 80%)[
+    *Abstract.* One-paragraph summary of the work.
+  ]
+]
+#v(1em)
+
+= Introduction
+Body text. Cite with @key (define a bibliography below).
+
+= Methods
+$ E = m c^2 $ <eq:einstein>
+
+See @eq:einstein.
+
+= Results
+#figure(
+  rect(width: 60%, height: 3cm, fill: luma(230))[plot placeholder],
+  caption: [Caption goes here.],
+) <fig:plot>
+
+= Conclusion
+Body text.
+
+// Uncomment when a bibliography is available:
+// #bibliography("refs.bib", style: "ieee")
+```
+
+### homework
+
+```typst
+#set document(title: [Homework N], author: ("Your Name",))
+#set text(font: "Libertinus Serif", size: 11pt, lang: "en")
+#set page("us-letter", margin: 1in, header: align(right)[Your Name · Course])
+#set par(leading: 0.7em)
+#set enum(numbering: "1.")
+#set math.equation(numbering: "(1)")
+
+#align(center)[
+  #text(size: 14pt, weight: "bold")[Course · Homework N] \
+  Your Name · #datetime.today().display("[year]-[month]-[day]")
+]
+#v(1em)
+
+#let problem(n, body) = [
+  *Problem #n.* #body
+]
+
+#problem(1)[
+  Statement of the first problem.
+
+  *Solution.* Working below.
+  $ x = (-b plus.minus sqrt(b^2 - 4 a c)) / (2 a) $
+]
+
+#problem(2)[
+  Statement of the second problem.
+
+  *Solution.* Working below.
+]
+```
+
+### cv
+
+```typst
+#set document(title: [Your Name — CV], author: ("Your Name",))
+#set text(font: "Libertinus Serif", size: 10.5pt, lang: "en")
+#set page("us-letter", margin: (x: 0.75in, y: 0.75in), numbering: none)
+#set par(leading: 0.55em)
+#show heading.where(level: 1): set text(size: 14pt, weight: "bold")
+#show heading.where(level: 1): set block(above: 1em, below: 0.4em)
+#show heading.where(level: 1): it => {
+  it.body
+  v(-0.2em)
+  line(length: 100%, stroke: 0.6pt)
+}
+
+#align(center)[
+  #text(size: 20pt, weight: "bold")[Your Name] \
+  #v(0.2em)
+  City · email\@example.com · #link("https://example.com")[example.com]
+]
+#v(0.5em)
+
+= Experience
+
+#grid(columns: (1fr, auto), gutter: 4pt,
+  [*Role* — Company], [#h(1fr) 2024 — present],
+)
+- Bullet describing impact.
+- Bullet describing impact.
+
+#v(0.5em)
+
+#grid(columns: (1fr, auto), gutter: 4pt,
+  [*Previous Role* — Earlier Company], [#h(1fr) 2022 — 2024],
+)
+- Bullet describing impact.
+
+= Education
+
+#grid(columns: (1fr, auto), gutter: 4pt,
+  [*B.S. in Major* — University], [#h(1fr) 2018 — 2022],
+)
+```
+
+### letter
+
+```typst
+#set document(title: [Letter], author: ("Your Name",))
+#set text(font: "Libertinus Serif", size: 11pt, lang: "en")
+#set page("us-letter", margin: (x: 1in, y: 1in))
+#set par(justify: true, leading: 0.65em)
+
+#align(right)[
+  Your Name \
+  Street Address \
+  City, ST ZIP
+]
+
+#v(1em)
+
+#datetime.today().display("[month repr:long] [day], [year]")
+
+#v(1em)
+
+Recipient Name \
+Recipient Title \
+Organization \
+Address
+
+#v(1em)
+
+Dear Recipient Name,
+
+Body of the letter. Replace this paragraph with the actual message.
+
+Closing paragraph stating the requested next step.
+
+#v(1em)
+
+Sincerely,
+
+#v(2em)
+Your Name
+```
+
 ## Packages from Typst Universe
 
-Use `#import "@preview/name:version"` to import community packages. Browse at https://typst.app/universe/. Common ones: `cetz` (drawing), `touying` (presentations), `unify` (units), `glossarium` (glossaries). Initialize a project from a template: `typst init @preview/charged-ieee`.
+Use `#import "@preview/name:version"` to import community packages. Browse at
+<https://typst.app/universe/>. Common ones: `cetz` (drawing), `touying`
+(presentations), `unify` (units), `glossarium` (glossaries), `lilaq` (plotting),
+`subpar` (sub-figures), `oxifmt` (string formatting). Initialize a project from
+a template: `typst init @preview/charged-ieee`.
+
+**Always check the package's Universe page for the current version before
+pinning.** Versions change quickly and APIs sometimes change with them.

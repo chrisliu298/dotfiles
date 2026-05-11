@@ -1,27 +1,67 @@
 ---
 description: |
-  How to write Typst documents correctly and idiomatically. Use this skill whenever the user
-  asks you to write, generate, edit, or convert Typst (.typ) files — including academic papers,
-  reports, CVs, letters, presentations, homework, or any typeset document. Also use when the
-  user mentions Typst by name, asks to convert LaTeX to Typst, or wants help with Typst syntax,
-  math equations, tables, templates, or styling. If the user says "write this up nicely" or
-  "make a PDF" and Typst is a reasonable choice, suggest it.
+  Write, edit, debug, or convert Typst (.typ) documents — papers, reports, CVs, letters,
+  slides, homework — or migrate from LaTeX. Trigger on Typst, ".typ", Typst math/tables/
+  templates/packages, or explicit LaTeX-to-Typst conversion. Do NOT trigger for plain
+  Markdown, generic "make a PDF" requests, or LaTeX edits that don't involve Typst.
 user-invocable: true
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash(typst:*), Bash(ls:*), Bash(mkdir:*), Bash(find:*)
 ---
 
 # Writing Typst
 
-Typst is a modern typesetting language that compiles to PDF. It replaces LaTeX with cleaner syntax, millisecond compilation, and a coherent design. This skill covers the patterns and gotchas you need to write Typst well.
+Typst is a modern typesetting language that compiles primarily to PDF (with experimental HTML export). It replaces LaTeX with cleaner syntax, millisecond compilation, and a coherent design.
+
+Verified against **Typst 0.14.2**. For 0.13.x targets, avoid `title()`, `math.equation(alt:)`, `--pdf-standard ua-1`, and `frac.style`; check `typst --version` first.
+
+## Verify before handoff
+
+After writing or editing any `.typ` file, compile it:
+
+```sh
+typst compile main.typ                      # produces main.pdf, surfaces errors
+typst compile --root . main.typ out.pdf     # multi-file project
+```
+
+If compilation fails, read the diagnostic (line + column + clear message) and fix the source — do not guess around errors. Common failure causes:
+
+- `can only be used when context is known` → wrap in `#context { ... }` (counters, `query`, `locate`, `measure`)
+- `unexpected hash` → you `#`-prefixed inside a code block (see gotcha #10)
+- `expected expression` → forgot to parenthesize a binary op after `#` (gotcha #11)
+- `cannot reference ...` → element has no supplement (gotcha #12)
+- `unclosed delimiter` → missing `]`, `)`, or `}`
+- `file not found` → paths are relative to the `.typ` file, not the CWD
+
+If `typst` is not available, say so and stop — don't claim the file is correct.
 
 ## Reference files
 
-This skill has deeper reference material in `references/`. Consult them as needed:
+Read references only when the task needs them:
 
-- `references/math.md` — Math mode: equations, symbols, alignment, matrices, and operators
-- `references/tables-layout.md` — Tables, grids, figures, page setup, and multi-column layout
-- `references/templates.md` — Template authoring, document structure, and reusable components
-- `references/latex-cheatsheet.md` — LaTeX-to-Typst quick mapping for common commands
+- `references/math.md` — nontrivial equations, aligned derivations, matrices, cases, operators, equation numbering
+- `references/tables-layout.md` — tables, grids, figures, images, page setup, multi-column, layout primitives
+- `references/templates.md` — reusable templates, title pages, letters, CVs, presentations, outlines, appendices, copy-paste skeletons
+- `references/latex-cheatsheet.md` — converting LaTeX commands, environments, citations, figures, tables, macros
+
+## Pick the document shape first
+
+Before writing syntax, decide what kind of document the user wants. Each shape
+has different conventions; mixing them produces wrong-feeling output.
+
+| User wants… | Defaults | See |
+|---|---|---|
+| Academic paper / report | metadata, numbered headings, justified par, abstract, bibliography | `references/templates.md#article` |
+| Homework set | numbered problems, equation numbering, plain page header | `references/templates.md#homework` |
+| CV / resume | unnumbered headings, no page numbering, dense grid, no justified prose | `references/templates.md#cv` |
+| Letter / memo | sender, date, recipient, subject; no headings | `references/templates.md#letter` |
+| Slides | use a presentation package (e.g. `touying`), not faked pages | `references/templates.md#presentation-with-touying-package` |
+| LaTeX conversion | convert structure → math → tables/figures → macros, compile after each phase | `references/latex-cheatsheet.md` |
+
+Start from a known-good skeleton and trim/extend; do not assemble preambles from
+scratch when one already exists in `templates.md`. Compileable starting files
+also live under `examples/` (`article.typ`, `cv.typ`, `letter.typ`,
+`homework.typ`). After making non-trivial edits to the skill, run
+`scripts/check-examples.sh` to compile every example and catch regressions.
 
 ## The three modes
 
@@ -166,10 +206,16 @@ Replace an element with custom content. The function receives the element as its
 #show heading.where(level: 1): it => {
   set text(navy, size: 16pt)
   block(below: 1em)[
-    #counter(heading).display(it.numbering) #smallcaps(it.body)
+    #if it.numbering != none [
+      #counter(heading).display(it.numbering)~
+    ]
+    #smallcaps(it.body)
   ]
 }
 ```
+
+`it.numbering` is `none` unless `#set heading(numbering: ...)` is active — guard
+the `counter(...).display()` call or it will fail when numbering is off.
 
 ### Text and regex show rules
 
@@ -269,8 +315,12 @@ When a function's last parameter accepts content, you can pass it after the pare
 
 ```typst
 #show heading.where(level: 2): set text(blue)
-#counter(figure.where(kind: table)).display()
+#context counter(figure.where(kind: table)).display()
 ```
+
+`counter(...).get()`, `.display()`, `.at()`, `.final()`, `query()`, `locate()`,
+and `measure()` are contextual — wrap them in `#context { ... }` unless they
+already sit inside a contextual callback (page header/footer, show rule body).
 
 ## Control flow
 
@@ -282,10 +332,20 @@ When a function's last parameter accepts content, you can pass it after the pare
 
 ### Loops
 
-Loop bodies **join** their results into content — they do NOT produce an array:
+Loop bodies **join** each iteration's value into one result. The shape follows
+what the body produces:
+
+- Body returns content → loop result is content.
+- Body returns a one-element array `(x,)` → results concatenate into an array.
+- For pure data transforms, prefer `.map()` / `.filter()` / `.fold()`; for
+  emitting document content, `for` is idiomatic.
 
 ```typst
+// Body emits content — result joins as content
 #for name in ("Alice", "Bob") [Hello, #name! \ ]
+
+// Body emits arrays — result joins into an array
+#let doubled = for n in (1, 2, 3) { (2 * n,) }   // (2, 4, 6)
 
 // Dictionary iteration with destructuring
 #for (key, value) in (name: "Alice", age: 30) [#key: #value \ ]
@@ -468,14 +528,19 @@ Format components: `[year]`, `[month]`, `[day]`, `[hour]`, `[minute]`, `[weekday
 #import "utils.typ": *
 
 // Import from Typst Universe (community packages)
-#import "@preview/cetz:0.4.1"
-#import "@preview/touying:0.5.0": *
+#import "@preview/cetz:0.5.2"
+#import "@preview/touying:0.7.3": *
 
 // Include file content directly (not as module)
 #include "chapter1.typ"
 ```
 
 Package names follow `@namespace/name:version`. The `preview` namespace is the community package registry.
+
+**Version policy.** Universe package versions move quickly. Preserve the
+project's existing pins unless the user asks to upgrade; for new imports,
+check the package page at <https://typst.app/universe/> before pinning.
+The versions shown here may already be stale.
 
 ## Data loading
 
@@ -506,11 +571,15 @@ If your equation appears inline when you wanted it centered on its own line, add
 In math mode, single letters are variables, but multi-letter sequences are interpreted as function/symbol names:
 
 ```typst
-$ sin(x) $     // sin is a built-in operator — correct
-$ diff $       // renders as the differential symbol, not "d·i·f·f"
-$ "word" $     // use quotes for literal multi-letter text
+$ sin(x) $              // sin is a built-in operator — correct
+$ partial f $           // ∂ — partial differential
+$ integral_a^b f(x) dif x $   // dif = upright differential d in integrals
+$ "word" $              // use quotes for literal multi-letter text
 $ x "if" y > 0 $
 ```
+
+Note: `diff` is a deprecated alias for `partial` in Typst 0.14+. Use `partial`
+for ∂ and `dif` for the upright differential d in derivatives and integrals.
 
 ### 3. No backslash commands
 
@@ -594,17 +663,21 @@ Value: #1 + 2       // WRONG — only #1 is the expression
 
 Use `;` to force-end a code expression before following markup: `#let n = 3; The value is #n.`
 
-### 12. Labels only work on referenceable elements
+### 12. Labels attach anywhere; only `@label` references need referenceable elements
 
-`@label` produces "Section 1" or "Figure 2" only for elements with numbering/supplement (headings, figures, equations, footnotes). For arbitrary labeled content, use `#link(<label>)` instead:
+Labels can attach to any element. What's restricted is **textual references**:
+`@label` produces automatic text ("Section 1", "Figure 2") only for elements
+with a supplement and numbering — headings, figures, equations, footnotes. For
+arbitrary labeled content, use `#link(<label>)[text]` or a page reference.
 
 ```typst
 = Intro <intro>
-@intro              // works: "Section 1"
+@intro                          // works: "Section 1"
 
 #block[Note] <note>
-// @note            // WRONG: block has no supplement
-#link(<note>)[see note]  // RIGHT: use link for arbitrary labels
+// @note                        // WRONG: block has no supplement
+#link(<note>)[see note]         // arbitrary text linking to the label
+#ref(<note>, form: "page")      // page number where <note> appears
 ```
 
 ### 13. Custom blocks need `figure(kind:)` to be cross-referenceable
@@ -635,171 +708,23 @@ Once you set `footer:`, the `numbering:` parameter no longer displays automatica
 
 ## Idiomatic patterns
 
-### Document preamble
+For full template recipes (document preamble, paragraph spacing, list/enum
+customization, footnotes, cross-reference and citation forms, theorems,
+bibliographies, page header/footer), see `references/templates.md`. Copy-paste
+skeletons for article / homework / CV / letter live there too.
 
-```typst
-#set document(title: "My Paper", author: "Author Name")
-#set text(font: "New Computer Modern", size: 11pt, lang: "en")
-#set par(justify: true, leading: 0.65em)
-#set page("a4", margin: auto, numbering: "1")
-#set heading(numbering: "1.1")
-
-// Optional: style headings, code blocks, etc.
-#show heading.where(level: 1): set text(size: 16pt)
-#show raw.where(block: true): block.with(fill: luma(240), inset: 10pt, radius: 4pt)
-```
+For two-column layout, figures with captions, page setup, and table caption
+position, see `references/tables-layout.md`.
 
 ### Accessibility checklist
 
 For any serious document:
 
-- `#set document(title: "...", author: "...")` — required for PDF metadata
+- `#set document(title: "...", author: "...")` — required for PDF metadata; Typst 0.14+ also exposes the semantic `#title()` element
 - `#set text(lang: "en")` — affects hyphenation, smart quotes, screen readers
 - `image("...", alt: "description")` — alt text for images
+- `figure(alt: "...")` only when the figure body is **not** itself accessible. Do not set `alt:` on a figure that already contains an image with `alt:`, a table, or code — it hides the accessible content from assistive tech.
 - Use `table.header` for table headers (not just bold text)
 - Use `figure` for numbered content (not manual counters + blocks)
+- For PDF/UA validation, compile with `typst compile main.typ out.pdf --pdf-standard ua-1`. Typst 0.14+ emits tagged PDFs by default; disable only with `--no-pdf-tags` if explicitly requested.
 - Don't put essential content only in headers/footers (invisible to assistive tech)
-
-### Paragraph spacing
-
-```typst
-// leading = between lines WITHIN a paragraph
-// spacing = between paragraphs
-#set par(leading: 0.65em, spacing: 1.2em)
-
-// "Double spacing" for homework/papers
-#set par(leading: 1.3em, spacing: 1.3em)
-
-// First-line indent (all paragraphs including after headings)
-#set par(first-line-indent: (amount: 1.8em, all: true))
-```
-
-### List and enum customization
-
-```typst
-#set enum(numbering: "a)")        // a) b) c)
-#set enum(numbering: "(1)")       // (1) (2) (3)
-#set enum(numbering: "i.")        // i. ii. iii.
-#set enum(numbering: "1.a)")      // nested: top 1., inner a)
-#set enum(start: 3)               // begin at 3
-#set list(marker: ([--], [*]))    // per nesting level
-```
-
-### Footnotes
-
-```typst
-See here#footnote[Footnote text.]
-
-#set footnote(numbering: "*")     // symbols instead of numbers
-#set footnote.entry(
-  separator: line(length: 30%, stroke: 0.5pt),
-  gap: 0.5em,
-)
-```
-
-### Cross-reference customization
-
-```typst
-#set heading(supplement: [Sec.])  // @intro → "Sec. 1"
-#set figure(supplement: [Fig.])   // @fig:x → "Fig. 1"
-@intro[Chapter]                   // one-off: "Chapter 1"
-```
-
-### Citation forms
-
-```typst
-@smith2024                              // [1] or (Smith, 2024)
-#cite(<smith2024>, form: "prose")       // Smith (2024)
-#cite(<smith2024>, form: "author")      // Smith
-#cite(<smith2024>, form: "year")        // 2024
-@smith2024[pp.~1--10]                   // with supplement
-```
-
-### Using a template
-
-```typst
-#import "template.typ": conf
-
-#show: conf.with(
-  title: [My Paper Title],
-  authors: (
-    (name: "Alice", affiliation: "MIT", email: "alice@mit.edu"),
-  ),
-  abstract: [This paper presents...],
-)
-
-= Introduction
-...
-```
-
-### Custom numbered blocks (theorems, definitions)
-
-```typst
-#let theorem-counter = counter("theorem")
-
-#let theorem(body, title: none) = {
-  theorem-counter.step()
-  block(
-    width: 100%, inset: 10pt,
-    stroke: (left: 2pt + navy),
-    fill: navy.lighten(95%),
-  )[
-    *Theorem #context theorem-counter.display()#if title != none [: #title]*
-    #parbreak() #body
-  ]
-}
-```
-
-### Two-column layout
-
-```typst
-// Whole document
-#set page(columns: 2)
-
-// Just a section
-#columns(2)[
-  Left column content.
-  #colbreak()
-  Right column content.
-]
-```
-
-### Figures with captions
-
-```typst
-#figure(
-  image("plot.png", width: 80%),
-  caption: [Experimental results showing...],
-) <fig:results>
-
-As shown in @fig:results, ...
-```
-
-For table figures, captions go on top by convention:
-
-```typst
-#show figure.where(kind: table): set figure.caption(position: top)
-```
-
-### Page header/footer
-
-```typst
-#set page(
-  header: context {
-    if counter(page).get().first() > 1 [
-      _My Document_ #h(1fr) #counter(page).display()
-    ]
-  },
-)
-```
-
-### Bibliography
-
-```typst
-// At end of document
-#bibliography("refs.bib", style: "ieee")
-
-// Cite in text
-As shown by @smith2024, ...
-#cite(<smith2024>, form: "prose")  // "Smith (2024) showed..."
-```

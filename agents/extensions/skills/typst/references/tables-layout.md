@@ -387,9 +387,11 @@ These transform content visually but do NOT change layout — surrounding elemen
 #layout(size => [Available: #size.width × #size.height])
 
 // Responsive: adapt based on available space
-#layout(size => {
-  if size.width > 400pt { columns(2)[#body] } else { body }
+#let responsive-columns(body) = layout(size => {
+  if size.width > 400pt { columns(2, body) } else { body }
 })
+
+#responsive-columns[#lorem(80)]
 ```
 
 `measure` without width constraints assumes infinite space — measured dimensions may differ from final layout.
