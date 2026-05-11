@@ -1,17 +1,24 @@
 ---
 name: pro-relay
 description: |
-  Send a prompt to ChatGPT Pro Extended via gpt-pro-relay on macmini over SSH. Use for
-  "ask gpt-pro", "send to gpt-pro", "use gpt-pro", "Pro Extended take", "ask the deep
-  model", or "second opinion from chatgpt pro". Different from the `chatgpt` skill
-  (live Chrome via MCP). Resilient to flaky networks via short-session polling.
-allowed-tools: Bash(ssh:*), Bash(uuidgen:*), Bash(date:*), Read, Write
+  Send a prompt to ChatGPT Pro Extended via gpt-pro-relay on macmini — over SSH from any
+  other machine, or directly when invoked on macmini itself. Use for "ask gpt-pro", "send
+  to gpt-pro", "use gpt-pro", "Pro Extended take", "ask the deep model", or "second
+  opinion from chatgpt pro". Different from the `chatgpt` skill (live Chrome via MCP).
+  Resilient to flaky networks via short-session polling.
+allowed-tools: Bash(ssh:*), Bash(gpt-pro-relay:*), Bash(uuidgen:*), Bash(date:*), Bash(hostname:*), Read, Write
 user-invocable: true
 ---
 
 # pro-relay
 
-One prompt in, one response out. The browser automation runs on macmini behind SSH against a dedicated logged-in profile. The work is done by a detached worker so SSH drops don't kill it — you can reconnect and `fetch` the result.
+One prompt in, one response out. The browser automation runs on macmini against a dedicated logged-in profile. The work is done by a detached worker so transport drops (or parent death) don't kill it — you can reconnect and `fetch` the result.
+
+## Pick the right transport: local vs SSH
+
+**Run `hostname -s` first.** If it returns `macmini`, you're already on the host — skip SSH entirely and use the [Direct invocation on macmini](#direct-invocation-on-macmini) form below. Wrapping a local call in `ssh macmini ...` will fail (there's no sshd loopback configured for the agent's identity, and even if there were, the SSH-drop polling machinery is pure overhead for a local call).
+
+From any other machine (l40s, macbookpro16, …), use the [SSH polling pattern](#the-command) — that's what the rest of this doc describes.
 
 ## Prompts must be self-contained
 
@@ -45,6 +52,21 @@ ssh "${SSH_OPTS[@]}" macmini gpt-pro-relay ask --run-id "$RUN_ID" --no-wait < "$
 ```
 
 For recurring tasks, factor the composer into a small `compose-prompt.sh` in the project — keep the file list and section headers there rather than rewriting them on every call.
+
+## Direct invocation on macmini
+
+When already on macmini, skip SSH and the polling loop — just call `gpt-pro-relay` directly with the blocking single-call form. There's no transport that can drop, so the polling machinery is overhead.
+
+```bash
+RUN_ID="ask-$(date -u +%Y%m%dT%H%M%SZ)-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+gpt-pro-relay ask --run-id "$RUN_ID" < "$PROMPT_FILE"
+```
+
+Wrap in `run_in_background: true, timeout: 1800000` (30 min). Recovery on parent death is `gpt-pro-relay fetch "$RUN_ID"` (no SSH). Everything else is identical to the SSH path: same artifacts in `~/.gpt-pro/runs/<run_id>/`, same exit codes, same error reasons in the terminal stderr JSON.
+
+If `gpt-pro-relay: command not found`, the `~/.local/bin/gpt-pro-relay` symlink is gone — fall back to `/Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro-relay`.
+
+The rest of this skill (SSH polling, fetch loop, transport-drop recovery) is for callers on other machines. Skip it.
 
 ## The command
 
