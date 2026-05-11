@@ -43,6 +43,7 @@ Run `./dotfiles.sh` after changes to re-sync symlinks.
 - Keep commits atomic by logical change (docs vs scripts vs skill content).
 - PRs should include: purpose, changed paths, verification commands run, and any migration/symlink impact.
 - Link related issues/tasks when available; include screenshots only for UI-facing documentation changes.
+- After `git push` succeeds, run `dfs` to sync the new commit to all peers (concurrent `git pull --ff-only` + `./dotfiles.sh` on each of `macbookpro16`, `macmini`, `l40s`; self is skipped). Skipping this leaves other machines on the previous revision.
 
 ## Maintaining Docs
 - After any structural change (adding, removing, or renaming files/directories, skills, or configs), check whether `README.md`, `CLAUDE.md`, or `AGENTS.md` reference the affected paths or content and update them if so.
