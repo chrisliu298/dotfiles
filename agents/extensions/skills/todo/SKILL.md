@@ -7,12 +7,9 @@ description: |
   or "we'll pick this up tomorrow", projects spanning multiple days, or work
   where context will need to survive compaction. Also trigger when the user
   invokes "/todo" explicitly, or asks to "track this", "checkpoint", or "save
-  what we're doing for next time". The cost of starting a TODO.md is small;
-  the cost of not having one when work spans sessions is hours of
-  re-explanation. Do NOT trigger on small one-shot tasks (a single bug fix,
-  rename, or one-line change), on in-session-only todo tracking (the native
-  task list handles that), or when the working directory has no clear project
-  root.
+  what we're doing for next time". Do NOT trigger on small one-shot tasks (a
+  single bug fix, rename, or one-line change), on in-session-only todo
+  tracking, or when the working directory has no clear project root.
 user-invocable: true
 ---
 

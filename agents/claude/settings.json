@@ -15,6 +15,7 @@
     "code-simplifier@claude-plugins-official": true
   },
   "effortLevel": "xhigh",
+  "skillListingBudgetFraction": 0.02,
   "showThinkingSummaries": true,
   "skipDangerousModePermissionPrompt": true,
   "autoInstallIdeExtension": false,
