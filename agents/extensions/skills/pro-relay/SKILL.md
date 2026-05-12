@@ -108,7 +108,9 @@ echo "gpt-pro-relay overall timeout for $RUN_ID" >&2; exit 124
 - **stderr** = newline-delimited JSON: a `submitted` line from Phase 1, then a terminal `ok` / `error` / `timeout` from the final fetch. The `ok` line includes `extraction: "copy_button" | "innertext"` so you can audit which capture path won.
 - **exit 0** = success. Other codes mean inspect stderr.
 
-Always pass `--run-id`. Use a UUID or timestamp+UUID — anything matching `[A-Za-z0-9._-]+`. Same id + same prompt bytes attaches to an existing run instead of submitting a new one (`submitted` JSONL gains `"attached": true`), so the Phase 1 submit is safe to retry on transport flakiness.
+Always pass `--run-id`. Use a UUID or timestamp+UUID — anything matching `[A-Za-z0-9._-]+`, max **100 chars**. Same id + same prompt bytes attaches to an existing run instead of submitting a new one (`submitted` JSONL gains `"attached": true`), so the Phase 1 submit is safe to retry on transport flakiness.
+
+**Do not add descriptive labels** (`ask-frontier-vlms-comparison-...`). The canonical `ask-<timestamp>-<uuid>` form (≈57 chars) is already opaque-by-design; appending a topic slug routinely pushes the id past 100 chars and gpt-pro-relay rejects it with `invalid run_id: '...'` (exit 2). If you need a human-readable handle for your own tracking, keep it outside the run_id (in the task description, a local variable, etc.).
 
 Use a heredoc, never `echo "$prompt"` — bare echo mangles `$`, backticks, and quotes.
 
@@ -206,6 +208,7 @@ The terminal stderr JSON's `reason` field tells you what failed:
 | `empty_prompt` | nothing on stdin | You forgot the heredoc |
 | `prompt_too_large` | prompt > 1 MB | Trim or split the prompt; the cap is at submission, no Pro quota burned |
 | `run_id_conflict` | same run_id, different prompt | Pick a fresh run_id |
+| `invalid run_id: '...'` (usage error, exit 2) | run_id exceeded 100 chars or contained chars outside `[A-Za-z0-9._-]` | Drop any descriptive slug; use the canonical `ask-<timestamp>-<uuid>` form |
 | `not_found` | fetch couldn't find run_dir | The `ask` parent died before submission; re-submit fresh |
 
 ## Exit codes
