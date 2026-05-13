@@ -73,7 +73,7 @@ These skills live in the Obsidian vault's `_claude/skills/` (not in dotfiles):
 | dump | Dump session-derived knowledge to Obsidian vault | manual |
 | goal-elicit | Multi-round interview that produces a verifiable Goal Contract before action | on |
 | jina | Fetch web content and search via Jina AI (r.jina.ai / s.jina.ai) | on |
-| pro-relay | Send a prompt to ChatGPT Pro Extended on macmini over SSH | manual |
+| gpt-pro-relay | Send a prompt to ChatGPT Pro Extended on macmini over SSH | manual |
 | push | Single-commit push to remote | on |
 | subagent-executor | Execute multi-task plans via fresh subagents with review gates | on |
 | tdd | Test-driven development: write failing test before production code | on |
