@@ -3,7 +3,7 @@
 set -euo pipefail
 
 PLUGINS=(
-    "chrisliu298/nanoresearch"
+    "chrisliu298/humanize"
 )
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}"
@@ -65,27 +65,38 @@ py="$HOME/.venv/bin/python3"
 [[ -x "$py" ]] || py="$(command -v python3 2>/dev/null || true)"
 
 for slug in "${PLUGINS[@]}"; do
-    name="${slug##*/}"
+    base="${slug##*/}"
     dir="$PLUGIN_CACHE/${slug//\//__}"
     [[ -d "$dir/.git" ]] || continue
-    if [[ ! -x "${py:-}" ]]; then warn "skip plugin/$name (no python3)"; continue; fi
+    if [[ ! -x "${py:-}" ]]; then warn "skip plugin/$base (no python3)"; continue; fi
+
+    mp_json="$dir/.claude-plugin/marketplace.json"
+    [[ -f "$mp_json" ]] || { warn "skip plugin/$base (no marketplace.json)"; continue; }
 
     km_file="$HOME/.claude/plugins/known_marketplaces.json"
     mkdir -p "$(dirname "$km_file")"
     [[ -f "$km_file" ]] || echo '{}' > "$km_file"
     abs_dir="$(cd "$dir" && pwd)"
-    "$py" - "$km_file" "$name" "$abs_dir" << 'PYEOF'
-import json, sys
-path, name, dir = sys.argv[1], sys.argv[2], sys.argv[3]
-with open(path) as f: data = json.load(f)
-if name not in data or data[name].get("installLocation") != dir:
-    data[name] = {"source": {"source": "directory", "path": dir}, "installLocation": dir, "lastUpdated": "2026-01-01T00:00:00.000Z"}
-    with open(path, "w") as f: json.dump(data, f, indent=2); f.write("\n")
-PYEOF
 
-    if ! plugin_installed "$name@$name"; then
-        claude plugin install "$name@$name" 2>/dev/null \
-            && log "add plugin/$name" || warn "fail plugin/$name"
+    # Read marketplace + plugin names from marketplace.json, sync known_marketplaces.json,
+    # emit "<plugin>@<marketplace>" slug for install.
+    install_slug=$("$py" - "$mp_json" "$km_file" "$abs_dir" << 'PYEOF'
+import json, sys
+mp_path, km_path, install_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(mp_path) as f: mp = json.load(f)
+mp_name = mp["name"]
+plugin_name = mp["plugins"][0]["name"]
+with open(km_path) as f: data = json.load(f)
+if data.get(mp_name, {}).get("installLocation") != install_dir:
+    data[mp_name] = {"source": {"source": "directory", "path": install_dir}, "installLocation": install_dir, "lastUpdated": "2026-01-01T00:00:00.000Z"}
+    with open(km_path, "w") as f: json.dump(data, f, indent=2); f.write("\n")
+print(f"{plugin_name}@{mp_name}")
+PYEOF
+) || { warn "fail parse plugin/$base"; continue; }
+
+    if ! plugin_installed "$install_slug"; then
+        claude plugin install "$install_slug" 2>/dev/null \
+            && log "add plugin/$install_slug" || warn "fail plugin/$install_slug"
     fi
 done
 

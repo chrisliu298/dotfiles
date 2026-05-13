@@ -99,7 +99,6 @@ Cloned from GitHub via `PLUGINS` table in `scripts/install-plugins.sh`, installe
 
 | Plugin | Description | Status |
 |--------|-------------|--------|
-| [nanoresearch](https://github.com/chrisliu298/nanoresearch) | Autonomous research pipeline (idea discovery, experiments, paper writing) | disabled |
-| [multi-autoresearch](https://github.com/chrisliu298/multi-autoresearch) | Parallel experiments via worktrees, multi-perspective ideation when stuck | disabled |
+| [humanize](https://github.com/chrisliu298/humanize) | RLCR loop (fork): Claude implements, Codex reviews; ask-gpt-pro consult via gpt-pro-relay | enabled |
 
 Marketplace plugins (installed manually, not tracked in `dotfiles.sh`): claude-md-management, code-review, pr-review-toolkit, feature-dev, frontend-design, pyright-lsp.
