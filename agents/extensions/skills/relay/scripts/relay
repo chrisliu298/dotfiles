@@ -57,6 +57,57 @@ strip_frontmatter() {
   awk '/^---$/ && !p { n++; next } n >= 2 { p=1 } p'
 }
 
+# Extract the last `codex` assistant block from a Codex CLI log.
+# Codex separates message stream entries with bare role-marker lines
+# (`user`, `codex`, `exec`, `thinking`, `tool`, `tokens used`). Returns
+# the contents of the final block whose role was `codex`. Best-effort —
+# Codex log format is not a stable protocol; intended for failure-only
+# salvage.
+last_codex_block() {
+  awk '
+    function finish_block() {
+      if (role == "codex" && block != "") last = block
+      block = ""
+    }
+    /^(user|codex|exec|thinking|tool|tokens used)$/ {
+      finish_block()
+      role = $0
+      next
+    }
+    role == "codex" {
+      block = block $0 ORS
+    }
+    END {
+      finish_block()
+      sub(/\n$/, "", last)
+      if (last != "") print last
+    }
+  ' "$1"
+}
+
+# Failure-only recovery: synthesize a valid .res.md from the last codex
+# assistant block when the peer exited without writing the response file.
+# Returns 0 if a non-empty block was recovered and written, 1 otherwise.
+recover_codex_response() {
+  local log_path="$1" res_path="$2" id="$3" from="$4" to="$5" peer_exit="$6"
+  local body status
+  body=$(last_codex_block "$log_path") || return 1
+  [ -n "$body" ] || return 1
+  status=done
+  [ "$peer_exit" -eq 0 ] || status=error
+  {
+    printf -- '---\n'
+    printf 'relay: %s\n' "$VERSION"
+    printf 're: %s\n' "$id"
+    printf 'from: %s\n' "$to"
+    printf 'to: %s\n' "$from"
+    printf 'status: %s\n' "$status"
+    printf 'verify: skip\n'
+    printf -- '---\n\n'
+    printf '%s\n' "$body"
+  } | atomic_write "$res_path"
+}
+
 # Auto-detect caller and peer from the skill directory this script lives in.
 # Falls back to environment variables when the path doesn't match a known
 # skill directory (e.g. invoked from the repo root during development).
@@ -215,6 +266,20 @@ cmd_call() {
   fi
   command -v "$peer_bin" >/dev/null 2>&1 || die "call: '$peer_bin' not found in PATH"
 
+  # Build peer prompt. Surface the response-file obligation in the entry
+  # prompt so the peer sees it before reading the (possibly large) body,
+  # and require explicit verification before finishing.
+  local peer_prompt
+  peer_prompt=$(cat <<EOF
+Read and execute this relay request: $req_path
+
+Mandatory relay output:
+- Write the complete reply, including the requested relay frontmatter, to: $res_path
+- Use a file-write or shell tool to create that file; do not rely on final-message/stdout output.
+- Before finishing, verify that the file exists and is non-empty.
+EOF
+)
+
   # Build peer invocation
   local -a peer_cmd
   if [ "$to" = "codex" ]; then
@@ -223,15 +288,25 @@ cmd_call() {
       --skip-git-repo-check --full-auto --color never
       --disable plugins
       --add-dir "$RELAY_DIR"
-      "Read and execute $req_path")
+      "$peer_prompt")
   elif [ "$to" = "claude" ]; then
     [ "$effort" = "medium" ] || echo "relay: note: --effort is informational when calling claude" >&2
-    peer_cmd=(env -u CLAUDECODE claude --model opus -p --dangerously-skip-permissions "Read and execute $req_path")
+    peer_cmd=(env -u CLAUDECODE claude --model opus -p --dangerously-skip-permissions "$peer_prompt")
   fi
 
   # Invoke peer and capture exit status (don't let set -e abort before checking response)
   local peer_exit=0
   "${peer_cmd[@]}" >/dev/null 2>"$log_path" || peer_exit=$?
+
+  # Failure-only recovery: if the peer (Codex) finished without writing
+  # the response file, salvage the last assistant block from the log.
+  if [ ! -f "$res_path" ] && [ "$to" = "codex" ]; then
+    local id="${req_path##*/}"
+    id="${id%.req.md}"
+    if recover_codex_response "$log_path" "$res_path" "$id" "$from" "$to" "$peer_exit"; then
+      echo "relay: recovered response from codex log → $res_path" >&2
+    fi
+  fi
 
   # Read and output response (check file even if peer exited non-zero)
   if [ -f "$res_path" ]; then
