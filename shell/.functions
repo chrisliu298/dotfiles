@@ -63,7 +63,8 @@ dfs() {
 
     # Run local install and remote sync concurrently
     local tmpdir=$(mktemp -d) local_rc=0
-    set +m
+    local _was_monitor=0
+    [[ -o monitor ]] && { _was_monitor=1; set +m; }
 
     ~/dotfiles/dotfiles.sh > "$tmpdir/local.log" 2>&1 &
     local local_pid=$!
@@ -74,7 +75,7 @@ dfs() {
     done
 
     wait $local_pid; local_rc=$?; wait
-    [[ -o interactive ]] && set -m
+    (( _was_monitor )) && set -m
 
     printf '  %sInstall%s\n' "$_c" "$_0"
     if (( local_rc )); then
