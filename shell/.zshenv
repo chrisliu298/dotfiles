@@ -46,3 +46,8 @@ export DISABLE_TELEMETRY=1
 
 # Unset CLAUDECODE inside tmux so claude can start fresh
 [[ -n "$TMUX" ]] && unset CLAUDECODE
+
+# =============================================================================
+# Grok
+# =============================================================================
+export PATH="$HOME/.grok/bin:$PATH"
