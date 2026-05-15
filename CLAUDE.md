@@ -72,6 +72,8 @@ Single SKILL.md per skill works in both agents. Include Claude-specific frontmat
 
 After `git push` succeeds, run `dfs` to propagate changes to all peers (concurrent `git pull --ff-only` + `./dotfiles.sh` on each of `macbookpro16`, `macmini`, `l40s`; self is skipped automatically). Without this step, the other machines stay on the previous revision until manually synced.
 
+From a non-interactive shell (e.g., an agent invoking it via a tool), use `zsh -c 'source ~/dotfiles/shell/.functions && dfs'` — no TTY required, and `dfs` is self-contained so `.zshrc` is not needed.
+
 </important>
 
 <important if="you are modifying CLAUDE.md, AGENTS.md, README.md, or project structure">
