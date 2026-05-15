@@ -192,6 +192,21 @@ xr(){ command codex resume --yolo -m gpt-5.5 --config model_reasoning_effort=hig
 xu(){ npm install -g @openai/codex@latest "$@"; }
 xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.5 --config model_reasoning_effort=high "${*}"; }
 
+# =============================================================================
+# Grok
+# =============================================================================
+
+k(){ command grok --always-approve --effort medium "$@"; }
+klo(){ command grok --always-approve --effort low "$@"; }
+km(){ command grok --always-approve --effort medium "$@"; }
+kh(){ command grok --always-approve --effort high "$@"; }
+kx(){ command grok --always-approve --effort xhigh "$@"; }
+kmax(){ command grok --always-approve --effort max "$@"; }
+kc(){ command grok --always-approve --continue --effort high "$@"; }
+kr(){ command grok --always-approve --resume --effort high "$@"; }
+ku(){ command grok update "$@"; }
+khl(){ (( $# )) || { echo 'Usage: khl "<prompt>"'; return 1; }; command grok -p --always-approve --effort high "${*}"; }
+
 # Show Claude + Codex account emails on local, macmini, and l40s.
 ae() {
     local _c=$'\033[1;36m' _d=$'\033[2m' _r=$'\033[31m' _0=$'\033[0m'
