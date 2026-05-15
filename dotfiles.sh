@@ -32,6 +32,8 @@ SKILLS=(
     # Relay: agent-specific SKILL.md (no top-level SKILL.md, so wildcard skips it)
     "relay|./agents/extensions/skills/relay/claude|claude"
     "relay|./agents/extensions/skills/relay/codex|codex"
+    # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup)
+    "keep-warm|./agents/extensions/skills/keep-warm|claude"
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex"
     "humanizer|blader/humanizer|claude,codex"
     "runpodctl|runpod/skills/runpodctl|claude,codex"
