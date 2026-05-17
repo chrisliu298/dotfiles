@@ -20,12 +20,13 @@ LINKS=(
     "agents/claude/keybindings.json:.claude/keybindings.json"
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
     "agents/codex/AGENTS.md:.codex/AGENTS.md"
+    "agents/grok/AGENTS.md:.grok/AGENTS.md"
 )
 
 # name|source|agents — name * = auto-discover subdirs with SKILL.md
 # source: ./path (local) or owner/repo[/subpath] (GitHub)
 SKILLS=(
-    "*|./agents/extensions/skills|claude,codex"
+    "*|./agents/extensions/skills|claude,codex,grok"
     # ChatGPT: agent-specific SKILL.md (no top-level SKILL.md, so wildcard skips it)
     "chatgpt|./agents/extensions/skills/chatgpt/claude|claude"
     "chatgpt|./agents/extensions/skills/chatgpt/codex|codex"
@@ -34,16 +35,19 @@ SKILLS=(
     "relay|./agents/extensions/skills/relay/codex|codex"
     # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup)
     "keep-warm|./agents/extensions/skills/keep-warm|claude"
-    "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex"
+    # prism: explicit entry excludes grok (overrides wildcard for this name)
+    "prism|./agents/extensions/skills/prism|claude,codex"
+    "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex,grok"
     "humanizer|blader/humanizer|claude,codex"
-    "runpodctl|runpod/skills/runpodctl|claude,codex"
+    "runpodctl|runpod/skills/runpodctl|claude,codex,grok"
     "pdf|anthropics/skills/skills/pdf|claude"
     "skill-creator|anthropics/skills/skills/skill-creator|claude"
-    "pdf|openai/skills/skills/.curated/pdf|codex"
+    "pdf|openai/skills/skills/.curated/pdf|codex,grok"
 )
 
 # Skills not auto-installed. Toggle with: ./dotfiles.sh enable/disable <name>
 MANUAL_SKILLS=(
+    autoresearch
     chatgpt
     citation-assistant
     deslop
@@ -54,6 +58,7 @@ MANUAL_SKILLS=(
     nanorepl
     rlm
     runpodctl
+    subagent-executor
     tdd
     typst
     update-readme
@@ -212,14 +217,14 @@ _fetch_skills_repos() {
 }
 
 install_skills() {
-    mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills"
+    mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills" "$HOME/.grok/skills"
     local explicit_names=$'\n'
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name _ _ <<< "$entry"
         [[ "$name" != "*" ]] && explicit_names+="$name"$'\n'
     done
 
-    local claude_expected="" codex_expected=""
+    local claude_expected="" codex_expected="" grok_expected=""
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name source agents <<< "$entry"
         local base_dir; base_dir=$(_resolve_source "$source")
@@ -252,21 +257,26 @@ install_skills() {
             local sname="${se%%:*}" spath="${se#*:}"
             [[ "$agents" == *claude* ]] && { ensure_symlink "$spath" "$HOME/.claude/skills/$sname"; claude_expected+="$sname"$'\n'; }
             [[ "$agents" == *codex* ]]  && { ensure_symlink "$spath" "$HOME/.codex/skills/$sname";  codex_expected+="$sname"$'\n'; }
+            [[ "$agents" == *grok* ]]   && { ensure_symlink "$spath" "$HOME/.grok/skills/$sname";   grok_expected+="$sname"$'\n'; }
         done
     done
 
     # Clean stale skill symlinks
     local dir expected
-    for dir in "$HOME/.claude/skills" "$HOME/.codex/skills"; do
+    for dir in "$HOME/.claude/skills" "$HOME/.codex/skills" "$HOME/.grok/skills"; do
         [[ -d "$dir" ]] || continue
-        [[ "$dir" == *claude* ]] && expected="$claude_expected" || expected="$codex_expected"
+        case "$dir" in
+            *claude*) expected="$claude_expected" ;;
+            *codex*)  expected="$codex_expected"  ;;
+            *grok*)   expected="$grok_expected"   ;;
+        esac
         for entry in "$dir"/*; do
-            [[ -e "$entry" || -L "$entry" ]] || continue
+            [[ -L "$entry" ]] || continue
             local bname="${entry##*/}"
             [[ "$bname" == .* ]] && continue
             [[ $'\n'"$expected" == *$'\n'"$bname"$'\n'* ]] && continue
-            _is_manual "$bname" && [[ -e "$entry" ]] && continue
-            rm -rf "$entry"; log "clean ${entry/#$HOME/~}"
+            _is_manual "$bname" && continue
+            rm "$entry"; log "clean ${entry/#$HOME/~}"
         done
     done
 
@@ -334,6 +344,7 @@ cmd_enable() {
         [[ -f "$base_dir/SKILL.md" ]] || { warn "skip $name (no SKILL.md at $source)"; continue; }
         [[ "$agents" == *claude* ]] && ensure_symlink "$base_dir" "$HOME/.claude/skills/$name"
         [[ "$agents" == *codex* ]]  && ensure_symlink "$base_dir" "$HOME/.codex/skills/$name"
+        [[ "$agents" == *grok* ]]   && ensure_symlink "$base_dir" "$HOME/.grok/skills/$name"
         found=true
     done
     # Fall back to wildcard discovery
@@ -346,6 +357,7 @@ cmd_enable() {
             [[ -f "$skill_dir/SKILL.md" ]] || continue
             [[ "$agents" == *claude* ]] && ensure_symlink "$skill_dir" "$HOME/.claude/skills/$name"
             [[ "$agents" == *codex* ]]  && ensure_symlink "$skill_dir" "$HOME/.codex/skills/$name"
+            [[ "$agents" == *grok* ]]   && ensure_symlink "$skill_dir" "$HOME/.grok/skills/$name"
             found=true
         done
     fi
@@ -356,7 +368,7 @@ cmd_disable() {
     local name="${1:?usage: dotfiles.sh disable <name>}"
     _is_manual "$name" || warn "'$name' is not a manual skill — next run will re-create it"
     local removed=false
-    for dir in "$HOME/.claude/skills/$name" "$HOME/.codex/skills/$name"; do
+    for dir in "$HOME/.claude/skills/$name" "$HOME/.codex/skills/$name" "$HOME/.grok/skills/$name"; do
         [[ -L "$dir" ]] && { rm "$dir"; log "removed ${dir/#$HOME/~}"; removed=true; }
     done
     $removed || log "$name is not currently enabled"
@@ -367,7 +379,7 @@ cmd_skills() {
     local m
     for m in "${MANUAL_SKILLS[@]}"; do
         local status="${_DIM}off${_RST}"
-        [[ -L "$HOME/.claude/skills/$m" || -L "$HOME/.codex/skills/$m" ]] && status="on "
+        [[ -L "$HOME/.claude/skills/$m" || -L "$HOME/.codex/skills/$m" || -L "$HOME/.grok/skills/$m" ]] && status="on "
         printf '    %-22s %s\n' "$m" "$status"
     done
     printf '\n'

@@ -51,3 +51,4 @@ export DISABLE_TELEMETRY=1
 # Grok
 # =============================================================================
 export PATH="$HOME/.grok/bin:$PATH"
+export GROK_MEMORY=1
