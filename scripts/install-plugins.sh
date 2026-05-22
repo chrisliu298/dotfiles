@@ -2,7 +2,9 @@
 # Install Claude Code plugins.
 set -euo pipefail
 
-PLUGINS=()
+PLUGINS=(
+    chrisliu298/humanize
+)
 [[ ${#PLUGINS[@]} -eq 0 ]] && exit 0
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}"
