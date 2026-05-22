@@ -203,6 +203,31 @@ gr(){ command grok --always-approve --resume "$@"; }
 gu(){ command grok update "$@"; }
 ghl(){ (( $# )) || { echo 'Usage: ghl "<prompt>"'; return 1; }; command grok --always-approve -p "${*}"; }
 
+# =============================================================================
+# DeepSeek (via Claude Code, Anthropic-compatible endpoint)
+# =============================================================================
+# Routes Claude Code at DeepSeek per-invocation, so default `c`/`cc` keep using
+# the Claude subscription. DeepSeek V4 Pro has two distinct effort levels: high
+# and max. Requires DEEPSEEK_API_KEY in env (see ~/.zshenv.local).
+
+_deepseek(){
+    [[ -n "${DEEPSEEK_API_KEY:-}" ]] || { echo 'DEEPSEEK_API_KEY not set (see ~/.zshenv.local)' >&2; return 1; }
+    env -u TMUX COLORTERM=truecolor \
+        ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic \
+        ANTHROPIC_AUTH_TOKEN="$DEEPSEEK_API_KEY" \
+        ANTHROPIC_MODEL=deepseek-v4-pro \
+        ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-v4-pro \
+        ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4-pro \
+        ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-flash \
+        CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-flash \
+        "$(command -v claude)" "$@"
+}
+ds(){   CLAUDE_CODE_EFFORT_LEVEL=high _deepseek --dangerously-skip-permissions "$@"; }
+dsx(){  CLAUDE_CODE_EFFORT_LEVEL=max  _deepseek --dangerously-skip-permissions "$@"; }
+dsc(){  CLAUDE_CODE_EFFORT_LEVEL=high _deepseek --dangerously-skip-permissions --continue "$@"; }
+dsr(){  CLAUDE_CODE_EFFORT_LEVEL=high _deepseek --dangerously-skip-permissions --resume "$@"; }
+dshl(){ (( $# )) || { echo 'Usage: dshl "<prompt>"'; return 1; }; CLAUDE_CODE_EFFORT_LEVEL=high _deepseek -p --dangerously-skip-permissions "${*}"; }
+
 # Show Claude + Codex account emails on local, macmini, and l40s.
 ae() {
     local _c=$'\033[1;36m' _d=$'\033[2m' _r=$'\033[31m' _0=$'\033[0m'

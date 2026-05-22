@@ -52,3 +52,8 @@ export DISABLE_TELEMETRY=1
 # =============================================================================
 export PATH="$HOME/.grok/bin:$PATH"
 export GROK_MEMORY=1
+
+# =============================================================================
+# Local secrets (not version controlled)
+# =============================================================================
+[[ -f "$HOME/.zshenv.local" ]] && source "$HOME/.zshenv.local"
