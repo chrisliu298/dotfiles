@@ -109,22 +109,17 @@ recover_codex_response() {
 }
 
 # Auto-detect caller and peer from the skill directory this script lives in.
-# Falls back to environment variables when the path doesn't match a known
-# skill directory (e.g. invoked from the repo root during development).
+# Caller is always Claude under the current one-direction protocol; the default
+# peer is Codex. Use --to deepseek to route to DeepSeek instead.
 # Returns "from to" (e.g. "claude codex") or empty string if unknown.
 detect_peers() {
   local script_dir
   script_dir=$(cd "$(dirname "$0")/.." && pwd)
   case "$script_dir" in
     */.claude/skills/* | */claude/skills/*) echo "claude codex" ;;
-    */.codex/skills/* | */codex/skills/*)   echo "codex claude" ;;
     *)
-      # Fallback: detect caller from agent-set environment variables.
-      # Check Codex markers first — CLAUDECODE=1 can leak into Codex's
-      # sandbox via env inheritance in multi-hop relay chains.
-      if [ -n "${CODEX_SANDBOX:-}" ] || [ -n "${CODEX_SANDBOX_NETWORK_DISABLED:-}" ]; then
-        echo "codex claude"
-      elif [ "${CLAUDECODE:-}" = "1" ]; then
+      # Fallback: only Claude Code is a supported caller.
+      if [ "${CLAUDECODE:-}" = "1" ]; then
         echo "claude codex"
       else
         echo ""
@@ -161,9 +156,10 @@ cmd_req() {
 
   ensure_relay_dir
 
-  # Build effort line (omit for claude — no reasoning effort param)
+  # Build effort line (only codex consumes it via frontmatter; deepseek takes
+  # effort via env var on the wrapper, set in cmd_call below).
   local effort_line=""
-  if [ -n "$effort" ] && [ "$to" != "claude" ]; then
+  if [ -n "$effort" ] && [ "$to" = "codex" ]; then
     effort_line=$'\n'"effort: $effort"
   fi
 
@@ -240,11 +236,10 @@ cmd_call() {
     *) die "call: --effort must be none, low, medium, high, or xhigh" ;;
   esac
 
-  # Build req (effort is omitted from frontmatter when calling claude)
-  local req_args=(--from "$from" --to "$to")
-  if [ "$to" != "claude" ]; then
-    req_args+=(--effort "$effort")
-  fi
+  # Build req. cmd_req decides whether to surface effort in frontmatter (only
+  # codex does); pass effort through for all peers so deepseek can map it to
+  # CLAUDE_CODE_EFFORT_LEVEL below.
+  local req_args=(--from "$from" --to "$to" --effort "$effort")
   [ -n "$name" ] || die "call: --name required"
   check_slug "call: --name" "$name"
   req_args+=(--name "$name")
@@ -255,14 +250,17 @@ cmd_call() {
   local res_path="${req_path%.req.md}.res.md"
   local log_path="${req_path%.req.md}.log"
 
-  # Preflight: check peer binary exists
+  # Preflight: check peer binary exists. deepseek piggybacks on the claude CLI
+  # with an env-var envelope that routes to DeepSeek's Anthropic-compatible
+  # endpoint (mirrors _deepseek() in shell/.functions).
   local peer_bin
   if [ "$to" = "codex" ]; then
     peer_bin="codex"
-  elif [ "$to" = "claude" ]; then
+  elif [ "$to" = "deepseek" ]; then
     peer_bin="claude"
+    [ -n "${DEEPSEEK_API_KEY:-}" ] || die "call: DEEPSEEK_API_KEY not set (required for --to deepseek)"
   else
-    die "call: unknown peer '$to' — expected 'codex' or 'claude'"
+    die "call: unknown peer '$to' — expected 'codex' or 'deepseek'"
   fi
   command -v "$peer_bin" >/dev/null 2>&1 || die "call: '$peer_bin' not found in PATH"
 
@@ -289,9 +287,21 @@ EOF
       --disable plugins
       --add-dir "$RELAY_DIR"
       "$peer_prompt")
-  elif [ "$to" = "claude" ]; then
-    [ "$effort" = "medium" ] || echo "relay: note: --effort is informational when calling claude" >&2
-    peer_cmd=(env -u CLAUDECODE claude --model opus -p --dangerously-skip-permissions "$peer_prompt")
+  elif [ "$to" = "deepseek" ]; then
+    # DeepSeek V4 Pro exposes two effort tiers (high, max); map relay's
+    # five-level scale down: xhigh → max, everything else → high.
+    local ds_effort=high
+    [ "$effort" = "xhigh" ] && ds_effort=max
+    peer_cmd=(env -u CLAUDECODE -u TMUX COLORTERM=truecolor
+      ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
+      ANTHROPIC_AUTH_TOKEN="$DEEPSEEK_API_KEY"
+      ANTHROPIC_MODEL=deepseek-v4-pro
+      ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-v4-pro
+      ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4-pro
+      ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-flash
+      CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-pro
+      CLAUDE_CODE_EFFORT_LEVEL="$ds_effort"
+      claude -p --dangerously-skip-permissions "$peer_prompt")
   fi
 
   # Invoke peer and capture exit status (don't let set -e abort before checking response)
@@ -340,8 +350,8 @@ Call options:
   --name <slug>      Call identifier
   --effort <level>   Reasoning effort: none, low, medium (default), high, xhigh
   --body-only        Strip frontmatter from response output
-  --from <peer>      Override caller detection (claude or codex)
-  --to <peer>        Override peer detection (claude or codex)
+  --from <peer>      Override caller detection (normally claude)
+  --to <peer>        Override peer detection (codex or deepseek; default codex)
 USAGE
 }
 

@@ -27,13 +27,12 @@ LINKS=(
 # source: ./path (local) or owner/repo[/subpath] (GitHub)
 SKILLS=(
     "*|./agents/extensions/skills|claude,codex,grok"
-    # Relay: agent-specific SKILL.md (no top-level SKILL.md, so wildcard skips it)
+    # Relay: claude-only caller; targets Codex and DeepSeek via the script
     "relay|./agents/extensions/skills/relay/claude|claude"
-    "relay|./agents/extensions/skills/relay/codex|codex"
     # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup)
     "keep-warm|./agents/extensions/skills/keep-warm|claude"
-    # prism: explicit entry excludes grok (overrides wildcard for this name)
-    "prism|./agents/extensions/skills/prism|claude,codex"
+    # prism: claude-only caller (dispatches parallax to Codex + DeepSeek via relay)
+    "prism|./agents/extensions/skills/prism|claude"
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex,grok"
     "humanizer|blader/humanizer|claude,codex,grok"
     "pdf|anthropics/skills/skills/pdf|claude"

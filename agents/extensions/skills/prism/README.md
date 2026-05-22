@@ -1,6 +1,6 @@
 # Prism
 
-**A skill for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex](https://github.com/openai/codex) that strengthens any output through parallel multi-agent deliberation.**
+**A skill for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that strengthens any output through parallel multi-agent deliberation across multiple model lineages — Claude (subagents), [Codex](https://github.com/openai/codex) GPT-5.5, and [DeepSeek](https://www.deepseek.com/) V4 Pro.**
 
 > *White light looks simple until it hits a prism — then you see every color was there all along. One question, many angles, nothing hidden.*
 
@@ -39,16 +39,16 @@ Asking the same question twice gets you the same biases twice. Prism assigns eac
 ## How It Works
 
 ```
-┌──────────────────────────────────────────────────────┐
-│  User question + shared context                      │
-├───────────┬──────────┬──────────┬────────────────────┤
-│   Self    │ Agent 1  │ Agent 2  │    Parallax        │
-│ Integra-  │ Lens: A  │ Lens: B  │    Lens: C         │
-│   tor     │          │          │   (cross-model     │
-│           │          │          │    via /relay)     │
-├───────────┴──────────┴──────────┴────────────────────┤
-│  Synthesis: consensus, contested, unique, gaps       │
-└──────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  User question + shared context                                 │
+├──────────┬──────────┬──────────┬──────────────┬─────────────────┤
+│   Self   │ Agent 1  │ Agent 2  │ Parallax     │  Parallax       │
+│ Integra- │ Lens: A  │ Lens: B  │  — Codex     │   — DeepSeek    │
+│   tor    │ (Claude) │ (Claude) │  Lens: C     │   Lens: D       │
+│          │          │          │ (relay→GPT)  │  (relay→DS V4)  │
+├──────────┴──────────┴──────────┴──────────────┴─────────────────┤
+│  Synthesis: consensus, contested, unique, gaps                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 Self is the primary agent (the one you're talking to). It uses the **Integrator Lens** — weighing holistic coherence, feasibility, and alignment with your goals — and forms its own position while dispatched agents run in parallel.
@@ -56,11 +56,11 @@ Self is the primary agent (the one you're talking to). It uses the **Integrator 
 1. **Freeze context** — build one shared evidence packet with all information needed
 2. **Compose prompts** — word-for-word identical question and context across all agents, only the lens line differs
 3. **Verify** — run pre-launch checks (redundancy, lens quality, count)
-4. **Launch all concurrently** — subagents + Parallax in parallel, then self-review
-5. **Wait for ALL** — no partial synthesis
+4. **Launch all concurrently** — subagents + both Parallax tiers in parallel, then self-review
+5. **Wait for ALL** — no partial synthesis (Codex finishing first ≠ permission to ignore DeepSeek)
 6. **Synthesize** — consensus, contested points, unique insights, blind spots, recommendation
 
-**Default: 4 perspectives** — self + 3 dispatched agents (2 subagents + 1 Parallax via [Relay](https://github.com/chrisliu298/relay)). Compact mode reduces to 2 dispatched when explicitly requested.
+**Default: 5 perspectives** — self + 4 dispatched agents (2 Claude subagents + 1 Codex parallax + 1 DeepSeek parallax, both via [Relay](https://github.com/chrisliu298/relay)). Either parallax tier can be opted out individually by setting its count to `0`.
 
 ### Core rules
 
@@ -81,19 +81,15 @@ Clone into your agent's skills directory:
 git clone https://github.com/chrisliu298/prism.git ~/.claude/skills/prism
 ```
 
-**Codex:**
-
-```bash
-git clone https://github.com/chrisliu298/prism.git ~/.codex/skills/prism
-```
-
 ### Recommended: install Relay for Parallax
 
-Prism's Parallax tier dispatches a cross-model agent via [Relay](https://github.com/chrisliu298/relay). Without Relay, Parallax falls back to a same-model adversarial agent — functional but with reduced model diversity.
+Prism's Parallax tiers dispatch cross-model agents via [Relay](https://github.com/chrisliu298/relay). Without Relay, Parallax falls back to same-model adversarial agents — functional but with reduced model diversity.
 
 ```bash
 git clone https://github.com/chrisliu298/relay.git ~/.claude/skills/relay
 ```
+
+**DeepSeek prerequisite:** for the DeepSeek parallax tier, export `DEEPSEEK_API_KEY` in your shell (e.g., `~/.zshenv.local`). DeepSeek is reached via the `claude` CLI with DeepSeek's Anthropic-compatible endpoint, so no separate binary install is required beyond Claude Code itself.
 
 ---
 
@@ -106,6 +102,28 @@ Tell your agent to deliberate:
 > "I need a prism analysis on whether to use SQL or NoSQL for this"
 
 Or invoke directly with `prism` — also available to subagents.
+
+### Shorthand
+
+Override dispatch defaults with positional args before the question:
+
+```
+prism <sub> <codex-count> <codex-effort> <ds-count> <ds-effort> [r] <question>
+```
+
+- `sub` — Claude subagent count (default `2`)
+- `codex-count` — Codex parallax count (default `1`, `0` to skip)
+- `codex-effort` — `n` / `l` / `m` / `h` / `x` (default `m`)
+- `ds-count` — DeepSeek parallax count (default `1`, `0` to skip)
+- `ds-effort` — `h` / `x` only (default `h`; DeepSeek V4 exposes two thinking tiers)
+- `r` — optional anonymous peer review round
+
+Examples:
+
+- `prism 2 2 x 2 x Which architecture should we pick?` — 2 subagents, 2 Codex (xhigh), 2 DeepSeek (max)
+- `prism 1 0 m 1 h Same-model + DeepSeek only` — skip Codex
+- `prism 2 1 h 0 h r Should we launch X?` — Codex high, no DeepSeek, peer review enabled
+- `prism Why does X?` — all defaults
 
 ### Example output
 
@@ -172,19 +190,24 @@ The skill includes pre-launch checks that prevent common mistakes:
 
 ## Parallax (Cross-Model)
 
-Parallax is the cross-model tier of Prism. It dispatches one agent via [Relay](https://github.com/chrisliu298/relay) to a **different model** — different training, different reasoning patterns, different blind spots.
+Parallax is the cross-model tier of Prism. It dispatches agents via [Relay](https://github.com/chrisliu298/relay) to **different models** — different training, different reasoning patterns, different blind spots. Prism currently supports two parallax tiers in parallel:
 
-### How it works
+| Tier | Model | Effort scale | Strength |
+|---|---|---|---|
+| Codex | GPT-5.5 | `none`/`low`/`medium`/`high`/`xhigh` | Strong agentic coding, fine-grained effort control |
+| DeepSeek | DeepSeek V4 Pro (1.6T MoE, open-weight) | `high`/`max` (DeepThink) | Independent vendor lineage, frontier reasoning at `max` |
 
-When running from Claude Code, Parallax calls Codex via Relay. When running from Codex, Parallax calls Claude Code. The Parallax agent receives the same full question and context as every other agent — only the lens differs.
+Each tier is dispatched as a separate concurrent Relay call. All Parallax agents receive the same full question and context as every other agent — only the lens differs.
 
 ### Why model diversity matters
 
-Same-model agents share systematic biases from training. A cross-model perspective catches issues that no amount of same-model redundancy will surface. Assign Parallax a lens that maximizes diversity (e.g., if subagents have Correctness and Simplicity, give Parallax Adversarial or Disconfirming).
+Same-model agents share systematic biases from training. A cross-model perspective catches issues that no amount of same-model redundancy will surface. With two parallax tiers, you can stack the diversity: when Codex and DeepSeek dissent in the same direction, that's a high-signal finding that two independent training lineages agree the subagents missed something.
+
+Assign each parallax tier a lens that maximizes diversity (e.g., if subagents have Correctness and Simplicity, give one parallax Adversarial and the other Falsification). Never assign the same lens to both Codex and DeepSeek — that wastes a perspective.
 
 ### Without Relay
 
-If Relay is not installed, Prism replaces Parallax with a same-model agent using a **structurally adversarial lens** (Adversarial, Falsification, Disconfirming). This partially compensates for missing model diversity. The user can also opt out of Parallax explicitly.
+If Relay is not installed, Prism replaces both Parallax tiers with same-model agents using **structurally adversarial lenses** (Adversarial, Falsification, Disconfirming). This partially compensates for missing model diversity. The user can also opt out of either tier explicitly by setting its count to `0`.
 
 ---
 
@@ -193,3 +216,4 @@ If Relay is not installed, Prism replaces Parallax with a same-model agent using
 - [@chrisliu298](https://github.com/chrisliu298)
 - **Claude Code** — protocol design and synthesis framework
 - **Codex** — lens calibration and cross-model validation
+- **DeepSeek V4 Pro** — second cross-model parallax tier added 2026-05

@@ -1,29 +1,40 @@
 ---
 name: relay
 description: |
-  The ONLY way to call Codex. Use this skill whenever the user wants to
-  ask, delegate to, or get a second opinion from Codex. Do NOT run the
-  codex CLI directly — whether from the main agent or a subagent. Always
-  use this skill's relay call command. Triggers on "ask codex", "have
-  codex", "send to codex", "get codex to", "delegate to codex", "second
-  opinion", "relay". Invoke with "relay".
+  The ONLY way to call Codex or DeepSeek. Use this skill whenever the user
+  wants to ask, delegate to, or get a second opinion from Codex or DeepSeek.
+  Do NOT run the codex or deepseek (ds) CLI directly — whether from the main
+  agent or a subagent. Always use this skill's relay call command. Triggers
+  on "ask codex", "ask deepseek", "have codex", "have deepseek", "send to
+  codex", "send to deepseek", "get codex to", "get deepseek to", "delegate
+  to codex", "delegate to deepseek", "second opinion", "relay". Invoke with
+  "relay".
 allowed-tools: Read, Write, Bash(relay:*), Bash(find:*), Bash(printf:*)
 user-invocable: true
 ---
 
 # Relay
 
-Call Codex like a function. One command: generates the request, invokes Codex, prints the response.
+Call Codex or DeepSeek like a function. One command: generates the request, invokes the peer, prints the response.
 
 ```
-relay call --name <slug> [--effort <level>] [--body-only] <<'BODY'
+relay call --name <slug> [--to <peer>] [--effort <level>] [--body-only] <<'BODY'
 task
 BODY
 ```
 
-The script is available as `relay` in PATH. It auto-detects caller/peer from environment variables (`CLAUDECODE=1` for Claude Code, `CODEX_SANDBOX` for Codex) or from its install path.
+The script is available as `relay` in PATH. The caller is always Claude (this is a Claude-only skill); the peer defaults to Codex. Pass `--to deepseek` to route to DeepSeek instead.
 
-**All Codex interactions go through `relay call`.** Do not invoke `codex exec` directly, do not spawn agents to run the codex CLI, and do not pass model flags (`-m`, `--model`). The model and invocation method are hardcoded in the script.
+**All Codex and DeepSeek interactions go through `relay call`.** Do not invoke `codex exec` or the `ds`/`dsx` deepseek aliases directly, do not spawn agents to run the codex or claude CLI for these purposes, and do not pass model flags (`-m`, `--model`). The model and invocation method are hardcoded in the script.
+
+## Peer selection
+
+| Peer | When to pick | How to invoke |
+|---|---|---|
+| **Codex** (default) | Code review, security review, refactoring, agentic coding. GPT-5.5 lineage. Five effort tiers (`none`/`low`/`medium`/`high`/`xhigh`). | `relay call --name ...` (no `--to` needed) |
+| **DeepSeek** | Independent model family for true cross-vendor diversity, frontier reasoning at `max`, multi-step analysis. Open-weight V4-Pro (1.6T MoE). Two effort tiers (`high`/`max`). | `relay call --to deepseek --name ...` |
+
+Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick DeepSeek when you want a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax. DeepSeek requires `DEEPSEEK_API_KEY` in the environment.
 
 ### Common Mistakes
 - **Premature failure diagnosis**: If a relay call was launched with `run_in_background: true`, do not inspect `.relay` files or enter the failure flow until the background task's completion notification arrives. No notification means the peer is still running.
@@ -43,13 +54,15 @@ BODY
 
 Choose `--effort` based on the task:
 
-| Level | When to use |
-|-------|-------------|
-| `none` | Latency-critical tasks that do not need reasoning or multi-step tool use |
-| `low` | Efficient reasoning for triage, classification, or simple migrations |
-| `medium` | **Default.** Balanced starting point for code review, tests, and bug fixes |
-| `high` | Complex agentic tasks, security review, or broad refactoring |
-| `xhigh` | Hard asynchronous architecture work or eval-bound tasks |
+| Level | When to use | Codex | DeepSeek |
+|-------|-------------|:-----:|:--------:|
+| `none` | Latency-critical tasks that do not need reasoning or multi-step tool use | ✓ | → `high` |
+| `low` | Efficient reasoning for triage, classification, or simple migrations | ✓ | → `high` |
+| `medium` | **Default.** Balanced starting point for code review, tests, and bug fixes | ✓ | → `high` |
+| `high` | Complex agentic tasks, security review, or broad refactoring | ✓ | ✓ |
+| `xhigh` | Hard asynchronous architecture work or eval-bound tasks | ✓ | → `max` |
+
+DeepSeek V4 exposes only two thinking tiers (`high` and `max`), so the script collapses the five relay levels: anything below `xhigh` maps to DeepSeek `high`, and `xhigh` maps to DeepSeek `max`. Pick `--effort xhigh` only when you genuinely need DeepSeek's maximum thinking depth — it roughly doubles latency.
 
 Evaluate `low` before `none` when planning, search, tool use, or multi-step decisions still matter. Before raising effort, improve the prompt first — add outcome-first success criteria, stop rules, verification steps, and completeness criteria.
 
@@ -82,6 +95,40 @@ Run pytest tests/test_pool.py — all tests must pass. No new lint errors.
 <output_contract>
 Summary of changes, one per line, with file path and description.
 </output_contract>
+BODY
+```
+
+## Prompting DeepSeek
+
+**Before composing the prompt body, read `~/.claude/skills/relay/references/deepseek.md`** (symlinked to the prompt-engineer reference). It covers the CO-STAR framework, XML scaffolding conventions, thinking-mode quirks, and DeepThink failure modes. This is not optional — the guide contains model-specific patterns that materially affect output quality.
+
+Default to XML scaffolding (DeepSeek V4 was trained heavily on XML-tagged data). The CO-STAR sections — `<context>`, `<objective>`, `<style>`, `<tone>`, `<audience>`, `<response_format>` — give the cleanest results for non-trivial tasks. Use positive framing ("include X") over negative constraints ("don't omit X"). Keep system-style meta-instructions out of the prompt body when running at `--effort xhigh` (DeepThink degrades under long system prompts).
+
+**Example:**
+
+```bash
+relay call --to deepseek --name pool-design --effort high <<'BODY'
+<context>
+We're hardening src/db/pool.py before a SOC 2 audit. Codebase is Python 3.12 +
+FastAPI. Tests live in tests/test_pool.py and run under pytest.
+</context>
+
+<objective>
+Add connection timeouts and stale-connection recovery to src/db/pool.py.
+</objective>
+
+<success_criteria>
+- ConnectionPool accepts a timeout_seconds parameter at construction
+- stale connections are auto-reconnected on use
+- a reclaim_stale() method exists for explicit cleanup
+- existing callers keep working without changes
+- pytest tests/test_pool.py passes; no new lint errors
+</success_criteria>
+
+<response_format>
+Summary of changes first (one line per change: file path + description),
+then the diffs grouped by file. Cap at 400 words excluding diffs.
+</response_format>
 BODY
 ```
 
@@ -122,18 +169,18 @@ When you have independent subagent work alongside a relay call, **never block on
 
 **Rule: Launch relay calls and subagents concurrently. Never serialize independent work.**
 
-**Never wrap relay in a subagent.** If an Agent task calls `relay` with `run_in_background: true`, the subagent will complete before Codex finishes, and the platform will kill the orphaned Codex process. Always call `relay` from the main conversation. If a subagent must call relay (e.g., the skill was invoked before you could prevent it), the Bash call must run in foreground — omit `run_in_background` so the subagent blocks until Codex replies.
+**Never wrap relay in a subagent.** If an Agent task calls `relay` with `run_in_background: true`, the subagent will complete before the peer (Codex or DeepSeek) finishes, and the platform will kill the orphaned peer process. Always call `relay` from the main conversation. If a subagent must call relay (e.g., the skill was invoked before you could prevent it), the Bash call must run in foreground — omit `run_in_background` so the subagent blocks until the peer replies.
 
 ## Prism / Parallax
 
-When Relay is used as the Parallax transport inside Prism, the relay call receives the **same full question and same context** as every local reviewer — only the lens (weighing posture) differs. Do not narrow the prompt for the Parallax agent.
+When Relay is used as the Parallax transport inside Prism, the relay call receives the **same full question and same context** as every local reviewer — only the lens (weighing posture) differs. Do not narrow the prompt for the Parallax agent. With two peers available, Prism dispatches each parallax tier independently — Codex calls and DeepSeek calls run concurrently as separate Bash relay invocations.
 
-Launch the relay Bash call with `run_in_background: true` in the same parallel dispatch step as the local reviewer subagents. Do not wrap Relay itself in another subagent layer.
+Launch each relay Bash call with `run_in_background: true` in the same parallel dispatch step as the local reviewer subagents. Do not wrap Relay itself in another subagent layer.
 
-If the Parallax relay call fails (after its background completion notification has arrived), treat it as a recoverable transport problem. Read the `.log` sidecar, fix the invocation, and retry once before declaring Parallax unavailable.
+If a Parallax relay call fails (after its background completion notification has arrived), treat it as a recoverable transport problem. Read the `.log` sidecar, fix the invocation, and retry once before declaring that peer unavailable. A failure of one peer (e.g., Codex) does not affect the other.
 
 ## Utility Commands
 
 `relay --help` and `relay --version` print usage and version info.
 
-If auto-detection fails, pass `--from claude --to codex` explicitly to `call`.
+`--to` accepts `codex` (default) or `deepseek`. There is no relay-to-Claude direction — Claude is the sole caller in this protocol.
