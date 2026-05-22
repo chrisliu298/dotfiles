@@ -27,9 +27,6 @@ LINKS=(
 # source: ./path (local) or owner/repo[/subpath] (GitHub)
 SKILLS=(
     "*|./agents/extensions/skills|claude,codex,grok"
-    # ChatGPT: agent-specific SKILL.md (no top-level SKILL.md, so wildcard skips it)
-    "chatgpt|./agents/extensions/skills/chatgpt/claude|claude"
-    "chatgpt|./agents/extensions/skills/chatgpt/codex|codex"
     # Relay: agent-specific SKILL.md (no top-level SKILL.md, so wildcard skips it)
     "relay|./agents/extensions/skills/relay/claude|claude"
     "relay|./agents/extensions/skills/relay/codex|codex"
@@ -39,7 +36,6 @@ SKILLS=(
     "prism|./agents/extensions/skills/prism|claude,codex"
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex,grok"
     "humanizer|blader/humanizer|claude,codex"
-    "runpodctl|runpod/skills/runpodctl|claude,codex,grok"
     "pdf|anthropics/skills/skills/pdf|claude"
     "skill-creator|anthropics/skills/skills/skill-creator|claude"
     "pdf|openai/skills/skills/.curated/pdf|codex,grok"
@@ -48,20 +44,8 @@ SKILLS=(
 # Skills not auto-installed. Toggle with: ./dotfiles.sh enable/disable <name>
 MANUAL_SKILLS=(
     autoresearch
-    chatgpt
-    citation-assistant
     deslop
-    diagnose
-    dump
     interviewer
-    last-call
-    nanorepl
-    rlm
-    runpodctl
-    subagent-executor
-    tdd
-    typst
-    update-readme
 )
 
 MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: claude,codex or omit for both)

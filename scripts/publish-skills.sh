@@ -7,17 +7,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 PUBLISH_SKILLS=(
     "autoresearch"
-    "chatgpt"
-    "citation-assistant"
     "deslop"
     "interviewer"
-    "last-call"
-    "nanorepl"
     "note-gen"
     "prism"
     "prompt-engineer"
     "relay"
-    "rlm"
     "vault-linker"
 )
 
