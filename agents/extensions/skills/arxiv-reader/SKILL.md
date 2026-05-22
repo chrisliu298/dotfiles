@@ -1,7 +1,7 @@
 ---
 name: arxiv-reader
 user-invocable: true
-description: Read arxiv papers via their TeX source for full-fidelity math, tables, and figures. Use whenever the user shares an arxiv URL or paper ID and wants to discuss or understand the paper — even without "read". Triggers on arxiv URLs (abs, pdf, html), bare IDs like "2401.12345", or "explain this paper". Do NOT use for note generation (use note-gen) or citation management (use citation-assistant).
+description: Read arxiv papers via their TeX source for full-fidelity math, tables, and figures. Use whenever the user shares an arxiv URL or paper ID and wants to discuss or understand the paper — even without "read". Triggers on arxiv URLs (abs, pdf, html), bare IDs like "2401.12345", or "explain this paper". Do NOT use for note generation (use note-gen).
 allowed-tools: Bash(curl:*), Bash(file:*), Bash(tar:*), Bash(mkdir:*), Bash(mv:*), Bash(rm:*), Bash(head:*), Bash(defuddle:*), Read, Grep
 ---
 
@@ -140,5 +140,4 @@ After the conversation with a paper is done, clean up temp files: `rm -rf /tmp/{
 ## What This Skill Does NOT Do
 
 - **Generate Obsidian notes** — use `note-gen` for that. If the user asks to turn the paper into notes, answer the reading/explanation part here, then suggest `note-gen` for the note.
-- **Manage citations/BibTeX** — use `citation-assistant` for that
 - **Read non-arxiv papers** — this skill is specifically for arxiv. For other PDFs, read them directly.

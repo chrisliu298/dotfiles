@@ -4,8 +4,7 @@ description: |
   Send a prompt to ChatGPT Pro Extended via gpt-pro-relay on macmini — over SSH from any
   other machine, or directly when invoked on macmini itself. Use for "ask gpt-pro", "send
   to gpt-pro", "use gpt-pro", "Pro Extended take", "ask the deep model", or "second
-  opinion from chatgpt pro". Different from the `chatgpt` skill (live Chrome via MCP).
-  Resilient to flaky networks via short-session polling.
+  opinion from chatgpt pro". Resilient to flaky networks via short-session polling.
 allowed-tools: Bash(ssh:*), Bash(gpt-pro-relay:*), Bash(uuidgen:*), Bash(date:*), Bash(hostname:*), Read, Write
 user-invocable: true
 ---
