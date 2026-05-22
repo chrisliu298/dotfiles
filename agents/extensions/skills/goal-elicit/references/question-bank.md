@@ -103,12 +103,6 @@ The structure for every good elicitation question:
 - "What's blocked on this? What does this block?"
 - "Is there a hard order — does X have to ship before Y?"
 
-## 15. Handoff target
-
-- "Who or what executes this — you in this session, Codex `/goal` autonomously, a parallel set of subagents, a manual checklist for a teammate?"
-- "Should the executing agent commit and push when done, or stop at a draft?"
-- "What does the executing agent need to report back when done — file diff, test output, a one-paragraph summary, all of the above?"
-
 ## Pattern: forcing a decision instead of asking yes/no
 
 Bad:

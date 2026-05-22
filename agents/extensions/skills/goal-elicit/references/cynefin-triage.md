@@ -79,4 +79,4 @@ If you classified Clear and find yourself asking a third question, escalate to C
 
 If you classified Complicated and the user keeps saying "I don't know" or every answer opens a new dimension you didn't expect, escalate to Complex and reframe the contract as a probe.
 
-Never *downgrade* domain — claiming "clear" after a 5-round interview is dishonest and will mislead downstream agents.
+Never *downgrade* domain — claiming "clear" after a 5-round interview is dishonest and will mislead whoever reads the contract.

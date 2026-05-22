@@ -5,7 +5,7 @@ Failure modes that elicitation skills fall into, with the concrete prompt move t
 | Failure mode                 | What happens                                                   | Mitigation                                                                                              |
 |------------------------------|----------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
 | Over-questioning             | Skill interrogates trivial tasks, becomes a tax on simple work.| Phase 0 Cynefin triage. Clear-domain tasks get fast lane (1 confirmation, no full interview).           |
-| Under-questioning            | Skill acts on ambiguity to avoid friction.                     | Stop criteria block `ready_for_handoff` while any P0 field is missing. Hard cap at round 8 forces resolution or `not_ready_blocked`. |
+| Under-questioning            | Skill acts on ambiguity to avoid friction.                     | Stop criteria block `ready` while any P0 field is missing. Hard cap at round 8 forces resolution or `blocked`. |
 | Faux Socratic loops          | Questions sound thoughtful but don't reduce uncertainty.       | Every question must name the contract field it resolves. The running summary lists *which* unresolved fields are next. |
 | Leading questions            | Skill steers user toward its preferred solution.               | Always state your inference and the evidence behind it: "I infer X because Y; alternatives are A and B; which is right?" |
 | Yes/no theater               | User says yes without inspecting meaning.                      | No yes/no until Phase 5 final approval. Earlier questions force a choice, rank, or edit.                |
@@ -14,7 +14,7 @@ Failure modes that elicitation skills fall into, with the concrete prompt move t
 | Anchoring on first phrasing  | Skill treats the requested implementation as the goal.         | Always preserve `stated_request` and `underlying_goal` as separate fields. By round 2, restate at least two plausible interpretations. |
 | Framing effects              | Early wording narrows the solution space prematurely.          | The two-interpretation restate at round 2 forces re-framing. Diverge phase actively widens the frame.   |
 | Sunk-cost in early questions | Bad early assumptions persist through later rounds.            | Running summary every 2 rounds includes "changed or discarded assumptions" as an explicit section.      |
-| Premature commitment         | Skill starts planning, coding, or invoking other skills.       | Hard rule in SKILL.md: do not plan, code, edit other files, or invoke other skills until `ready_for_handoff` is written. |
+| Premature commitment         | Skill starts planning, coding, or invoking other skills.       | Hard rule in SKILL.md: do not plan, code, edit other files, or invoke other skills — ever. The skill writes `GOAL.md` and stops. |
 | Premature convergence        | Skill writes contract at round 2 to seem efficient.            | Stop criteria must all be true. Require at least one Gherkin scenario and at least one anti-goal for non-Clear tasks. |
 | Verification theater         | "Done" is a vibes check.                                       | Hard gate: every `done_when` item must name a command, file artifact, metric, or user-observable behavior. Reject "looks good", "works well", "feels right". |
 | Proxy-signal completion      | Tests pass but the actual user need isn't met.                 | Contract audit (stop criterion 6): each acceptance criterion must have a *direct* verification — not "the test suite passes" as a stand-in. |
@@ -22,8 +22,8 @@ Failure modes that elicitation skills fall into, with the concrete prompt move t
 | Risk blindness               | Skill ignores rollback, deadlines, production impact.          | `Risks`, `Rollback`, `Observability` are required sections for non-Clear tasks. Question taxonomy mandates these.|
 | Runaway scope                | Interview keeps adding to the task.                            | Default any new idea introduced after round 2 to "Could" or "Won't this time" (MoSCoW) unless user explicitly promotes it. Each promotion is a recorded decision. |
 | User fatigue                 | Even good elicitation is exhausting at scale.                  | 3–5 questions per turn (2 if heavy). Running summary every 2 rounds. Hard cap at round 8.               |
-| False completion at the cap  | Skill pretends `ready_for_handoff` to dodge the round limit.   | At round 8, write either a complete contract *or* `not_ready_blocked` with `blocking_unknowns` populated. Mid-flight assertion in SKILL.md. |
-| Chatty wrap-up               | Skill summarizes at the end with no actionable artifact.       | The artifact *is* the deliverable. The handoff menu is paste-ready commands, not prose.                 |
+| False completion at the cap  | Skill pretends `ready` to dodge the round limit.               | At round 8, write either a complete contract *or* `blocked` with `blocking_unknowns` populated. Mid-flight assertion in SKILL.md. |
+| Chatty wrap-up               | Skill summarizes at the end with no actionable artifact.       | The artifact *is* the deliverable. Tell the user where `GOAL.md` is and stop — no prose summary.        |
 | Skill-on-skill recursion     | Skill calls /goal-elicit recursively or invokes other skills.  | Forbidden in SKILL.md. Only `Read`, `Write`, `Edit`, narrow `Bash`, and `AskUserQuestion` are allowed.  |
 
 ## Empirical reminder
@@ -34,7 +34,7 @@ This is why every question in this skill must be tied to a field in `references/
 
 ## Audit checklist
 
-Before marking `status: ready_for_handoff`, verify:
+Before marking `status: ready`, verify:
 
 - [ ] Every required frontmatter field is set.
 - [ ] Every required body section exists and is substantive (not "TBD").
@@ -46,4 +46,4 @@ Before marking `status: ready_for_handoff`, verify:
 - [ ] `cynefin_domain` matches the actual interview shape (clear ≤ 1 round; complicated 3–5; complex 4–6 with probe contract).
 - [ ] `approved_by_user: true` is set only after an explicit assent or incorporated edit.
 
-If any check fails, do not write `ready_for_handoff`. Either continue the interview or write `not_ready_blocked`.
+If any check fails, do not write `ready`. Either continue the interview or write `blocked`.

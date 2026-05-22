@@ -1,28 +1,28 @@
 ---
 name: goal-elicit
 description: |
-  Convert ambiguous, multi-step, or autonomous requests into a verifiable Goal Contract
-  (GOAL.md) before planning, coding, subagent dispatch, or /goal invocation. Use for
-  "clarify what I want", "define done_when/acceptance criteria", "make this unambiguous",
-  XY-problem requests, untestable success, or before atomic-push, subagent-executor, plan
-  mode, /goal, or long autonomous runs whose scope is not pinned. Skip trivial edits,
-  factual questions, routine commands, and ordinary code review.
+  Interview the user and write a verifiable Goal Contract (GOAL.md) that the user can
+  copy/paste into a goal-pursuing agent. This skill never executes the goal, hands off,
+  or invokes downstream tools — it only produces the document. Use for "clarify what I
+  want", "define done_when/acceptance criteria", "make this unambiguous", XY-problem
+  requests, or untestable success. Skip trivial edits, factual questions, routine
+  commands, and ordinary code review.
 user-invocable: true
 allowed-tools: Read, Write, Edit, Bash(git:*), Bash(date:*), AskUserQuestion
 ---
 
 # goal-elicit
 
-Convert an ambiguous request into a verifiable Goal Contract before action. The skill is the deliberate opposite of jumping to action: no planning, code, edits, or other-skill invocations until `GOAL.md` is written and the user has explicitly approved it (or the skill has terminated as `not_ready_blocked`).
+Interview the user and write a verifiable Goal Contract. The deliverable is a single file: `GOAL.md`. The skill terminates when that file is written — the user takes the contract from there and pastes it into whichever agent or tool they choose to pursue it.
 
-Codex `/goal` keeps an agent looping toward an *already-defined* objective with a strict completion audit ("prompt-to-artifact checklist", "Do not accept proxy signals", "Treat uncertainty as not achieved"). It does almost no upstream elicitation. The quality of any long `/goal` run, plan-mode session, or subagent dispatch is gated by the quality of the contract handed to it. This skill writes that contract.
+This skill never plans, edits other files, runs code, or invokes other skills. It writes one document and stops.
 
 ## What this skill produces
 
 A single file: `GOAL.md` at the repo root (or `$PWD` if not in a git repo). Markdown with YAML frontmatter. Exactly one of three terminal states in the frontmatter:
 
-- `ready_for_handoff` — every required field is filled, every `done_when` item is mapped to evidence, the user has explicitly assented.
-- `not_ready_blocked` — interview hit the round ceiling or the user can't supply enough context. `blocking_unknowns` enumerates what's missing. Do not execute against a blocked contract.
+- `ready` — every required field is filled, every `done_when` item is mapped to evidence, the user has explicitly assented. The contract is ready to copy/paste elsewhere.
+- `blocked` — interview hit the round ceiling or the user can't supply enough context. `blocking_unknowns` enumerates what's missing. Tell the user the contract is incomplete and what is needed.
 - `draft` — interview in progress; the file is the durable session state.
 
 Schema: see `references/contract-template.md`.
@@ -65,13 +65,15 @@ Use AskUserQuestion when there are 2–4 plausible options — make the options 
 
 ### Phase 4 — Contract (1 turn)
 
-Show the draft `GOAL.md` in compressed form: objective, scope in/out, constraints, acceptance criteria (at least one as Gherkin), `done_when` (each item mapped to evidence), risks, rollback, handoff. Ask the user to **approve, edit, or mark blocked** — not yes/no.
+Show the draft `GOAL.md` in compressed form: objective, scope in/out, constraints, acceptance criteria (at least one as Gherkin), `done_when` (each item mapped to evidence), risks, rollback. Ask the user to **approve, edit, or mark blocked** — not yes/no.
 
 ### Phase 5 — Confirm (1 turn)
 
-After incorporating the user's edits, write the final `GOAL.md` with `status: ready_for_handoff`. The final confirmation is *not* "are we good now?" It is:
+After incorporating the user's edits, write the final `GOAL.md` with `status: ready`. The final confirmation is *not* "are we good now?" It is:
 
 > "I will write this as the Goal Contract unless you change one of these fields: [short list of decisions]."
+
+Once the file is written, tell the user where it is (path) and stop. The user takes it from there.
 
 ## Question batching
 
@@ -81,25 +83,25 @@ After incorporating the user's edits, write the final `GOAL.md` with `status: re
 
 ## Stop criteria
 
-Mark `status: ready_for_handoff` only when **all** of the following are true. If any are false, either continue interviewing or write `status: not_ready_blocked`.
+Mark `status: ready` only when **all** of the following are true. If any are false, either continue interviewing or write `status: blocked`.
 
-1. Required fields filled: `objective`, `underlying_goal`, `stakeholders`, `scope_in`, `scope_out`, `constraints`, `assumptions`, `acceptance_criteria`, `done_when` (each mapped to evidence), `verification_plan`, `risks`, `rollback`, `observability`, `handoff_targets`, `final_response_contract`.
+1. Required fields filled: `objective`, `underlying_goal`, `stakeholders`, `scope_in`, `scope_out`, `constraints`, `assumptions`, `acceptance_criteria`, `done_when` (each mapped to evidence), `verification_plan`, `risks`, `rollback`, `observability`, `final_response_contract`.
 2. At least one acceptance criterion is written as a Gherkin scenario (Given / When / Then) or an equivalent testable scenario.
 3. **Hard gate:** every `done_when` item names a command, file artifact, metric, or user-observable behavior. Reject `done when "looks good"` style criteria.
 4. Zero P0 open questions. Non-blocking assumptions are written with defaults and rationale.
 5. The user has explicitly assented or supplied edits that you incorporated. Silence is not assent.
-6. Contract audit: each acceptance criterion has a matching verification method; each constraint has a way to notice violation; no success criterion depends only on agent self-report. (This mirrors `/goal`'s own "do not accept proxy signals" rule.)
+6. Contract audit: each acceptance criterion has a matching verification method; each constraint has a way to notice violation; no success criterion depends only on executor self-report.
 
 ## Hard upper bound: 8 user rounds
 
 | Round | Behavior                                                                                  |
 |-------|-------------------------------------------------------------------------------------------|
 | 1–5   | Normal interview.                                                                         |
-| 6     | Warn the user: "Two rounds left before I either write the contract or write a `not_ready_blocked` brief." |
+| 6     | Warn the user: "Two rounds left before I either write the contract or write a `blocked` brief." |
 | 7     | Last chance to resolve P0 unknowns. Be explicit about what's still missing.               |
-| 8     | Stop interviewing. Write either a complete contract or `not_ready_blocked` with `blocking_unknowns` populated. |
+| 8     | Stop interviewing. Write either a complete contract or `blocked` with `blocking_unknowns` populated. |
 
-Never pretend completion to dodge the cap. A `not_ready_blocked` contract is a successful outcome — it tells the user (and any downstream agent) exactly what new input is required before execution can start.
+Never pretend completion to dodge the cap. A `blocked` contract is a successful outcome — it tells the user exactly what new input is required before the contract can be considered complete.
 
 ## Question taxonomy
 
@@ -119,7 +121,6 @@ Ask in roughly this order. Earlier answers determine whether later categories ma
 12. **Rollback / containment** — how to undo, disable, or mitigate?
 13. **Observability** — where will evidence appear (logs, tests, UI, files, metrics)?
 14. **Deadline / sequencing** — real date or ordering constraint?
-15. **Handoff target** — `/goal`, plan mode, subagents, atomic-push, manual?
 
 ## Anti-patterns to engineer out
 
@@ -132,35 +133,21 @@ See `references/anti-patterns.md` for the full failure-mode table with the promp
 - **No anchoring on first phrasing.** Preserve `stated_request` and `underlying_goal` as separate fields. By round 2, restate at least two plausible interpretations.
 - **No verification theater.** Every `done_when` needs concrete evidence — command, file artifact, metric, or user-visible behavior.
 - **No runaway scope.** Default new ideas to "Could" or "Won't this time" (MoSCoW) unless the user explicitly promotes them.
-- **No premature commitment.** Do not invoke other skills, write code, or open another file (other than `GOAL.md`) until `status: ready_for_handoff` is written and the user has assented.
+- **No execution.** Never plan, write code, edit other files, or invoke other skills. The skill writes `GOAL.md` and stops. The user takes it from there.
 
 ## Resumption
 
 If `GOAL.md` already exists in the working directory:
 
 1. Read it.
-2. If `status: ready_for_handoff`, the contract is already complete. Tell the user, show the handoff menu (Phase 6), and stop. Do not re-interview.
-3. If `status: draft` or `not_ready_blocked`, identify which fields are blank or in `blocking_unknowns`. Resume the interview by asking only for those fields. Do not re-ask filled fields. Increment `rounds_used` from where it left off.
-
-## Phase 6 — Handoff (after `ready_for_handoff` is written)
-
-Present a menu of paste-ready next steps based on `handoff_targets` in the frontmatter. Templates live in `assets/handoff-prompts/`. Read the template, substitute the contract path, and offer it to the user. Do **not** invoke `/goal`, plan mode, or other skills yourself — let the user choose.
-
-| Target              | Template                                  | When                                                                |
-|---------------------|-------------------------------------------|---------------------------------------------------------------------|
-| Codex `/goal`       | `assets/handoff-prompts/codex-goal.md`    | Long-running autonomous execution by Codex.                         |
-| Plan mode           | `assets/handoff-prompts/plan-mode.md`     | Decompose contract into an implementation plan in this session.     |
-| `subagent-executor` | `assets/handoff-prompts/subagent-executor.md` | Multiple disjoint scope slices to execute in parallel.          |
-| `atomic-push`       | `assets/handoff-prompts/atomic-push.md`   | Push only when every `done_when` item has its evidence verified.    |
-
-Codex emphasis: **`/goal` is an execution loop, not a spec validator.** Do not invoke `/goal` at the end as verification. The contract audit (stop criterion 6 above) already mirrors `/goal`'s completion-audit logic; running it inside this skill is the verification step.
+2. If `status: ready`, the contract is already complete. Tell the user where it is and stop. Do not re-interview.
+3. If `status: draft` or `blocked`, identify which fields are blank or in `blocking_unknowns`. Resume the interview by asking only for those fields. Do not re-ask filled fields. Increment `rounds_used` from where it left off.
 
 ## What this skill must not do
 
-- Do not plan, code, edit other files, or invoke another skill before `GOAL.md` is `ready_for_handoff`.
+- Do not plan, write code, edit other files, or invoke another skill — ever. The deliverable is `GOAL.md` only.
 - Do not infer the user's goal silently and proceed.
-- Do not pretend completion at the round ceiling — write `not_ready_blocked` instead.
-- Do not invoke `/goal`, plan mode, `subagent-executor`, or `atomic-push` itself. Emit paste-ready prompts and let the user choose.
+- Do not pretend completion at the round ceiling — write `blocked` instead.
 - Do not relay to Codex or GPT-Pro during the interview unless the user explicitly asks for an external second opinion.
 - Do not over-question Clear-domain tasks. Fast-lane them.
 
@@ -169,8 +156,7 @@ Codex emphasis: **`/goal` is an execution loop, not a spec validator.** Do not i
 - `SKILL.md` — this file.
 - `references/contract-template.md` — the `GOAL.md` skeleton with all required frontmatter and body sections.
 - `references/cynefin-triage.md` — Phase 0 decision tree with worked examples.
-- `references/question-bank.md` — ~40 worked questions per taxonomy category.
-- `references/anti-patterns.md` — full failure-mode table with the prompt move that engineers each one out.
-- `assets/handoff-prompts/` — paste-ready handoff templates for each downstream target.
+- `references/question-bank.md` — worked questions per taxonomy category.
+- `references/anti-patterns.md` — failure-mode table with the prompt move that engineers each one out.
 
 Read the references when you need them — not all up front. Long-form material is there so the model loads it only when relevant.

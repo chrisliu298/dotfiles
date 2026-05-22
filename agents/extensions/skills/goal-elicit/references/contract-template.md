@@ -8,18 +8,13 @@ The Goal Contract is a single Markdown file with YAML frontmatter. Path: `GOAL.m
 ---
 schema_version: goal-contract/v1
 id: 20260503-2200-api-timeout-fix      # YYYYMMDD-HHMM-<slug>; slug ≤ 30 chars, kebab-case
-status: ready_for_handoff               # ready_for_handoff | not_ready_blocked | draft
+status: ready                           # ready | blocked | draft
 cynefin_domain: complicated             # clear | complicated | complex
 created_by: goal-elicit
 created_at: 2026-05-03T22:00:00Z        # ISO 8601 UTC
 approved_by_user: true
 rounds_used: 4
-blocking_unknowns: []                   # populated when status: not_ready_blocked
-handoff_targets:                        # any subset; order = recommended sequence
-  - codex_goal
-  - plan_mode
-  - subagent_executor
-  - atomic_push
+blocking_unknowns: []                   # populated when status: blocked
 source_prompt_summary: "User asked to clarify what they wanted before building X"
 ---
 ```
@@ -31,8 +26,7 @@ source_prompt_summary: "User asked to clarify what they wanted before building X
 - `cynefin_domain` — set in Phase 0; do not revise downward (don't claim "clear" after asking 4 rounds).
 - `approved_by_user` — `true` only after the user explicitly said "approved", "yes use this", or supplied edits that you incorporated. Silence is not assent.
 - `rounds_used` — number of user turns consumed by the interview, including resumed turns.
-- `blocking_unknowns` — empty list if `status: ready_for_handoff`. Non-empty list of P0 questions when `status: not_ready_blocked`.
-- `handoff_targets` — emit handoff prompts for these. Order them by what the user should do first.
+- `blocking_unknowns` — empty list if `status: ready`. Non-empty list of P0 questions when `status: blocked`.
 
 ## Body (required sections, in this order)
 
@@ -78,7 +72,7 @@ paired with measurable behavior.>
 
 ## Open questions
 - (P0 = blocking; P1 = should resolve; P2 = nice-to-resolve)
-- P0: <question> — <why it blocks>     # only present when status: not_ready_blocked
+- P0: <question> — <why it blocks>     # only present when status: blocked
 - P1: <question>
 - P2: <question>
 
@@ -115,20 +109,6 @@ Then …
 ## Rollback plan
 <How to undo, disable, or contain the change. Specific commands or steps.>
 
-## Handoff prompts
-
-### Codex /goal
-<Paste-ready /goal command — see assets/handoff-prompts/codex-goal.md>
-
-### Plan mode
-<Paste-ready plan-mode entry — see assets/handoff-prompts/plan-mode.md>
-
-### subagent-executor
-<Partitioned scope slices — see assets/handoff-prompts/subagent-executor.md>
-
-### atomic-push
-<Done-when-verified push template — see assets/handoff-prompts/atomic-push.md>
-
 ## Final response contract
 <What the executing agent must report when done. Include: which Done When items
 were verified with what evidence, what was deferred to a follow-up contract, any
@@ -141,15 +121,13 @@ new risks discovered.>
 ---
 schema_version: goal-contract/v1
 id: 20260503-2200-rename-foo
-status: ready_for_handoff
+status: ready
 cynefin_domain: clear
 created_by: goal-elicit
 created_at: 2026-05-03T22:00:00Z
 approved_by_user: true
 rounds_used: 1
 blocking_unknowns: []
-handoff_targets:
-  - atomic_push
 source_prompt_summary: "Rename variable foo → user_id in src/auth.py"
 ---
 
@@ -219,11 +197,6 @@ Then no matches remain
 
 ## Rollback plan
 `git restore src/auth.py` and any other file touched.
-
-## Handoff prompts
-
-### atomic-push
-After verification passes, /atomic-push with one commit: "rename foo → user_id in auth.py"
 
 ## Final response contract
 Report: files touched (count + names), `rg` output (empty), test result (pass/fail).
