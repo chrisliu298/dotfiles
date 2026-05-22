@@ -35,7 +35,7 @@ SKILLS=(
     # prism: explicit entry excludes grok (overrides wildcard for this name)
     "prism|./agents/extensions/skills/prism|claude,codex"
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex,grok"
-    "humanizer|blader/humanizer|claude,codex"
+    "humanizer|blader/humanizer|claude,codex,grok"
     "pdf|anthropics/skills/skills/pdf|claude"
     "skill-creator|anthropics/skills/skills/skill-creator|claude"
     "pdf|openai/skills/skills/.curated/pdf|codex,grok"
@@ -44,7 +44,6 @@ SKILLS=(
 # Skills not auto-installed. Toggle with: ./dotfiles.sh enable/disable <name>
 MANUAL_SKILLS=(
     autoresearch
-    deslop
     interviewer
 )
 

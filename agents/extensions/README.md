@@ -32,10 +32,10 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | atomic-push             | ✓ | ✓ | ✓ | on     | local — Split changes into atomic commits, then push |
 | [autoresearch][p-ar]    | ✱ | ✱ | ✱ | manual | local + [pub][p-ar] — Karpathy-faithful experiment loop |
 | defuddle                | ✓ | ✓ | ✓ | on     | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
-| [deslop][p-ds]          | ✱ | ✱ | ✱ | manual | local + [pub][p-ds] — Strip AI-slop from code changes |
+| [deslop][p-ds]          | ✓ | ✓ | ✓ | on     | local + [pub][p-ds] — Strip AI-slop from code changes |
 | goal-elicit             | ✓ | ✓ | ✓ | on     | local — Multi-round interview → verifiable Goal Contract |
 | gpt-pro-relay           | ✓ | ✓ | ✓ | on     | local — SSH to ChatGPT Pro Extended on macmini |
-| humanizer               | ✓ | ✓ | — | on     | [blader/humanizer][c-hu] — Remove AI signatures from text |
+| humanizer               | ✓ | ✓ | ✓ | on     | [blader/humanizer][c-hu] — Remove AI signatures from text |
 | [interviewer][p-iv]     | ✱ | ✱ | ✱ | manual | local + [pub][p-iv] — Mock AI/ML technical interviews |
 | jina                    | ✓ | ✓ | ✓ | on     | local — Fetch web content / search via Jina AI |
 | keep-warm               | ✓ | — | — | on     | local — Cache heartbeat (uses Claude-only scheduling tools) |
