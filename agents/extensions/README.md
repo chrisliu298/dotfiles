@@ -61,17 +61,6 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 [c-pdf-o]: https://github.com/openai/skills
 [c-sc]: https://github.com/anthropics/skills
 
-### Vault-scoped (not in dotfiles)
-
-These live in the Obsidian vault's `_claude/skills/` and are only loaded when working inside that vault:
-
-| Skill | Description |
-|-------|-------------|
-| [note-gen](https://github.com/chrisliu298/note-gen) | Generate Obsidian notes from source materials |
-| [vault-linker](https://github.com/chrisliu298/vault-linker) | Build wikilink connections across vaults |
-| obsidian-bases | Create and edit Obsidian Bases (`.base` files) |
-| obsidian-cli | Interact with Obsidian vaults via the CLI |
-
 ### Project-local
 
 | Skill | Description |
