@@ -29,7 +29,6 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | Skill | C | X | G | Default | Source · Description |
 |-------|:-:|:-:|:-:|:-------:|----------------------|
 | arxiv-reader            | ✓ | ✓ | ✓ | on     | local — Read arxiv via TeX / HF markdown / HTML fallback |
-| atomic-push             | ✓ | ✓ | ✓ | on     | local — Split changes into atomic commits, then push |
 | [autoresearch][p-ar]    | ✱ | ✱ | ✱ | manual | local + [pub][p-ar] — Karpathy-faithful experiment loop |
 | defuddle                | ✓ | ✓ | ✓ | on     | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
 | [deslop][p-ds]          | ✓ | ✓ | ✓ | on     | local + [pub][p-ds] — Strip AI-slop from code changes |
@@ -42,7 +41,7 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | pdf                     | ✓ | ✓ | ✓ | on     | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (others) — PDF read/edit |
 | [prism][p-pr]           | ✓ | ✓ | — | on     | local + [pub][p-pr] — Multi-perspective parallel review |
 | [prompt-engineer][p-pe] | ✓ | ✓ | ✓ | on     | local + [pub][p-pe] — Prompt writing per-vendor best practices |
-| push                    | ✓ | ✓ | ✓ | on     | local — Single-commit push to remote |
+| push                    | ✓ | ✓ | ✓ | on     | local — Push to remote (auto-picks single vs atomic commits) |
 | [relay][p-rl]           | ✓ | ✓ | — | on     | local + [pub][p-rl] — Cross-agent relay (Claude ↔ Codex, per-agent subdirs) |
 | skill-creator           | ✓ | — | — | on     | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
 | todo                    | ✓ | ✓ | ✓ | on     | local — TODO.md tracking across sessions |

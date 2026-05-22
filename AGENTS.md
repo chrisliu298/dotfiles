@@ -29,7 +29,7 @@ Run `./dotfiles.sh` after changes to re-sync symlinks.
 ## Coding Style & Naming Conventions
 - Use Markdown for guides and skill instructions, with short sections and actionable bullets.
 - Shell scripts should stay Bash-first, with clear helper functions and defensive flags (`set -e`).
-- Use lowercase kebab-case for skill directories (example: `note-gen`, `atomic-push`).
+- Use lowercase kebab-case for skill directories (example: `arxiv-reader`, `keep-warm`).
 - Each skill has a single SKILL.md that works in both Claude Code and Codex.
 - Follow `.gitignore`; do not commit secrets, caches, or local environment artifacts.
 
