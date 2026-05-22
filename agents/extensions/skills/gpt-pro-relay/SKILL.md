@@ -1,5 +1,5 @@
 ---
-name: pro-relay
+name: gpt-pro-relay
 description: |
   Send a prompt to ChatGPT Pro Extended via gpt-pro-relay on macmini — over SSH from any
   other machine, or directly when invoked on macmini itself. Use for "ask gpt-pro", "send
@@ -9,7 +9,7 @@ allowed-tools: Bash(ssh:*), Bash(gpt-pro-relay:*), Bash(uuidgen:*), Bash(date:*)
 user-invocable: true
 ---
 
-# pro-relay
+# gpt-pro-relay
 
 One prompt in, one response out. The browser automation runs on macmini against a dedicated logged-in profile. The work is done by a detached worker so transport drops (or parent death) don't kill it — you can reconnect and `fetch` the result.
 
@@ -234,15 +234,15 @@ The terminal stderr JSON's `reason` field tells you what failed:
 
 Reach for them via `ssh macmini cat <run_dir>/<file>` or `ssh macmini ls <run_dir>` when diagnosing.
 
-## When pro-relay fits
+## When gpt-pro-relay fits
 
 | Situation | Verdict |
 |---|---|
 | Pro Extended reasoning, from any machine with SSH to macmini | Yes |
 | Tolerating a flaky network on a 5–20 min reasoning run | Yes — the polling pattern handles drops without intervention |
 | Driving your local live Chrome with any model + effort | Use a local Chrome-driving skill instead |
-| Multi-turn follow-ups in the same chat | Doesn't fit — pro-relay is one-shot per invocation |
+| Multi-turn follow-ups in the same chat | Doesn't fit — gpt-pro-relay is one-shot per invocation |
 
 ## Multi-turn
 
-pro-relay is one-shot per invocation — every call is a fresh ChatGPT conversation. To continue a thread, paste the prior response into the next prompt yourself. The dedicated profile retains login but does not persist conversation context across calls.
+gpt-pro-relay is one-shot per invocation — every call is a fresh ChatGPT conversation. To continue a thread, paste the prior response into the next prompt yourself. The dedicated profile retains login but does not persist conversation context across calls.
