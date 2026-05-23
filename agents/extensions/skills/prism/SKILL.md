@@ -18,6 +18,8 @@ allowed-tools:
 
 # Prism
 
+**Claude-only.** If `ANTHROPIC_BASE_URL` contains `deepseek`, this skill is unavailable — stop and tell the user: "prism is Claude-only; DeepSeek cannot orchestrate other models from inside a DeepSeek session." Prism dispatches parallax via [[relay]], which itself refuses from DeepSeek sessions.
+
 Prism sends the **same complete question** to multiple independent agents. Each agent answers the **entire question end-to-end**. The only thing that changes between agents is the **lens**: what they prioritize and what tradeoffs they weigh more heavily.
 
 ## Core Principle

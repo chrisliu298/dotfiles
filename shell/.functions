@@ -211,7 +211,11 @@ ghl(){ (( $# )) || { echo 'Usage: ghl "<prompt>"'; return 1; }; command grok --a
 
 _deepseek(){
     [[ -n "${DEEPSEEK_API_KEY:-}" ]] || { echo 'DEEPSEEK_API_KEY not set (see ~/.zshenv.local)' >&2; return 1; }
+    # Drop relay scripts dir from PATH so DeepSeek sessions can't shell out to relay.
+    local _ds_path="${PATH//$HOME\/.claude\/skills\/relay\/scripts:/}"
+    _ds_path="${_ds_path%:$HOME/.claude/skills/relay/scripts}"
     env -u TMUX COLORTERM=truecolor \
+        PATH="$_ds_path" \
         ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic \
         ANTHROPIC_AUTH_TOKEN="$DEEPSEEK_API_KEY" \
         ANTHROPIC_MODEL=deepseek-v4-pro \

@@ -15,6 +15,8 @@ user-invocable: true
 
 # Relay
 
+**Claude-only.** If `ANTHROPIC_BASE_URL` contains `deepseek`, this skill is unavailable — stop and tell the user: "relay is Claude-only; DeepSeek cannot orchestrate other models from inside a DeepSeek session." The relay script itself also refuses at the shell layer.
+
 Call Codex or DeepSeek like a function. One command: generates the request, invokes the peer, prints the response.
 
 ```

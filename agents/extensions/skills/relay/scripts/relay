@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Claude-only: refuse when invoked from a DeepSeek-backed session.
+case "${ANTHROPIC_BASE_URL:-}" in
+  *deepseek*) echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at DeepSeek." >&2; exit 2 ;;
+esac
+
 # relay — relay protocol v5: call a peer agent
 #
 # Usage:
