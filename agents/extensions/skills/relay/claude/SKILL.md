@@ -31,10 +31,10 @@ The script is available as `relay` in PATH. The caller is always Claude (this is
 
 | Peer | When to pick | How to invoke |
 |---|---|---|
-| **Codex** (default) | Code review, security review, refactoring, agentic coding. GPT-5.5 lineage. Five effort tiers (`none`/`low`/`medium`/`high`/`xhigh`). | `relay call --name ...` (no `--to` needed) |
-| **DeepSeek** | Independent model family for true cross-vendor diversity, frontier reasoning at `max`, multi-step analysis. Open-weight V4-Pro (1.6T MoE). Two effort tiers (`high`/`max`). | `relay call --to deepseek --name ...` |
+| **Codex** (default) | Code review, security review, refactoring, agentic coding. GPT-5.5 lineage. Two effort tiers (`medium`/`xhigh`). | `relay call --name ...` (no `--to` needed) |
+| **DeepSeek** | Independent model family for true cross-vendor diversity, frontier reasoning, multi-step analysis. Open-weight V4-Pro (1.6T MoE). Always runs at `max` (DeepThink). | `relay call --to deepseek --name ...` |
 
-Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick DeepSeek when you want a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax. DeepSeek requires `DEEPSEEK_API_KEY` in the environment.
+Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick DeepSeek when you want a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax. DeepSeek always runs at `max`; `--effort` is silently ignored on DeepSeek calls, so just omit it. DeepSeek requires `DEEPSEEK_API_KEY` in the environment.
 
 ### Common Mistakes
 - **Premature failure diagnosis**: If a relay call was launched with `run_in_background: true`, do not inspect `.relay` files or enter the failure flow until the background task's completion notification arrives. No notification means the peer is still running.
@@ -52,19 +52,14 @@ BODY
 
 ## Effort Levels
 
-Choose `--effort` based on the task:
+`--effort` applies to Codex only. DeepSeek always runs at `max` (DeepThink) — the flag is silently ignored on DeepSeek calls, so just omit it.
 
-| Level | When to use | Codex | DeepSeek |
-|-------|-------------|:-----:|:--------:|
-| `none` | Latency-critical tasks that do not need reasoning or multi-step tool use | ✓ | → `high` |
-| `low` | Efficient reasoning for triage, classification, or simple migrations | ✓ | → `high` |
-| `medium` | **Default.** Balanced starting point for code review, tests, and bug fixes | ✓ | → `high` |
-| `high` | Complex agentic tasks, security review, or broad refactoring | ✓ | ✓ |
-| `xhigh` | Hard asynchronous architecture work or eval-bound tasks | ✓ | → `max` |
+| Level | When to use |
+|-------|-------------|
+| `medium` | **Default for Codex.** Balanced starting point for code review, tests, bug fixes, and most refactoring. |
+| `xhigh` | Codex only. Hard architecture work, deep security review, or eval-bound tasks worth the extra latency. |
 
-DeepSeek V4 exposes only two thinking tiers (`high` and `max`), so the script collapses the five relay levels: anything below `xhigh` maps to DeepSeek `high`, and `xhigh` maps to DeepSeek `max`. Pick `--effort xhigh` only when you genuinely need DeepSeek's maximum thinking depth — it roughly doubles latency.
-
-Evaluate `low` before `none` when planning, search, tool use, or multi-step decisions still matter. Before raising effort, improve the prompt first — add outcome-first success criteria, stop rules, verification steps, and completeness criteria.
+Before raising effort, improve the prompt first — add outcome-first success criteria, stop rules, verification steps, and completeness criteria.
 
 ## Prompting Codex
 
@@ -102,12 +97,12 @@ BODY
 
 **Before composing the prompt body, read `~/.claude/skills/relay/references/deepseek.md`** (symlinked to the prompt-engineer reference). It covers the CO-STAR framework, XML scaffolding conventions, thinking-mode quirks, and DeepThink failure modes. This is not optional — the guide contains model-specific patterns that materially affect output quality.
 
-Default to XML scaffolding (DeepSeek V4 was trained heavily on XML-tagged data). The CO-STAR sections — `<context>`, `<objective>`, `<style>`, `<tone>`, `<audience>`, `<response_format>` — give the cleanest results for non-trivial tasks. Use positive framing ("include X") over negative constraints ("don't omit X"). Keep system-style meta-instructions out of the prompt body when running at `--effort xhigh` (DeepThink degrades under long system prompts).
+Default to XML scaffolding (DeepSeek V4 was trained heavily on XML-tagged data). The CO-STAR sections — `<context>`, `<objective>`, `<style>`, `<tone>`, `<audience>`, `<response_format>` — give the cleanest results for non-trivial tasks. Use positive framing ("include X") over negative constraints ("don't omit X"). Keep system-style meta-instructions out of the prompt body — DeepThink (always on for DeepSeek calls) degrades under long system prompts.
 
 **Example:**
 
 ```bash
-relay call --to deepseek --name pool-design --effort high <<'BODY'
+relay call --to deepseek --name pool-design <<'BODY'
 <context>
 We're hardening src/db/pool.py before a SOC 2 audit. Codebase is Python 3.12 +
 FastAPI. Tests live in tests/test_pool.py and run under pytest.

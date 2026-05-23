@@ -41,28 +41,27 @@ Convergence across diverse lenses is high-confidence signal; divergence surfaces
 
 Override dispatch config with positional args before the question, or use natural language — both work.
 
-**Positional:** `<sub> <codex-count> <codex-effort> <ds-count> <ds-effort> [r] <question>`
+**Positional:** `<sub> <codex-count> <codex-effort> <ds-count> [r] <question>`
 - **sub** — number of same-model (Claude) subagents (default: 2)
 - **codex-count** — number of Codex parallax agents (default: 1, `0` to opt out)
-- **codex-effort** — Codex reasoning effort: `n` none, `l` low, `m` medium, `h` high, `x` xhigh (default: `m`)
-- **ds-count** — number of DeepSeek parallax agents (default: 1, `0` to opt out)
-- **ds-effort** — DeepSeek reasoning effort: `h` high, `x` max (default: `h`). Only these two letters are valid for DeepSeek (V4 Pro exposes two thinking tiers).
+- **codex-effort** — Codex reasoning effort: `m` medium, `x` xhigh (default: `m`)
+- **ds-count** — number of DeepSeek parallax agents (default: 1, `0` to opt out). DeepSeek always runs at `max` (DeepThink) — no effort knob.
 - **r** — enable anonymous peer review round (default: off)
 
-**Omission rule:** Positions fill left-to-right and you may stop at any point; remaining positions take their defaults. You cannot skip a position — to reach `ds-count`, you must specify the three preceding tokens. When a count is `0`, the following effort token is still consumed positionally (so the next digit lands in the right slot) and then ignored.
+**Omission rule:** Positions fill left-to-right and you may stop at any point; remaining positions take their defaults. You cannot skip a position — to reach `ds-count`, you must specify the three preceding tokens. When `codex-count` is `0`, the following effort token is still consumed positionally (so the next digit lands in the right slot) and then ignored.
 
 Examples:
-- `prism 2 2 x 2 x Which architecture should we pick?` — 2 sub, 2 Codex (xhigh), 2 DeepSeek (max)
-- `prism 3 2 h 1 h Why does X happen?` — 3 sub, 2 Codex (high), 1 DeepSeek (high)
-- `prism 1 0 m 1 h Same-model + DeepSeek` — 1 sub, no Codex, 1 DeepSeek (high)
-- `prism 2 1 m 0 h r Should we launch X?` — 2 sub, 1 Codex (medium), no DeepSeek, peer review
-- `prism 2 0 m 0 h Solo-claude only` — 2 sub, no parallax at all (degraded — flag to user)
-- `prism Why does X?` — all defaults: 2 sub, 1 Codex (medium), 1 DeepSeek (high)
+- `prism 2 2 x 2 Which architecture should we pick?` — 2 sub, 2 Codex (xhigh), 2 DeepSeek (max)
+- `prism 3 2 x 1 Why does X happen?` — 3 sub, 2 Codex (xhigh), 1 DeepSeek (max)
+- `prism 1 0 m 1 Same-model + DeepSeek` — 1 sub, no Codex, 1 DeepSeek (max)
+- `prism 2 1 m 0 r Should we launch X?` — 2 sub, 1 Codex (medium), no DeepSeek, peer review
+- `prism 2 0 m 0 Solo-claude only` — 2 sub, no parallax at all (degraded — flag to user)
+- `prism Why does X?` — all defaults: 2 sub, 1 Codex (medium), 1 DeepSeek (max)
 - `prism r Should we launch X?` — all defaults plus peer review (`r` may appear before the question)
 - `prism 3 Why does X?` — 3 sub, defaults for both parallax tiers (omission rule: trailing positions take defaults)
-- `prism 3 sub, 2 codex high, 1 deepseek max, with review: Why does X?` — natural language works too
+- `prism 3 sub, 2 codex xhigh, 1 deepseek, with review: Why does X?` — natural language works too
 
-**Parsing:** Read tokens left-to-right. A token is config if it is a single digit, an effort letter (`n`/`l`/`m`/`h`/`x`), or the literal `r` (peer review). Map positionally in this order: digit → sub-count, digit → codex-count, letter → codex-effort, digit → ds-count, letter → ds-effort. The `r` token may appear anywhere among config tokens. The first non-matching token begins the question. Reject DeepSeek effort letters outside `{h, x}` with: "DeepSeek effort must be h or x." Natural language config is also accepted.
+**Parsing:** Read tokens left-to-right. A token is config if it is a single digit, an effort letter (`m`/`x`), or the literal `r` (peer review). Map positionally in this order: digit → sub-count, digit → codex-count, letter → codex-effort, digit → ds-count. The `r` token may appear anywhere among config tokens. The first non-matching token begins the question. Reject effort letters outside `{m, x}` with: "Codex effort must be m or x." Natural language config is also accepted.
 
 **Both Parallax tiers are on by default.** Every run with `codex-count > 0` MUST include that many Bash relay calls to Codex; every run with `ds-count > 0` MUST include that many to DeepSeek. Do not skip, replace with a subagent, or defer. Exceptions: (1) user explicitly set the tier's count to `0`, or (2) `relay` is unavailable (substitute a same-model adversarial agent and warn the user about degradation). If your planned dispatch set contains fewer relay calls than `codex-count + ds-count`, Parallax is incomplete — fix before launching.
 
@@ -70,8 +69,8 @@ Examples:
 
 Parallax is dispatched via `relay` to **different models** (Codex and/or DeepSeek). Invoke `relay` directly — not via a subagent that calls relay. The value of each tier is model diversity:
 
-- **Codex** brings GPT-5.5's training, its strengths in agentic code review, and a fine-grained five-level effort scale.
-- **DeepSeek** brings an entirely independent training lineage (open-weight V4-Pro), distinct prompting conventions, and two thinking tiers (`high`/`max`).
+- **Codex** brings GPT-5.5's training, its strengths in agentic code review, and two effort tiers (`medium`/`xhigh`).
+- **DeepSeek** brings an entirely independent training lineage (open-weight V4-Pro), distinct prompting conventions, and always runs at `max` (DeepThink).
 
 Assign each tier a lens that maximizes diversity (e.g., give one parallax tier an Adversarial lens when subagents have Correctness and Simplicity; give the other a Falsification or Disconfirming lens). When using two parallax tiers, give them distinct lenses — never the same lens to both Codex and DeepSeek (that wastes a perspective).
 
@@ -85,17 +84,17 @@ If those symlinks are unavailable, use the repo copies at `agents/extensions/ski
 
 ```bash
 # Codex parallax
-relay call --to codex --name <slug> --effort <level> <<'BODY'
+relay call --to codex --name <slug> --effort <medium|xhigh> <<'BODY'
 <prompt content here>
 BODY
 
-# DeepSeek parallax
-relay call --to deepseek --name <slug> --effort <level> <<'BODY'
+# DeepSeek parallax (no --effort — always max)
+relay call --to deepseek --name <slug> <<'BODY'
 <prompt content here>
 BODY
 ```
 
-`--name` is required (lowercase slug, e.g., `prism-adversarial`). `--to codex` is the script default and may be omitted; `--to deepseek` is required for DeepSeek calls. The heredoc body must not be empty. Do not pass model flags — the script handles model selection. For concurrency details (backgrounding, timeouts), follow the relay skill's Async / Parallel section for your platform.
+`--name` is required (lowercase slug, e.g., `prism-adversarial`). `--to codex` is the script default and may be omitted; `--to deepseek` is required for DeepSeek calls. Do not pass `--effort` to DeepSeek — it always runs at `max` and the flag is silently ignored. The heredoc body must not be empty. Do not pass model flags — the script handles model selection. For concurrency details (backgrounding, timeouts), follow the relay skill's Async / Parallel section for your platform.
 
 **Inspecting Parallax results:** Only read the `.res.md` response file. Never read the `.log` sidecar — it contains the peer's full stderr, which is extremely long and token-heavy. The relay script's Bash output already surfaces diagnostic information for failure cases.
 
@@ -109,22 +108,14 @@ If `relay` is unavailable, replace both Parallax tiers with same-model subagents
 
 Without these redundant prohibitions, the peer will treat the task as a fresh request and recurse.
 
-**Effort selection for Parallax:** If the user specified effort levels in the shorthand, use those values verbatim. Otherwise, choose `--effort` per tier and lens.
+**Effort selection for Parallax:** If the user specified `codex-effort` in the shorthand, map it to the relay flag value: `m` → `--effort medium`, `x` → `--effort xhigh`. Otherwise, pick the Codex effort by lens. DeepSeek has no effort knob — every DeepSeek call runs at `max`.
 
-Codex parallax (`--effort` accepts `n`/`l`/`m`/`h`/`x`):
-
-| Lens type | `--effort` | Rationale |
-|-----------|-----------|-----------|
-| Adversarial, Falsification, Disconfirming | `high` or `xhigh` | Needs deep reasoning to find subtle flaws |
-| Correctness, Risk, Causal | `high` | Benefits from thorough analysis |
-| Simplicity, Pragmatist, Feasibility, Breadth | `medium` | Pattern-matching; deeper reasoning adds latency without proportional quality gain |
-
-DeepSeek parallax (DeepSeek V4 Pro exposes only `high` and `max` thinking tiers; the prism shorthand mirrors that with `h` and `x` only — other effort letters are rejected at parse time):
+Codex parallax (`--effort` accepts `medium`/`xhigh`):
 
 | Lens type | `--effort` | Rationale |
 |-----------|-----------|-----------|
-| Adversarial, Falsification, Disconfirming | `xhigh` (→ DeepSeek `max`) | DeepThink mode catches subtle flaws other models miss |
-| Everything else | `high` (→ DeepSeek `high`) | Default thinking depth handles most analytical tasks well |
+| Adversarial, Falsification, Disconfirming | `xhigh` | Needs deep reasoning to find subtle flaws |
+| Everything else | `medium` | Balanced default; deeper reasoning adds latency without proportional quality gain |
 
 ### Subagents
 
@@ -211,16 +202,16 @@ LAUNCHER_CODEX=$(sed -e 's|{{SHARED_PACKET_PATH}}|/tmp/prism-abc123.md|g' \
                      -e 's|{{LENS_NAME}}|Adversarial|g' \
                      -e 's|{{LENS_DESC}}|weigh the strongest attacks on the proposal|g' \
                      /path/to/templates/launcher-relay-codex.tmpl)
-relay call --to codex --name prism-adversarial --effort high <<BODY
+relay call --to codex --name prism-adversarial --effort xhigh <<BODY
 $LAUNCHER_CODEX
 BODY
 
-# DeepSeek Parallax example (render to variable, pass as heredoc)
+# DeepSeek Parallax example (render to variable, pass as heredoc — no --effort)
 LAUNCHER_DS=$(sed -e 's|{{SHARED_PACKET_PATH}}|/tmp/prism-abc123.md|g' \
                   -e 's|{{LENS_NAME}}|Falsification|g' \
                   -e 's|{{LENS_DESC}}|weigh what evidence would prove this wrong|g' \
                   /path/to/templates/launcher-relay-deepseek.tmpl)
-relay call --to deepseek --name prism-falsification --effort high <<BODY
+relay call --to deepseek --name prism-falsification <<BODY
 $LAUNCHER_DS
 BODY
 ```
@@ -248,7 +239,7 @@ Run these checks before launching. If any fails, rewrite and re-check.
 
    If any count mismatches, the dispatch is wrong — fix before launching. The most common failure is forgetting the DeepSeek call because the previous parallax model was Codex-only.
 
-6. **Effort test:** If the user specified effort levels in the shorthand, confirm every Codex relay call uses the exact `codex-effort` level and every DeepSeek relay call uses the exact `ds-effort` level. If effort was omitted, confirm each call uses the effort from the lens-based tables (Effort selection for Parallax). State both effort levels being applied. DeepSeek effort must be `h` or `x`; reject `n`/`l`/`m` at parse time.
+6. **Effort test:** If the user specified `codex-effort` in the shorthand, confirm every Codex relay call uses the mapped level (`m` → `--effort medium`, `x` → `--effort xhigh`) — never pass the raw shorthand letter, the relay script rejects it. If omitted, confirm each Codex call uses the effort from the lens-based table (Effort selection for Parallax). State the Codex effort being applied. DeepSeek calls must NOT pass `--effort` — it always runs at `max`. Reject Codex effort letters outside `{m, x}` at parse time.
 
 ### Division-of-labor diagnostic
 
@@ -376,7 +367,7 @@ Since you composed the prompts and chose the lenses, your self-review is not ful
 
 **Do not synthesize, summarize, or present results until EVERY dispatched agent — including both Parallax tiers — has returned.** This is a hard gate, not a suggestion. Having "enough" subagents is never a reason to skip the remaining agents. The whole point of Parallax is model diversity — proceeding without it defeats the purpose of Prism. Codex finishing first is not permission to ignore DeepSeek, and vice versa.
 
-**Parallax is slow — that is normal and expected.** Relay calls routinely take 2-5x longer than same-model subagents. DeepSeek calls at `--effort xhigh` (DeepThink `max`) are the slowest of all. Do not diagnose, retry, report failure, or proceed while a background task is running. The system sends a completion notification per call; until all expected notifications arrive, the run is healthy. Do not tell the user you are "still waiting" or suggest proceeding without any tier.
+**Parallax is slow — that is normal and expected.** Relay calls routinely take 2-5x longer than same-model subagents. DeepSeek calls (always at DeepThink `max`) and Codex calls at `--effort xhigh` are the slowest. Do not diagnose, retry, report failure, or proceed while a background task is running. The system sends a completion notification per call; until all expected notifications arrive, the run is healthy. Do not tell the user you are "still waiting" or suggest proceeding without any tier.
 
 **What to do while waiting:** Work on your self-review (Step 2). If self-review is done, wait silently. Do not synthesize partial results.
 

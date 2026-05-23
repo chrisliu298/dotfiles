@@ -14,8 +14,8 @@ relay call --name <slug> [--effort <level>] [--body-only] <<'BODY'
 task
 BODY
 
-# Claude Code → DeepSeek
-relay call --to deepseek --name <slug> [--effort <level>] [--body-only] <<'BODY'
+# Claude Code → DeepSeek (always runs at max — no --effort)
+relay call --to deepseek --name <slug> [--body-only] <<'BODY'
 task
 BODY
 ```
@@ -154,8 +154,8 @@ Each peer pins a specific model. Do **not** substitute other models — they may
 
 | Peer (`--to`) | Model | Reasoning effort | Notes |
 |---|---|---|---|
-| `codex` (default) | `gpt-5.5` | `none`/`low`/`medium`/`high`/`xhigh` | Claude selects effort per task; default `medium` |
-| `deepseek` | `deepseek-v4-pro` | Two tiers: relay `xhigh` → DeepSeek `max`; everything else → DeepSeek `high` | Requires `DEEPSEEK_API_KEY`; reached via the `claude` CLI with DeepSeek's Anthropic-compatible endpoint |
+| `codex` (default) | `gpt-5.5` | `medium` / `xhigh` | Claude selects effort per task; default `medium` |
+| `deepseek` | `deepseek-v4-pro` | Always `max` (DeepThink) — no `--effort` knob | Requires `DEEPSEEK_API_KEY`; reached via the `claude` CLI with DeepSeek's Anthropic-compatible endpoint |
 
 ### Call
 
@@ -172,12 +172,12 @@ BODY
 **Claude Code → DeepSeek:**
 
 ```bash
-relay call --to deepseek --name auth-review --effort high <<'BODY'
+relay call --to deepseek --name auth-review <<'BODY'
 Review src/auth.py for security issues. Run pytest to verify.
 BODY
 ```
 
-The `--name` flag provides a human-readable slug; the script prepends a timestamp and PID automatically (format: `YYYYMMDD-HHMMSS-PID-{name}`). The `--effort` flag controls reasoning depth on both peers (mapped down to DeepSeek's two-tier scale automatically).
+The `--name` flag provides a human-readable slug; the script prepends a timestamp and PID automatically (format: `YYYYMMDD-HHMMSS-PID-{name}`). The `--effort` flag controls Codex reasoning depth (`medium` or `xhigh`); it does not apply to DeepSeek, which always runs at `max`.
 
 Generated request `.relay/20260219-163042-12345-auth-review.req.md`:
 

@@ -108,21 +108,20 @@ Or invoke directly with `prism` — also available to subagents.
 Override dispatch defaults with positional args before the question:
 
 ```
-prism <sub> <codex-count> <codex-effort> <ds-count> <ds-effort> [r] <question>
+prism <sub> <codex-count> <codex-effort> <ds-count> [r] <question>
 ```
 
 - `sub` — Claude subagent count (default `2`)
 - `codex-count` — Codex parallax count (default `1`, `0` to skip)
-- `codex-effort` — `n` / `l` / `m` / `h` / `x` (default `m`)
-- `ds-count` — DeepSeek parallax count (default `1`, `0` to skip)
-- `ds-effort` — `h` / `x` only (default `h`; DeepSeek V4 exposes two thinking tiers)
+- `codex-effort` — `m` / `x` only (default `m`; Codex relay exposes two effort tiers — medium and xhigh)
+- `ds-count` — DeepSeek parallax count (default `1`, `0` to skip). DeepSeek always runs at `max` (DeepThink) — no effort knob.
 - `r` — optional anonymous peer review round
 
 Examples:
 
-- `prism 2 2 x 2 x Which architecture should we pick?` — 2 subagents, 2 Codex (xhigh), 2 DeepSeek (max)
-- `prism 1 0 m 1 h Same-model + DeepSeek only` — skip Codex
-- `prism 2 1 h 0 h r Should we launch X?` — Codex high, no DeepSeek, peer review enabled
+- `prism 2 2 x 2 Which architecture should we pick?` — 2 subagents, 2 Codex (xhigh), 2 DeepSeek (max)
+- `prism 1 0 m 1 Same-model + DeepSeek only` — skip Codex
+- `prism 2 1 x 0 r Should we launch X?` — Codex xhigh, no DeepSeek, peer review enabled
 - `prism Why does X?` — all defaults
 
 ### Example output
@@ -194,8 +193,8 @@ Parallax is the cross-model tier of Prism. It dispatches agents via [Relay](http
 
 | Tier | Model | Effort scale | Strength |
 |---|---|---|---|
-| Codex | GPT-5.5 | `none`/`low`/`medium`/`high`/`xhigh` | Strong agentic coding, fine-grained effort control |
-| DeepSeek | DeepSeek V4 Pro (1.6T MoE, open-weight) | `high`/`max` (DeepThink) | Independent vendor lineage, frontier reasoning at `max` |
+| Codex | GPT-5.5 | `medium`/`xhigh` | Strong agentic coding, two-tier effort control |
+| DeepSeek | DeepSeek V4 Pro (1.6T MoE, open-weight) | `max` only (DeepThink, no knob) | Independent vendor lineage, frontier reasoning |
 
 Each tier is dispatched as a separate concurrent Relay call. All Parallax agents receive the same full question and context as every other agent — only the lens differs.
 

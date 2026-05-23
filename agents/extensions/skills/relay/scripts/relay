@@ -156,8 +156,8 @@ cmd_req() {
 
   ensure_relay_dir
 
-  # Build effort line (only codex consumes it via frontmatter; deepseek takes
-  # effort via env var on the wrapper, set in cmd_call below).
+  # Build effort line (only codex consumes it via frontmatter; deepseek
+  # always runs at max and ignores effort entirely).
   local effort_line=""
   if [ -n "$effort" ] && [ "$to" = "codex" ]; then
     effort_line=$'\n'"effort: $effort"
@@ -230,15 +230,17 @@ cmd_call() {
     fi
   fi
 
-  # Validate effort level
-  case "$effort" in
-    none|low|medium|high|xhigh) ;;
-    *) die "call: --effort must be none, low, medium, high, or xhigh" ;;
-  esac
+  # Validate effort level. Only codex consumes it; deepseek always runs at
+  # max and silently ignores --effort.
+  if [ "$to" = "codex" ]; then
+    case "$effort" in
+      medium|xhigh) ;;
+      *) die "call: --effort must be medium or xhigh for codex" ;;
+    esac
+  fi
 
-  # Build req. cmd_req decides whether to surface effort in frontmatter (only
-  # codex does); pass effort through for all peers so deepseek can map it to
-  # CLAUDE_CODE_EFFORT_LEVEL below.
+  # Build req. cmd_req surfaces effort in frontmatter only for codex; deepseek
+  # ignores it (always runs at max via CLAUDE_CODE_EFFORT_LEVEL below).
   local req_args=(--from "$from" --to "$to" --effort "$effort")
   [ -n "$name" ] || die "call: --name required"
   check_slug "call: --name" "$name"
@@ -288,10 +290,7 @@ EOF
       --add-dir "$RELAY_DIR"
       "$peer_prompt")
   elif [ "$to" = "deepseek" ]; then
-    # DeepSeek V4 Pro exposes two effort tiers (high, max); map relay's
-    # five-level scale down: xhigh → max, everything else → high.
-    local ds_effort=high
-    [ "$effort" = "xhigh" ] && ds_effort=max
+    # DeepSeek always runs at max (DeepThink). --effort is not a knob here.
     peer_cmd=(env -u CLAUDECODE -u TMUX COLORTERM=truecolor
       ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
       ANTHROPIC_AUTH_TOKEN="$DEEPSEEK_API_KEY"
@@ -300,7 +299,7 @@ EOF
       ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4-pro
       ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-flash
       CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-pro
-      CLAUDE_CODE_EFFORT_LEVEL="$ds_effort"
+      CLAUDE_CODE_EFFORT_LEVEL=max
       claude -p --dangerously-skip-permissions "$peer_prompt")
   fi
 
@@ -348,7 +347,8 @@ Subcommands:
 
 Call options:
   --name <slug>      Call identifier
-  --effort <level>   Reasoning effort: none, low, medium (default), high, xhigh
+  --effort <level>   Reasoning effort for codex: medium (default) or xhigh.
+                     Ignored for deepseek — it always runs at max.
   --body-only        Strip frontmatter from response output
   --from <peer>      Override caller detection (normally claude)
   --to <peer>        Override peer detection (codex or deepseek; default codex)
