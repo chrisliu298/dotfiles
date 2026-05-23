@@ -17,17 +17,21 @@ This skill assumes the user has `ENABLE_PROMPT_CACHING_1H=1` set (the 1-hour cac
 
 ## Cadence
 
-Cron cannot express "every 55 minutes." `*/55 * * * *` does **not** mean every 55 min — `*/N` resets each hour, so `*/55` fires at minute 0 and 55, producing alternating 55-min and 5-min gaps. Any `*/N` where N does not divide 60 is broken the same way. **Do not use `*/55`.**
+Only cron `*/N` patterns where **N divides 60** produce uniform gaps — i.e. 15, 20, 30, 60. Anything else (`*/55`, `*/45`, `*/40`, `*/25`) resets at the top of each hour and produces a broken alternating pattern. **`*/55` is the canonical trap: it fires at :00 and :55, giving 55-min then 5-min gaps.**
 
-Two correct options:
-- **`*/30 * * * *` via CronCreate** (default): uniform 30-min gaps, well under the 60-min TTL, set-and-forget. One extra heartbeat per hour vs. a 55-min cadence — cheap, since the heartbeat is a single short reply. **No chain risk:** cron keeps firing regardless of missed wake-ups.
-- **`/loop 55m <heartbeat-prompt>`** (only if the user explicitly wants 55-min cadence): true 55 min via the `/loop` skill, which reschedules itself with `ScheduleWakeup` under the hood. Tradeoff: it's a self-rescheduling chain, so a dropped wake-up silently ends it.
+`/loop <interval>` also uses cron under the hood for interval mode, so `/loop 55m` is broken the same way — do not suggest it as a workaround. (`/loop` dynamic mode, invoked with no interval, uses `ScheduleWakeup` and can pick any delay in [60s, 3600s] — but that's an active self-paced loop, not a passive heartbeat, and isn't appropriate for keep-warm.)
+
+**True 55-min cadence is not reachable for keep-warm purposes.** Pick a cron-friendly cadence instead:
+
+- **`*/30 * * * *`** (default): uniform 30-min gaps, well under the 60-min TTL. One extra heartbeat per hour vs. a hypothetical 55-min cadence — cheap, since the heartbeat is a single short reply.
+- **`*/20 * * * *`** or **`*/15 * * * *`**: tighter cadences if extra safety margin is wanted.
+- **Avoid `0 * * * *`** (every 60 min): fires *at* the TTL boundary, leaving zero margin for delivery jitter.
 
 Do **not** call `ScheduleWakeup` directly from this skill — it's gated to `/loop` dynamic mode and its `prompt` must be a `/loop` input.
 
 ## Start
 
-1. Default to **CronCreate** with `*/30 * * * *`. Only use `/loop 55m` if the user explicitly asked for a 55-min cadence and accepts the chain-failure risk.
+1. Use **CronCreate** with `*/30 * * * *`. If the user explicitly asks for "every 55 minutes" or another non-divisor cadence, tell them it's not expressible cleanly and offer the nearest divisor (30 or 60-but-risky) — do **not** silently substitute or use `/loop 55m`.
 2. Heartbeat prompt: `Cache heartbeat. Reply with one short line and stop. No file reads, no tool calls, no other action.`
 3. Tag the schedule's reason field with `keep-warm heartbeat` so `stop` can find it.
 4. Report to the user: scheduled, cadence, next fire time, and how to stop.
