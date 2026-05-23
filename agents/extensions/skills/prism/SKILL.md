@@ -72,7 +72,7 @@ Parallax is dispatched via `relay` to **different models** (Codex and/or DeepSee
 - **Codex** brings GPT-5.5's training, its strengths in agentic code review, and two effort tiers (`medium`/`xhigh`).
 - **DeepSeek** brings an entirely independent training lineage (open-weight V4-Pro), distinct prompting conventions, and always runs at `max` (DeepThink).
 
-Assign each tier a lens that maximizes diversity (e.g., give one parallax tier an Adversarial lens when subagents have Correctness and Simplicity; give the other a Falsification or Disconfirming lens). When using two parallax tiers, give them distinct lenses — never the same lens to both Codex and DeepSeek (that wastes a perspective).
+Assign each tier a lens that maximizes diversity. For stress-testing tasks (decisions, designs, code reviews, risk-bearing changes), an adversarial lens (Adversarial, Falsification, Disconfirming) on at least one parallax tier sharpens the dispatch — e.g., when subagents have Correctness and Simplicity, give one parallax Adversarial and the other Falsification. For wide-research or exploratory tasks where the goal is broad coverage rather than attacking a proposal, prefer orthogonal exploratory lenses (Breadth-Weighted, Depth-Weighted, Outsider, First-Principles) on the parallax tiers instead. When using two parallax tiers, give them distinct lenses — never the same lens to both Codex and DeepSeek (that wastes a perspective).
 
 Before writing any Parallax relay prompt:
 - **For Codex:** read `~/.claude/skills/prompt-engineer/references/gpt.md` and `~/.claude/skills/prompt-engineer/references/codex.md`.
@@ -98,7 +98,7 @@ BODY
 
 **Inspecting Parallax results:** Only read the `.res.md` response file. Never read the `.log` sidecar — it contains the peer's full stderr, which is extremely long and token-heavy. The relay script's Bash output already surfaces diagnostic information for failure cases.
 
-If `relay` is unavailable, replace both Parallax tiers with same-model subagents using **structurally adversarial lenses** (Adversarial, Falsification, Disconfirming) and warn the user.
+If `relay` is unavailable, replace both Parallax tiers with same-model subagents and warn the user. Pick replacement lenses to match the task: structurally adversarial lenses (Adversarial, Falsification, Disconfirming) for stress-testing tasks; orthogonal exploratory lenses (Breadth-Weighted, Depth-Weighted, Outsider, First-Principles) for wide-research or exploratory tasks.
 
 **Constraint leakage risk (CRITICAL):** Relay peers may recurse unless the anti-recursion rule is explicit, early, and repeated. You MUST:
 1. Put the anti-recursion warning at the top of every launcher prompt, before the file-read instruction.
@@ -230,7 +230,7 @@ Run these checks before launching. If any fails, rewrite and re-check.
 
 3. **Redundancy test:** Swap any two agents' lenses. If the prompts become incoherent, you have divided labor. This applies across tiers too — a Codex agent's lens and a DeepSeek agent's lens should be swappable in principle (only the prompt format differs).
 
-4. **Lens quality test:** Each lens name must be a weighing posture (1-3 words), never a task or role. For each lens, write one sentence explaining what unique axis it covers that no other lens does. If two lenses would produce the same emphasis, replace one. At least one lens across the full dispatch set must be structurally adversarial. Never assign the same lens to both Codex and DeepSeek — that wastes a perspective.
+4. **Lens quality test:** Each lens name must be a weighing posture (1-3 words), never a task or role. For each lens, write one sentence explaining what unique axis it covers that no other lens does. If two lenses would produce the same emphasis, replace one. **Adversarial coverage is task-dependent:** for tasks that propose, evaluate, or change something risk-bearing (decisions, designs, code reviews, implementations, root-cause claims), at least one lens across the full dispatch set must be structurally adversarial (Adversarial, Falsification, Disconfirming, Risk, or similar). For wide-research, exploratory, or open-ended discovery tasks where the goal is breadth of coverage rather than attacking a proposal, an adversarial lens is optional — name the task as exploratory and justify the choice before dispatch. Never assign the same lens to both Codex and DeepSeek — that wastes a perspective.
 
 5. **Dispatch-shape test (CRITICAL):** Total dispatched agents (subagents + Codex parallax + DeepSeek parallax) must match the configured counts. Self does not count. Enumerate planned calls by type:
    - Bash relay calls with `--to codex` must equal `codex-count`.
@@ -261,7 +261,7 @@ Starting points — every lens still answers the full question:
 - **Diagnosis / root cause**: Causal + Falsification + Risk
 - **Option comparison**: Simplicity + Feasibility + Disconfirming
 - **Writing / communication**: Clarity + Audience + Adversarial
-- **Research / exploration**: Breadth-Weighted + Depth-Weighted + Disconfirming
+- **Research / exploration**: Breadth-Weighted + Depth-Weighted + Outsider (adversarial optional — swap in Disconfirming only if there's a claim to stress-test)
 - **Decision / strategy**: First-Principles + Disconfirming + Expansionist + Outsider + Executor
 
 ## Peer Review (Optional)

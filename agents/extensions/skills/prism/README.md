@@ -177,12 +177,12 @@ A lens is a **weighing posture**, not a task variant. Every agent answers the fu
 | Diagnosis / root cause | Causal + Falsification + Risk |
 | Option comparison | Simplicity + Feasibility + Disconfirming |
 | Writing / communication | Clarity + Audience + Adversarial |
-| Research / exploration | Breadth-Weighted + Depth-Weighted + Disconfirming |
+| Research / exploration | Breadth-Weighted + Depth-Weighted + Outsider (adversarial optional) |
 
 The skill includes pre-launch checks that prevent common mistakes:
 
 1. **Redundancy test** — ensures agents aren't dividing labor
-2. **Lens quality test** — ensures lenses are distinct weighing postures with at least one adversarial
+2. **Lens quality test** — ensures lenses are distinct weighing postures; requires at least one adversarial lens for stress-testing tasks (decisions, designs, reviews, risk-bearing changes), optional for wide-research or exploratory tasks
 3. **Count test** — ensures the right number of agents are dispatched
 
 ---
@@ -202,11 +202,11 @@ Each tier is dispatched as a separate concurrent Relay call. All Parallax agents
 
 Same-model agents share systematic biases from training. A cross-model perspective catches issues that no amount of same-model redundancy will surface. With two parallax tiers, you can stack the diversity: when Codex and DeepSeek dissent in the same direction, that's a high-signal finding that two independent training lineages agree the subagents missed something.
 
-Assign each parallax tier a lens that maximizes diversity (e.g., if subagents have Correctness and Simplicity, give one parallax Adversarial and the other Falsification). Never assign the same lens to both Codex and DeepSeek — that wastes a perspective.
+Assign each parallax tier a lens that maximizes diversity. For stress-testing tasks (e.g., subagents on Correctness and Simplicity), give one parallax Adversarial and the other Falsification. For wide-research or exploratory tasks, use orthogonal exploratory lenses (Breadth-Weighted, Outsider, First-Principles) on the parallax tiers instead — Prism is also valuable when you want broad coverage rather than to attack a proposal. Never assign the same lens to both Codex and DeepSeek — that wastes a perspective.
 
 ### Without Relay
 
-If Relay is not installed, Prism replaces both Parallax tiers with same-model agents using **structurally adversarial lenses** (Adversarial, Falsification, Disconfirming). This partially compensates for missing model diversity. The user can also opt out of either tier explicitly by setting its count to `0`.
+If Relay is not installed, Prism replaces both Parallax tiers with same-model agents and picks replacement lenses based on the task: structurally adversarial lenses (Adversarial, Falsification, Disconfirming) for stress-testing tasks, or orthogonal exploratory lenses (Breadth-Weighted, Outsider, First-Principles) for wide-research tasks. This partially compensates for missing model diversity. The user can also opt out of either tier explicitly by setting its count to `0`.
 
 ---
 
