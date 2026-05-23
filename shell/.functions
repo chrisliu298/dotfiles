@@ -221,11 +221,11 @@ _deepseek(){
         CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-pro \
         "$(command -v claude)" "$@"
 }
-ds(){   CLAUDE_CODE_EFFORT_LEVEL=high _deepseek --dangerously-skip-permissions "$@"; }
-dsx(){  CLAUDE_CODE_EFFORT_LEVEL=max  _deepseek --dangerously-skip-permissions "$@"; }
-dsc(){  CLAUDE_CODE_EFFORT_LEVEL=high _deepseek --dangerously-skip-permissions --continue "$@"; }
-dsr(){  CLAUDE_CODE_EFFORT_LEVEL=high _deepseek --dangerously-skip-permissions --resume "$@"; }
-dshl(){ (( $# )) || { echo 'Usage: dshl "<prompt>"'; return 1; }; CLAUDE_CODE_EFFORT_LEVEL=high _deepseek -p --dangerously-skip-permissions "${*}"; }
+ds(){   CLAUDE_CODE_EFFORT_LEVEL=max  _deepseek --dangerously-skip-permissions "$@"; }
+dsh(){  CLAUDE_CODE_EFFORT_LEVEL=high _deepseek --dangerously-skip-permissions "$@"; }
+dsc(){  CLAUDE_CODE_EFFORT_LEVEL=max  _deepseek --dangerously-skip-permissions --continue "$@"; }
+dsr(){  CLAUDE_CODE_EFFORT_LEVEL=max  _deepseek --dangerously-skip-permissions --resume "$@"; }
+dshl(){ (( $# )) || { echo 'Usage: dshl "<prompt>"'; return 1; }; CLAUDE_CODE_EFFORT_LEVEL=max _deepseek -p --dangerously-skip-permissions "${*}"; }
 
 # Show Claude + Codex account emails on local, macmini, and l40s.
 ae() {
