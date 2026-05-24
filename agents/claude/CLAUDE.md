@@ -1,21 +1,26 @@
 # CLAUDE.md
 
+Behavioral guidelines to reduce common LLM failure modes—sprawl, premature optimization, scope creep, unverified "improvements". Under ambiguity, err toward deciding and proceeding (not stopping to ask); escalate only on the named gates below.
+
+**Working if**: every changed line traces to the request, clarifying questions arrive before implementation (not after), no rewrites for overcomplication.
+
 ## Working Principles
 
 ### Planning & Problem-Solving
 
 - **Plan and review**: For multi-step tasks, state a plan with verification steps (`[Step] → verify: [check]`); re-plan when assumptions break.
-- **Task tracking**: For non-trivial work, keep a compact checklist tied to verification, update it as facts change, and reconcile it before finishing.
-- **One-shot delivery**: Ship features and bug fixes as one complete change—no "Phase 1/Phase 2", "Priority 1/Priority 2", or mid-task approval checkpoints. Plan internally in steps if needed, but deliver one reviewable diff. Phasing is only for genuinely large/risky work (multi-PR migrations, cross-cutting refactors)—state the reason before splitting.
-- **Self-improvement**: After meaningful corrections, propose a concise rule for CLAUDE.md—only add if broadly reusable, to keep the file from bloating.
+- **Task tracking**: For multi-step work (see *Plan and review*), keep a checklist of verification bullets—update it as facts change and reconcile it before finishing.
+- **One-shot delivery**: Ship features and bug fixes as one complete change—no "Phase 1/Phase 2", "Priority 1/Priority 2", or mid-task approval checkpoints. Plan internally in steps if needed, but deliver one reviewable diff. Phasing is only for work that can't fit in a single reviewable diff (multi-PR migrations, cross-cutting refactors)—state the reason before splitting.
+- **Self-improvement**: After meaningful corrections, propose a concise rule for CLAUDE.md. Self-check: *would this rule have caught a different past mistake, or apply to a future task unrelated to this one?* If not, mention it in the reply and move on—don't bloat the file.
 - **Debugging**: Create a minimal reproduction before fixing.
-- **Minimum vs. ideal**: For non-trivial changes where the smallest patch and the cleanest structural fix diverge meaningfully, briefly state both options (1–2 lines each), recommend one, and proceed—only block on user input when the tradeoff is large enough to warrant it.
-- **Code is cheap**: When weighing options, don't downrank the structurally right solution because it "takes longer" or "costs more to build." Implementation time is not a primary constraint—prefer the durable fix over the short-term hack unless the user explicitly asks for a quick patch. Don't be bound by past patterns or "too expensive" framing; in an agent-driven workflow, iteration is cheap.
-- **First-principles thinking**: Don't blindly follow the stated path—question whether the request is an XY problem. If the goal is unclear, stop and clarify before proceeding. If the goal is clear but the path is suboptimal, proactively suggest a simpler, lower-cost approach.
+- **Minimum vs. ideal**: When the smallest patch and the cleanest fix diverge, state both in 1 line each, recommend one, and proceed. Block only when the tradeoff is large enough to genuinely change direction.
+- **Code is cheap**: Pick the durable fix over the hack. Self-check: *am I avoiding the structurally right solution because it "takes longer"?* If yes, switch. Override only if the user explicitly asked for a quick patch.
+- **Stop and ask when**: goal is unclear, two valid interpretations exist with materially different outcomes, you can't bisect a regression, or a quality claim has no eval harness. Otherwise: decide and proceed.
+- **First-principles thinking**: Question the stated path. Self-check: *is this an XY problem?* If the goal is unclear → stop (see "Stop and ask when"). If the goal is clear but the path is suboptimal → propose the simpler approach before coding.
 - **Context discipline**: Keep progress narration terse and useful. Summarize large logs, file dumps, and generated artifacts instead of pasting them into the conversation unless exact text is needed.
 - **Test-driven development**: For behavior changes, prefer RED/GREEN/REFACTOR when practical—write a failing test, watch it fail (setup errors don't count as RED), make it pass, refactor while green. Skip for config, docs, mechanical migrations, or emergency fixes; explain when skipped.
 - **Measure before optimizing**: For "did this make it better?" claims (agent quality, prompt changes, perf+accuracy tradeoffs), build the evaluation harness before iterating. Distinct from TDD: that's correctness, this is regression detection on fuzzy outputs. Without a number, every "improvement" is just changing posture.
-- **Stop-the-line for missing infra**: When you hit a regression you can't bisect or a "did this help?" you can't answer, halt feature work and build the harness/CI first. The cost of not having it compounds faster than the cost of building it.
+- **Stop-the-line for missing infra**: When you hit a regression you can't bisect or a "did this help?" you can't answer, halt feature work and build the harness/CI first. This overrides one-shot delivery—the harness is a separate prerequisite deliverable, not phasing. Resume the feature as its own one-shot diff after. The cost of not having it compounds faster than the cost of building it.
 
 ### Code
 
@@ -23,12 +28,13 @@
 - **Surgical cleanup**: Remove imports/variables/functions that YOUR changes made unused. Don't remove pre-existing dead code—mention it, don't delete it.
 - **Don't regenerate**: Use `cp`/`mv` for existing files, `curl`/`wget` for remote content. Never recreate from scratch—copy/move first, then edit in place.
 - **Workspace hygiene**: Keep scratch files out of the repo unless they are deliverables; use `/tmp` for experiments, delete temporary outputs before handoff, and do not add dead files, folders, or unused generated artifacts.
+- **Trace test**: Before declaring done, every edited line should trace to the user's request, or remove an orphan your edit created. If not, delete it.
 
 <important if="you are spawning or coordinating subagents">
 
 ### Agent Coordination
 
-- **Concurrent subagents**: Use subagents for parallelizable or isolated work—no keyword trigger required. Launch in background (`run_in_background: true`). Wait for ALL before synthesizing.
+- **Concurrent subagents**: Use subagents for parallelizable or isolated work—no keyword trigger required. Launch in background (`run_in_background: true`), continue local work while they run, and wait for all before final synthesis or when blocked.
 - **Orchestrator role**: When coordinating agents, write bounded tasks with clear ownership and expected output. The lead agent remains responsible for synthesis, reviewing agent results, resolving conflicts, and deciding the final change.
 - **Self-review**: For non-trivial changes, run independent subagent reviews. Use 2 reviewers for risky/broad changes. Skip for trivial edits.
 - **Redundancy vs. division**: Use redundant reviewers for diverse judgment on one question. Use parallel subtasks for naturally partitioned work. Don't conflate them.
