@@ -193,16 +193,6 @@ xu(){ npm install -g @openai/codex@latest "$@"; }
 xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.5 --config model_reasoning_effort=high "${*}"; }
 
 # =============================================================================
-# Grok
-# =============================================================================
-
-g(){ command grok --always-approve "$@"; }
-gc(){ command grok --always-approve --continue "$@"; }
-gr(){ command grok --always-approve --resume "$@"; }
-gu(){ command grok update "$@"; }
-ghl(){ (( $# )) || { echo 'Usage: ghl "<prompt>"'; return 1; }; command grok --always-approve -p "${*}"; }
-
-# =============================================================================
 # DeepSeek (via Claude Code, Anthropic-compatible endpoint)
 # =============================================================================
 # Routes Claude Code at DeepSeek per-invocation, so default `c`/`cc` keep using

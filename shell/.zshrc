@@ -30,7 +30,7 @@ zinit light zsh-users/zsh-completions
 zinit light zsh-users/zsh-autosuggestions
 
 # Oh My Zsh snippets
-# zinit snippet OMZP::git  # disabled — git aliases unused, conflicted with Grok g-family
+# zinit snippet OMZP::git  # disabled — git aliases unused
 zinit snippet OMZP::sudo
 zinit snippet OMZP::command-not-found
 

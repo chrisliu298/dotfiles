@@ -15,7 +15,6 @@ dotfiles/
 └── agents/
     ├── claude/              # Claude Code (~/.claude/) — CLAUDE.md, settings (copied), keybindings, hooks, statusline
     ├── codex/               # Codex (~/.codex/) — AGENTS.md
-    ├── grok/                # Grok Build (~/.grok/) — AGENTS.md
     └── extensions/skills/   # Global skills (SKILL.md per skill)
 ```
 
@@ -38,7 +37,7 @@ dotfiles/
 
 ## Editing Skills
 
-Never edit in `~/.claude/skills/`, `~/.codex/skills/`, or `~/.grok/skills/` — those are symlinks. Check `agents/extensions/README.md` for source.
+Never edit in `~/.claude/skills/` or `~/.codex/skills/` — those are symlinks. Check `agents/extensions/README.md` for source.
 
 - **Own skills** (`agents/extensions/skills/`): Edit in this repo — this is the single source of truth. Published GitHub repos are synced copies via `./dotfiles.sh publish`.
 - **Third-party skills** (cloned from GitHub): Edit in the source repo or fork
@@ -63,9 +62,7 @@ Managed by `SKILLS` table in `dotfiles.sh` (git-clone + symlink, no `npx skills`
 - **Project-local skills**: Place in `.claude/skills/<name>/` — available only in this repo, not globally
 - **Install/update all**: `./dotfiles.sh`
 
-Single SKILL.md per skill works in all three agents. Include Claude-specific frontmatter (`allowed-tools`, `user-invocable`) — Codex and Grok ignore unknown keys.
-
-**Grok reads `~/.claude/skills/` too.** Per Grok's Claude Code compatibility (`~/.grok/README.md` "Claude Code Compatibility" + `docs/user-guide/08-skills.md`), Grok auto-discovers `~/.claude/skills/`, `~/.claude/agents/`, `~/.claude/plugins/`, etc. as lowest-priority sources. Removing a skill from Grok via the `SKILLS` table only deletes `~/.grok/skills/<name>` — if the skill is still in `~/.claude/skills/<name>`, it will reappear in `grok inspect` under "Claude Code compatibility". `[skills] ignore` in `~/.grok/config.toml` does **not** filter the default Claude path (verified, only filters within `[skills] paths` entries). To fully hide a skill from Grok, also remove it from Claude (or disable it for both). Lowest-priority means it won't auto-trigger unless the prompt strongly matches its description.
+Single SKILL.md per skill works in both agents. Include Claude-specific frontmatter (`allowed-tools`, `user-invocable`) — Codex ignores unknown keys.
 
 </important>
 
@@ -83,7 +80,7 @@ From a non-interactive shell (e.g., an agent invoking it via a tool), use `zsh -
 
 ## Maintenance
 
-- **Sync instructions**: `agents/claude/CLAUDE.md`, `agents/codex/AGENTS.md`, and `agents/grok/AGENTS.md` share working principles — update all three when changing any
+- **Sync instructions**: `agents/claude/CLAUDE.md` and `agents/codex/AGENTS.md` share working principles — update both when changing either
 - **Update docs**: After structural changes, check if `README.md`, `CLAUDE.md`, or `AGENTS.md` reference affected paths
 
 </important>

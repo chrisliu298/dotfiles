@@ -14,38 +14,37 @@ Single source of truth: own skills live in `agents/extensions/skills/`; communit
 
 - Claude → `~/.claude/skills/`
 - Codex  → `~/.codex/skills/`
-- Grok   → `~/.grok/skills/`
 
-Each `SKILL.md` works across all three agents. Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by the others. Agent-specific variants (`relay`) use per-agent subdirectories.
+Each `SKILL.md` works across both agents. Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex. Agent-specific variants (`relay`) use per-agent subdirectories.
 
 Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via `./dotfiles.sh skills`. Publish own skills to standalone GitHub repos via `./dotfiles.sh publish`.
 
 ### Skill matrix
 
-Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
+Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
 > DeepSeek is reached **through** Claude Code via the `ds`/`dsx`/… aliases (see `shell/.functions`), so it inherits the Claude column directly.
 
-| Skill | C | X | G | Default | Source · Description |
-|-------|:-:|:-:|:-:|:-------:|----------------------|
-| arxiv-reader            | ✓ | ✓ | ✓ | on     | local — Read arxiv via TeX / HF markdown / HTML fallback |
-| [autoresearch][p-ar]    | ✱ | ✱ | ✱ | manual | local + [pub][p-ar] — Karpathy-faithful experiment loop |
-| defuddle                | ✓ | ✓ | ✓ | on     | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
-| [deslop][p-ds]          | ✓ | ✓ | ✓ | on     | local + [pub][p-ds] — Strip AI-slop from code changes |
-| goal-elicit             | ✓ | ✓ | ✓ | on     | local — Multi-round interview → verifiable Goal Contract |
-| gpt-pro-relay           | ✓ | ✓ | ✓ | on     | local — SSH to ChatGPT Pro Extended on macmini |
-| humanizer               | ✓ | ✓ | ✓ | on     | [blader/humanizer][c-hu] — Remove AI signatures from text |
-| [interviewer][p-iv]     | ✱ | ✱ | ✱ | manual | local + [pub][p-iv] — Mock AI/ML technical interviews |
-| jina                    | ✓ | ✓ | ✓ | on     | local — Fetch web content / search via Jina AI |
-| keep-warm               | ✓ | — | — | on     | local — Cache heartbeat (uses Claude-only scheduling tools) |
-| pdf                     | ✓ | ✓ | ✓ | on     | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (others) — PDF read/edit |
-| [prism][p-pr]           | ✓ | — | — | on     | local + [pub][p-pr] — Multi-perspective parallel review (Claude-only caller; dispatches parallax to Codex + DeepSeek via relay) |
-| [prompt-engineer][p-pe] | ✓ | ✓ | ✓ | on     | local + [pub][p-pe] — Prompt writing per-vendor best practices |
-| push                    | ✓ | ✓ | ✓ | on     | local — Push to remote (auto-picks single vs atomic commits) |
-| [relay][p-rl]           | ✓ | — | — | on     | local + [pub][p-rl] — Cross-agent relay from Claude to Codex/DeepSeek (Claude-only caller) |
-| skill-creator           | ✓ | — | — | on     | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
-| todo                    | ✓ | ✓ | ✓ | on     | local — TODO.md tracking across sessions |
-| xurl                    | ✓ | ✓ | ✓ | on     | local — X/Twitter via the `xurl` CLI |
+| Skill | C | X | Default | Source · Description |
+|-------|:-:|:-:|:-------:|----------------------|
+| arxiv-reader            | ✓ | ✓ | on     | local — Read arxiv via TeX / HF markdown / HTML fallback |
+| [autoresearch][p-ar]    | ✱ | ✱ | manual | local + [pub][p-ar] — Karpathy-faithful experiment loop |
+| defuddle                | ✓ | ✓ | on     | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
+| [deslop][p-ds]          | ✓ | ✓ | on     | local + [pub][p-ds] — Strip AI-slop from code changes |
+| goal-elicit             | ✓ | ✓ | on     | local — Multi-round interview → verifiable Goal Contract |
+| gpt-pro-relay           | ✓ | ✓ | on     | local — SSH to ChatGPT Pro Extended on macmini |
+| humanizer               | ✓ | ✓ | on     | [blader/humanizer][c-hu] — Remove AI signatures from text |
+| [interviewer][p-iv]     | ✱ | ✱ | manual | local + [pub][p-iv] — Mock AI/ML technical interviews |
+| jina                    | ✓ | ✓ | on     | local — Fetch web content / search via Jina AI |
+| keep-warm               | ✓ | — | on     | local — Cache heartbeat (uses Claude-only scheduling tools) |
+| pdf                     | ✓ | ✓ | on     | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex) — PDF read/edit |
+| [prism][p-pr]           | ✓ | — | on     | local + [pub][p-pr] — Multi-perspective parallel review (Claude-only caller; dispatches parallax to Codex + DeepSeek via relay) |
+| [prompt-engineer][p-pe] | ✓ | ✓ | on     | local + [pub][p-pe] — Prompt writing per-vendor best practices |
+| push                    | ✓ | ✓ | on     | local — Push to remote (auto-picks single vs atomic commits) |
+| [relay][p-rl]           | ✓ | — | on     | local + [pub][p-rl] — Cross-agent relay from Claude to Codex/DeepSeek (Claude-only caller) |
+| skill-creator           | ✓ | — | on     | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
+| todo                    | ✓ | ✓ | on     | local — TODO.md tracking across sessions |
+| xurl                    | ✓ | ✓ | on     | local — X/Twitter via the `xurl` CLI |
 
 > Note: SKILL.md supports an optional Claude-only `effort` frontmatter (`medium` / `high` / `max`) to set thinking budget per skill. Currently unset on every skill in this repo — they all inherit the session default.
 
@@ -69,8 +68,6 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 
 ### Discovery quirks (not managed here)
 
-- **Grok built-ins**: `~/.grok/skills/` also contains shipped extras (`best-of-n`, `check`, `create-skill`, `docx`, `help`, `pptx`, `xlsx`) that aren't from dotfiles.
-- **Claude-fallback discovery**: Grok auto-discovers `~/.claude/skills/` as a lowest-priority source. Skills present there (e.g., `keep-warm`, `skill-creator`) remain visible to it even when not symlinked into `~/.grok/skills/` — they just won't auto-trigger unless the prompt strongly matches.
 - **Plugin-provided skills**: Some skills (e.g., `lecture-refine`) come from Claude marketplace plugins and live in `~/.claude/skills/` as regular directories, not symlinks.
 
 ## MCP Servers
