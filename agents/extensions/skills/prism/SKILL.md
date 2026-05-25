@@ -85,13 +85,9 @@ This affects assignment only. In synthesis, DeepSeek dissent retains full cross-
 
 Assign each tier a lens that maximizes diversity. **Default to orthogonal exploratory lenses** (Breadth-Weighted, Depth-Weighted, Outsider, First-Principles, Disconfirming-via-different-frame) — these almost always extract more from cross-model diversity than a second attack angle. **Reach for an adversarial lens (Adversarial, Falsification, Disconfirming) only when it is much more valuable than another orthogonal lens would be** — i.e., the deliverable hinges on finding a non-obvious flaw, attack, or failure mode, and no other dispatched lens is already covering that ground. When that bar is met, put it on the parallax tier best suited to the reasoning load (see "Tier strength and lens fit"); otherwise skip it. When using two parallax tiers, give them distinct lenses — never the same lens to both Codex and DeepSeek (that wastes a perspective), and don't stack two adversarial lenses unless the task genuinely demands two independent attack frames.
 
-Before writing any Parallax relay prompt:
-- **For Codex:** read `~/.claude/skills/prompt-engineer/references/gpt.md` and `~/.claude/skills/prompt-engineer/references/codex.md`.
-- **For DeepSeek:** read `~/.claude/skills/prompt-engineer/references/deepseek.md`.
+Before writing any Parallax relay prompt, follow the per-peer prompting guidance in the [[relay]] skill — its **Prompting Codex** section (which directs you to the `gpt.md` + `codex.md` references) and **Prompting DeepSeek** section (which directs you to `deepseek.md`, including the repo-copy fallback if the symlinks are unavailable). Read those references before composing the prompt body, every time — not just once.
 
-If those symlinks are unavailable, use the repo copies at `agents/extensions/skills/prompt-engineer/references/`. Do this every time, not just once.
-
-**Relay call syntax (exact):**
+**Relay call syntax (exact)** — the command shapes Prism must emit:
 
 ```bash
 # Codex parallax
@@ -105,7 +101,7 @@ relay call --to deepseek --name <slug> <<'BODY'
 BODY
 ```
 
-`--name` is required (lowercase slug, e.g., `prism-adversarial`). `--to codex` is the script default and may be omitted; `--to deepseek` is required for DeepSeek calls. Do not pass `--effort` to DeepSeek — it always runs at `max` and the flag is silently ignored. The heredoc body must not be empty. Do not pass model flags — the script handles model selection. For concurrency details (backgrounding, timeouts), follow the relay skill's Async / Parallel section for your platform.
+Use a lowercase slug for `--name` (e.g., `prism-adversarial`), and never pass `--effort` or model flags on DeepSeek (it always runs at `max`). For all other invocation rules — `--name` required, `--to codex` as the default, non-empty heredoc, no model flags — follow the [[relay]] skill rather than restating them. For concurrency (backgrounding, timeouts), follow relay's Async / Parallel section.
 
 **Inspecting Parallax results:** Only read the `.res.md` response file. Never read the `.log` sidecar — it contains the peer's full stderr, which is extremely long and token-heavy. The relay script's Bash output already surfaces diagnostic information for failure cases.
 

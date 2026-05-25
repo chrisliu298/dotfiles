@@ -174,7 +174,7 @@ When Relay is used as the Parallax transport inside Prism, the relay call receiv
 
 Launch each relay Bash call with `run_in_background: true` in the same parallel dispatch step as the local reviewer subagents. Do not wrap Relay itself in another subagent layer.
 
-If a Parallax relay call fails (after its background completion notification has arrived), treat it as a recoverable transport problem. Read the `.log` sidecar, fix the invocation, and retry once before declaring that peer unavailable. A failure of one peer (e.g., Codex) does not affect the other.
+If a Parallax relay call fails (after its background completion notification has arrived), treat it as a recoverable transport problem. Check the relay script's Bash output for the diagnosed cause, fix the invocation, and retry once before declaring that peer unavailable — never read the `.log` sidecar (it contains the peer's full stderr and is extremely long and token-heavy). A failure of one peer (e.g., Codex) does not affect the other.
 
 ## Utility Commands
 
