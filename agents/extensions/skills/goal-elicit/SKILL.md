@@ -1,12 +1,12 @@
 ---
 name: goal-elicit
 description: |
-  Interview the user and write a verifiable Goal Contract (GOAL.md) that the user can
-  copy/paste into a goal-pursuing agent. This skill never executes the goal, hands off,
-  or invokes downstream tools — it only produces the document. Use for "clarify what I
-  want", "define done_when/acceptance criteria", "make this unambiguous", XY-problem
-  requests, or untestable success. Skip trivial edits, factual questions, routine
-  commands, and ordinary code review.
+  Interview the user and write a verifiable Goal Contract (GOAL.md) to copy/paste
+  into a goal-pursuing agent. Never executes the goal or invokes downstream tools —
+  only produces the document. Use for "clarify what I want", "define
+  done_when/acceptance criteria", "make this unambiguous", XY-problem requests, or
+  untestable success. Skip trivial edits, factual questions, routine commands, and
+  code review.
 user-invocable: true
 allowed-tools: Read, Write, Edit, Bash(git:*), Bash(date:*), AskUserQuestion
 ---

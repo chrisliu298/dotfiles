@@ -1,13 +1,11 @@
 ---
 name: relay
 description: |
-  The ONLY way to call Codex or DeepSeek. Use this skill whenever the user
-  wants to ask, delegate to, or get a second opinion from Codex or DeepSeek.
-  Do NOT run the codex or deepseek (ds) CLI directly — whether from the main
-  agent or a subagent. Always use this skill's relay call command. Triggers
-  on "ask codex", "ask deepseek", "have codex", "have deepseek", "send to
-  codex", "send to deepseek", "get codex to", "get deepseek to", "delegate
-  to codex", "delegate to deepseek", "second opinion", "relay". Invoke with
+  The ONLY way to call Codex or DeepSeek. Use whenever the user wants to ask,
+  delegate to, or get a second opinion from Codex or DeepSeek. Do NOT run the
+  codex or deepseek (ds) CLI directly — from the main agent or a subagent;
+  always use this skill's relay call command. Triggers on "ask/have/send
+  to/get/delegate to codex" or the same with "deepseek", "second opinion",
   "relay".
 allowed-tools: Read, Write, Bash(relay:*), Bash(find:*), Bash(printf:*)
 user-invocable: true

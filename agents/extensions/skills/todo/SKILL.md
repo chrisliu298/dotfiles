@@ -1,15 +1,12 @@
 ---
 description: |
   Maintain a single TODO.md at the project root so task state survives session
-  boundaries, compaction events, and multi-day gaps. Use this skill whenever a
-  task is large or long-running — multi-day refactors, migrations, anything
-  the user describes as "this will take a while", "across several sessions",
-  or "we'll pick this up tomorrow", projects spanning multiple days, or work
-  where context will need to survive compaction. Also trigger when the user
-  invokes "/todo" explicitly, or asks to "track this", "checkpoint", or "save
-  what we're doing for next time". Do NOT trigger on small one-shot tasks (a
-  single bug fix, rename, or one-line change), on in-session-only todo
-  tracking, or when the working directory has no clear project root.
+  boundaries, compaction, and multi-day gaps. Use for large or long-running
+  work — multi-day refactors, migrations, or anything spanning several
+  sessions. Also trigger on "/todo", "track this", "checkpoint", or "save for
+  next time". Do NOT trigger on small one-shot tasks (a single bug fix, rename,
+  or one-liner), in-session-only todo tracking, or when there's no clear
+  project root.
 user-invocable: true
 ---
 
