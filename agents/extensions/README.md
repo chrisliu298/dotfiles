@@ -15,7 +15,7 @@ Single source of truth: own skills live in `agents/extensions/skills/`; communit
 - Claude → `~/.claude/skills/`
 - Codex  → `~/.codex/skills/`
 
-Each `SKILL.md` works across both agents. Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex. Agent-specific variants (`relay`) use per-agent subdirectories.
+Each `SKILL.md` works across both agents. Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex. Per-agent scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., relay is claude-only).
 
 Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via `./dotfiles.sh skills`. Publish own skills to standalone GitHub repos via `./dotfiles.sh publish`.
 

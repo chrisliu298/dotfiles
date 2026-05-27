@@ -91,7 +91,7 @@ for name in "${PUBLISH_SKILLS[@]}"; do
     # real files to keep the published repo self-contained.
     copy_links=()
     [[ "$name" == "relay" ]] && copy_links=(--copy-unsafe-links)
-    rsync -a --delete "${copy_links[@]}" \
+    rsync -a --delete ${copy_links[@]+"${copy_links[@]}"} \
         --exclude='.git' --exclude='LICENSE' \
         --exclude='.gitignore' --exclude='.relay' \
         "$skill_dir/" "$repo_dir/"
