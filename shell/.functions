@@ -221,6 +221,35 @@ dsc(){  CLAUDE_CODE_EFFORT_LEVEL=max  _deepseek --dangerously-skip-permissions -
 dsr(){  CLAUDE_CODE_EFFORT_LEVEL=max  _deepseek --dangerously-skip-permissions --resume "$@"; }
 dshl(){ (( $# )) || { echo 'Usage: dshl "<prompt>"'; return 1; }; CLAUDE_CODE_EFFORT_LEVEL=max _deepseek -p --dangerously-skip-permissions "${*}"; }
 
+# =============================================================================
+# MiMo (via Claude Code, Anthropic-compatible endpoint)
+# =============================================================================
+# Routes Claude Code at Xiaomi MiMo per-invocation, so default `c`/`cc` keep
+# using the Claude subscription. mimo-v2.5-pro has no separate effort tiers;
+# the `[1m]` suffix enables the 1M-token context window. Model IDs keep their
+# dots (the endpoint rejects `mimo-v2-5-pro`). Requires MIMO_API_KEY in env
+# (see ~/.zshenv.local).
+_mimo(){
+    [[ -n "${MIMO_API_KEY:-}" ]] || { echo 'MIMO_API_KEY not set (see ~/.zshenv.local)' >&2; return 1; }
+    # Drop relay scripts dir from PATH so MiMo sessions can't shell out to relay.
+    local _mm_path="${PATH//$HOME\/.claude\/skills\/relay\/scripts:/}"
+    _mm_path="${_mm_path%:$HOME/.claude/skills/relay/scripts}"
+    env -u TMUX COLORTERM=truecolor \
+        PATH="$_mm_path" \
+        ANTHROPIC_BASE_URL=https://api.xiaomimimo.com/anthropic \
+        ANTHROPIC_AUTH_TOKEN="$MIMO_API_KEY" \
+        ANTHROPIC_MODEL='mimo-v2.5-pro[1m]' \
+        ANTHROPIC_DEFAULT_OPUS_MODEL='mimo-v2.5-pro[1m]' \
+        ANTHROPIC_DEFAULT_SONNET_MODEL='mimo-v2.5-pro[1m]' \
+        ANTHROPIC_DEFAULT_HAIKU_MODEL='mimo-v2.5-pro[1m]' \
+        CLAUDE_CODE_SUBAGENT_MODEL='mimo-v2.5-pro[1m]' \
+        "$(command -v claude)" "$@"
+}
+mm(){   _mimo --dangerously-skip-permissions "$@"; }
+mmc(){  _mimo --dangerously-skip-permissions --continue "$@"; }
+mmr(){  _mimo --dangerously-skip-permissions --resume "$@"; }
+mmhl(){ (( $# )) || { echo 'Usage: mmhl "<prompt>"'; return 1; }; _mimo -p --dangerously-skip-permissions "${*}"; }
+
 # Show Claude + Codex account emails on local, macmini, and l40s.
 ae() {
     local _c=$'\033[1;36m' _d=$'\033[2m' _r=$'\033[31m' _0=$'\033[0m'
