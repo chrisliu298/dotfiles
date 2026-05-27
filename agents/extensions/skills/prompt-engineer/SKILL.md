@@ -10,21 +10,21 @@ user-invocable: true
 
 # Prompt Engineer
 
-Help users write effective prompts — either from scratch or by refining existing prompts — using vendor-specific best practices.
+Help users write effective prompts — from scratch or by refining existing ones — using vendor-specific best practices.
 
 ## Usage
 
-This skill covers three model families. The user specifies which one:
+Covers three model families; the user specifies which:
 
 - **`prompt-engineer claude`** — Anthropic Claude prompting best practices
 - **`prompt-engineer gpt`** — OpenAI GPT-5.5 general prompting best practices
 - **`prompt-engineer codex`** — OpenAI Codex coding agent best practices
 
-If the user doesn't specify, ask which model family the prompt targets. If it's obvious from context (e.g., they mention "Claude", "Anthropic", "GPT", "OpenAI", "Codex"), use that. If the user says "GPT" or "OpenAI" without specifying further, ask whether the prompt is for a general GPT-5.5 application or a Codex coding agent — the guidance differs significantly.
+If unspecified, ask which model family the prompt targets. If obvious from context (e.g., they mention "Claude", "Anthropic", "GPT", "OpenAI", "Codex"), use that. If they say "GPT" or "OpenAI" without specifying further, ask whether the prompt is for a general GPT-5.5 application or a Codex coding agent — the guidance differs significantly.
 
 ## Workflow
 
-Regardless of model family, the overall process is the same:
+The process is the same regardless of model family:
 
 ### Writing a prompt from scratch
 
@@ -34,13 +34,13 @@ Regardless of model family, the overall process is the same:
 - What context will be available at runtime? (documents, user input, tool results)
 - Will the model have tools? (search, file editing, code execution, etc.)
 
-**Step 2: Draft the prompt** — read the appropriate reference file for model-specific patterns and blocks, then draft the prompt applying the relevant techniques.
+**Step 2: Draft the prompt** — read the appropriate reference file for model-specific patterns and blocks, then draft applying the relevant techniques.
 
 **Step 3: Present the draft** — show the complete prompt and explain design choices.
 
 ### Refining an existing prompt
 
-**Step 1: Diagnose** — read the prompt and ask what's going wrong. Consult the model-specific diagnostic table in the reference file.
+**Step 1: Diagnose** — read the prompt and ask what's going wrong, then read the reference file and consult its model-specific diagnostic table.
 
 **Step 2: Apply targeted fixes** — add what's missing, remove what's counterproductive, explain the why.
 
@@ -48,10 +48,10 @@ Regardless of model family, the overall process is the same:
 
 ## Model-specific references
 
-After determining the target model family, read the corresponding reference file for the full set of patterns, XML blocks, and diagnostic tables:
+Read the corresponding reference file for the full set of patterns, XML blocks, and diagnostic tables:
 
-- **Claude** → `references/claude.md` — covers clarity, roles, XML structure, examples, output format, thinking guidance, safety controls, agentic patterns, and Claude-specific failure modes.
-- **GPT** → `references/gpt.md` — covers outcome-first prompting, output contracts, follow-through policies, tool persistence, completeness verification, citation/grounding, reasoning effort, verbosity, and GPT-specific failure modes.
-- **Codex** → `references/codex.md` — covers the Codex-Max starter prompt, autonomy/persistence, preambles and personality, tool configuration, plan hygiene, and Codex-specific failure modes.
+- **Claude** → `references/claude.md` — clarity, roles, XML structure, examples, output format, thinking guidance, safety controls, agentic patterns, and Claude-specific failure modes.
+- **GPT** → `references/gpt.md` — outcome-first prompting, output contracts, follow-through policies, tool persistence, completeness verification, citation/grounding, reasoning effort, verbosity, and GPT-specific failure modes.
+- **Codex** → `references/codex.md` — the Codex-Max starter prompt, autonomy/persistence, preambles and personality, tool configuration, plan hygiene, and Codex-specific failure modes.
 
-The Claude and GPT references contain ready-to-paste XML blocks. The Codex reference contains a full starter prompt to customize.
+The Claude and GPT references contain ready-to-paste XML blocks; the Codex reference contains a full starter prompt to customize.
