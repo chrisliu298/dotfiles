@@ -25,6 +25,8 @@ BODY
 
 `relay` is in PATH. The caller is always Claude (this is a Claude-only skill); the peer defaults to Codex. Pass `--to deepseek` or `--to mimo` to route elsewhere.
 
+If a bare `relay` ever returns "command not found" (a sandboxed/non-zsh/reset-env shell that didn't inherit the PATH entry), re-run the **identical** command with the absolute install path — `~/.claude/skills/relay/scripts/relay call …`. That is the whole recovery; do not reconstruct the call by hand.
+
 **All Codex, DeepSeek, and MiMo interactions go through `relay call`.** Do not invoke `codex exec` or the `ds`/`mm` aliases directly, do not spawn agents to run the codex or claude CLI for these purposes, and do not pass model flags (`-m`, `--model`) — the model and invocation method are hardcoded in the script.
 
 ## Peer selection

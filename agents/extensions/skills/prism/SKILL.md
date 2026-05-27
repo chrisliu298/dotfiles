@@ -208,7 +208,9 @@ When adding a new relay target model, create a new template file (e.g., `launche
 
 ### Dispatch via prism-launch
 
-You do **not** render templates or hand-write relay heredocs. The `prism-launch` script (a sibling `scripts/prism-launch`, on PATH) owns the cross-model half of dispatch: it renders every launcher from the templates, validates dispatch shape mechanically, and fans all relay calls out as **one** backgrounded process that waits for every peer and writes a single structured result. This is the documented dispatch path — it eliminates the per-call `sed`+heredoc token cost and makes the most common failure (dispatch-shape mismatch) structurally impossible.
+You do **not** render templates or hand-write relay heredocs. The `prism-launch` script — installed at `~/.claude/skills/prism/scripts/prism-launch` — owns the cross-model half of dispatch: it renders every launcher from the templates, validates dispatch shape mechanically, and fans all relay calls out as **one** backgrounded process that waits for every peer and writes a single structured result. This is the documented dispatch path — it eliminates the per-call `sed`+heredoc token cost and makes the most common failure (dispatch-shape mismatch) structurally impossible.
+
+**Invoke it by its absolute path** — `~/.claude/skills/prism/scripts/prism-launch` — not the bare name. The bare command is on PATH only when the shell inherited the `.zshenv`-injected PATH; a sandboxed/non-zsh/reset-env agent shell will not have it, and a bare-name miss must NOT trigger the manual fallback. The absolute path is the script's real install location, so its templates resolve correctly with no extra handling. (`prism-launch` resolves its sibling `relay` the same way — by install path, falling back to PATH — so `parallax` dispatches even when `relay` is not on PATH either.)
 
 It cannot dispatch Claude subagents — only Claude can invoke the Agent tool, and `claude -p` is never used for Claude here (it is only relay's transport for DeepSeek/MiMo). So you still issue the subagent Agent-tool calls yourself.
 
@@ -234,16 +236,17 @@ CFG
 
 # 1) prepare (foreground): validates packet/shape/effort/injection, renders all
 #    launchers, writes <id>-manifest.json. Fails loudly if anything is off.
-prism-launch prepare --config /tmp/prism-<id>-config.json
+~/.claude/skills/prism/scripts/prism-launch prepare --config /tmp/prism-<id>-config.json
 
 # 2) parallax (ONE backgrounded Bash call, run_in_background: true): fans out all
 #    relay calls, waits for all, writes <id>-result.json with per-peer status.
-prism-launch parallax /tmp/prism-<id>-manifest.json
+#    (prepare prints this command with the same absolute path — copy it from there.)
+~/.claude/skills/prism/scripts/prism-launch parallax /tmp/prism-<id>-manifest.json
 ```
 
-`prepare` prints the rendered subagent launcher file paths — pass each file's **contents** as the prompt of an Agent-tool call. It validates `lens`/`lens_desc` (rejecting `</` and `{{` as an injection guard; comparison operators like `>` are allowed), enforces distinct lens names and distinct relay `name`s, rejects `effort` on DeepSeek/MiMo, and rejects a `shared_packet` path containing whitespace. `parallax` writes `<id>-result.json` (`{id, expected, succeeded, failed, results:[{to,name,status,res,log}]}`) and prints each peer's `.res.md` path; read those on completion (the `log` field is relay's own diagnostics for a failed peer — never relay's token-heavy `.log` sidecar). Use `prism-launch parallax <manifest> --dry-run` to preview the exact relay commands without dispatching. Per-peer timeout defaults to 1800s (`PRISM_PEER_TIMEOUT`; set `=0` to disable the per-peer cap, leaving only the outer Bash-tool timeout); set the backgrounded Bash call's `timeout` above that (e.g. `1860000`).
+`prepare` prints the rendered subagent launcher file paths — pass each file's **contents** as the prompt of an Agent-tool call. It validates `lens`/`lens_desc` (rejecting `</` and `{{` as an injection guard; comparison operators like `>` are allowed), enforces distinct lens names and distinct relay `name`s, rejects `effort` on DeepSeek/MiMo, and rejects a `shared_packet` path containing whitespace. `parallax` writes `<id>-result.json` (`{id, expected, succeeded, failed, results:[{to,name,status,res,log}]}`) and prints each peer's `.res.md` path; read those on completion (the `log` field is relay's own diagnostics for a failed peer — never relay's token-heavy `.log` sidecar). Use `~/.claude/skills/prism/scripts/prism-launch parallax <manifest> --dry-run` to preview the exact relay commands without dispatching. Per-peer timeout defaults to 1800s (`PRISM_PEER_TIMEOUT`; set `=0` to disable the per-peer cap, leaving only the outer Bash-tool timeout); set the backgrounded Bash call's `timeout` above that (e.g. `1860000`).
 
-**Manual fallback (only if `prism-launch` is unavailable):** render each launcher with `sed -e 's|{{SHARED_PACKET_PATH}}|...|g' -e 's|{{LENS_NAME}}|...|g' -e 's|{{LENS_DESC}}|...|g' templates/launcher-<kind>.tmpl`, then dispatch one `relay call --to <peer> --name prism-<slug> [--effort <medium|xhigh>]` heredoc per parallax tier (background each, `timeout: 1860000`). This is the pre-`prism-launch` flow; prefer the script.
+**Manual fallback (last resort — only if the script file is genuinely missing):** A bare-name "command not found" is NOT a trigger — re-invoke by the absolute path above. The manual flow applies only when `~/.claude/skills/prism/scripts/prism-launch` does not exist at all (a broken install). First try to repair the install (`cd ~/dotfiles && ./dotfiles.sh`); if that is not possible, render each launcher with `sed -e 's|{{SHARED_PACKET_PATH}}|...|g' -e 's|{{LENS_NAME}}|...|g' -e 's|{{LENS_DESC}}|...|g' templates/launcher-<kind>.tmpl`, then dispatch one `relay call --to <peer> --name prism-<slug> [--effort <medium|xhigh>]` heredoc per parallax tier (background each, `timeout: 1860000`). This is the degraded pre-`prism-launch` flow; prefer the script.
 
 ## Pre-Launch Checks
 
@@ -376,13 +379,13 @@ sed -e 's|{{REVIEW_INDEX_PATH}}|/tmp/prism-abc123-review.md|g' \
 
 1. Build one canonical shared packet (Full Question + Context + Constraints). Write it to `/tmp/prism-<unique-id>.md` with the Write tool.
 2. Assign lenses (run the redundancy and lens-quality checks — these are yours to judge), then write the compact config JSON (`shared_packet` + one `parallax` entry per peer + one `subagent` entry per lens). See "Dispatch via prism-launch".
-3. **`prism-launch prepare --config /tmp/prism-<id>-config.json`** (foreground). This validates the packet and records its path (it does not copy or hash it — do not mutate the packet after this point), renders all launchers, runs checks 1/2/5/6, and writes `<id>-manifest.json`. If it exits non-zero, fix the config and re-run — nothing has been dispatched.
+3. **`~/.claude/skills/prism/scripts/prism-launch prepare --config /tmp/prism-<id>-config.json`** (foreground). This validates the packet and records its path (it does not copy or hash it — do not mutate the packet after this point), renders all launchers, runs checks 1/2/5/6, and writes `<id>-manifest.json`. If it exits non-zero, fix the config and re-run — nothing has been dispatched.
 4. Launch all dispatched agents concurrently (`run_in_background: true`). **Dispatch checklist:**
-   - **Parallax — ONE backgrounded Bash call:** `prism-launch parallax /tmp/prism-<id>-manifest.json` (set the Bash tool `timeout` above `PRISM_PEER_TIMEOUT`, e.g. `1860000`). This fans out every Codex/DeepSeek/MiMo call, waits for all, and yields a single completion notification. Compose this call FIRST.
+   - **Parallax — ONE backgrounded Bash call:** `~/.claude/skills/prism/scripts/prism-launch parallax /tmp/prism-<id>-manifest.json` (set the Bash tool `timeout` above `PRISM_PEER_TIMEOUT`, e.g. `1860000`). This fans out every Codex/DeepSeek/MiMo call, waits for all, and yields a single completion notification. Compose this call FIRST.
    - **Subagents:** one **Agent** tool call per subagent, using the contents of the rendered launcher file (`prepare` printed the paths) as the prompt. Never use `claude -p` for these.
    - The manifest's `counts` is the authoritative dispatch shape — there is no per-relay-call count to reconcile by hand, because `prism-launch` emits exactly the configured calls.
 
-Do not poll or sleep-loop — the system notifies you when agents finish. (Manual fallback when `prism-launch` is unavailable: render with `sed` and dispatch one `relay call` heredoc per tier, per "Manual fallback" above.)
+Do not poll or sleep-loop — the system notifies you when agents finish. (A bare-name "command not found" is not a fallback trigger — invoke by the absolute path above. The manual `sed`+heredoc flow applies only if the script file is genuinely missing, per "Manual fallback" above.)
 
 ### Step 2: Self-review
 

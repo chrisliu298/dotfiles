@@ -208,7 +208,7 @@ cmd_prepare() {
   fi
   if [ "$(echo "$manifest_json" | jq '.counts.parallax_total')" -gt 0 ]; then
     echo "Parallax — ONE backgrounded Bash call dispatches all cross-model peers:"
-    echo "  prism-launch parallax $manifest"
+    echo "  $0 parallax $manifest"
     echo
   fi
   echo "REMINDER: this launcher does NOT dispatch the $nsub Claude subagent(s)."
@@ -239,7 +239,13 @@ cmd_parallax() {
   n=$(jq '.parallax | length' "$manifest")
   [ "$n" -gt 0 ] || die "parallax: manifest has no parallax calls"
 
-  command -v relay >/dev/null 2>&1 || die "parallax: relay not found in PATH"
+  # Resolve relay by its installed sibling path first (PATH-independent), then
+  # fall back to PATH. This mirrors invoking prism-launch by absolute path, so a
+  # sanitized/non-zsh shell that lacks the skills dir on PATH still dispatches.
+  local relay_bin="$SCRIPT_DIR/../../relay/scripts/relay"
+  [ -x "$relay_bin" ] || relay_bin="$(command -v relay || true)"
+  [ -n "$relay_bin" ] && [ -x "$relay_bin" ] \
+    || die "parallax: relay not found at \$SCRIPT_DIR/../../relay/scripts/relay or in PATH"
   [ -f "$packet" ] || die "parallax: shared_packet not found: $packet"
 
   # Per-peer timeout wrapper (optional — coreutils on macOS). Set
@@ -270,9 +276,9 @@ cmd_parallax() {
       effort=$(jq -r ".parallax[$i].effort // \"\"" "$manifest")
       launcher=$(jq -r ".parallax[$i].launcher" "$manifest")
       if [ -n "$effort" ]; then
-        echo "  relay call --to $to --name $name --effort $effort < $launcher"
+        echo "  $relay_bin call --to $to --name $name --effort $effort < $launcher"
       else
-        echo "  relay call --to $to --name $name < $launcher"
+        echo "  $relay_bin call --to $to --name $name < $launcher"
       fi
       i=$((i + 1))
     done
@@ -290,7 +296,7 @@ cmd_parallax() {
     local log; log=$(jq -r ".parallax[$i].log" "$manifest")
 
     # Build the relay command; only codex takes --effort.
-    set -- relay call --to "$to" --name "$name"
+    set -- "$relay_bin" call --to "$to" --name "$name"
     [ -n "$effort" ] && set -- "$@" --effort "$effort"
     [ -n "$TIMEOUT_BIN" ] && set -- "$TIMEOUT_BIN" "$PEER_TIMEOUT" "$@"
 
