@@ -1,11 +1,11 @@
 ---
 name: relay
 description: |
-  The ONLY way to call Codex or DeepSeek. Use whenever the user wants to ask,
-  delegate to, or get a second opinion from Codex or DeepSeek. Do NOT run the
-  codex or deepseek (ds) CLI directly — from the main agent or a subagent;
-  always use this skill's relay call command. Triggers on "ask/have/send
-  to/get/delegate to codex" or the same with "deepseek", "second opinion",
+  The ONLY way to call Codex, DeepSeek, or MiMo. Use whenever the user wants to
+  ask, delegate to, or get a second opinion from Codex, DeepSeek, or MiMo. Do NOT
+  run the codex, deepseek (ds), or mimo (mm) CLI directly — from the main agent or
+  a subagent; always use this skill's relay call command. Triggers on "ask/have/send
+  to/get/delegate to codex" or the same with "deepseek"/"mimo", "second opinion",
   "relay".
 allowed-tools: Read, Write, Bash(relay:*), Bash(find:*), Bash(printf:*)
 user-invocable: true
@@ -13,9 +13,9 @@ user-invocable: true
 
 # Relay
 
-**Claude-only.** If `ANTHROPIC_BASE_URL` contains `deepseek`, this skill is unavailable — stop and tell the user: "relay is Claude-only; DeepSeek cannot orchestrate other models from inside a DeepSeek session." The relay script itself also refuses at the shell layer.
+**Claude-only.** If `ANTHROPIC_BASE_URL` contains `deepseek` or `xiaomimimo`, this skill is unavailable — stop and tell the user: "relay is Claude-only; a non-Claude session cannot orchestrate other models." The relay script itself also refuses at the shell layer.
 
-Call Codex or DeepSeek like a function. One command: generates the request, invokes the peer, prints the response.
+Call Codex, DeepSeek, or MiMo like a function. One command: generates the request, invokes the peer, prints the response.
 
 ```
 relay call --name <slug> [--to <peer>] [--effort <level>] [--body-only] <<'BODY'
@@ -23,9 +23,9 @@ task
 BODY
 ```
 
-The script is available as `relay` in PATH. The caller is always Claude (this is a Claude-only skill); the peer defaults to Codex. Pass `--to deepseek` to route to DeepSeek instead.
+The script is available as `relay` in PATH. The caller is always Claude (this is a Claude-only skill); the peer defaults to Codex. Pass `--to deepseek` or `--to mimo` to route elsewhere.
 
-**All Codex and DeepSeek interactions go through `relay call`.** Do not invoke `codex exec` or the `ds`/`dsx` deepseek aliases directly, do not spawn agents to run the codex or claude CLI for these purposes, and do not pass model flags (`-m`, `--model`). The model and invocation method are hardcoded in the script.
+**All Codex, DeepSeek, and MiMo interactions go through `relay call`.** Do not invoke `codex exec` or the `ds`/`mm` aliases directly, do not spawn agents to run the codex or claude CLI for these purposes, and do not pass model flags (`-m`, `--model`). The model and invocation method are hardcoded in the script.
 
 ## Peer selection
 
@@ -33,8 +33,9 @@ The script is available as `relay` in PATH. The caller is always Claude (this is
 |---|---|---|
 | **Codex** (default) | Code review, security review, refactoring, agentic coding. GPT-5.5 lineage. Two effort tiers (`medium`/`xhigh`). | `relay call --name ...` (no `--to` needed) |
 | **DeepSeek** | Independent model family for true cross-vendor diversity, frontier reasoning, multi-step analysis. Open-weight V4-Pro (1.6T MoE). Always runs at `max` (DeepThink). | `relay call --to deepseek --name ...` |
+| **MiMo** | Another independent open-weight lineage (Xiaomi MiMo-V2.5-Pro, 1.02T MoE / 42B active, 1M context). Use for a third cross-vendor perspective. No effort knob. | `relay call --to mimo --name ...` |
 
-Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick DeepSeek when you want a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax. DeepSeek always runs at `max`; `--effort` is silently ignored on DeepSeek calls, so just omit it. DeepSeek requires `DEEPSEEK_API_KEY` in the environment.
+Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick DeepSeek or MiMo when you want a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax. Neither DeepSeek nor MiMo has an effort knob — `--effort` is silently ignored on those calls, so just omit it. DeepSeek requires `DEEPSEEK_API_KEY` and MiMo requires `MIMO_API_KEY` in the environment.
 
 ### Common Mistakes
 - **Premature failure diagnosis**: If a relay call was launched with `run_in_background: true`, do not inspect `.relay` files or enter the failure flow until the background task's completion notification arrives. No notification means the peer is still running.
@@ -52,7 +53,7 @@ BODY
 
 ## Effort Levels
 
-`--effort` applies to Codex only. DeepSeek always runs at `max` (DeepThink) — the flag is silently ignored on DeepSeek calls, so just omit it.
+`--effort` applies to Codex only. DeepSeek always runs at `max` (DeepThink) and MiMo has no effort knob — the flag is silently ignored on those calls, so just omit it.
 
 | Level | When to use |
 |-------|-------------|
@@ -127,6 +128,38 @@ then the diffs grouped by file. Cap at 400 words excluding diffs.
 BODY
 ```
 
+## Prompting MiMo
+
+MiMo-V2.5-Pro has no dedicated prompt-engineer reference. Treat it like DeepSeek: it responds well to XML-scaffolded, structured prompts with explicit sections (`<context>`, `<objective>`, `<success_criteria>`, `<response_format>`) and positive framing. There is no effort knob — deep thinking is on by default — so keep system-style meta-instructions out of the prompt body. Lead with the outcome and success criteria, then let the model pick the path.
+
+**Example:**
+
+```bash
+relay call --to mimo --name pool-design <<'BODY'
+<context>
+We're hardening src/db/pool.py before a SOC 2 audit. Python 3.12 + FastAPI;
+tests live in tests/test_pool.py and run under pytest.
+</context>
+
+<objective>
+Add connection timeouts and stale-connection recovery to src/db/pool.py.
+</objective>
+
+<success_criteria>
+- ConnectionPool accepts a timeout_seconds parameter at construction
+- stale connections are auto-reconnected on use
+- a reclaim_stale() method exists for explicit cleanup
+- existing callers keep working without changes
+- pytest tests/test_pool.py passes; no new lint errors
+</success_criteria>
+
+<response_format>
+Summary of changes first (one line per change: file path + description),
+then the diffs grouped by file. Cap at 400 words excluding diffs.
+</response_format>
+BODY
+```
+
 ## Output
 
 The script prints the response file content to stdout. The response has YAML frontmatter followed by free-form markdown:
@@ -164,11 +197,11 @@ When you have independent subagent work alongside a relay call, **never block on
 
 **Rule: Launch relay calls and subagents concurrently. Never serialize independent work.**
 
-**Never wrap relay in a subagent.** If an Agent task calls `relay` with `run_in_background: true`, the subagent will complete before the peer (Codex or DeepSeek) finishes, and the platform will kill the orphaned peer process. Always call `relay` from the main conversation. If a subagent must call relay (e.g., the skill was invoked before you could prevent it), the Bash call must run in foreground — omit `run_in_background` so the subagent blocks until the peer replies.
+**Never wrap relay in a subagent.** If an Agent task calls `relay` with `run_in_background: true`, the subagent will complete before the peer (Codex, DeepSeek, or MiMo) finishes, and the platform will kill the orphaned peer process. Always call `relay` from the main conversation. If a subagent must call relay (e.g., the skill was invoked before you could prevent it), the Bash call must run in foreground — omit `run_in_background` so the subagent blocks until the peer replies.
 
 ## Prism / Parallax
 
-When Relay is used as the Parallax transport inside Prism, the relay call receives the **same full question and same context** as every local reviewer — only the lens (weighing posture) differs. Do not narrow the prompt for the Parallax agent. With two peers available, Prism dispatches each parallax tier independently — Codex calls and DeepSeek calls run concurrently as separate Bash relay invocations.
+When Relay is used as the Parallax transport inside Prism, the relay call receives the **same full question and same context** as every local reviewer — only the lens (weighing posture) differs. Do not narrow the prompt for the Parallax agent. With three peers available, Prism dispatches each parallax tier independently — Codex, DeepSeek, and MiMo calls run concurrently as separate Bash relay invocations.
 
 Launch each relay Bash call with `run_in_background: true` in the same parallel dispatch step as the local reviewer subagents. Do not wrap Relay itself in another subagent layer.
 
@@ -178,4 +211,4 @@ If a Parallax relay call fails (after its background completion notification has
 
 `relay --help` and `relay --version` print usage and version info.
 
-`--to` accepts `codex` (default) or `deepseek`. There is no relay-to-Claude direction — Claude is the sole caller in this protocol.
+`--to` accepts `codex` (default), `deepseek`, or `mimo`. There is no relay-to-Claude direction — Claude is the sole caller in this protocol.

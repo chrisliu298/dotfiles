@@ -26,11 +26,11 @@ LINKS=(
 # source: ./path (local) or owner/repo[/subpath] (GitHub)
 SKILLS=(
     "*|./agents/extensions/skills|claude,codex"
-    # Relay: claude-only caller; targets Codex and DeepSeek via the script
+    # Relay: claude-only caller; targets Codex, DeepSeek, and MiMo via the script
     "relay|./agents/extensions/skills/relay/claude|claude"
     # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup)
     "keep-warm|./agents/extensions/skills/keep-warm|claude"
-    # prism: claude-only caller (dispatches parallax to Codex + DeepSeek via relay)
+    # prism: claude-only caller (dispatches parallax to Codex + DeepSeek + MiMo via relay)
     "prism|./agents/extensions/skills/prism|claude"
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex"
     "humanizer|blader/humanizer|claude,codex"

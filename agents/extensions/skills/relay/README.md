@@ -1,6 +1,6 @@
 # Relay
 
-**A skill for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that lets it delegate work to other reasoning models — currently [Codex](https://github.com/openai/codex) (GPT-5.5) and [DeepSeek](https://www.deepseek.com/) V4-Pro.**
+**A skill for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that lets it delegate work to other reasoning models — currently [Codex](https://github.com/openai/codex) (GPT-5.5), [DeepSeek](https://www.deepseek.com/) V4-Pro, and [Xiaomi MiMo](https://platform.xiaomimimo.com/) V2.5-Pro.**
 
 > *A baton changes hands, the race continues. One agent writes the task, another picks it up and runs.*
 
@@ -18,9 +18,14 @@ BODY
 relay call --to deepseek --name <slug> [--body-only] <<'BODY'
 task
 BODY
+
+# Claude Code → MiMo (no effort knob)
+relay call --to mimo --name <slug> [--body-only] <<'BODY'
+task
+BODY
 ```
 
-Relay was built through Relay. Claude Code and Codex designed the protocol, debated trade-offs, reviewed each other's changes, and verified the result — all by passing tasks back and forth through the very skill they were creating. The protocol since simplified to a one-direction fan-out: Claude is the sole caller, with Codex and DeepSeek as targets for cross-model diversity.
+Relay was built through Relay. Claude Code and Codex designed the protocol, debated trade-offs, reviewed each other's changes, and verified the result — all by passing tasks back and forth through the very skill they were creating. The protocol since simplified to a one-direction fan-out: Claude is the sole caller, with Codex, DeepSeek, and MiMo as targets for cross-model diversity.
 
 ## Table of Contents
 
@@ -51,7 +56,7 @@ When you run one agent, you get one model's strengths. Relay lets you compose mu
 
 ### Why not subagents?
 
-Subagents spawn copies of the same model. Relay calls a different model — different training, different reasoning, different blind spots. A cross-model review catches more. With two peer options (Codex and DeepSeek), you can run cross-model checks against entirely different lineages: Anthropic ↔ OpenAI ↔ DeepSeek. Subagents can also invoke Relay (`relay`), combining same-model parallelism with cross-model depth.
+Subagents spawn copies of the same model. Relay calls a different model — different training, different reasoning, different blind spots. A cross-model review catches more. With three peer options (Codex, DeepSeek, and MiMo), you can run cross-model checks against entirely different lineages: Anthropic ↔ OpenAI ↔ DeepSeek ↔ MiMo. Subagents can also invoke Relay (`relay`), combining same-model parallelism with cross-model depth.
 
 ---
 
@@ -88,7 +93,7 @@ Relay stays intentionally small: no locked schema, just a readable protocol that
 ```mermaid
 sequenceDiagram
     participant C as Claude Code
-    participant P as Peer (Codex or DeepSeek)
+    participant P as Peer (Codex, DeepSeek, or MiMo)
 
     C->>C: 1. relay call --name ... <<'BODY'
     Note left of C: generates .relay/{id}.req.md
@@ -100,7 +105,7 @@ sequenceDiagram
     C->>C: 6. Print response content
 ```
 
-The `call` subcommand wraps the full round-trip: generates the request file, invokes the peer agent, and prints the response content to stdout. The script picks the peer from `--to` (default `codex`; pass `deepseek` to route to DeepSeek instead).
+The `call` subcommand wraps the full round-trip: generates the request file, invokes the peer agent, and prints the response content to stdout. The script picks the peer from `--to` (default `codex`; pass `deepseek` or `mimo` to route elsewhere).
 
 ---
 
@@ -131,6 +136,7 @@ Ensure `~/.local/bin` is in your PATH (it is by default on most Linux distros an
 
 - **Codex** — install the [Codex CLI](https://github.com/openai/codex). Used by default (no `--to` flag needed).
 - **DeepSeek** — export `DEEPSEEK_API_KEY` in your shell (e.g., `~/.zshenv.local`). DeepSeek is reached via the `claude` CLI with an Anthropic-compatible endpoint envelope, so no separate binary install is required beyond Claude Code itself.
+- **MiMo** — export `MIMO_API_KEY` in your shell (e.g., `~/.zshenv.local`). Like DeepSeek, MiMo is reached via the `claude` CLI with an Anthropic-compatible endpoint envelope — no separate binary install required.
 
 ---
 
@@ -156,6 +162,7 @@ Each peer pins a specific model. Do **not** substitute other models — they may
 |---|---|---|---|
 | `codex` (default) | `gpt-5.5` | `medium` / `xhigh` | Claude selects effort per task; default `medium` |
 | `deepseek` | `deepseek-v4-pro` | Always `max` (DeepThink) — no `--effort` knob | Requires `DEEPSEEK_API_KEY`; reached via the `claude` CLI with DeepSeek's Anthropic-compatible endpoint |
+| `mimo` | `mimo-v2.5-pro[1m]` | No effort knob | Requires `MIMO_API_KEY`; reached via the `claude` CLI with MiMo's Anthropic-compatible endpoint. `[1m]` enables the 1M-token context window |
 
 ### Call
 
@@ -177,7 +184,15 @@ Review src/auth.py for security issues. Run pytest to verify.
 BODY
 ```
 
-The `--name` flag provides a human-readable slug; the script prepends a timestamp and PID automatically (format: `YYYYMMDD-HHMMSS-PID-{name}`). The `--effort` flag controls Codex reasoning depth (`medium` or `xhigh`); it does not apply to DeepSeek, which always runs at `max`.
+**Claude Code → MiMo:**
+
+```bash
+relay call --to mimo --name auth-review <<'BODY'
+Review src/auth.py for security issues. Run pytest to verify.
+BODY
+```
+
+The `--name` flag provides a human-readable slug; the script prepends a timestamp and PID automatically (format: `YYYYMMDD-HHMMSS-PID-{name}`). The `--effort` flag controls Codex reasoning depth (`medium` or `xhigh`); it does not apply to DeepSeek (always `max`) or MiMo (no effort knob).
 
 Generated request `.relay/20260219-163042-12345-auth-review.req.md`:
 
@@ -245,7 +260,7 @@ By default, `relay call` blocks until the peer finishes. When you have independe
 
 Claude Code supports `run_in_background: true` on Bash tool calls — pass it on the Bash invocation that runs `relay`, and the call proceeds in the background while subagents and the main agent do other work. The platform sends a completion notification when the peer finishes; do not poll `.relay/` files or read the `.log` sidecar before the notification arrives.
 
-When running both peers in the same dispatch step (e.g., from Prism's Parallax tier), launch each `relay` call in its own background Bash invocation — Codex and DeepSeek run concurrently as independent processes.
+When running multiple peers in the same dispatch step (e.g., from Prism's Parallax tier), launch each `relay` call in its own background Bash invocation — Codex, DeepSeek, and MiMo run concurrently as independent processes.
 
 ---
 
@@ -263,7 +278,7 @@ relay --version
 
 [Prism](https://github.com/chrisliu298/prism) is a multi-agent deliberation skill that sends the same question to multiple independent agents, each answering from a different analytical lens. Relay powers Prism's **Parallax** tier — the cross-model agents that provide model diversity.
 
-With two peer options, Prism's Parallax dispatches each tier independently: a configurable number of Codex agents and DeepSeek agents launch concurrently as separate Relay calls. Each Parallax agent receives the same full question and context as every local reviewer — only the lens differs.
+With three peer options, Prism's Parallax dispatches each tier independently: a configurable number of Codex, DeepSeek, and MiMo agents launch concurrently as separate Relay calls. Each Parallax agent receives the same full question and context as every local reviewer — only the lens differs.
 
 ```bash
 # Install both for the full Prism experience
@@ -281,6 +296,7 @@ Without Relay installed, Prism falls back to a same-model adversarial agent — 
 - `.relay/` is gitignored — the script handles this automatically
 - **Codex** uses `--full-auto` (`workspace-write` sandbox) and `--skip-git-repo-check` (Codex refuses to run in non-git directories by default)
 - **DeepSeek** is invoked via the `claude` CLI with `--dangerously-skip-permissions` and the DeepSeek endpoint envelope (matches the local `_deepseek()` wrapper) — use only in trusted repos
+- **MiMo** is invoked the same way via the `claude` CLI with `--dangerously-skip-permissions` and the MiMo endpoint envelope (matches the local `_mimo()` wrapper) — use only in trusted repos
 - Clean up: `rm .relay/*.md .relay/*.log`
 
 ---
@@ -309,6 +325,7 @@ The bash script lives once at `scripts/relay`; the skill directory symlinks to i
 - **Claude Code** — protocol design
 - **Codex** — execution contract and CLI integration
 - **DeepSeek V4 Pro** — second peer target added 2026-05 (Anthropic-compatible endpoint envelope)
+- **Xiaomi MiMo-V2.5-Pro** — third peer target added 2026-05 (Anthropic-compatible endpoint envelope)
 
 [^1]: Anthropic — [Building effective agents](https://www.anthropic.com/research/building-effective-agents), [Writing tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents); OpenAI — [A practical guide to building agents](https://openai.com/business/guides-and-resources/a-practical-guide-to-building-ai-agents/), [Unrolling the Codex agent loop](https://openai.com/index/unrolling-the-codex-agent-loop/)
 [^2]: Anthropic — [Effective context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents); OpenAI — [Conversation state](https://developers.openai.com/api/docs/guides/conversation-state), [Compaction](https://developers.openai.com/api/docs/guides/compaction)
