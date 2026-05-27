@@ -69,6 +69,53 @@ These are load-bearing constraints — everything else (lens choices, agent coun
 - **Redundancy, not division of labor** — every agent answers the full question end-to-end. If agents get different files, tasks, or deliverables, that is not Prism.
 - **Identical prompts** — the Full Question and Context sections must be word-for-word identical across all dispatched agents. Only the lens line differs.
 
+### Dispatch: the `prism-launch` launcher
+
+Dispatch is handled by a small script, `scripts/prism-launch`, so the orchestrating agent never hand-renders prompts or hand-writes relay calls.
+
+**Before** — the agent generated, *inline in the conversation*, a `sed` render plus a full relay heredoc for **every** cross-model call, then hand-counted the calls and tracked one completion ping per call:
+
+```
+   for EVERY run, the agent emits by hand:
+   ┌──────────────────────────────────────────────────────────────┐
+   │  sed render  +  relay heredoc   ──▶ relay call --to codex    │ ─┐
+   │  sed render  +  relay heredoc   ──▶ relay call --to deepseek │ ─┤ 3 Bash
+   │  sed render  +  relay heredoc   ──▶ relay call --to mimo     │ ─┘ relay calls
+   │  Agent(prompt…)  Agent(prompt…) ──▶ 2 Claude subagents       │ ─── 2 Agent calls
+   └──────────────────────────────────────────────────────────────┘
+   then: manually reconcile the dispatch-shape count,
+         and track 5 separate completion notifications
+   ✗ #1 failure mode: forget one relay call (DeepSeek/MiMo)
+   ✗ ~hundreds of boilerplate tokens reproduced verbatim each run
+```
+
+**After** — the agent writes one compact config, runs `prepare` (renders + validates + emits a manifest), then makes the subagent calls plus **one** backgrounded `parallax` call that fans out every peer and returns a single result:
+
+```
+   one config.json  (shared_packet + one line per peer / subagent)
+        │
+        ▼
+   prism-launch prepare ─▶ renders all launchers from templates,
+        │                  validates shape · effort · injection,
+        │                  validates packet, writes manifest.json
+        ▼
+   ┌─ Agent(subagent 1) ─┐   Claude subagents stay in-conversation
+   ├─ Agent(subagent 2) ─┤   (a shell can't launch the Agent tool;
+   │                     │    `claude -p` is never used for Claude)
+   └─ prism-launch parallax manifest.json   ◀── ONE backgrounded call
+            │
+            ├──▶ relay → codex      ─┐
+            ├──▶ relay → deepseek    ┤  fans out concurrently,
+            ├──▶ relay → mimo       ─┘  WAITS for all peers,
+            ▼                           writes result.json
+        ONE completion notification for the whole parallax tier
+   ✓ dispatch-shape mismatch is structurally impossible
+   ✓ agent emits ~10 lines of JSON, not N rendered prompts
+   ✓ notifications drop from 5 to 3 (2 subagents + 1 parallax fan)
+```
+
+The launcher owns only the cross-model half — same-model subagents remain Agent-tool calls, so the notification floor is ~3, not 1. If `prism-launch` is unavailable, Prism falls back to the manual `sed`+heredoc flow.
+
 ---
 
 ## Installation

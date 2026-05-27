@@ -1,0 +1,391 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# prism-launch — Prism dispatch launcher
+#
+# Owns the cross-model (Parallax) half of a Prism run: renders launcher prompts
+# from the committed templates, validates dispatch shape mechanically, and fans
+# all relay calls out as ONE backgrounded process that waits for every peer and
+# emits a single structured result. The same-model subagent half stays in the
+# conversation as Agent-tool calls — a shell script cannot (and must not) launch
+# Claude agents, and `claude -p` is never used for Claude here (it is only
+# relay's transport for DeepSeek/MiMo).
+#
+# Usage:
+#   prism-launch prepare --config <config.json>      # foreground: render + validate + manifest
+#   prism-launch parallax <manifest.json> [--dry-run] # ONE backgrounded call: fan out all peers
+#   prism-launch --help | --version
+#
+# Subcommands and the manifest are documented in the prism SKILL.md.
+
+VERSION=1
+
+die() { echo "prism-launch: $*" >&2; exit 1; }
+
+# Templates live in a sibling directory of this script's parent (scripts/../templates).
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+TEMPLATES_DIR=$(cd "$SCRIPT_DIR/../templates" && pwd 2>/dev/null) \
+  || die "templates dir not found next to script ($SCRIPT_DIR/../templates)"
+# Note: launcher-reviewer.tmpl in TEMPLATES_DIR is rendered manually for the
+# optional peer-review wave (see SKILL.md), not by this script.
+
+# ── prepare ──────────────────────────────────────────────────────────────────
+
+cmd_prepare() {
+  local config=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --config) [ $# -ge 2 ] || die "prepare: --config requires a value"; config="$2"; shift 2 ;;
+      -*)       die "prepare: unknown flag: $1" ;;
+      *)        die "prepare: unexpected argument: $1" ;;
+    esac
+  done
+  [ -n "$config" ] || die "prepare: --config <config.json> required"
+  [ -f "$config" ] || die "prepare: config file not found: $config"
+  command -v jq >/dev/null 2>&1 || die "prepare: jq not found in PATH"
+
+  jq -e . "$config" >/dev/null 2>&1 || die "prepare: config is not valid JSON: $config"
+
+  local packet
+  packet=$(jq -r '.shared_packet // ""' "$config")
+  [ -n "$packet" ]            || die "prepare: config.shared_packet is required"
+  case "$packet" in /*) ;; *) die "prepare: shared_packet must be an absolute path: $packet" ;; esac
+  # Reject whitespace/glob: run_base derives from this path, and the per-peer log
+  # paths are carried through space-joined arrays in cmd_parallax (fail-closed).
+  case "$packet" in *[[:space:]]*|*'*'*|*'?'*|*'['*) die "prepare: shared_packet path must not contain whitespace or glob characters: $packet" ;; esac
+  [ -f "$packet" ]            || die "prepare: shared_packet not found: $packet"
+  [ -s "$packet" ]            || die "prepare: shared_packet is empty: $packet"
+  grep -q '^## Full Question' "$packet" || die "prepare: shared_packet missing '## Full Question' section"
+  grep -q '^## Context'       "$packet" || die "prepare: shared_packet missing '## Context' section"
+  grep -q '^## Constraints'   "$packet" || die "prepare: shared_packet missing '## Constraints' section"
+
+  # run_base: shared_packet path minus a trailing .md. All run artifacts hang off it.
+  local run_base="${packet%.md}"
+  local manifest="${run_base}-manifest.json"
+  local run_id; run_id=$(basename "$run_base")
+  # Clear any stale artifacts from a prior run on the same packet so a failed
+  # prepare cannot leave an authoritative-looking manifest/result behind.
+  rm -f "$manifest" "${run_base}-result.json"
+
+  # Single jq pass: validate structure/enums/effort/injection/dup-lenses, then
+  # emit the authoritative manifest (computed names, launcher paths, counts).
+  local manifest_json
+  manifest_json=$(jq \
+      --arg base "$run_base" \
+      --arg tdir "$TEMPLATES_DIR" '
+    def bad($m): error($m);
+    def chktext($field):
+      if (type != "string") or (. == "") then bad($field + " must be a non-empty string")
+      elif test("</") or test("\\{\\{") then bad($field + " may not contain </ or {{ (injection guard): " + .)
+      else . end;
+
+    (.shared_packet) as $pkt
+    | (.parallax // []) as $px
+    | (.subagents // []) as $sa
+    | ($px | type) as $pxt | (if $pxt != "array" then bad("parallax must be an array") else . end)
+    | ($sa | type) as $sat | (if $sat != "array" then bad("subagents must be an array") else . end)
+
+    # Validate + normalize parallax entries.
+    | ($px | map(
+        (.to // bad("parallax entry missing .to")) as $to
+        | (if ($to|test("^(codex|deepseek|mimo)$")|not) then bad("parallax .to must be codex|deepseek|mimo, got: " + $to) else . end)
+        | (.name // bad("parallax entry missing .name")) as $name
+        | (if ($name|test("^[a-z0-9-]+$")|not) then bad("parallax .name must match [a-z0-9-]+, got: " + $name) else . end)
+        | (.lens | chktext("parallax .lens")) as $lens
+        | (.lens_desc | chktext("parallax .lens_desc")) as $desc
+        | (if ($to != "codex") and ((.effort // null) != null)
+             then bad("effort is only valid for codex; remove it from " + $to + " entry \"" + $name + "\"") else . end)
+        | (if $to == "codex"
+             then ((.effort // "medium") as $e
+                   | if ($e|test("^(medium|xhigh)$")|not) then bad("codex effort must be medium|xhigh, got: " + $e) else $e end)
+             else null end) as $effort
+        | {
+            to: $to,
+            name: ("prism-" + $name),
+            slug: $name,
+            effort: $effort,
+            lens: $lens,
+            lens_desc: $desc,
+            launcher: ($base + "-launcher-" + $to + "-" + $name + ".md"),
+            log:      ($base + "-out-prism-" + $name + ".log")
+          }
+      )) as $pxn
+
+    # Validate + normalize subagent entries (slugify lens for the filename).
+    | ($sa | map(
+        (.lens | chktext("subagent .lens")) as $lens
+        | (.lens_desc | chktext("subagent .lens_desc")) as $desc
+        | ($lens | ascii_downcase | gsub("[^a-z0-9]+"; "-") | gsub("(^-|-$)"; "")) as $slug
+        | { lens: $lens, lens_desc: $desc, slug: $slug, launcher: ($base + "-launcher-subagent-" + $slug + ".md") }
+      )) as $san
+
+    # All lens names across the whole run must be distinct (redundancy guard).
+    | (($pxn + $san) | map(.lens)) as $lenses
+    | (if ($lenses|length) != ($lenses|unique|length) then bad("duplicate lens name in run; every agent needs a distinct lens") else . end)
+    | ($pxn | map(.name)) as $names
+    | (if ($names|length) != ($names|unique|length) then bad("duplicate parallax name; each relay --name must be distinct (it keys the per-peer log)") else . end)
+
+    | ($pxn | map(select(.to=="codex"))   | length) as $nc
+    | ($pxn | map(select(.to=="deepseek"))| length) as $nd
+    | ($pxn | map(select(.to=="mimo"))    | length) as $nm
+    | {
+        version: 1,
+        id: ($base | split("/") | last),
+        shared_packet: $pkt,
+        templates_dir: $tdir,
+        counts: {
+          subagents: ($san|length),
+          codex: $nc, deepseek: $nd, mimo: $nm,
+          parallax_total: ($pxn|length),
+          dispatched_total: (($san|length) + ($pxn|length))
+        },
+        parallax: $pxn,
+        subagents: $san
+      }
+  ' "$config") || die "prepare: validation failed (see message above)"
+
+  # Render every launcher FROM the manifest (manifest is authoritative — no drift).
+  # Substitution is literal bash parameter expansion, so lens text cannot break
+  # sed delimiters or replacement specials.
+  local n i to slug lens desc launcher tmpl tpl rendered first
+  n=$(echo "$manifest_json" | jq '.parallax | length')
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    to=$(echo "$manifest_json"      | jq -r ".parallax[$i].to")
+    lens=$(echo "$manifest_json"    | jq -r ".parallax[$i].lens")
+    desc=$(echo "$manifest_json"    | jq -r ".parallax[$i].lens_desc")
+    launcher=$(echo "$manifest_json"| jq -r ".parallax[$i].launcher")
+    tmpl="$TEMPLATES_DIR/launcher-relay-$to.tmpl"
+    [ -f "$tmpl" ] || die "prepare: template not found: $tmpl"
+    tpl=$(cat "$tmpl")
+    rendered="${tpl//\{\{SHARED_PACKET_PATH\}\}/$packet}"
+    rendered="${rendered//\{\{LENS_NAME\}\}/$lens}"
+    rendered="${rendered//\{\{LENS_DESC\}\}/$desc}"
+    case "$rendered" in *'{{'*) die "prepare: unreplaced {{slot}} in rendered launcher for $to/$lens" ;; esac
+    first=$(printf '%s\n' "$rendered" | head -1)
+    case "$first" in CRITICAL:*) ;; *) die "prepare: rendered $to launcher does not start with the anti-recursion CRITICAL line" ;; esac
+    printf '%s\n' "$rendered" > "$launcher"
+    i=$((i + 1))
+  done
+
+  n=$(echo "$manifest_json" | jq '.subagents | length')
+  tmpl="$TEMPLATES_DIR/launcher-subagent.tmpl"
+  [ -f "$tmpl" ] || die "prepare: template not found: $tmpl"
+  tpl=$(cat "$tmpl")
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    lens=$(echo "$manifest_json"    | jq -r ".subagents[$i].lens")
+    desc=$(echo "$manifest_json"    | jq -r ".subagents[$i].lens_desc")
+    launcher=$(echo "$manifest_json"| jq -r ".subagents[$i].launcher")
+    rendered="${tpl//\{\{SHARED_PACKET_PATH\}\}/$packet}"
+    rendered="${rendered//\{\{LENS_NAME\}\}/$lens}"
+    rendered="${rendered//\{\{LENS_DESC\}\}/$desc}"
+    case "$rendered" in *'{{'*) die "prepare: unreplaced {{slot}} in rendered subagent launcher for $lens" ;; esac
+    first=$(printf '%s\n' "$rendered" | head -1)
+    case "$first" in CRITICAL:*) ;; *) die "prepare: rendered subagent launcher does not start with the anti-recursion CRITICAL line" ;; esac
+    printf '%s\n' "$rendered" > "$launcher"
+    i=$((i + 1))
+  done
+
+  # Write the manifest atomically, only after every launcher rendered cleanly.
+  printf '%s\n' "$manifest_json" > "$manifest.tmp" && mv "$manifest.tmp" "$manifest"
+
+  # Human-facing summary for the orchestrator.
+  local nsub ncx nds nmm
+  nsub=$(echo "$manifest_json" | jq '.counts.subagents')
+  ncx=$(echo "$manifest_json"  | jq '.counts.codex')
+  nds=$(echo "$manifest_json"  | jq '.counts.deepseek')
+  nmm=$(echo "$manifest_json"  | jq '.counts.mimo')
+
+  echo "prism-launch: run '$run_id' prepared — all checks passed."
+  echo "dispatch shape: subagents=$nsub codex=$ncx deepseek=$nds mimo=$nmm"
+  echo
+  if [ "$nsub" -gt 0 ]; then
+    echo "Subagents — issue ONE Agent-tool call each (run_in_background: true);"
+    echo "use the file contents as the prompt:"
+    echo "$manifest_json" | jq -r '.subagents[] | "  - " + .lens + "  → " + .launcher'
+    echo
+  fi
+  if [ "$(echo "$manifest_json" | jq '.counts.parallax_total')" -gt 0 ]; then
+    echo "Parallax — ONE backgrounded Bash call dispatches all cross-model peers:"
+    echo "  prism-launch parallax $manifest"
+    echo
+  fi
+  echo "REMINDER: this launcher does NOT dispatch the $nsub Claude subagent(s)."
+  echo "You must issue those Agent-tool calls yourself. Never use 'claude -p' for them."
+  echo "manifest: $manifest"
+}
+
+# ── parallax ─────────────────────────────────────────────────────────────────
+
+cmd_parallax() {
+  local manifest="" dry_run=false
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --dry-run) dry_run=true; shift ;;
+      -*)        die "parallax: unknown flag: $1" ;;
+      *)         [ -z "$manifest" ] || die "parallax: unexpected argument: $1"; manifest="$1"; shift ;;
+    esac
+  done
+  [ -n "$manifest" ] || die "parallax: <manifest.json> required"
+  [ -f "$manifest" ] || die "parallax: manifest not found: $manifest"
+  command -v jq >/dev/null 2>&1 || die "parallax: jq not found in PATH"
+  jq -e . "$manifest" >/dev/null 2>&1 || die "parallax: manifest is not valid JSON: $manifest"
+
+  local packet run_base result n
+  packet=$(jq -r '.shared_packet' "$manifest")
+  run_base="${packet%.md}"
+  result="${run_base}-result.json"
+  n=$(jq '.parallax | length' "$manifest")
+  [ "$n" -gt 0 ] || die "parallax: manifest has no parallax calls"
+
+  command -v relay >/dev/null 2>&1 || die "parallax: relay not found in PATH"
+  [ -f "$packet" ] || die "parallax: shared_packet not found: $packet"
+
+  # Per-peer timeout wrapper (optional — coreutils on macOS).
+  local TIMEOUT_BIN="" PEER_TIMEOUT="${PRISM_PEER_TIMEOUT:-600}"
+  if command -v timeout >/dev/null 2>&1; then TIMEOUT_BIN=timeout
+  elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_BIN=gtimeout; fi
+  [ -z "$TIMEOUT_BIN" ] && echo "prism-parallax: warning: no timeout/gtimeout in PATH — per-peer timeout disabled" >&2
+
+  # Verify every launcher exists before launching anything.
+  local i to name effort launcher
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    launcher=$(jq -r ".parallax[$i].launcher" "$manifest")
+    [ -f "$launcher" ] || die "parallax: launcher file missing (re-run prepare): $launcher"
+    i=$((i + 1))
+  done
+
+  if $dry_run; then
+    echo "prism-parallax: DRY RUN — $n peer call(s), nothing dispatched."
+    i=0
+    while [ "$i" -lt "$n" ]; do
+      to=$(jq -r ".parallax[$i].to" "$manifest")
+      name=$(jq -r ".parallax[$i].name" "$manifest")
+      effort=$(jq -r ".parallax[$i].effort // \"\"" "$manifest")
+      launcher=$(jq -r ".parallax[$i].launcher" "$manifest")
+      if [ -n "$effort" ]; then
+        echo "  relay call --to $to --name $name --effort $effort < $launcher"
+      else
+        echo "  relay call --to $to --name $name < $launcher"
+      fi
+      i=$((i + 1))
+    done
+    exit 0
+  fi
+
+  # Launch all peers concurrently. Parallel index arrays (bash 3.2-safe).
+  local pids="" names="" tos="" logs="" rc_of=""
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    to=$(jq -r ".parallax[$i].to" "$manifest")
+    name=$(jq -r ".parallax[$i].name" "$manifest")
+    effort=$(jq -r ".parallax[$i].effort // \"\"" "$manifest")
+    launcher=$(jq -r ".parallax[$i].launcher" "$manifest")
+    local log; log=$(jq -r ".parallax[$i].log" "$manifest")
+
+    # Build the relay command; only codex takes --effort.
+    set -- relay call --to "$to" --name "$name"
+    [ -n "$effort" ] && set -- "$@" --effort "$effort"
+    [ -n "$TIMEOUT_BIN" ] && set -- "$TIMEOUT_BIN" "$PEER_TIMEOUT" "$@"
+
+    # Discard relay's stdout (it just echoes the .res.md we read directly) and
+    # capture only relay's own diagnostics on stderr. Parsing the response path
+    # from a stream that never carries model output makes it unspoofable.
+    "$@" < "$launcher" > /dev/null 2> "$log" &
+    pids="$pids $!"
+    names="$names $name"
+    tos="$tos $to"
+    logs="$logs $log"
+    echo "prism-parallax: launched $to/$name (pid $!)" >&2
+    i=$((i + 1))
+  done
+
+  # If we are terminated mid-fan (e.g. the outer Bash-tool timeout fires), kill
+  # the in-flight peers rather than leaving them orphaned.
+  trap 'for _p in $pids; do kill "$_p" 2>/dev/null || true; done' INT TERM HUP
+
+  # Wait for EVERY child even if some fail. errexit must not abort the loop or
+  # kill survivors, so each wait is guarded inside an `if`.
+  set -- $pids
+  local idx=1 pid
+  for pid in "$@"; do
+    if wait "$pid"; then rc_of="$rc_of $idx:0"; else rc_of="$rc_of $idx:$?"; fi
+    idx=$((idx + 1))
+  done
+  trap - INT TERM HUP
+
+  # Build per-peer results from logs (response path + status). Sentinel is
+  # written only after every wait above has returned.
+  local results="" tarr narr larr ec res status succeeded=0 failed=0
+  set -- $tos;   tarr="$*"
+  set -- $names; narr="$*"
+  set -- $logs;  larr="$*"
+  i=1
+  while [ "$i" -le "$n" ]; do
+    to=$(echo "$tarr"   | cut -d' ' -f"$i")
+    name=$(echo "$narr" | cut -d' ' -f"$i")
+    local log; log=$(echo "$larr" | cut -d' ' -f"$i")
+    ec=$(echo "$rc_of" | tr ' ' '\n' | grep "^$i:" | cut -d: -f2)
+    # Strip the exact "relay: response → " prefix so paths containing spaces
+    # survive intact (unlike awk $NF). The log holds only relay's stderr.
+    res=$(sed -n 's/^relay: response → //p' "$log" 2>/dev/null | tail -1)
+    if [ -n "$res" ] && [ -s "$res" ] && [ "${ec:-1}" = "0" ]; then
+      status=done; succeeded=$((succeeded + 1))
+    else
+      status=error; failed=$((failed + 1)); res=""
+    fi
+    results="$results
+$(jq -n --arg to "$to" --arg name "$name" --arg status "$status" --arg res "$res" --arg log "$log" \
+        '{to:$to, name:$name, status:$status, res:(if $res=="" then null else $res end), log:$log}')"
+    i=$((i + 1))
+  done
+
+  printf '%s\n' "$results" | jq -s \
+      --arg id "$(jq -r '.id' "$manifest")" \
+      --argjson expected "$n" \
+      --argjson succeeded "$succeeded" \
+      --argjson failed "$failed" \
+      '{id:$id, expected:$expected, succeeded:$succeeded, failed:$failed, results:.}' \
+      > "$result"
+
+  echo "prism-parallax: $succeeded/$n succeeded, $failed failed"
+  jq -r '.results[] | "  " + (if .status=="done" then "done " else "error" end) + " " + .to + "  " + .name + "  " + (.res // ("(no response; see " + .log + ")"))' "$result"
+  echo "result: $result"
+  echo "REMINDER: Claude subagents are dispatched separately via the Agent tool; this result covers parallax only." >&2
+
+  [ "$failed" -eq 0 ]
+}
+
+# ── main ─────────────────────────────────────────────────────────────────────
+
+cmd_help() {
+  cat <<'USAGE'
+prism-launch — Prism dispatch launcher (parallax fan-out + dispatch prep)
+
+Usage:
+  prism-launch prepare  --config <config.json>
+  prism-launch parallax <manifest.json> [--dry-run]
+  prism-launch --help | --version
+
+prepare:   validate config, render all launchers from templates, write a manifest.
+parallax:  fan out every relay call as ONE backgrounded process, wait for all,
+           write a structured result. Run with run_in_background: true.
+
+Env:
+  PRISM_PEER_TIMEOUT  per-peer timeout in seconds (default 600; needs coreutils timeout).
+USAGE
+}
+
+[ $# -ge 1 ] || { cmd_help; exit 1; }
+case "$1" in
+  --help|-h)    cmd_help; exit 0 ;;
+  --version|-V) echo "prism-launch v$VERSION"; exit 0 ;;
+esac
+sub="$1"; shift
+case "$sub" in
+  prepare)  cmd_prepare  "$@" ;;
+  parallax) cmd_parallax "$@" ;;
+  *)        die "unknown subcommand: $sub (use prepare|parallax)" ;;
+esac

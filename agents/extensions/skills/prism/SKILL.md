@@ -38,7 +38,7 @@ Convergence across diverse lenses is high-confidence signal; divergence surfaces
 | **Parallax — DeepSeek** | **Bash** (`relay --to deepseek`) | Cross-model agents via relay to DeepSeek V4 Pro |
 | **Parallax — MiMo** | **Bash** (`relay --to mimo`) | Cross-model agents via relay to Xiaomi MiMo-V2.5-Pro |
 
-**Default: 6 perspectives** — self + 2 subagents + 1 Codex parallax + 1 DeepSeek parallax + 1 MiMo parallax. Required dispatch: **2 Agent calls + 3 Bash relay calls**. Self does not count. All three Parallax tiers are included by default; opt out of any tier individually by setting its count to `0`.
+**Default: 6 perspectives** — self + 2 subagents + 1 Codex parallax + 1 DeepSeek parallax + 1 MiMo parallax. Required dispatch: **2 Agent calls + 1 backgrounded `prism-launch parallax` call that fans out the 3 relay calls** (manual fallback: 3 separate Bash relay calls). Self does not count. All three Parallax tiers are included by default; opt out of any tier individually by setting its count to `0`.
 
 ### Invocation Shorthand
 
@@ -190,7 +190,7 @@ After writing, read the file back with the Read tool to verify it contains all t
 
 ### Launcher Templates
 
-Launcher prompts are stored as committed template files in the `templates/` directory alongside this SKILL.md. Each template uses `{{PLACEHOLDER}}` slots filled via `sed` at dispatch time. This ensures the "identical prompts" invariant is enforced mechanically — the boilerplate is never regenerated, only the lens-specific values are emitted.
+Launcher prompts are stored as committed template files in the `templates/` directory alongside this SKILL.md. Each template uses `{{PLACEHOLDER}}` slots filled by the `prism-launch` script at dispatch time (see "Dispatch via prism-launch" below). This ensures the "identical prompts" invariant is enforced mechanically — the boilerplate is never regenerated, only the lens-specific values are emitted.
 
 **Template files:**
 
@@ -202,42 +202,52 @@ Launcher prompts are stored as committed template files in the `templates/` dire
 | `templates/launcher-relay-mimo.tmpl` | Bash relay (Parallax to MiMo) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
 | `templates/launcher-reviewer.tmpl` | Agent tool (peer review subagents) | `REVIEW_INDEX_PATH`, `PERSPECTIVE_COUNT`, `REVIEW_LENS_NAME`, `REVIEW_LENS_DESC` |
 
-All three relay templates use XML structure (`<context>`, `<objective>`, `<constraints>`, `<your_lens>`, `<response_format>`) — Codex follows the GPT-5.5 prompting guide; DeepSeek and MiMo follow CO-STAR / XML-tagged conventions that suit open-weight models trained heavily on XML data. The subagent and reviewer templates use plain markdown. The anti-recursion warning appears at the top of every template.
+The relay templates use XML structure — the Codex template uses `<goal>`, `<context>`, `<constraints>`, `<your_lens>` (following the GPT-5.5 prompting guide); the DeepSeek and MiMo templates use `<context>`, `<objective>`, `<constraints>`, `<your_lens>`, `<response_format>` (CO-STAR / XML-tagged conventions that suit open-weight models trained heavily on XML data). The subagent and reviewer templates use plain markdown. The anti-recursion warning appears at the top of every template.
 
-**Rendering a launcher prompt:** Use `sed` with `|` as the delimiter (avoids conflicts with `/` in paths). Locate the templates directory relative to this SKILL.md (it is a sibling `templates/` directory).
+When adding a new relay target model, create a new template file (e.g., `launcher-relay-gemini.tmpl`) optimized for that model's prompting conventions, and add the peer to `prism-launch`.
+
+### Dispatch via prism-launch
+
+You do **not** render templates or hand-write relay heredocs. The `prism-launch` script (a sibling `scripts/prism-launch`, on PATH) owns the cross-model half of dispatch: it renders every launcher from the templates, validates dispatch shape mechanically, and fans all relay calls out as **one** backgrounded process that waits for every peer and writes a single structured result. This is the documented dispatch path — it eliminates the per-call `sed`+heredoc token cost and makes the most common failure (dispatch-shape mismatch) structurally impossible.
+
+It cannot dispatch Claude subagents — only Claude can invoke the Agent tool, and `claude -p` is never used for Claude here (it is only relay's transport for DeepSeek/MiMo). So you still issue the subagent Agent-tool calls yourself.
+
+**You write one compact config JSON** (instead of N `sed` renders), then run two commands:
 
 ```bash
-# Subagent example
-sed -e 's|{{SHARED_PACKET_PATH}}|/tmp/prism-abc123.md|g' \
-    -e 's|{{LENS_NAME}}|Simplicity|g' \
-    -e 's|{{LENS_DESC}}|weigh the approach that requires the fewest moving parts|g' \
-    /path/to/templates/launcher-subagent.tmpl
+# config: shared_packet path + one entry per parallax peer + one per subagent.
+# (effort is codex-only: medium|xhigh. deepseek/mimo take no effort.)
+cat > /tmp/prism-<id>-config.json <<'CFG'
+{
+  "shared_packet": "/tmp/prism-<id>.md",
+  "parallax": [
+    {"to":"codex","name":"adversarial","effort":"xhigh","lens":"Adversarial","lens_desc":"weigh the strongest attacks on the proposal"},
+    {"to":"deepseek","name":"falsification","lens":"Falsification","lens_desc":"weigh what evidence would prove this wrong"},
+    {"to":"mimo","name":"outsider","lens":"Outsider","lens_desc":"weigh how a newcomer would approach this"}
+  ],
+  "subagents": [
+    {"lens":"Simplicity","lens_desc":"weigh the approach that requires the fewest moving parts"},
+    {"lens":"Correctness","lens_desc":"weigh correctness guarantees and edge cases"}
+  ]
+}
+CFG
 
-# Codex Parallax example (render to variable, pass as heredoc)
-LAUNCHER_CODEX=$(sed -e 's|{{SHARED_PACKET_PATH}}|/tmp/prism-abc123.md|g' \
-                     -e 's|{{LENS_NAME}}|Adversarial|g' \
-                     -e 's|{{LENS_DESC}}|weigh the strongest attacks on the proposal|g' \
-                     /path/to/templates/launcher-relay-codex.tmpl)
-relay call --to codex --name prism-adversarial --effort xhigh <<BODY
-$LAUNCHER_CODEX
-BODY
+# 1) prepare (foreground): validates packet/shape/effort/injection, renders all
+#    launchers, writes <id>-manifest.json. Fails loudly if anything is off.
+prism-launch prepare --config /tmp/prism-<id>-config.json
 
-# DeepSeek / MiMo Parallax example — identical shape, NO --effort.
-# Swap --to deepseek|mimo and the matching launcher-relay-{deepseek,mimo}.tmpl.
-LAUNCHER_DS=$(sed -e 's|{{SHARED_PACKET_PATH}}|/tmp/prism-abc123.md|g' \
-                  -e 's|{{LENS_NAME}}|Falsification|g' \
-                  -e 's|{{LENS_DESC}}|weigh what evidence would prove this wrong|g' \
-                  /path/to/templates/launcher-relay-deepseek.tmpl)
-relay call --to deepseek --name prism-falsification <<BODY
-$LAUNCHER_DS
-BODY
+# 2) parallax (ONE backgrounded Bash call, run_in_background: true): fans out all
+#    relay calls, waits for all, writes <id>-result.json with per-peer status.
+prism-launch parallax /tmp/prism-<id>-manifest.json
 ```
 
-Only the shared packet path and lens vary between launcher prompts. Agent names are metadata outside the prompt body. When adding a new relay target model, create a new template file (e.g., `launcher-relay-gemini.tmpl`) optimized for that model's prompting conventions.
+`prepare` prints the rendered subagent launcher file paths — pass each file's **contents** as the prompt of an Agent-tool call. It validates `lens`/`lens_desc` (rejecting `</` and `{{` as an injection guard; comparison operators like `>` are allowed), enforces distinct lens names and distinct relay `name`s, rejects `effort` on DeepSeek/MiMo, and rejects a `shared_packet` path containing whitespace. `parallax` writes `<id>-result.json` (`{id, expected, succeeded, failed, results:[{to,name,status,res,log}]}`) and prints each peer's `.res.md` path; read those on completion (the `log` field is relay's own diagnostics for a failed peer — never relay's token-heavy `.log` sidecar). Use `prism-launch parallax <manifest> --dry-run` to preview the exact relay commands without dispatching. Per-peer timeout defaults to 600s (`PRISM_PEER_TIMEOUT`); set the backgrounded Bash call's `timeout` above that (e.g. `660000`).
+
+**Manual fallback (only if `prism-launch` is unavailable):** render each launcher with `sed -e 's|{{SHARED_PACKET_PATH}}|...|g' -e 's|{{LENS_NAME}}|...|g' -e 's|{{LENS_DESC}}|...|g' templates/launcher-<kind>.tmpl`, then dispatch one `relay call --to <peer> --name prism-<slug> [--effort <medium|xhigh>]` heredoc per parallax tier (background each, `timeout: 600000`). This is the pre-`prism-launch` flow; prefer the script.
 
 ## Pre-Launch Checks
 
-Run these checks before launching. If any fails, rewrite and re-check.
+Run these checks before launching. If any fails, rewrite and re-check. **When dispatching via `prism-launch` (the default path), `prepare` enforces checks 1, 2, 5, and 6 mechanically and aborts on failure, and `parallax` enforces check 0 (relay availability) before dispatch — you still own the judgment checks 3 (redundancy) and 4 (lens quality), which require semantic reasoning a script cannot do.** The descriptions below remain authoritative for the manual fallback and for understanding what `prism-launch` verifies.
 
 0. **Relay availability test (if any parallax tier > 0):** Run `command -v relay` to check if the relay command is in PATH. This is the sole test — do not glob for relay files or references to determine availability. If the command exists, relay is available.
 
@@ -364,19 +374,15 @@ sed -e 's|{{REVIEW_INDEX_PATH}}|/tmp/prism-abc123-review.md|g' \
 
 ### Step 1: Freeze context, compose, verify, launch
 
-1. Build one canonical shared packet (Full Question + Context + Constraints).
-2. Write the shared packet to `/tmp/prism-<unique-id>.md` using the Write tool. Read it back to verify completeness.
-3. Render launcher prompts from the template files in `templates/` using `sed` substitution (see Launcher Templates). For each agent, fill only the lens-specific slots — the boilerplate is already in the template. Render Codex parallax launchers from `launcher-relay-codex.tmpl`, DeepSeek parallax launchers from `launcher-relay-deepseek.tmpl`, MiMo parallax launchers from `launcher-relay-mimo.tmpl`, and subagent launchers from `launcher-subagent.tmpl`.
-4. Run the pre-launch checks (including the slot-completion test on rendered launchers). Fix failures before launch.
-5. Launch all dispatched agents concurrently (`run_in_background: true`). **Dispatch checklist:**
-   - Subagents: **Agent** tool with the rendered launcher prompt.
-   - **Codex parallax (required if codex-count > 0):** **Bash** tool to `relay call --to codex` (the `--to codex` flag is optional since codex is the default) with the rendered Codex launcher as the heredoc body.
-   - **DeepSeek parallax (required if ds-count > 0):** **Bash** tool to `relay call --to deepseek` with the rendered DeepSeek launcher as the heredoc body.
-   - **MiMo parallax (required if mm-count > 0):** **Bash** tool to `relay call --to mimo` with the rendered MiMo launcher as the heredoc body.
-   - Compose all Parallax calls FIRST to prevent omission — they are the most-forgotten step. Verify each relay command shape, heredoc body, and Bash timeout (`timeout: 600000`) before launching.
-   - Confirm the count of dispatched Codex relay calls matches `codex-count`, DeepSeek relay calls matches `ds-count`, and MiMo relay calls matches `mm-count`.
+1. Build one canonical shared packet (Full Question + Context + Constraints). Write it to `/tmp/prism-<unique-id>.md` with the Write tool.
+2. Assign lenses (run the redundancy and lens-quality checks — these are yours to judge), then write the compact config JSON (`shared_packet` + one `parallax` entry per peer + one `subagent` entry per lens). See "Dispatch via prism-launch".
+3. **`prism-launch prepare --config /tmp/prism-<id>-config.json`** (foreground). This validates the packet and records its path (it does not copy or hash it — do not mutate the packet after this point), renders all launchers, runs checks 1/2/5/6, and writes `<id>-manifest.json`. If it exits non-zero, fix the config and re-run — nothing has been dispatched.
+4. Launch all dispatched agents concurrently (`run_in_background: true`). **Dispatch checklist:**
+   - **Parallax — ONE backgrounded Bash call:** `prism-launch parallax /tmp/prism-<id>-manifest.json` (set the Bash tool `timeout` above `PRISM_PEER_TIMEOUT`, e.g. `660000`). This fans out every Codex/DeepSeek/MiMo call, waits for all, and yields a single completion notification. Compose this call FIRST.
+   - **Subagents:** one **Agent** tool call per subagent, using the contents of the rendered launcher file (`prepare` printed the paths) as the prompt. Never use `claude -p` for these.
+   - The manifest's `counts` is the authoritative dispatch shape — there is no per-relay-call count to reconcile by hand, because `prism-launch` emits exactly the configured calls.
 
-Do not poll or sleep-loop — the system notifies you when agents finish.
+Do not poll or sleep-loop — the system notifies you when agents finish. (Manual fallback when `prism-launch` is unavailable: render with `sed` and dispatch one `relay call` heredoc per tier, per "Manual fallback" above.)
 
 ### Step 2: Self-review
 
@@ -388,13 +394,13 @@ Since you composed the prompts and chose the lenses, your self-review is not ful
 
 **Do not synthesize, summarize, or present results until EVERY dispatched agent — including all Parallax tiers — has returned.** This is a hard gate, not a suggestion. Having "enough" subagents is never a reason to skip the remaining agents. The whole point of Parallax is model diversity — proceeding without it defeats the purpose of Prism. One peer finishing first (Codex, DeepSeek, or MiMo) is never permission to ignore the others.
 
-**Parallax is slow — that is normal and expected.** Relay calls routinely take 2-5x longer than same-model subagents. DeepSeek calls (always at DeepThink `max`), MiMo calls, and Codex calls at `--effort xhigh` are the slowest. Do not diagnose, retry, report failure, or proceed while a background task is running. The system sends a completion notification per call; until all expected notifications arrive, the run is healthy. Do not tell the user you are "still waiting" or suggest proceeding without any tier.
+**Parallax is slow — that is normal and expected.** Relay calls routinely take 2-5x longer than same-model subagents. DeepSeek calls (always at DeepThink `max`), MiMo calls, and Codex calls at `--effort xhigh` are the slowest. Do not diagnose, retry, report failure, or proceed while a background task is running. With `prism-launch parallax`, **all parallax peers finish under a single completion notification** (the fan waits for every peer before signaling) — so a default run yields ~3 notifications: one per subagent plus one for the whole parallax batch. Until both the parallax notification and every subagent notification have arrived, the run is healthy. Do not tell the user you are "still waiting" or suggest proceeding without any tier.
 
 **What to do while waiting:** Work on your self-review (Step 2). If self-review is done, wait silently. Do not synthesize partial results.
 
 **Handling failures (after completion notification only):**
 
-- **Relay transport failure:** Check the Bash tool's output for diagnostic information, fix the invocation, and retry once before escalating. Do not read the `.log` sidecar — it is extremely long and token-heavy.
+- **Relay transport failure:** After the parallax notification, read `<id>-result.json` — any peer with `status: "error"` failed. Retry just that peer with a single `relay call --to <peer> --name prism-<slug> [--effort ...] < <its launcher file>` (do not re-run the whole fan). Check the Bash output for the diagnosed cause; do not read the `.log` sidecar — it is extremely long and token-heavy.
 - **Answer-quality failure** (empty, truncated, off-topic): Offer the user: (a) retry, (b) proceed with reduced perspectives, or (c) abort.
 - **Only these post-notification failures justify proceeding without Parallax.** "It's taking a long time" is never a failure.
 
@@ -470,13 +476,13 @@ Re-read the user's original question. Verify:
 - No lens-by-lens summary appears outside an optional appendix.
 - Every retained dissent, caveat, or trigger changes a decision, confidence level, or next action.
 
-Optionally delete all Prism temp files: shared context (`/tmp/prism-<unique-id>.md`), perspective files (`/tmp/prism-<unique-id>-perspective-*.md`), and review index (`/tmp/prism-<unique-id>-review.md`).
+Optionally delete all Prism temp files — they share the `/tmp/prism-<unique-id>` prefix: shared context (`.md`), config, manifest, rendered launchers (`-launcher-*.md`), parallax out logs (`-out-*.log`), result sentinel (`-result.json`), perspective files (`-perspective-*.md`), and review index (`-review.md`). A single `rm -f /tmp/prism-<unique-id>*` covers them.
 
 ## Guards
 
 - **No recursion (HARD RULE):** Dispatched agents must never invoke prism, relay, any skill, or spawn child agents. The Constraints section and launcher prompts both enforce this — do not weaken or omit either. For Parallax, keep the anti-recursion warning at the top of every heredoc (Codex, DeepSeek, and MiMo launchers).
 - **No contamination:** Write the shared context file and compose all launcher prompts before any launch. Do not modify the shared file or revise prompts after seeing early agent outputs.
-- **No all-same-model dispatch (HARD RULE):** The total count of Bash relay calls must equal `codex-count + ds-count + mm-count`. If the planned dispatch has zero relay calls but any configured count is non-zero, fix before launching. This is the most common Prism failure mode — even with all three parallax tiers configured, forgetting to launch one is easy.
+- **No all-same-model dispatch (HARD RULE):** The dispatched parallax peers must equal `codex-count + ds-count + mm-count`. Via `prism-launch`, the manifest's `counts` derives this from the config, and the single `parallax` call emits exactly those peers — so the historical "forgot a relay call" failure cannot occur. In the manual fallback, the total count of Bash relay calls must equal that sum; if the planned dispatch has zero relay calls but any configured count is non-zero, fix before launching.
 - **No early synthesis (HARD RULE):** Do not synthesize until every dispatched agent has returned its completion notification. "Subagents are done, Codex relay is still running" or "Codex came back, DeepSeek is still running" are not reasons to proceed — they are the expected state. Proceeding without any tier's results voids the entire Prism run.
 - **No side effects:** Dispatched agents must not edit files, commit, push, or invoke skills. The only permitted write is the relay response file (.res.md).
 
