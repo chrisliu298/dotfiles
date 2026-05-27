@@ -120,7 +120,7 @@ git clone https://github.com/chrisliu298/relay.git ~/.cache/relay-src
 **Claude Code:**
 
 ```bash
-ln -s ~/.cache/relay-src/claude/skills/relay ~/.claude/skills/relay
+ln -s ~/.cache/relay-src ~/.claude/skills/relay
 ```
 
 **Add to PATH** (recommended — makes `relay` callable directly):
@@ -284,7 +284,7 @@ With three peer options, Prism's Parallax dispatches each tier independently: a 
 # Install both for the full Prism experience
 git clone https://github.com/chrisliu298/prism.git ~/.claude/skills/prism
 git clone https://github.com/chrisliu298/relay.git ~/.cache/relay-src
-ln -s ~/.cache/relay-src/claude/skills/relay ~/.claude/skills/relay
+ln -s ~/.cache/relay-src ~/.claude/skills/relay
 ```
 
 Without Relay installed, Prism falls back to a same-model adversarial agent — functional but with reduced diversity.
@@ -305,17 +305,15 @@ Without Relay installed, Prism falls back to a same-model adversarial agent — 
 
 ```text
 relay/
-├── scripts/relay                # canonical script (single source of truth)
-└── claude/skills/relay/
-    ├── SKILL.md                 # the Claude-side skill (caller)
-    ├── references/
-    │   ├── codex.md             # → prompt-engineer GPT/Codex guide
-    │   ├── gpt.md               # → prompt-engineer GPT guide
-    │   └── deepseek.md          # → prompt-engineer DeepSeek guide
-    └── scripts/relay            # → ../../../scripts/relay (symlink)
+├── SKILL.md                     # the Claude-side skill (caller)
+├── references/
+│   ├── codex.md                 # → prompt-engineer GPT/Codex guide
+│   ├── gpt.md                   # → prompt-engineer GPT guide
+│   └── deepseek.md              # → prompt-engineer DeepSeek guide
+└── scripts/relay                # the bash script (single source of truth)
 ```
 
-The bash script lives once at `scripts/relay`; the skill directory symlinks to it. The earlier `codex/skills/relay/` was removed when the protocol was simplified to one direction (Claude is the sole caller).
+Claude is the sole caller, so the repo is a single flat skill directory: clone it and symlink the root into `~/.claude/skills/relay`, with `scripts/relay` on PATH. The earlier `codex/skills/relay/` peer was removed when the protocol was simplified to one direction.
 
 ---
 

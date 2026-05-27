@@ -1,1 +1,0 @@
-../../../prompt-engineer/references/codex.md

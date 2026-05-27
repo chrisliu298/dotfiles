@@ -86,22 +86,15 @@ for name in "${PUBLISH_SKILLS[@]}"; do
         continue
     fi
 
-    if [[ "$name" == "relay" ]]; then
-        # --copy-unsafe-links materializes symlinks pointing outside the source
-        # tree (e.g. references/*.md -> prompt-engineer/references/) into real
-        # files, so the published repo stays self-contained.
-        mkdir -p "$repo_dir/claude/skills/relay" "$repo_dir/codex/skills/relay" "$repo_dir/scripts"
-        rsync -a --delete --copy-unsafe-links --exclude='scripts/' \
-            "$skill_dir/claude/" "$repo_dir/claude/skills/relay/"
-        rsync -a --delete --copy-unsafe-links --exclude='scripts/' \
-            "$skill_dir/codex/" "$repo_dir/codex/skills/relay/"
-        rsync -a --delete "$skill_dir/scripts/" "$repo_dir/scripts/"
-    else
-        rsync -a --delete \
-            --exclude='.git' --exclude='LICENSE' \
-            --exclude='.gitignore' --exclude='.relay' \
-            "$skill_dir/" "$repo_dir/"
-    fi
+    # relay needs --copy-unsafe-links: its references/*.md symlinks point outside
+    # the skill tree (-> prompt-engineer/references/), so materialize them into
+    # real files to keep the published repo self-contained.
+    copy_links=()
+    [[ "$name" == "relay" ]] && copy_links=(--copy-unsafe-links)
+    rsync -a --delete "${copy_links[@]}" \
+        --exclude='.git' --exclude='LICENSE' \
+        --exclude='.gitignore' --exclude='.relay' \
+        "$skill_dir/" "$repo_dir/"
 
     if git -C "$repo_dir" diff --quiet 2>/dev/null \
         && [[ -z "$(git -C "$repo_dir" ls-files --others --exclude-standard 2>/dev/null)" ]]; then

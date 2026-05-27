@@ -27,7 +27,7 @@ LINKS=(
 SKILLS=(
     "*|./agents/extensions/skills|claude,codex"
     # Relay: claude-only caller; targets Codex, DeepSeek, and MiMo via the script
-    "relay|./agents/extensions/skills/relay/claude|claude"
+    "relay|./agents/extensions/skills/relay|claude"
     # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup)
     "keep-warm|./agents/extensions/skills/keep-warm|claude"
     # prism: claude-only caller (dispatches parallax to Codex + DeepSeek + MiMo via relay)
