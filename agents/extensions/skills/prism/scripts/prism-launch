@@ -242,11 +242,15 @@ cmd_parallax() {
   command -v relay >/dev/null 2>&1 || die "parallax: relay not found in PATH"
   [ -f "$packet" ] || die "parallax: shared_packet not found: $packet"
 
-  # Per-peer timeout wrapper (optional — coreutils on macOS).
-  local TIMEOUT_BIN="" PEER_TIMEOUT="${PRISM_PEER_TIMEOUT:-600}"
-  if command -v timeout >/dev/null 2>&1; then TIMEOUT_BIN=timeout
+  # Per-peer timeout wrapper (optional — coreutils on macOS). Set
+  # PRISM_PEER_TIMEOUT=0 to disable the cap entirely (peers run unbounded; the
+  # only backstop is the outer Bash-tool timeout, which kills all peers at once).
+  local TIMEOUT_BIN="" PEER_TIMEOUT="${PRISM_PEER_TIMEOUT:-1800}"
+  if [ "$PEER_TIMEOUT" = "0" ]; then
+    echo "prism-parallax: per-peer timeout disabled (PRISM_PEER_TIMEOUT=0)" >&2
+  elif command -v timeout >/dev/null 2>&1; then TIMEOUT_BIN=timeout
   elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_BIN=gtimeout; fi
-  [ -z "$TIMEOUT_BIN" ] && echo "prism-parallax: warning: no timeout/gtimeout in PATH — per-peer timeout disabled" >&2
+  [ -z "$TIMEOUT_BIN" ] && [ "$PEER_TIMEOUT" != "0" ] && echo "prism-parallax: warning: no timeout/gtimeout in PATH — per-peer timeout disabled" >&2
 
   # Verify every launcher exists before launching anything.
   local i to name effort launcher
@@ -374,7 +378,7 @@ parallax:  fan out every relay call as ONE backgrounded process, wait for all,
            write a structured result. Run with run_in_background: true.
 
 Env:
-  PRISM_PEER_TIMEOUT  per-peer timeout in seconds (default 600; needs coreutils timeout).
+  PRISM_PEER_TIMEOUT  per-peer timeout in seconds (default 1800; 0 = no cap; needs coreutils timeout).
 USAGE
 }
 
