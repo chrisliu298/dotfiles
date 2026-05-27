@@ -492,7 +492,7 @@ Optionally delete all Prism temp files: shared context (`/tmp/prism-<unique-id>.
 
 The core principle (redundancy, not division of labor), the prompt template structure, and the hard completion gate are load-bearing constraints — do not relax them. Everything else — lens choices, synthesis categories, agent count beyond the minimum, pre-launch check order — is flexible guidance that you should adapt to the task.
 
-**Synthesis adaptation:** The default categories (Recommendation, Confidence and basis, Key dissent, Contingencies) suit most analysis and decision questions. But the integrator should actively adapt the synthesis frame when the task calls for it — merge sections, reorder, or add task-specific sections. A deliverable question needs the artifact front and center with design rationale behind it; a pure risk assessment might elevate Contingencies above Confidence. Rigid adherence to the default categories when they don't fit the question is a failure of integration.
+**Synthesis adaptation:** The default structure (Answer, Do now, Why, Watch/Dissent — see Step 4) suits most analysis and decision questions. But the integrator should actively adapt the synthesis frame when the task calls for it — merge sections, reorder, or add task-specific sections. A deliverable question needs the artifact front and center in Answer with design rationale behind it; a pure risk assessment might elevate Watch/Dissent above Why. Rigid adherence to the default structure when it doesn't fit the question is a failure of integration.
 
 ## When to Use Prism
 
