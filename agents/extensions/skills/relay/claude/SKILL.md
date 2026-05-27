@@ -94,51 +94,19 @@ Summary of changes, one per line, with file path and description.
 BODY
 ```
 
-## Prompting DeepSeek
+## Prompting DeepSeek and MiMo
 
-**Before composing the prompt body, read `~/.claude/skills/relay/references/deepseek.md`** (symlinked to the prompt-engineer reference). It covers the CO-STAR framework, XML scaffolding conventions, thinking-mode quirks, and DeepThink failure modes. This is not optional — the guide contains model-specific patterns that materially affect output quality.
+Both are independent open-weight models that respond best to XML-scaffolded, structured prompts. **Before composing a DeepSeek prompt body, read `~/.claude/skills/relay/references/deepseek.md`** (symlinked to the prompt-engineer reference) — it covers the CO-STAR framework, XML scaffolding conventions, thinking-mode quirks, and DeepThink failure modes. This is not optional — the guide contains model-specific patterns that materially affect output quality. MiMo-V2.5-Pro has no dedicated reference; treat it like DeepSeek.
 
-Default to XML scaffolding (DeepSeek V4 was trained heavily on XML-tagged data). The CO-STAR sections — `<context>`, `<objective>`, `<style>`, `<tone>`, `<audience>`, `<response_format>` — give the cleanest results for non-trivial tasks. Use positive framing ("include X") over negative constraints ("don't omit X"). Keep system-style meta-instructions out of the prompt body — DeepThink (always on for DeepSeek calls) degrades under long system prompts.
+Default to XML scaffolding (DeepSeek V4 was trained heavily on XML-tagged data; MiMo behaves the same). The CO-STAR sections — `<context>`, `<objective>`, `<style>`, `<tone>`, `<audience>`, `<response_format>` — give the cleanest results for non-trivial tasks. Use positive framing ("include X") over negative constraints ("don't omit X"). Neither has an effort knob — deep thinking is always on — so keep system-style meta-instructions out of the prompt body; both degrade under long system prompts. Lead with the outcome and success criteria, then let the model pick the path.
 
-**Example:**
+**Example** (swap `--to deepseek` for `--to mimo` to route to MiMo — the prompt shape is identical):
 
 ```bash
 relay call --to deepseek --name pool-design <<'BODY'
 <context>
 We're hardening src/db/pool.py before a SOC 2 audit. Codebase is Python 3.12 +
 FastAPI. Tests live in tests/test_pool.py and run under pytest.
-</context>
-
-<objective>
-Add connection timeouts and stale-connection recovery to src/db/pool.py.
-</objective>
-
-<success_criteria>
-- ConnectionPool accepts a timeout_seconds parameter at construction
-- stale connections are auto-reconnected on use
-- a reclaim_stale() method exists for explicit cleanup
-- existing callers keep working without changes
-- pytest tests/test_pool.py passes; no new lint errors
-</success_criteria>
-
-<response_format>
-Summary of changes first (one line per change: file path + description),
-then the diffs grouped by file. Cap at 400 words excluding diffs.
-</response_format>
-BODY
-```
-
-## Prompting MiMo
-
-MiMo-V2.5-Pro has no dedicated prompt-engineer reference. Treat it like DeepSeek: it responds well to XML-scaffolded, structured prompts with explicit sections (`<context>`, `<objective>`, `<success_criteria>`, `<response_format>`) and positive framing. There is no effort knob — deep thinking is on by default — so keep system-style meta-instructions out of the prompt body. Lead with the outcome and success criteria, then let the model pick the path.
-
-**Example:**
-
-```bash
-relay call --to mimo --name pool-design <<'BODY'
-<context>
-We're hardening src/db/pool.py before a SOC 2 audit. Python 3.12 + FastAPI;
-tests live in tests/test_pool.py and run under pytest.
 </context>
 
 <objective>
