@@ -67,7 +67,7 @@ Examples:
 
 **Parsing:** Read tokens left-to-right. A token is config if it is a single digit, an effort letter (`m`/`x`), or the literal `r` (peer review). Map positionally in this order: digit → sub-count, digit → codex-count, letter → codex-effort, digit → ds-count, digit → mm-count. The `r` token may appear anywhere among config tokens. The first non-matching token begins the question. Reject effort letters outside `{m, x}` with: "Codex effort must be m or x." Natural language config is also accepted.
 
-**All three Parallax tiers are on by default.** Every run with `codex-count > 0` MUST include that many Bash relay calls to Codex; every run with `ds-count > 0` MUST include that many to DeepSeek; every run with `mm-count > 0` MUST include that many to MiMo. Do not skip, replace with a subagent, or defer. Exceptions: (1) user explicitly set the tier's count to `0`, or (2) `relay` is unavailable (substitute a same-model agent carrying that tier's assigned lens and warn the user about degradation). If your planned dispatch set contains fewer relay calls than `codex-count + ds-count + mm-count`, Parallax is incomplete — fix before launching.
+**Every run with `codex-count > 0` MUST include that many Bash relay calls to Codex; every run with `ds-count > 0` MUST include that many to DeepSeek; every run with `mm-count > 0` MUST include that many to MiMo.** Do not skip, replace with a subagent, or defer. Exceptions: (1) user explicitly set the tier's count to `0`, or (2) `relay` is unavailable (substitute a same-model agent carrying that tier's assigned lens and warn the user about degradation). The dispatch-shape check verifies the counts before launch (Pre-Launch Check #5).
 
 ### Parallax (cross-model agents)
 
@@ -222,22 +222,14 @@ relay call --to codex --name prism-adversarial --effort xhigh <<BODY
 $LAUNCHER_CODEX
 BODY
 
-# DeepSeek Parallax example (render to variable, pass as heredoc — no --effort)
+# DeepSeek / MiMo Parallax example — identical shape, NO --effort.
+# Swap --to deepseek|mimo and the matching launcher-relay-{deepseek,mimo}.tmpl.
 LAUNCHER_DS=$(sed -e 's|{{SHARED_PACKET_PATH}}|/tmp/prism-abc123.md|g' \
                   -e 's|{{LENS_NAME}}|Falsification|g' \
                   -e 's|{{LENS_DESC}}|weigh what evidence would prove this wrong|g' \
                   /path/to/templates/launcher-relay-deepseek.tmpl)
 relay call --to deepseek --name prism-falsification <<BODY
 $LAUNCHER_DS
-BODY
-
-# MiMo Parallax example (render to variable, pass as heredoc — no --effort)
-LAUNCHER_MM=$(sed -e 's|{{SHARED_PACKET_PATH}}|/tmp/prism-abc123.md|g' \
-                  -e 's|{{LENS_NAME}}|Outsider|g' \
-                  -e 's|{{LENS_DESC}}|weigh how someone outside the project would see this|g' \
-                  /path/to/templates/launcher-relay-mimo.tmpl)
-relay call --to mimo --name prism-outsider <<BODY
-$LAUNCHER_MM
 BODY
 ```
 
