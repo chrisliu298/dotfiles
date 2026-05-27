@@ -13,9 +13,9 @@ user-invocable: true
 
 # Relay
 
-**Claude-only.** If `ANTHROPIC_BASE_URL` contains `deepseek` or `xiaomimimo`, this skill is unavailable — stop and tell the user: "relay is Claude-only; a non-Claude session cannot orchestrate other models." The relay script itself also refuses at the shell layer.
+**Claude-only.** If `ANTHROPIC_BASE_URL` contains `deepseek` or `xiaomimimo`, this skill is unavailable — stop and tell the user: "relay is Claude-only; a non-Claude session cannot orchestrate other models." The relay script also refuses at the shell layer.
 
-Call Codex, DeepSeek, or MiMo like a function. One command: generates the request, invokes the peer, prints the response.
+Call Codex, DeepSeek, or MiMo like a function: one command generates the request, invokes the peer, and prints the response.
 
 ```
 relay call --name <slug> [--to <peer>] [--effort <level>] [--body-only] <<'BODY'
@@ -23,9 +23,9 @@ task
 BODY
 ```
 
-The script is available as `relay` in PATH. The caller is always Claude (this is a Claude-only skill); the peer defaults to Codex. Pass `--to deepseek` or `--to mimo` to route elsewhere.
+`relay` is in PATH. The caller is always Claude (this is a Claude-only skill); the peer defaults to Codex. Pass `--to deepseek` or `--to mimo` to route elsewhere.
 
-**All Codex, DeepSeek, and MiMo interactions go through `relay call`.** Do not invoke `codex exec` or the `ds`/`mm` aliases directly, do not spawn agents to run the codex or claude CLI for these purposes, and do not pass model flags (`-m`, `--model`). The model and invocation method are hardcoded in the script.
+**All Codex, DeepSeek, and MiMo interactions go through `relay call`.** Do not invoke `codex exec` or the `ds`/`mm` aliases directly, do not spawn agents to run the codex or claude CLI for these purposes, and do not pass model flags (`-m`, `--model`) — the model and invocation method are hardcoded in the script.
 
 ## Peer selection
 
@@ -35,13 +35,13 @@ The script is available as `relay` in PATH. The caller is always Claude (this is
 | **DeepSeek** | Independent model family for true cross-vendor diversity, frontier reasoning, multi-step analysis. Open-weight V4-Pro (1.6T MoE). Always runs at `max` (DeepThink). | `relay call --to deepseek --name ...` |
 | **MiMo** | Another independent open-weight lineage (Xiaomi MiMo-V2.5-Pro, 1.02T MoE / 42B active, 1M context). Use for a third cross-vendor perspective. No effort knob. | `relay call --to mimo --name ...` |
 
-Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick DeepSeek or MiMo when you want a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax. Neither DeepSeek nor MiMo has an effort knob — `--effort` is silently ignored on those calls, so just omit it. DeepSeek requires `DEEPSEEK_API_KEY` and MiMo requires `MIMO_API_KEY` in the environment.
+Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick DeepSeek or MiMo for a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax. Neither DeepSeek nor MiMo has an effort knob — `--effort` is silently ignored on those calls, so omit it. DeepSeek requires `DEEPSEEK_API_KEY` and MiMo requires `MIMO_API_KEY` in the environment.
 
 ### Common Mistakes
 - **Premature failure diagnosis**: If a relay call was launched with `run_in_background: true`, do not inspect `.relay` files or enter the failure flow until the background task's completion notification arrives. No notification means the peer is still running.
-- **Wrapping relay in a subagent**: Do not spawn an Agent that then calls `relay` inside. When the subagent completes, the platform kills its child processes — including the still-running Codex CLI. Call `relay` directly from the main conversation with `run_in_background: true` instead.
-- **Empty heredoc body**: The `<<'BODY'` ... `BODY` block must contain text. An empty body causes an immediate error.
-- **Missing `--name`**: Every call requires `--name`. Omitting it is a script error, not a peer failure.
+- **Wrapping relay in a subagent**: Do not spawn an Agent that then calls `relay` inside. When the subagent completes, the platform kills its child processes — including the still-running peer CLI. Call `relay` directly from the main conversation with `run_in_background: true` instead.
+- **Empty heredoc body**: The `<<'BODY'` ... `BODY` block must contain text — an empty body causes an immediate error.
+- **Missing `--name`**: Every call requires `--name` — omitting it is a script error, not a peer failure.
 
 ## Example
 
@@ -53,7 +53,7 @@ BODY
 
 ## Effort Levels
 
-`--effort` applies to Codex only. DeepSeek always runs at `max` (DeepThink) and MiMo has no effort knob — the flag is silently ignored on those calls, so just omit it.
+`--effort` applies to Codex only. DeepSeek always runs at `max` (DeepThink) and MiMo has no effort knob — the flag is silently ignored on those calls, so omit it.
 
 | Level | When to use |
 |-------|-------------|
@@ -66,7 +66,7 @@ Before raising effort, improve the prompt first — add outcome-first success cr
 
 **Before composing the prompt body, read the prompt-engineer references** — `~/.claude/skills/prompt-engineer/references/gpt.md` for cross-cutting GPT-5.5 prompt patterns and `~/.claude/skills/prompt-engineer/references/codex.md` for Codex coding agent patterns. If those symlinks are unavailable, use the repo copies at `agents/extensions/skills/prompt-engineer/references/`. This is not optional — the guides contain model-specific patterns that materially affect output quality.
 
-Lead with the outcome, not the procedure. GPT-5.5 responds best to outcome-first prompts — state the goal, success criteria, and stop rules, then let Codex pick the path. Reach for XML scaffolding only when a specific failure mode needs it:
+Lead with the outcome, not the procedure. GPT-5.5 responds best to outcome-first prompts — state the goal, success criteria, and stop rules, then let Codex pick the path. Use XML scaffolding only when a specific failure mode needs it:
 
 - `<output_contract>` — when format precision matters
 - `<completeness_contract>` — when the task has discrete items that must all be covered
@@ -179,7 +179,7 @@ Request and response files are saved in `.relay/` (auto-gitignored). Peer stderr
 
 When a completed relay call reports a missing response file, the peer failed before producing output. Each call generates a new request ID, so retrying does not re-execute previous attempts.
 
-1. **Check the Bash output.** The relay script prints diagnostic information (exit code, error summary) to stdout/stderr. Use this — visible in the Bash tool result — to identify the cause. **Do not read the `.log` sidecar file** — it contains the peer's full stderr and is extremely long and token-heavy.
+1. **Check the Bash output.** The relay script prints diagnostic information (exit code, error summary) to stdout/stderr. Use this — visible in the Bash tool result — to identify the cause. **Do not read the `.log` sidecar file** — full stderr, token-heavy.
 2. **Diagnose.** Common causes and fixes:
    - *Peer binary not found* → verify the peer CLI is installed and in PATH
    - *Empty body / malformed heredoc* → verify the heredoc has content and a matching terminator
@@ -205,7 +205,7 @@ When Relay is used as the Parallax transport inside Prism, the relay call receiv
 
 Launch each relay Bash call with `run_in_background: true` in the same parallel dispatch step as the local reviewer subagents. Do not wrap Relay itself in another subagent layer.
 
-If a Parallax relay call fails (after its background completion notification has arrived), treat it as a recoverable transport problem. Check the relay script's Bash output for the diagnosed cause, fix the invocation, and retry once before declaring that peer unavailable — never read the `.log` sidecar (it contains the peer's full stderr and is extremely long and token-heavy). A failure of one peer (e.g., Codex) does not affect the other.
+If a Parallax relay call fails (after its background completion notification has arrived), treat it as a recoverable transport problem. Check the relay script's Bash output for the diagnosed cause, fix the invocation, and retry once before declaring that peer unavailable — never read the `.log` sidecar (full stderr, token-heavy). A failure of one peer (e.g., Codex) does not affect the others.
 
 ## Utility Commands
 
