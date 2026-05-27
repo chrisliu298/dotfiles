@@ -28,16 +28,19 @@ fetch_is_fresh() {
     (( $(date +%s) - mtime < FETCH_TTL ))
 }
 
+# Fingerprint by each cache's git HEAD (not the plugin version), so a same-version
+# content update — remote pushed without a version bump — still changes the stamp
+# and triggers the force-reinstall below.
 _plugin_fingerprint() {
-    local input; input="$(printf '%s\n' "${PLUGINS[@]}")"
-    [[ -f "$INSTALLED_JSON" ]] && input+=$'\n'"$(cat "$INSTALLED_JSON")"
+    local input slug dir; input="$(printf '%s\n' "${PLUGINS[@]}")"
+    for slug in "${PLUGINS[@]}"; do
+        dir="$PLUGIN_CACHE/${slug//\//__}"
+        [[ -d "$dir/.git" ]] && input+=$'\n'"$(git -C "$dir" rev-parse HEAD 2>/dev/null)"
+    done
     printf '%s' "$input" | shasum -a 256 | cut -d' ' -f1
 }
 
 command -v claude &>/dev/null || exit 0
-
-_current_fp="$(_plugin_fingerprint)"
-[[ -f "$PLUGIN_STAMP" ]] && [[ "$(cat "$PLUGIN_STAMP")" == "$_current_fp" ]] && exit 0
 
 mkdir -p "$PLUGIN_CACHE"
 
@@ -61,7 +64,11 @@ for pid in "${fetch_pids[@]+"${fetch_pids[@]}"}"; do
     wait "$pid" 2>/dev/null || true
 done
 
-# Phase 2: Register marketplaces and install plugins
+# Compute fingerprint after fetch so it reflects the just-synced cache HEADs.
+_current_fp="$(_plugin_fingerprint)"
+[[ -f "$PLUGIN_STAMP" ]] && [[ "$(cat "$PLUGIN_STAMP")" == "$_current_fp" ]] && exit 0
+
+# Phase 2: Register marketplaces and (force-)install plugins
 py="$HOME/.venv/bin/python3"
 [[ -x "$py" ]] || py="$(command -v python3 2>/dev/null || true)"
 
@@ -95,10 +102,11 @@ print(f"{plugin_name}@{mp_name}")
 PYEOF
 ) || { warn "fail parse plugin/$base"; continue; }
 
-    if ! plugin_installed "$install_slug"; then
-        claude plugin install "$install_slug" 2>/dev/null \
-            && log "add plugin/$install_slug" || warn "fail plugin/$install_slug"
-    fi
+    # Force-reinstall: `claude plugin update` is a no-op when the remote ships new
+    # content under the same version, so uninstall first (if present), then install.
+    plugin_installed "$install_slug" && claude plugin uninstall "$install_slug" >/dev/null 2>&1 || true
+    claude plugin install "$install_slug" 2>/dev/null \
+        && log "sync plugin/$install_slug" || warn "fail plugin/$install_slug"
 done
 
 mkdir -p "$(dirname "$PLUGIN_STAMP")"
