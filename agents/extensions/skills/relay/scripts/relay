@@ -116,7 +116,7 @@ recover_codex_response() {
 
 # Auto-detect caller and peer from the skill directory this script lives in.
 # Caller is always Claude under the current one-direction protocol; the default
-# peer is Codex. Use --to deepseek to route to DeepSeek instead.
+# peer is Codex. Use --to deepseek or --to mimo to route elsewhere.
 # Returns "from to" (e.g. "claude codex") or empty string if unknown.
 detect_peers() {
   local script_dir
