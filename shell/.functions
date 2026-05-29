@@ -203,7 +203,9 @@ xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex ex
 # =============================================================================
 # Routes Claude Code at DeepSeek per-invocation, so default `c`/`cc` keep using
 # the Claude subscription. DeepSeek V4 Pro has two distinct effort levels: high
-# and max. Requires DEEPSEEK_API_KEY in env (see ~/.zshenv.local).
+# and max. The 1M-token context window is native/default — do NOT append a
+# `[1m]` suffix (that's MiMo-only below; the DeepSeek endpoint has no such
+# variant). Requires DEEPSEEK_API_KEY in env (see ~/.zshenv.local).
 
 _deepseek(){
     [[ -n "${DEEPSEEK_API_KEY:-}" ]] || { echo 'DEEPSEEK_API_KEY not set (see ~/.zshenv.local)' >&2; return 1; }
