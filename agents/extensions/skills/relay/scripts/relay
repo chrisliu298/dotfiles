@@ -290,7 +290,12 @@ Mandatory relay output:
 EOF
 )
 
-  # Build peer invocation
+  # Build peer invocation. deepseek/mimo route claude at Anthropic-compatible
+  # gateways that reject a `system`-role message inside the messages array;
+  # claude 2.1.154 emits the available-skills list as exactly such a message
+  # (upstream regression anthropics/claude-code#63366), so the transport passes
+  # --disable-slash-commands to suppress it. The relay peer only needs
+  # Read/Write/Bash, never skills. Revert this once upstream is fixed.
   local -a peer_cmd
   if [ "$to" = "codex" ]; then
     peer_cmd=(codex exec --model gpt-5.5
@@ -310,7 +315,7 @@ EOF
       ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-pro
       CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-pro
       CLAUDE_CODE_EFFORT_LEVEL=max
-      claude -p --dangerously-skip-permissions "$peer_prompt")
+      claude -p --disable-slash-commands --dangerously-skip-permissions "$peer_prompt")
   elif [ "$to" = "mimo" ]; then
     # MiMo has no effort knob. The [1m] suffix enables the 1M-token context
     # window; model IDs keep their dots (the endpoint rejects mimo-v2-5-pro).
@@ -322,7 +327,7 @@ EOF
       ANTHROPIC_DEFAULT_SONNET_MODEL='mimo-v2.5-pro[1m]'
       ANTHROPIC_DEFAULT_HAIKU_MODEL='mimo-v2.5-pro[1m]'
       CLAUDE_CODE_SUBAGENT_MODEL='mimo-v2.5-pro[1m]'
-      claude -p --dangerously-skip-permissions "$peer_prompt")
+      claude -p --disable-slash-commands --dangerously-skip-permissions "$peer_prompt")
   fi
 
   # Invoke peer and capture exit status (don't let set -e abort before checking response)

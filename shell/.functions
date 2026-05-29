@@ -213,7 +213,7 @@ _deepseek(){
         ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4-pro \
         ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-pro \
         CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-pro \
-        "$(command -v claude)" "$@"
+        "$(command -v claude)" --disable-slash-commands "$@"  # claude 2.1.154 sends the skills list as a role:system message DeepSeek 400s on (anthropics/claude-code#63366); drop --disable-slash-commands when fixed
 }
 ds(){   CLAUDE_CODE_EFFORT_LEVEL=max  _deepseek --dangerously-skip-permissions "$@"; }
 dsh(){  CLAUDE_CODE_EFFORT_LEVEL=high _deepseek --dangerously-skip-permissions "$@"; }
@@ -243,7 +243,7 @@ _mimo(){
         ANTHROPIC_DEFAULT_SONNET_MODEL='mimo-v2.5-pro[1m]' \
         ANTHROPIC_DEFAULT_HAIKU_MODEL='mimo-v2.5-pro[1m]' \
         CLAUDE_CODE_SUBAGENT_MODEL='mimo-v2.5-pro[1m]' \
-        "$(command -v claude)" "$@"
+        "$(command -v claude)" --disable-slash-commands "$@"  # claude 2.1.154 sends the skills list as a role:system message MiMo 400s on (anthropics/claude-code#63366); drop --disable-slash-commands when fixed
 }
 mm(){   _mimo --dangerously-skip-permissions "$@"; }
 mmc(){  _mimo --dangerously-skip-permissions --continue "$@"; }
