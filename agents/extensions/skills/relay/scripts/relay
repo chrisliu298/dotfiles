@@ -18,13 +18,6 @@ esac
 
 VERSION=5
 
-# Capabilities declared for Foundry-routed peers (deepseek/mimo). Omitting the
-# mid-conversation-system capability stops claude 2.1.154 from injecting a
-# `system`-role message into messages[] that the gateways reject with HTTP 400
-# (anthropics/claude-code#63366). Foundry routing is the only mode where this
-# declaration gates the beta; plain ANTHROPIC_BASE_URL ignores it.
-FOUNDRY_CAPS="thinking,adaptive_thinking,temperature,effort,max_effort"
-
 die() { echo "relay: $*" >&2; exit 1; }
 
 need_arg() { [ "$1" -ge 2 ] || die "$2 requires a value"; }
@@ -297,13 +290,7 @@ Mandatory relay output:
 EOF
 )
 
-  # Build peer invocation. deepseek/mimo route claude at Anthropic-compatible
-  # gateways that reject a `system`-role message inside messages[]; claude 2.1.154
-  # emits one (skills list / mid-conversation-system beta) — upstream regression
-  # anthropics/claude-code#63366. We route via Foundry mode with a declared
-  # capability set ($FOUNDRY_CAPS) that omits mid-conversation-system, which
-  # suppresses the beta while keeping skills available. Revert to plain
-  # ANTHROPIC_BASE_URL once the gateways support the beta.
+  # Build peer invocation
   local -a peer_cmd
   if [ "$to" = "codex" ]; then
     peer_cmd=(codex exec --model gpt-5.5
@@ -314,34 +301,28 @@ EOF
       "$peer_prompt")
   elif [ "$to" = "deepseek" ]; then
     # DeepSeek always runs at max (DeepThink). --effort is not a knob here.
-    # Model selected via the opus alias (--model opus) so $FOUNDRY_CAPS applies.
     peer_cmd=(env -u CLAUDECODE -u TMUX COLORTERM=truecolor
-      CLAUDE_CODE_USE_FOUNDRY=1
-      ANTHROPIC_FOUNDRY_BASE_URL=https://api.deepseek.com/anthropic
-      ANTHROPIC_FOUNDRY_API_KEY="$DEEPSEEK_API_KEY"
+      ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
+      ANTHROPIC_AUTH_TOKEN="$DEEPSEEK_API_KEY"
+      ANTHROPIC_MODEL=deepseek-v4-pro
       ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-v4-pro
-      ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES="$FOUNDRY_CAPS"
       ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4-pro
-      ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES="$FOUNDRY_CAPS"
       ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-pro
-      ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES="$FOUNDRY_CAPS"
+      CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-pro
       CLAUDE_CODE_EFFORT_LEVEL=max
-      claude -p --model opus --dangerously-skip-permissions "$peer_prompt")
+      claude -p --dangerously-skip-permissions "$peer_prompt")
   elif [ "$to" = "mimo" ]; then
     # MiMo has no effort knob. The [1m] suffix enables the 1M-token context
     # window; model IDs keep their dots (the endpoint rejects mimo-v2-5-pro).
-    # Model selected via the opus alias (--model opus) so $FOUNDRY_CAPS applies.
     peer_cmd=(env -u CLAUDECODE -u TMUX COLORTERM=truecolor
-      CLAUDE_CODE_USE_FOUNDRY=1
-      ANTHROPIC_FOUNDRY_BASE_URL=https://api.xiaomimimo.com/anthropic
-      ANTHROPIC_FOUNDRY_API_KEY="$MIMO_API_KEY"
+      ANTHROPIC_BASE_URL=https://api.xiaomimimo.com/anthropic
+      ANTHROPIC_AUTH_TOKEN="$MIMO_API_KEY"
+      ANTHROPIC_MODEL='mimo-v2.5-pro[1m]'
       ANTHROPIC_DEFAULT_OPUS_MODEL='mimo-v2.5-pro[1m]'
-      ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES="$FOUNDRY_CAPS"
       ANTHROPIC_DEFAULT_SONNET_MODEL='mimo-v2.5-pro[1m]'
-      ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES="$FOUNDRY_CAPS"
       ANTHROPIC_DEFAULT_HAIKU_MODEL='mimo-v2.5-pro[1m]'
-      ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES="$FOUNDRY_CAPS"
-      claude -p --model opus --dangerously-skip-permissions "$peer_prompt")
+      CLAUDE_CODE_SUBAGENT_MODEL='mimo-v2.5-pro[1m]'
+      claude -p --dangerously-skip-permissions "$peer_prompt")
   fi
 
   # Invoke peer and capture exit status (don't let set -e abort before checking response)
