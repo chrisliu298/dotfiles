@@ -180,6 +180,12 @@ cu(){ command claude update "$@"; }
 cpu(){ local prompt="/push"; (( $# )) && prompt+=" ${*}"; _claude -p --dangerously-skip-permissions "$prompt"; }
 chl(){ (( $# )) || { echo 'Usage: chl "<prompt>"'; return 1; }; _claude -p --dangerously-skip-permissions "${*}"; }
 cch(){ tmux new-session -ds claude-channels "env -u TMUX COLORTERM=truecolor $(command -v claude) --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official $*" 2>/dev/null; tmux attach -t claude-channels; }
+# Reasoning-effort tiers (CLAUDE_CODE_EFFORT_LEVEL); plain `c` keeps the default.
+cl(){  CLAUDE_CODE_EFFORT_LEVEL=low    _claude --dangerously-skip-permissions "$@"; }
+cm(){  CLAUDE_CODE_EFFORT_LEVEL=medium _claude --dangerously-skip-permissions "$@"; }
+ch(){  CLAUDE_CODE_EFFORT_LEVEL=high   _claude --dangerously-skip-permissions "$@"; }
+cx(){  CLAUDE_CODE_EFFORT_LEVEL=xhigh  _claude --dangerously-skip-permissions "$@"; }
+cmx(){ CLAUDE_CODE_EFFORT_LEVEL=max    _claude --dangerously-skip-permissions "$@"; }
 
 xn(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=none "$@"; }
 x(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=medium "$@"; }
