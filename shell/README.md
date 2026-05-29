@@ -35,7 +35,7 @@ Effort suffixes follow one convention — `n`=none, `l`=low, `m`=medium, `h`=hig
 
 | tier | suffix | Claude `c` | Codex `x` | DeepSeek `ds` | MiMo `mm` |
 |------|:------:|:----------:|:---------:|:-------------:|:---------:|
-| *bare (default)* | — | `c` (adaptive) | `x` (medium) | `ds` (max) | `mm` (default) |
+| *bare (default)* | — | `c` (xhigh) | `x` (medium) | `ds` (max) | `mm` (default) |
 | none | `n` | — | `xn` | — | — |
 | low | `l` | `cl` | `xl` | → high | — |
 | medium | `m` | `cm` | `xm` | → high | — |
@@ -43,4 +43,4 @@ Effort suffixes follow one convention — `n`=none, `l`=low, `m`=medium, `h`=hig
 | xhigh | `x` | `cx` | `xx` | → max | — |
 | max | `mx` | `cmx` | n/a | `ds` (bare) | — |
 
-`→` = the requested value collapses to that tier (DeepSeek maps low/medium → high, xhigh → max); MiMo's Anthropic endpoint surfaces no effort control. Continue/resume/headless suffixes (`*c`/`*r`/`*hl`) are uniform across all four.
+`→` = the requested value collapses to that tier (DeepSeek maps low/medium → high, xhigh → max); MiMo's Anthropic endpoint surfaces no effort control. Continue/resume/headless suffixes (`*c`/`*r`/`*hl`) are uniform across all four. Bare `c` doesn't pin an effort — it inherits `effortLevel` from `agents/claude/settings.json` (adaptive thinking is disabled there), currently `xhigh`, so `c` ≡ `cx`.
