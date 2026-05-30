@@ -1,12 +1,12 @@
 # Extensions
 
-Agent extensions for Claude and Codex. **Skills** and **MCP servers** are managed by `dotfiles.sh`; **plugins** are installed manually via `claude plugin install`.
+Agent extensions for Claude and Codex. **Skills**, **MCP servers**, and a curated set of **plugins** are managed by `dotfiles.sh`.
 
 | Type | What it does | Managed by |
 |------|--------------|------------|
 | Skill | Injects domain knowledge via SKILL.md prompts | `SKILLS` table in `dotfiles.sh` |
 | MCP server | Exposes external tools via Model Context Protocol | `MCP_SERVERS` table in `dotfiles.sh` |
-| Plugin | Bundles commands, agents, hooks, and skills | Manual (`claude plugin install`) |
+| Plugin | Bundles commands, agents, hooks, and skills | `PLUGINS` table in `dotfiles.sh` (user scope) |
 
 ## Skills
 
@@ -79,4 +79,12 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 
 ## Plugins
 
-Marketplace plugins (installed manually, not tracked in `dotfiles.sh`): claude-md-management, code-review, pr-review-toolkit, feature-dev, frontend-design, pyright-lsp.
+Managed by the `PLUGINS` table in `dotfiles.sh` — each is installed and enabled at **user scope** on every run (`name|marketplace`):
+
+| Plugin | Marketplace | Purpose |
+|--------|-------------|---------|
+| pyright-lsp | claude-plugins-official | Python LSP diagnostics |
+| code-simplifier | claude-plugins-official | Simplify/refactor changed code |
+| frontend-design | claude-plugins-official | Distinctive frontend UI generation |
+
+User scope keeps them available across all projects (vs. per-project pinning, which drifts between machines). Plugin install state lives in `~/.claude/plugins/` and is **not** synced by `dfs` — `./dotfiles.sh` reconciles it on each machine. Other marketplace plugins can still be added ad hoc with `claude plugin install`.

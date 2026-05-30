@@ -50,6 +50,13 @@ MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: clau
     "codex|codex|mcp-server|codex"
 )
 
+# name|marketplace — Claude plugins installed + enabled at user scope (claude-only)
+PLUGINS=(
+    "pyright-lsp|claude-plugins-official"
+    "code-simplifier|claude-plugins-official"
+    "frontend-design|claude-plugins-official"
+)
+
 SKILL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/skills-src"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}"
 GLOBAL_STAMP="$CACHE_DIR/dotfiles-global-stamp"
@@ -308,6 +315,43 @@ install_mcp_servers() {
     stamp_write "$stamp_file" "$fingerprint"
 }
 
+install_plugins() {
+    command -v claude &>/dev/null || { warn "claude CLI not found — skipping plugins"; return; }
+
+    # Skip CLI calls when PLUGINS config hasn't changed
+    local stamp_file="$CACHE_DIR/dotfiles-plugins-stamp"
+    local fingerprint; fingerprint=$(printf '%s\n' "${PLUGINS[@]}" | md5 2>/dev/null \
+        || printf '%s\n' "${PLUGINS[@]}" | md5sum 2>/dev/null | cut -d' ' -f1)
+    stamp_fresh "$stamp_file" "$fingerprint" && return
+
+    local list; list="$(claude plugin list 2>/dev/null)" || true
+    local markets; markets="$(claude plugin marketplace list 2>/dev/null)" || true
+
+    local entry name mkt full
+    for entry in "${PLUGINS[@]}"; do
+        IFS='|' read -r name mkt <<< "$entry"
+        full="$name@$mkt"
+        # Ensure the marketplace is configured (only the official one is auto-added)
+        if ! printf '%s\n' "$markets" | grep -q "❯ $mkt$"; then
+            [[ "$mkt" == "claude-plugins-official" ]] \
+                && claude plugin marketplace add anthropics/claude-plugins-official >/dev/null 2>&1 || true
+        fi
+        # Already installed at user scope and enabled? nothing to do
+        if printf '%s\n' "$list" | awk -v t="$full" '
+            /❯ / { cur=$2; scope="" }
+            /Scope:/ { scope=$2 }
+            /Status:/ { if (cur==t && scope=="user" && /enabled/) f=1 }
+            END { exit(f?0:1) }'; then
+            continue
+        fi
+        claude plugin install "$full" --scope user >/dev/null 2>&1 || true
+        claude plugin enable "$full" --scope user >/dev/null 2>&1 || true
+        log "enable $name"
+    done
+
+    stamp_write "$stamp_file" "$fingerprint"
+}
+
 # ── Skill toggle commands ────────────────────────────────────────
 
 cmd_enable() {
@@ -397,6 +441,9 @@ main() {
     local _mcp_out; _mcp_out=$(mktemp)
     install_mcp_servers > "$_mcp_out" 2>&1 &
     local _mcp_pid=$!
+    local _plugins_out; _plugins_out=$(mktemp)
+    install_plugins > "$_plugins_out" 2>&1 &
+    local _plugins_pid=$!
 
     # Foreground: local-only sections
     section "Links";  install_links
@@ -408,6 +455,11 @@ main() {
     wait "$_mcp_pid" 2>/dev/null || true
     [[ -s "$_mcp_out" ]] && cat "$_mcp_out"
     rm -f "$_mcp_out"
+
+    section "Plugins"
+    wait "$_plugins_pid" 2>/dev/null || true
+    [[ -s "$_plugins_out" ]] && cat "$_plugins_out"
+    rm -f "$_plugins_out"
 
     stamp_write "$GLOBAL_STAMP" "$(compute_fingerprint)"
     printf '\n  ✨ Done. Restart your shell or %ssource ~/.zshrc%s\n\n' "$_DIM" "$_RST"
