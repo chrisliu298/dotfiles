@@ -17,7 +17,7 @@ export STARSHIP_CONFIG="$HOME/.config/starship/starship.toml"
 # =============================================================================
 # PATH
 # =============================================================================
-export PATH="$HOME/.claude/skills/relay/scripts:$HOME/.claude/skills/prism/scripts:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/.local/bin:$PATH"
+export PATH="$HOME/.claude/skills/relay/scripts:$HOME/.claude/skills/prism/scripts:$HOME/.claude/skills/gpt-pro-relay/scripts:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/.local/bin:$PATH"
 if (( IS_MACOS )); then
     eval "$(/opt/homebrew/bin/brew shellenv)"
     export PATH="/opt/homebrew/opt/curl/bin:$PATH"

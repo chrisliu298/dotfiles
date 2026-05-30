@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# gpt-pro — caller-side wrapper for ChatGPT Pro Extended via the gpt-pro-relay
+# engine on macmini. One prompt on stdin, one response on stdout.
+#
+# Usage:
+#   gpt-pro [--max-wait <sec>] [--dry-run] < prompt.md   # new run, prompt on stdin
+#   gpt-pro --run-id <id> [--max-wait <sec>]             # reattach / recover a run
+#   gpt-pro --help | --version
+#
+# It absorbs everything mechanical: run-id generation, local-vs-SSH transport,
+# the two-phase submit+poll loop, exponential backoff on SSH drops, exit-code
+# demux, and the command-not-found fallback to the engine's venv path. The
+# response reaches stdout ONLY after a fetch exits 0 with a non-empty body;
+# the run-id, diagnostics, and the engine's JSONL all go to stderr.
+#
+# What this wrapper deliberately does NOT do (lives in SKILL.md): the Bash-tool
+# envelope (run_in_background:true, timeout:3600000), the Pro-quota cost gate,
+# and prompt composition. Those are the caller's judgment, not the shell's.
+
+VERSION=1
+
+HOST=macmini
+RELAY_BIN=gpt-pro-relay
+RELAY_VENV=/Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro-relay
+SSH_OPTS=(-S none -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+MAX_BYTES=1000000   # engine's 1 MB submission cap
+
+# die <exit-code> <message>
+die() { echo "gpt-pro: $2" >&2; exit "$1"; }
+
+usage() {
+  cat <<'USAGE'
+gpt-pro — send one prompt to ChatGPT Pro Extended (via macmini)
+
+Usage:
+  gpt-pro [--max-wait <sec>] [--dry-run] < prompt.md   # new run, prompt on stdin
+  gpt-pro --run-id <id> [--max-wait <sec>]             # reattach / recover a run
+  gpt-pro --help | --version
+
+Options:
+  --run-id <id>      Reattach to an existing run (recovery only); skips submit.
+  --max-wait <sec>   Caller-side poll deadline (default 3600 = 60 min).
+  --dry-run          Print the resolved run-id and transport, then exit. No quota used.
+
+Output: response on stdout; run-id + diagnostics + engine JSONL on stderr.
+Exit:   0 ok · 1 error/empty · 2 usage · 3 worker timeout · 4 not found
+        · 124 timed out, still pending (recover with --run-id) · 255 SSH transport unknown
+
+Always wrap the Bash call in run_in_background:true, timeout:3600000.
+USAGE
+}
+
+# ---- parse args ----
+RUN_ID=""; REATTACH=false; MAX_WAIT=3600; DRY=false
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --run-id)     [ $# -ge 2 ] || die 2 "--run-id requires a value"; RUN_ID="$2"; REATTACH=true; shift 2 ;;
+    --max-wait)   [ $# -ge 2 ] || die 2 "--max-wait requires a value"; MAX_WAIT="$2"; shift 2 ;;
+    --dry-run)    DRY=true; shift ;;
+    --help|-h)    usage; exit 0 ;;
+    --version|-V) echo "gpt-pro v$VERSION"; exit 0 ;;
+    --)           shift; if [ $# -gt 0 ]; then die 2 "prompt comes from stdin, not arguments (pipe it: gpt-pro < prompt.md)"; fi; break ;;
+    -*)           die 2 "unknown flag: $1" ;;
+    *)            die 2 "unexpected argument: $1 (the prompt comes from stdin)" ;;
+  esac
+done
+case "$MAX_WAIT" in ''|*[!0-9]*) die 2 "--max-wait must be a positive integer (seconds)" ;; esac
+MAX_WAIT=$((10#$MAX_WAIT))                       # normalize so e.g. 08 isn't read as octal
+(( MAX_WAIT > 0 )) || die 2 "--max-wait must be greater than 0 seconds"
+
+# ---- transport detection ----
+LOCAL=false
+[ "$(hostname -s 2>/dev/null)" = "$HOST" ] && LOCAL=true
+if $LOCAL; then RUN=(); else RUN=(ssh "${SSH_OPTS[@]}" "$HOST"); fi
+
+# ---- prompt spool + run-id ----
+# Spool the prompt to a file BEFORE submit: stdin can't be replayed, and idempotent
+# retry on a dropped submit needs identical bytes.
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/gpt-pro.XXXXXX")
+trap 'rm -rf "$WORK"' EXIT
+PROMPT_FILE="$WORK/prompt"; OUT="$WORK/out"; ERR="$WORK/err"
+
+if $REATTACH; then
+  [[ "$RUN_ID" =~ ^[A-Za-z0-9._-]{1,100}$ ]] \
+    || die 2 "invalid run_id: '$RUN_ID' (expected [A-Za-z0-9._-]+, <=100 chars)"
+else
+  [ -t 0 ] && die 2 "no prompt on stdin (pipe a file: gpt-pro < prompt.md)"
+  cat > "$PROMPT_FILE"
+  bytes=$(wc -c < "$PROMPT_FILE" | tr -d ' ')
+  (( bytes > 0 ))          || die 2 "empty prompt on stdin"
+  (( bytes <= MAX_BYTES )) || die 2 "prompt too large: ${bytes} bytes (cap ${MAX_BYTES}); no quota burned"
+  # Canonical id: ~57 chars, matches [A-Za-z0-9._-]+, well under 100. No descriptive slug.
+  RUN_ID="ask-$(date -u +%Y%m%dT%H%M%SZ)-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+fi
+
+if $DRY; then
+  echo "gpt-pro: run_id=$RUN_ID transport=$($LOCAL && echo local || echo ssh) mode=$($REATTACH && echo reattach || echo submit)" >&2
+  exit 0
+fi
+echo "gpt-pro: run_id=$RUN_ID" >&2
+
+# Emit ONLY on a non-empty body — refuse ambiguous success. The engine returning
+# rc 0 with an empty body is a real anomaly (extraction failure), not an answer.
+emit() {  # <outfile> <errfile>
+  [ -s "$2" ] && cat "$2" >&2                  # surface the engine's terminal JSONL
+  [ -s "$1" ] || die 1 "engine rc=0 but empty response for $RUN_ID (inspect run_dir on macmini)"
+  cat "$1"
+  exit 0
+}
+
+# ---- LOCAL path: blocking call, no SSH, no poll loop (nothing to drop) ----
+# ask blocks until the run finishes and prints the response; fetch blocks until ready.
+if $LOCAL; then
+  run_local() {
+    if $REATTACH; then "$RELAY_BIN" fetch "$RUN_ID" >"$OUT" 2>"$ERR"
+    else "$RELAY_BIN" ask --run-id "$RUN_ID" <"$PROMPT_FILE" >"$OUT" 2>"$ERR"; fi
+  }
+  set +e; run_local; rc=$?; set -e
+  if (( rc == 127 )) && [ "$RELAY_BIN" != "$RELAY_VENV" ]; then
+    RELAY_BIN="$RELAY_VENV"; set +e; run_local; rc=$?; set -e
+  fi
+  (( rc == 0 )) && emit "$OUT" "$ERR"
+  cat "$ERR" >&2 2>/dev/null || true
+  exit "$rc"
+fi
+
+# ---- SSH path: two-phase submit + poll, with one-shot 127 -> venv fallback ----
+engine() {     # <args...>, no stdin
+  "${RUN[@]}" "$RELAY_BIN" "$@"; local rc=$?
+  if (( rc == 127 )) && [ "$RELAY_BIN" != "$RELAY_VENV" ]; then
+    RELAY_BIN="$RELAY_VENV"; "${RUN[@]}" "$RELAY_BIN" "$@"; rc=$?
+  fi
+  return $rc
+}
+engine_in() {  # <args...>, stdin re-read from PROMPT_FILE each attempt
+  "${RUN[@]}" "$RELAY_BIN" "$@" < "$PROMPT_FILE"; local rc=$?
+  if (( rc == 127 )) && [ "$RELAY_BIN" != "$RELAY_VENV" ]; then
+    RELAY_BIN="$RELAY_VENV"; "${RUN[@]}" "$RELAY_BIN" "$@" < "$PROMPT_FILE"; rc=$?
+  fi
+  return $rc
+}
+
+# Phase 1: submit (idempotent on same run_id + same prompt). Retry once on a
+# transport drop; a real usage error (rc 2) dies immediately — no quota burned.
+if ! $REATTACH; then
+  set +e; engine_in ask --run-id "$RUN_ID" --no-wait >/dev/null 2>"$ERR"; rc=$?; set -e
+  if (( rc == 255 )); then
+    echo "gpt-pro: submit SSH dropped (255), retrying once…" >&2
+    sleep 3
+    set +e; engine_in ask --run-id "$RUN_ID" --no-wait >/dev/null 2>"$ERR"; rc=$?; set -e
+  fi
+  case $rc in
+    0)   cat "$ERR" >&2 2>/dev/null || true ;;                                   # submitted
+    255) cat "$ERR" >&2 2>/dev/null || true
+         die 255 "submit never confirmed for $RUN_ID; safe to retry (same prompt reattaches)" ;;
+    *)   cat "$ERR" >&2 2>/dev/null || true; exit "$rc" ;;                        # usage/conflict/etc.
+  esac
+fi
+
+# Phase 2: poll. Each fetch blocks <=60s on the engine; the SSH session is bounded
+# to ~60s by ServerAlive. Preserve phase state: 124 = engine still working (healthy),
+# 255 = transport drop (back off and retry), anything else terminal.
+deadline=$((SECONDS + MAX_WAIT)); delay=5; saw_pending=false
+while (( SECONDS < deadline )); do
+  # Cap each blocking fetch to the time left, so --max-wait bounds wall-clock.
+  remaining=$((deadline - SECONDS)); ftimeout=$(( remaining < 60 ? remaining : 60 ))
+  set +e; engine fetch "$RUN_ID" --timeout "$ftimeout" >"$OUT" 2>"$ERR"; rc=$?; set -e
+  case $rc in
+    0)   emit "$OUT" "$ERR" ;;                                  # done -> emit (non-empty guard inside)
+    124) saw_pending=true; delay=5; continue ;;                 # engine still working
+    255) echo "gpt-pro: ssh dropped, retry in ${delay}s" >&2
+         remaining=$((deadline - SECONDS)); (( remaining > 0 )) || break  # don't sleep past the deadline
+         sleep "$(( delay < remaining ? delay : remaining ))"
+         (( delay < 30 )) && delay=$((delay * 2)) ;;
+    *)   cat "$ERR" >&2 2>/dev/null || true; exit "$rc" ;;      # terminal engine error
+  esac
+done
+
+# Deadline reached. Surface the last engine JSONL, then preserve phase state:
+# only claim a recoverable pending run if we actually saw one.
+[ -s "$ERR" ] && cat "$ERR" >&2
+if [ "$saw_pending" = true ]; then
+  die 124 "timed out after ${MAX_WAIT}s, run still pending — recover with: gpt-pro --run-id $RUN_ID"
+fi
+die 255 "no successful fetch within ${MAX_WAIT}s (transport unknown) — retry with: gpt-pro --run-id $RUN_ID"
