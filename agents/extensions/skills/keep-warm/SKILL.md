@@ -1,4 +1,5 @@
 ---
+effort: low
 name: keep-warm
 description: |
   Schedule a recurring heartbeat that keeps Claude Code's 1-hour prompt cache from

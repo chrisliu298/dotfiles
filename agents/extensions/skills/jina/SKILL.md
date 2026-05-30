@@ -1,4 +1,5 @@
 ---
+effort: low
 description: |
   Fetch web pages or search the web via Jina AI (r.jina.ai / s.jina.ai). Use when WebFetch
   fails, returns empty/garbage, or for JS-heavy sites: x.com, Notion, SPAs, PDFs at a URL,

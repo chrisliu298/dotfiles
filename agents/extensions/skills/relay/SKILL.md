@@ -1,4 +1,5 @@
 ---
+effort: medium
 name: relay
 description: |
   The ONLY way to call Codex, DeepSeek, or MiMo. Use whenever the user wants to

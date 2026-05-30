@@ -1,4 +1,5 @@
 ---
+effort: medium
 name: push
 description: |
   Commit and push changes to the remote ("commit and push", "push this", "ship it",

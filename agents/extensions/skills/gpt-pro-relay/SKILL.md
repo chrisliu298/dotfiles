@@ -1,4 +1,5 @@
 ---
+effort: low
 name: gpt-pro-relay
 description: |
   Send a prompt to ChatGPT Pro Extended via gpt-pro-relay on macmini — over SSH from any

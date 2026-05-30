@@ -1,4 +1,5 @@
 ---
+effort: high
 name: xurl
 description: |
   Interact with X (Twitter) via xurl, the official X API CLI: post, reply, quote, delete,

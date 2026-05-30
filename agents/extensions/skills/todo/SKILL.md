@@ -1,4 +1,5 @@
 ---
+effort: low
 description: |
   Maintain a single TODO.md at the project root so task state survives session
   boundaries, compaction, and multi-day gaps. Use for large or long-running
