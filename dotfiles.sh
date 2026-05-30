@@ -368,7 +368,6 @@ main() {
     cd "$ROOT"
     case "${1:-}" in
         publish) exec "$ROOT/scripts/publish-skills.sh" ;;
-        plugins) exec "$ROOT/scripts/install-plugins.sh" ;;
         enable)  cmd_enable "${2:-}"; exit ;;
         disable) cmd_disable "${2:-}"; exit ;;
         skills)  cmd_skills; exit ;;
@@ -395,8 +394,6 @@ main() {
     # Background: network-dependent tasks
     _fetch_skills_repos &
     local _fetch_pid=$!
-    "$ROOT/scripts/install-plugins.sh" &
-    local _plugins_pid=$!
     local _mcp_out; _mcp_out=$(mktemp)
     install_mcp_servers > "$_mcp_out" 2>&1 &
     local _mcp_pid=$!
@@ -411,9 +408,6 @@ main() {
     wait "$_mcp_pid" 2>/dev/null || true
     [[ -s "$_mcp_out" ]] && cat "$_mcp_out"
     rm -f "$_mcp_out"
-
-    section "Plugins"
-    wait "$_plugins_pid" 2>/dev/null || true
 
     stamp_write "$GLOBAL_STAMP" "$(compute_fingerprint)"
     printf '\n  ✨ Done. Restart your shell or %ssource ~/.zshrc%s\n\n' "$_DIM" "$_RST"

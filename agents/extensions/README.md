@@ -1,12 +1,12 @@
 # Extensions
 
-Agent extensions managed by `dotfiles.sh`. Three types: **skills**, **MCP servers**, and **plugins**.
+Agent extensions for Claude and Codex. **Skills** and **MCP servers** are managed by `dotfiles.sh`; **plugins** are installed manually via `claude plugin install`.
 
 | Type | What it does | Managed by |
 |------|--------------|------------|
 | Skill | Injects domain knowledge via SKILL.md prompts | `SKILLS` table in `dotfiles.sh` |
 | MCP server | Exposes external tools via Model Context Protocol | `MCP_SERVERS` table in `dotfiles.sh` |
-| Plugin | Bundles commands, agents, hooks, and skills | `scripts/install-plugins.sh` + `claude plugin install` |
+| Plugin | Bundles commands, agents, hooks, and skills | Manual (`claude plugin install`) |
 
 ## Skills
 
@@ -78,11 +78,5 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 | codex | Codex MCP server for cross-agent tool access | Codex |
 
 ## Plugins
-
-Cloned from GitHub via the `PLUGINS` table in `scripts/install-plugins.sh`, installed with `claude plugin install`.
-
-| Plugin | Description | Status |
-|--------|-------------|--------|
-| [humanize](https://github.com/chrisliu298/humanize) | RLCR loop fork: Claude implements, Codex reviews; ask-gpt-pro consult via gpt-pro-relay | enabled |
 
 Marketplace plugins (installed manually, not tracked in `dotfiles.sh`): claude-md-management, code-review, pr-review-toolkit, feature-dev, frontend-design, pyright-lsp.
