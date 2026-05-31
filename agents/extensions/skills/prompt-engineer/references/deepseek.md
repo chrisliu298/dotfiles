@@ -4,7 +4,7 @@ Help users write effective prompts for DeepSeek V4 (Pro and Flash) — either fr
 
 DeepSeek V4 is an open-weight Mixture-of-Experts family (V4-Pro ≈ 1.6T total / 49B active, V4-Flash ≈ 284B total / 13B active) with a 1M-token context window and up to 384k output tokens. Both models share the same prompt surface; pick Flash for cheap quick answers and Pro for multi-step reasoning or agentic work.
 
-When DeepSeek is reached via the Anthropic-compatible endpoint and driven by Claude Code (e.g., the `ds`/`dsx` aliases or `relay call --to deepseek`), the prompt surface is the Claude Code user message — system-prompt guidance below applies to whatever wrapper composes the request.
+When DeepSeek is reached via the Anthropic-compatible endpoint and driven by Claude Code (e.g., the `ds`/`dsx` aliases or `relay call --to deepseek`), it is **not** a stateless chat-completions call: DeepSeek runs *inside the Claude Code harness* (`claude -p`) with the full default tool set — Bash, file read/write, WebFetch, WebSearch, multi-step agentic execution. Treat it as a capable agent that can read files, run commands, and browse the web, not as a one-shot text endpoint. The prompt surface is the Claude Code user message; the system-prompt guidance below applies to whatever wrapper composes the request.
 
 ## Core philosophy: structured prompts with thinking effort
 

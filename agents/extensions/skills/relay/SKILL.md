@@ -18,6 +18,8 @@ user-invocable: true
 
 Call Codex, DeepSeek, or MiMo like a function: one command generates the request, invokes the peer, and prints the response.
 
+> **The peer is a full agent in the Claude Code harness — not a stateless API call.** Relay runs `claude -p` with only the model weights swapped (Codex → GPT-5.5, DeepSeek → V4-Pro, MiMo → MiMo-V2.5-Pro), so the peer has your core tools — Bash, file read/write, Grep/Glob, subagents, multi-step agentic loops. It can see this repo, run commands, and verify its own work; delegate file I/O and shell work directly. Do **not** treat it as a one-shot completion that "can't see the codebase." Web tools (WebFetch/WebSearch) are registered but their backend varies by peer — DeepSeek's works, MiMo's currently returns "no access" — so don't assume browsing without checking. The only constant difference from you is the model behind the harness.
+
 ```
 relay call --name <slug> [--to <peer>] [--effort <level>] [--body-only] <<'BODY'
 task
