@@ -119,6 +119,82 @@ dfs() {
     fi
 }
 
+# synckeys — propagate this machine's ~/.zshenv.local API keys to the dfs peers.
+# ~/.zshenv.local holds secrets (DEEPSEEK/MIMO/MINIMAX_API_KEY, …) and is
+# intentionally NOT in the dotfiles repo, so `dfs` never carries it — a new
+# `export FOO_API_KEY=...` added here must reach the other machines separately.
+# synckeys upserts the local `export *_API_KEY=` lines onto each peer (adds
+# missing, updates changed), never deletes peer-only lines or touches non-key
+# config, and never prints key values (the diff lists variable names only). Each
+# applied peer keeps a ~/.zshenv.local.bak for rollback. Dry-run by default; pass
+# `apply` (or `-y`) to write. Usage: synckeys [apply]
+synckeys() {
+    local _c=$'\033[1;36m' _g=$'\033[32m' _y=$'\033[33m' _r=$'\033[31m' _d=$'\033[2m' _0=$'\033[0m'
+    local apply=false
+    [[ "${1:-}" == apply || "${1:-}" == -y ]] && apply=true
+    printf '\n  %ssynckeys%s  %s%s ~/.zshenv.local API keys to peers%s\n\n' \
+        "$_c" "$_0" "$_d" "$([[ $apply == true ]] && print propagating || print 'dry-run —')" "$_0"
+
+    local src="$HOME/.zshenv.local"
+    [[ -f "$src" ]] || { printf '  %s✗%s no %s\n\n' "$_r" "$_0" "$src"; return 1; }
+    local local_keys
+    local_keys=$(grep -E '^export [A-Za-z_][A-Za-z0-9_]*_API_KEY=' "$src")
+    [[ -n "$local_keys" ]] || { printf '  %s✗%s no *_API_KEY exports in %s\n\n' "$_r" "$_0" "$src"; return 1; }
+
+    # SSH alias:hostname -s (same peer set + self-skip as dfs)
+    local dfs_peers=(macbookpro16:MacBookPro16 macmini:macmini l40s:lambda-scalar)
+    local self_host=$(hostname -s 2>/dev/null); local self_host_l=${self_host:l}
+    local peer peer_alias peer_host hosts=()
+    for peer in "${dfs_peers[@]}"; do
+        peer_alias=${peer%%:*}; peer_host=${peer#*:}
+        [[ "$self_host_l" == "${peer_alias:l}" || "$self_host_l" == "${peer_host:l}" ]] && continue
+        hosts+=("$peer_alias")
+    done
+
+    # Declare loop-locals ONCE here, not inside the loop: in zsh a bare `local x`
+    # re-declaration of an already-valued var prints `x=value` (would leak keys).
+    local h rc=0 peer_keys add upd ok push line var peer_line
+    for h in "${hosts[@]}"; do
+        if ! peer_keys=$(command ssh -o ConnectTimeout=10 -o BatchMode=yes "$h" \
+                'grep -E "^export [A-Za-z_][A-Za-z0-9_]*_API_KEY=" ~/.zshenv.local 2>/dev/null'); then
+            printf '  %s%s%s  %s✗ unreachable%s\n' "$_c" "$h" "$_0" "$_r" "$_0"; rc=1; continue
+        fi
+        add=() upd=() ok=() push=""
+        while IFS= read -r line; do
+            [[ -n "$line" ]] || continue
+            var=${${line#export }%%=*}
+            peer_line=$(print -r -- "$peer_keys" | grep -E "^export ${var}=" | head -1)
+            if [[ -z "$peer_line" ]]; then add+=("$var"); push+="$line"$'\n'
+            elif [[ "$peer_line" != "$line" ]]; then upd+=("$var"); push+="$line"$'\n'
+            else ok+=("$var"); fi
+        done <<< "$local_keys"
+
+        printf '  %s%s%s  ' "$_c" "$h" "$_0"
+        (( ${#add[@]} )) && printf '%sadd:%s %s   ' "$_g" "$_0" "${add[*]}"
+        (( ${#upd[@]} )) && printf '%supdate:%s %s   ' "$_y" "$_0" "${upd[*]}"
+        printf '%sin-sync: %d%s\n' "$_d" "${#ok[@]}" "$_0"
+
+        if $apply && [[ -n "$push" ]]; then
+            if print -rn -- "$push" | command ssh -o ConnectTimeout=10 -o BatchMode=yes "$h" '
+                set -e; f="$HOME/.zshenv.local"; [ -f "$f" ] || touch "$f"
+                new=$(cat); cp "$f" "$f.bak"
+                vars=$(printf "%s\n" "$new" | sed -E "s/^export ([A-Za-z0-9_]+)=.*/\1/" | paste -sd"|" -)
+                tmp=$(mktemp)
+                grep -vE "^export (${vars})=" "$f" > "$tmp" || true
+                { [ -s "$tmp" ] && [ -n "$(tail -c1 "$tmp")" ] && printf "\n" >> "$tmp"; } || true
+                printf "%s\n" "$new" >> "$tmp"; mv "$tmp" "$f"
+            '; then
+                printf '           %s✓%s applied  %s(backup: ~/.zshenv.local.bak)%s\n' "$_g" "$_0" "$_d" "$_0"
+            else
+                printf '           %s✗%s apply failed\n' "$_r" "$_0"; rc=1
+            fi
+        fi
+    done
+
+    $apply || printf '\n  %srun%s synckeys apply %sto write%s\n' "$_d" "$_0" "$_d" "$_0"
+    printf '\n'; return $rc
+}
+
 # =============================================================================
 # Arxiv
 # =============================================================================
