@@ -138,7 +138,7 @@ Prism's Parallax tiers dispatch cross-model agents via [Relay](https://github.co
 git clone https://github.com/chrisliu298/relay.git ~/.claude/skills/relay
 ```
 
-**DeepSeek / MiMo / MiniMax prerequisite:** for the DeepSeek parallax tier, export `DEEPSEEK_API_KEY`; for the MiMo tier, export `MIMO_API_KEY`; for the MiniMax tier, export `MINIMAX_API_KEY` (e.g., in `~/.zshenv.local`). All are reached via the `claude` CLI with the vendor's Anthropic-compatible endpoint, so no separate binary install is required beyond Claude Code itself.
+**DeepSeek / MiMo / MiniMax prerequisite:** for the DeepSeek parallax tier, export `DEEPSEEK_API_KEY`; for the MiMo tier, export `MIMO_API_KEY`; for the MiniMax tier, export `MINIMAX_PLAN_KEY` or `MINIMAX_API_KEY` (the plan key is preferred, with the API key as fallback; e.g., in `~/.zshenv.local`). All are reached via the `claude` CLI with the vendor's Anthropic-compatible endpoint, so no separate binary install is required beyond Claude Code itself.
 
 ---
 

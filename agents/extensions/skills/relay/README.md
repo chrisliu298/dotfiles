@@ -142,7 +142,7 @@ Ensure `~/.local/bin` is in your PATH (it is by default on most Linux distros an
 - **Codex** — install the [Codex CLI](https://github.com/openai/codex). Used by default (no `--to` flag needed).
 - **DeepSeek** — export `DEEPSEEK_API_KEY` in your shell (e.g., `~/.zshenv.local`). DeepSeek is reached via the `claude` CLI with an Anthropic-compatible endpoint envelope, so no separate binary install is required beyond Claude Code itself.
 - **MiMo** — export `MIMO_API_KEY` in your shell (e.g., `~/.zshenv.local`). Like DeepSeek, MiMo is reached via the `claude` CLI with an Anthropic-compatible endpoint envelope — no separate binary install required.
-- **MiniMax** — export `MINIMAX_API_KEY` in your shell (e.g., `~/.zshenv.local`). Like DeepSeek and MiMo, MiniMax is reached via the `claude` CLI with an Anthropic-compatible endpoint envelope — no separate binary install required.
+- **MiniMax** — export `MINIMAX_PLAN_KEY` and/or `MINIMAX_API_KEY` in your shell (e.g., `~/.zshenv.local`). The plan/subscription key is preferred and falls back to the API key when unset, so comment out `MINIMAX_PLAN_KEY` to switch to the API key once the plan is consumed. Like DeepSeek and MiMo, MiniMax is reached via the `claude` CLI with an Anthropic-compatible endpoint envelope — no separate binary install required.
 
 ---
 
@@ -169,7 +169,7 @@ Each peer pins a specific model. Do **not** substitute other models — they may
 | `codex` (default) | `gpt-5.5` | `medium` / `xhigh` | Claude selects effort per task; default `medium` |
 | `deepseek` | `deepseek-v4-pro` | Always `max` (DeepThink) — no `--effort` knob | Requires `DEEPSEEK_API_KEY`; reached via the `claude` CLI with DeepSeek's Anthropic-compatible endpoint. Text-only (no image input) |
 | `mimo` | `mimo-v2.5-pro[1m]` | No effort knob | Requires `MIMO_API_KEY`; reached via the `claude` CLI with MiMo's Anthropic-compatible endpoint. `[1m]` enables the 1M-token context window. Text-only (no image input) |
-| `minimax` | `MiniMax-M3` | No effort knob (thinking on by default) | Requires `MINIMAX_API_KEY`; reached via the `claude` CLI with MiniMax's Anthropic-compatible endpoint (`api.minimax.io/anthropic`). Multimodal — accepts image input (verified); the only vision-capable peer |
+| `minimax` | `MiniMax-M3` | No effort knob (thinking on by default) | Requires `MINIMAX_PLAN_KEY` (preferred) or `MINIMAX_API_KEY` (fallback); reached via the `claude` CLI with MiniMax's Anthropic-compatible endpoint (`api.minimax.io/anthropic`). Multimodal — accepts image input (verified); the only vision-capable peer |
 
 ### Call
 

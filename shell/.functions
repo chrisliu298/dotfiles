@@ -353,17 +353,21 @@ mmhl(){ (( $# )) || { echo 'Usage: mmhl "<prompt>"'; return 1; }; _mimo -p --dan
 # documented mapping to here. So no effort variants (like MiMo, unlike DeepSeek's
 # high/max). API_TIMEOUT_MS and the disable-traffic flag follow MiniMax's
 # official Claude Code setup. Uses the international endpoint (api.minimax.io);
-# China users would use api.minimaxi.com instead. Requires MINIMAX_API_KEY in
-# env (see ~/.zshenv.local).
+# China users would use api.minimaxi.com instead. Prefers MINIMAX_PLAN_KEY (the
+# plan/subscription key), falling back to MINIMAX_API_KEY when it's unset — to
+# switch manually once the plan is consumed, comment MINIMAX_PLAN_KEY out in
+# ~/.zshenv.local. Note: MINIMAX_PLAN_KEY isn't a *_API_KEY, so `synckeys` won't
+# carry it to peers; they use MINIMAX_API_KEY until you sync the plan key by hand.
 _minimax(){
-    [[ -n "${MINIMAX_API_KEY:-}" ]] || { echo 'MINIMAX_API_KEY not set (see ~/.zshenv.local)' >&2; return 1; }
+    local _mx_key="${MINIMAX_PLAN_KEY:-${MINIMAX_API_KEY:-}}"
+    [[ -n "$_mx_key" ]] || { echo 'MINIMAX_PLAN_KEY/MINIMAX_API_KEY not set (see ~/.zshenv.local)' >&2; return 1; }
     # Drop relay scripts dir from PATH so MiniMax sessions can't shell out to relay.
     local _mx_path="${PATH//$HOME\/.claude\/skills\/relay\/scripts:/}"
     _mx_path="${_mx_path%:$HOME/.claude/skills/relay/scripts}"
     env -u TMUX COLORTERM=truecolor \
         PATH="$_mx_path" \
         ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic \
-        ANTHROPIC_AUTH_TOKEN="$MINIMAX_API_KEY" \
+        ANTHROPIC_AUTH_TOKEN="$_mx_key" \
         API_TIMEOUT_MS=3000000 \
         CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
         ANTHROPIC_MODEL=MiniMax-M3 \

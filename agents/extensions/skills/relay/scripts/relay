@@ -288,13 +288,19 @@ cmd_call() {
   # Preflight: peer binary + required API key. claude-env peers piggyback on the
   # claude CLI with an env envelope routing to their Anthropic-compatible
   # endpoint; codex uses its own CLI. The transport comes from the registry.
-  local peer_bin key_env=""
+  local peer_bin key_env="" key_env_fb="" auth_token=""
   if [ "$transport" = "codex" ]; then
     peer_bin="codex"
   elif [ "$transport" = "claude-env" ]; then
     peer_bin="claude"
     key_env=$(jq -r '.key_env' <<<"$peer_json")
-    [ -n "${!key_env:-}" ] || die "call: $key_env not set (required for --to $to)"
+    # Prefer key_env; fall back to the optional key_env_fallback when it's unset
+    # (minimax: plan key first, pay-as-you-go MINIMAX_API_KEY when the plan is
+    # consumed/commented out, or on a peer that never received the plan key).
+    key_env_fb=$(jq -r '.key_env_fallback // empty' <<<"$peer_json")
+    auth_token="${!key_env:-}"
+    if [ -z "$auth_token" ] && [ -n "$key_env_fb" ]; then auth_token="${!key_env_fb:-}"; fi
+    [ -n "$auth_token" ] || die "call: $key_env${key_env_fb:+ (or $key_env_fb)} not set (required for --to $to)"
   else
     die "call: unknown transport '$transport' for peer '$to' in $PEERS"
   fi
@@ -359,7 +365,7 @@ EOF
     peer_cmd=(env -u CLAUDECODE -u TMUX "PATH=$sanitized_path" "RELAY_PEER=$to"
       COLORTERM=truecolor
       "ANTHROPIC_BASE_URL=$base"
-      "ANTHROPIC_AUTH_TOKEN=${!key_env:-}"
+      "ANTHROPIC_AUTH_TOKEN=$auth_token"
       "ANTHROPIC_MODEL=$model"
       "ANTHROPIC_DEFAULT_OPUS_MODEL=$model"
       "ANTHROPIC_DEFAULT_SONNET_MODEL=$model"
