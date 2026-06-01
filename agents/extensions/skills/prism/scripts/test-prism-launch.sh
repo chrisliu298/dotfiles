@@ -87,6 +87,17 @@ CFGXE="$TMP/runxe-config.json"
 jq -n --arg p "$PKTX" '{shared_packet:$p,parallax:[{to:"minimax",name:"x",effort:"xhigh",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CFGXE"
 expect_err "rejects --effort on minimax" "$LAUNCH" prepare --config "$CFGXE"
 
+echo "== prepare + dry-run: all four parallax tiers (default-shape regression guard) =="
+PKT4="$TMP/prism-run4.md"; make_packet "$PKT4"
+CFG4="$TMP/run4-config.json"
+jq -n --arg p "$PKT4" '{shared_packet:$p,parallax:[{to:"codex",name:"a",effort:"medium",lens:"Adversarial",lens_desc:"d1"},{to:"deepseek",name:"b",lens:"Completeness",lens_desc:"d2"},{to:"mimo",name:"c",lens:"Consistency",lens_desc:"d3"},{to:"minimax",name:"d",lens:"First-Principles",lens_desc:"d4"}],subagents:[{lens:"Correctness",lens_desc:"d5"}]}' > "$CFG4"
+expect_ok "prepare accepts all four parallax tiers together" "$LAUNCH" prepare --config "$CFG4"
+MAN4="$TMP/prism-run4-manifest.json"
+[ "$(jq -r '.counts.minimax' "$MAN4" 2>/dev/null)" = "1" ] && [ "$(jq -r '.counts.parallax_total' "$MAN4" 2>/dev/null)" = "4" ] && ok "four-tier counts: minimax=1, parallax_total=4" || bad "four-tier counts"
+DRY4=$("$LAUNCH" parallax "$MAN4" --dry-run 2>/dev/null)
+[ "$(echo "$DRY4" | grep -c 'relay call --to')" = "4" ] && ok "four-tier dry-run lists exactly 4 relay calls" || bad "four-tier dry-run lists 4 relay calls"
+echo "$DRY4" | grep -q 'relay call --to minimax --name prism-d <' && ok "four-tier dry-run includes minimax with no --effort" || bad "four-tier dry-run minimax shape"
+
 echo "== prepare: negative cases (fail-closed) =="
 # missing Constraints section
 P2="$TMP/p2.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$P2"

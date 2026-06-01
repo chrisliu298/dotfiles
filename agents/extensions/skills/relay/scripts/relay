@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Claude-only: refuse when invoked from a non-Claude (DeepSeek/MiMo) session.
+# Claude-only: refuse when invoked from a non-Claude (DeepSeek/MiMo/MiniMax) session.
 case "${ANTHROPIC_BASE_URL:-}" in
   *deepseek*)    echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at DeepSeek." >&2; exit 2 ;;
   *xiaomimimo*)  echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at MiMo." >&2; exit 2 ;;

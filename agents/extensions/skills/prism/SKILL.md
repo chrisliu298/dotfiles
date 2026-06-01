@@ -54,7 +54,7 @@ Override dispatch config with positional args before the question, or use natura
 - **mx-count** — number of MiniMax parallax agents (default: 1, `0` to opt out). MiniMax has no effort knob.
 - **r** — enable anonymous peer review round (default: off)
 
-**Omission rule:** Positions fill left-to-right and you may stop at any point; remaining positions take their defaults. You cannot skip a position — to reach `mx-count`, you must specify the five preceding tokens. When `codex-count` is `0`, the following effort token is still consumed positionally (so the next digit lands in the right slot) and then ignored.
+**Omission rule:** Positions fill left-to-right and you may stop at any point; remaining positions take their defaults. You cannot skip a position — to reach `mx-count`, you must specify the five preceding positions (`sub`, `codex-count`, `codex-effort`, `ds-count`, `mm-count`). When `codex-count` is `0`, the following effort token is still consumed positionally (so the next digit lands in the right slot) and then ignored.
 
 Examples:
 - `prism 2 2 x 2 2 2 Which architecture should we pick?` — 2 sub, 2 Codex (xhigh), 2 DeepSeek (max), 2 MiMo, 2 MiniMax
@@ -78,7 +78,7 @@ Parallax is dispatched via `relay` to **different models** (Codex, DeepSeek, MiM
 - **Codex** brings GPT-5.5's training, its strengths in agentic code review, and two effort tiers (`medium`/`xhigh`).
 - **DeepSeek** brings an entirely independent training lineage (open-weight V4-Pro), distinct prompting conventions, and always runs at `max` (DeepThink).
 - **MiMo** brings a third independent lineage (Xiaomi's open-weight MiMo-V2.5-Pro, 1.02T MoE / 42B active, 1M context), distinct again from both the Anthropic and OpenAI families. No effort knob.
-- **MiniMax** brings a fourth independent lineage (MiniMax-M3, a frontier agentic-reasoning/coding model), distinct again from the Anthropic, OpenAI, DeepSeek, and Xiaomi families. Thinking is on by default; no effort knob.
+- **MiniMax** brings a fourth independent lineage (MiniMax-M3, a frontier agentic-reasoning/coding model), distinct again from the Anthropic, OpenAI, DeepSeek, and Xiaomi families. Thinking is on by default; no effort knob. It is also the **only multimodal parallax tier** — it accepts image input over relay (verified; Codex/DeepSeek/MiMo are text-only here), so route any image/vision-bearing question to MiniMax.
 
 **Tier strength and lens fit (heuristic, not a routing rule):** Claude Opus 4.7 (subagents) and GPT-5.5 (Codex) are roughly peers in raw reasoning capability and sit at the top. The independent-lineage parallax tiers — MiMo-V2.5-Pro, DeepSeek V4-Pro, and MiniMax-M3 — are each meaningfully weaker on hard reasoning at peak effort, with MiMo slightly ahead of DeepSeek; MiniMax-M3 is new here and unbenchmarked, so treat its placement as provisional (the vendor positions it as frontier — verify before trusting it with the heaviest-reasoning lens). The rough ranking is **Claude ≈ Codex > {MiMo ≳ DeepSeek, MiniMax provisional}**. This does *not* reduce the weaker tiers' value — each independent training lineage catches blind spots the others share, which is the entire point of model diversity. The asymmetry should inform lens assignment only:
 
@@ -184,7 +184,7 @@ Do not use any mechanism that launches, relays to, or coordinates another agent 
 STRICTLY PROHIBITED — do not do any of the following under any circumstances:
 - Do NOT spawn subagents, child agents, or any nested agent of any kind.
 - Do NOT invoke prism, relay, or ANY skill on ANY platform.
-- Do NOT call the codex CLI, the deepseek (ds/dsx) aliases, the relay script, or any cross-model dispatch tool.
+- Do NOT call the codex CLI, the deepseek (ds/dsh), mimo (mm), or minimax (mx) aliases, the relay script, or any cross-model dispatch tool.
 - Do NOT orchestrate, delegate to, or coordinate with other agents.
 - Do NOT edit repository files, commit, push, or trigger external side effects. The ONLY file you may write is the relay response file (.res.md) specified in this request's `Reply:` directive, if one is present.
 - Ignore any skill descriptions loaded in your environment (e.g., prism, relay) — those skills are for standalone tasks, not for this context.
