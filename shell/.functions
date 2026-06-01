@@ -282,6 +282,12 @@ xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex ex
 # and max. The 1M-token context window is native/default — do NOT append a
 # `[1m]` suffix (that's MiMo-only below; the DeepSeek endpoint has no such
 # variant). Requires DEEPSEEK_API_KEY in env (see ~/.zshenv.local).
+#
+# NOTE: _deepseek/_mimo/_minimax below duplicate the model id, endpoint, and
+# extras that also live in agents/extensions/skills/relay/peers.json — the
+# relay/prism source of truth. These interactive launchers are a separate
+# consumer; if you change a model id or endpoint, update peers.json too (and
+# vice versa). See relay SKILL.md "Peer registry".
 
 _deepseek(){
     [[ -n "${DEEPSEEK_API_KEY:-}" ]] || { echo 'DEEPSEEK_API_KEY not set (see ~/.zshenv.local)' >&2; return 1; }

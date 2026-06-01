@@ -1,0 +1,35 @@
+{
+  "codex": {
+    "transport": "codex",
+    "model": "gpt-5.5",
+    "effort_values": ["medium", "xhigh"],
+    "default_effort": "medium",
+    "template": "codex"
+  },
+  "deepseek": {
+    "transport": "claude-env",
+    "base": "https://api.deepseek.com/anthropic",
+    "key_env": "DEEPSEEK_API_KEY",
+    "model": "deepseek-v4-pro",
+    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max" },
+    "template": "costar"
+  },
+  "mimo": {
+    "transport": "claude-env",
+    "base": "https://api.xiaomimimo.com/anthropic",
+    "key_env": "MIMO_API_KEY",
+    "model": "mimo-v2.5-pro[1m]",
+    "template": "costar"
+  },
+  "minimax": {
+    "transport": "claude-env",
+    "base": "https://api.minimax.io/anthropic",
+    "key_env": "MINIMAX_API_KEY",
+    "model": "MiniMax-M3",
+    "extra_env": {
+      "API_TIMEOUT_MS": "3000000",
+      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+    },
+    "template": "costar"
+  }
+}

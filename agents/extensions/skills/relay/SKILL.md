@@ -30,7 +30,7 @@ BODY
 
 If a bare `relay` ever returns "command not found" (a sandboxed/non-zsh/reset-env shell that didn't inherit the PATH entry), re-run the **identical** command with the absolute install path — `~/.claude/skills/relay/scripts/relay call …`. That is the whole recovery; do not reconstruct the call by hand.
 
-**All Codex, DeepSeek, MiMo, and MiniMax interactions go through `relay call`.** Do not invoke `codex exec` or the `ds`/`mm`/`mx` aliases directly, do not spawn agents to run the codex or claude CLI for these purposes, and do not pass model flags (`-m`, `--model`) — the model and invocation method are hardcoded in the script.
+**All Codex, DeepSeek, MiMo, and MiniMax interactions go through `relay call`.** Do not invoke `codex exec` or the `ds`/`mm`/`mx` aliases directly, do not spawn agents to run the codex or claude CLI for these purposes, and do not pass model flags (`-m`, `--model`) — the model and invocation method come from the peer registry (`peers.json`), not the call.
 
 ## Peer selection
 
@@ -42,6 +42,10 @@ If a bare `relay` ever returns "command not found" (a sandboxed/non-zsh/reset-en
 | **MiniMax** | A fourth independent lineage (MiniMax-M3, frontier agentic-reasoning/coding model). Use for another cross-vendor perspective. Thinking is on by default; no effort knob. **Only multimodal peer — accepts image input (verified); use it for vision/image tasks.** | `relay call --to minimax --name ...` |
 
 Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick DeepSeek, MiMo, or MiniMax for a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax. None of DeepSeek, MiMo, or MiniMax has an effort knob — `--effort` is silently ignored on those calls, so omit it. DeepSeek requires `DEEPSEEK_API_KEY`, MiMo requires `MIMO_API_KEY`, and MiniMax requires `MINIMAX_API_KEY` in the environment.
+
+### Peer registry
+
+Every model-family fact — transport (`codex` CLI vs a generic `claude-env` Anthropic-compatible envelope), endpoint, key variable, model id, effort knob, per-peer extras, and launcher template style — lives once in `peers.json` next to the script. `relay` and `prism-launch` both read it, so **adding a peer to the dispatch path is one stanza** there, not edits across the script, the prism launcher, and the docs. The `claude-env` peers share one code path that differs only by registry data; only Codex has its own transport. Two deliberate exceptions stay in code, not data: a brand-new *transport* needs its own script branch, and a new `claude-env` peer should also get its endpoint added to the inbound Claude-only refusal at the top of the script (a one-line safety guard that must run before the registry is loaded). The interactive `ds`/`mm`/`mx` launchers in `shell/.functions` are a separate consumer and still carry their own copy — keep them in sync.
 
 ### Common Mistakes
 - **Premature failure diagnosis**: If a relay call was launched with `run_in_background: true`, do not inspect `.relay` files or enter the failure flow until the background task's completion notification arrives. No notification means the peer is still running.

@@ -322,11 +322,12 @@ Without Relay installed, Prism falls back to a same-model adversarial agent — 
 ```text
 relay/
 ├── SKILL.md                     # the Claude-side skill (caller)
+├── peers.json                   # peer registry — single source of truth for model-family facts
 ├── references/
 │   ├── codex.md                 # → prompt-engineer GPT/Codex guide
 │   ├── gpt.md                   # → prompt-engineer GPT guide
 │   └── deepseek.md              # → prompt-engineer DeepSeek guide
-└── scripts/relay                # the bash script (single source of truth)
+└── scripts/relay                # the bash script (reads peers.json; prism-launch reads it too)
 ```
 
 Claude is the sole caller, so the repo is a single flat skill directory: clone it and symlink the root into `~/.claude/skills/relay`, with `scripts/relay` on PATH. The earlier `codex/skills/relay/` peer was removed when the protocol was simplified to one direction.

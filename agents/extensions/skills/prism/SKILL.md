@@ -34,10 +34,10 @@ Convergence across diverse lenses is high-confidence signal; divergence surfaces
 |------|------|------|
 | Self | (none) | Your own analysis while agents run |
 | Subagents | **Agent** | Same-model agents (Claude), one Agent call each |
-| **Parallax — Codex** | **Bash** (`relay --to codex`) | Cross-model agents via relay to GPT-5.5 |
-| **Parallax — DeepSeek** | **Bash** (`relay --to deepseek`) | Cross-model agents via relay to DeepSeek V4 Pro |
-| **Parallax — MiMo** | **Bash** (`relay --to mimo`) | Cross-model agents via relay to Xiaomi MiMo-V2.5-Pro |
-| **Parallax — MiniMax** | **Bash** (`relay --to minimax`) | Cross-model agents via relay to MiniMax-M3 |
+| **Parallax — Codex** | **Bash** (`relay call --to codex`) | Cross-model agents via relay to GPT-5.5 |
+| **Parallax — DeepSeek** | **Bash** (`relay call --to deepseek`) | Cross-model agents via relay to DeepSeek V4 Pro |
+| **Parallax — MiMo** | **Bash** (`relay call --to mimo`) | Cross-model agents via relay to Xiaomi MiMo-V2.5-Pro |
+| **Parallax — MiniMax** | **Bash** (`relay call --to minimax`) | Cross-model agents via relay to MiniMax-M3 |
 
 **Default: 7 perspectives** — self + 2 subagents + 1 Codex parallax + 1 DeepSeek parallax + 1 MiMo parallax + 1 MiniMax parallax. Required dispatch: **2 Agent calls + 1 backgrounded `prism-launch parallax` call that fans out the 4 relay calls** (manual fallback: 4 separate Bash relay calls). Self does not count. All four Parallax tiers are included by default; opt out of any tier individually by setting its count to `0`.
 
@@ -205,15 +205,13 @@ Launcher prompts are stored as committed template files in the `templates/` dire
 | File | Used for | Slots |
 |------|----------|-------|
 | `templates/launcher-subagent.tmpl` | Agent tool (same-model subagents) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
-| `templates/launcher-relay-codex.tmpl` | Bash relay (Parallax to Codex) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
-| `templates/launcher-relay-deepseek.tmpl` | Bash relay (Parallax to DeepSeek) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
-| `templates/launcher-relay-mimo.tmpl` | Bash relay (Parallax to MiMo) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
-| `templates/launcher-relay-minimax.tmpl` | Bash relay (Parallax to MiniMax) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
+| `templates/launcher-relay-codex.tmpl` | Bash relay, Codex (GPT `<goal>` style) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
+| `templates/launcher-relay-costar.tmpl` | Bash relay, any CO-STAR peer (DeepSeek, MiMo, MiniMax) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
 | `templates/launcher-reviewer.tmpl` | Agent tool (peer review subagents) | `REVIEW_INDEX_PATH`, `PERSPECTIVE_COUNT`, `REVIEW_LENS_NAME`, `REVIEW_LENS_DESC` |
 
-The relay templates use XML structure — the Codex template uses `<goal>`, `<context>`, `<constraints>`, `<your_lens>` (following the GPT-5.5 prompting guide); the DeepSeek, MiMo, and MiniMax templates use `<context>`, `<objective>`, `<constraints>`, `<your_lens>`, `<response_format>` (CO-STAR / XML-tagged conventions that suit independent-lineage models trained heavily on XML data). The subagent and reviewer templates use plain markdown. The anti-recursion warning appears at the top of every template.
+There is **one relay template per prompting style**, not per peer — `prism-launch` selects it by the `template` field in the peer registry (`relay/peers.json`), so the byte-identical DeepSeek/MiMo/MiniMax launchers are a single shared `launcher-relay-costar.tmpl`. The Codex template uses `<goal>`, `<context>`, `<constraints>`, `<your_lens>` (the GPT-5.5 prompting guide); the CO-STAR template uses `<context>`, `<objective>`, `<constraints>`, `<your_lens>`, `<response_format>` (XML-tagged conventions that suit independent-lineage models). The subagent and reviewer templates use plain markdown. The anti-recursion warning appears at the top of every template.
 
-When adding a new relay target model, create a new template file (e.g., `launcher-relay-gemini.tmpl`) optimized for that model's prompting conventions, and add the peer to `prism-launch`.
+Adding a relay target model is **one stanza in `relay/peers.json`** (transport, endpoint, key var, model id, optional extras, and a `template` style). No `prism-launch` edit is needed — the peer set, counts, effort rules, and template selection all derive from the registry. Add a new template file only if the peer needs a genuinely new prompting style (then set its `template` to match); a CO-STAR peer reuses `launcher-relay-costar.tmpl`.
 
 ### Dispatch via prism-launch
 

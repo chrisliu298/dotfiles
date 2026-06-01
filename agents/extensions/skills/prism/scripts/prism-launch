@@ -44,7 +44,13 @@ cmd_prepare() {
   [ -f "$config" ] || die "prepare: config file not found: $config"
   command -v jq >/dev/null 2>&1 || die "prepare: jq not found in PATH"
 
+  # Peer registry — relay's sibling file, the single source of truth for which
+  # peers exist, their effort knobs, and their launcher template style.
+  local PEERS="$SCRIPT_DIR/../../relay/peers.json"
+  [ -f "$PEERS" ] || die "prepare: peer registry not found at \$SCRIPT_DIR/../../relay/peers.json ($PEERS)"
+
   jq -e . "$config" >/dev/null 2>&1 || die "prepare: config is not valid JSON: $config"
+  jq -e . "$PEERS"  >/dev/null 2>&1 || die "prepare: peer registry is not valid JSON: $PEERS"
 
   local packet
   packet=$(jq -r '.shared_packet // ""' "$config")
@@ -72,7 +78,8 @@ cmd_prepare() {
   local manifest_json
   manifest_json=$(jq \
       --arg base "$run_base" \
-      --arg tdir "$TEMPLATES_DIR" '
+      --arg tdir "$TEMPLATES_DIR" \
+      --argjson peers "$(cat "$PEERS")" '
     def bad($m): error($m);
     def chktext($field):
       if (type != "string") or (. == "") then bad($field + " must be a non-empty string")
@@ -85,19 +92,21 @@ cmd_prepare() {
     | ($px | type) as $pxt | (if $pxt != "array" then bad("parallax must be an array") else . end)
     | ($sa | type) as $sat | (if $sat != "array" then bad("subagents must be an array") else . end)
 
-    # Validate + normalize parallax entries.
+    # Validate + normalize parallax entries against the peer registry.
+    | ($peers | keys) as $valid_peers
     | ($px | map(
         (.to // bad("parallax entry missing .to")) as $to
-        | (if ($to|test("^(codex|deepseek|mimo|minimax)$")|not) then bad("parallax .to must be codex|deepseek|mimo|minimax, got: " + $to) else . end)
+        | ($peers[$to] // bad("parallax .to must be one of " + ($valid_peers|join("|")) + ", got: " + $to)) as $peer
         | (.name // bad("parallax entry missing .name")) as $name
         | (if ($name|test("^[a-z0-9-]+$")|not) then bad("parallax .name must match [a-z0-9-]+, got: " + $name) else . end)
         | (.lens | chktext("parallax .lens")) as $lens
         | (.lens_desc | chktext("parallax .lens_desc")) as $desc
-        | (if ($to != "codex") and ((.effort // null) != null)
-             then bad("effort is only valid for codex; remove it from " + $to + " entry \"" + $name + "\"") else . end)
-        | (if $to == "codex"
-             then ((.effort // "medium") as $e
-                   | if ($e|test("^(medium|xhigh)$")|not) then bad("codex effort must be medium|xhigh, got: " + $e) else $e end)
+        | ($peer.effort_values) as $evals
+        | (if ($evals == null) and ((.effort // null) != null)
+             then bad("effort is only valid for peers with an effort knob; remove it from " + $to + " entry \"" + $name + "\"") else . end)
+        | (if $evals != null
+             then ((.effort // ($peer.default_effort // $evals[0])) as $e
+                   | if (($evals | index($e)) == null) then bad($to + " effort must be one of " + ($evals|join("|")) + ", got: " + $e) else $e end)
              else null end) as $effort
         | {
             to: $to,
@@ -106,6 +115,7 @@ cmd_prepare() {
             effort: $effort,
             lens: $lens,
             lens_desc: $desc,
+            template: ($peer.template // bad("registry peer " + $to + " has no .template")),
             launcher: ($base + "-launcher-" + $to + "-" + $name + ".md"),
             log:      ($base + "-out-prism-" + $name + ".log")
           }
@@ -125,10 +135,8 @@ cmd_prepare() {
     | ($pxn | map(.name)) as $names
     | (if ($names|length) != ($names|unique|length) then bad("duplicate parallax name; each relay --name must be distinct (it keys the per-peer log)") else . end)
 
-    | ($pxn | map(select(.to=="codex"))   | length) as $nc
-    | ($pxn | map(select(.to=="deepseek"))| length) as $nd
-    | ($pxn | map(select(.to=="mimo"))    | length) as $nm
-    | ($pxn | map(select(.to=="minimax")) | length) as $nx
+    # Per-peer counts derived from the dispatch, not a hardcoded peer list.
+    | ($pxn | group_by(.to) | map({key: .[0].to, value: length}) | from_entries) as $by_peer
     | {
         version: 1,
         id: ($base | split("/") | last),
@@ -136,7 +144,7 @@ cmd_prepare() {
         templates_dir: $tdir,
         counts: {
           subagents: ($san|length),
-          codex: $nc, deepseek: $nd, mimo: $nm, minimax: $nx,
+          by_peer: $by_peer,
           parallax_total: ($pxn|length),
           dispatched_total: (($san|length) + ($pxn|length))
         },
@@ -148,16 +156,17 @@ cmd_prepare() {
   # Render every launcher FROM the manifest (manifest is authoritative — no drift).
   # Substitution is literal bash parameter expansion, so lens text cannot break
   # sed delimiters or replacement specials.
-  local n i to slug lens desc launcher tmpl tpl rendered first
+  local n i to tmplname slug lens desc launcher tmpl tpl rendered first
   n=$(echo "$manifest_json" | jq '.parallax | length')
   i=0
   while [ "$i" -lt "$n" ]; do
-    to=$(echo "$manifest_json"      | jq -r ".parallax[$i].to")
-    lens=$(echo "$manifest_json"    | jq -r ".parallax[$i].lens")
-    desc=$(echo "$manifest_json"    | jq -r ".parallax[$i].lens_desc")
-    launcher=$(echo "$manifest_json"| jq -r ".parallax[$i].launcher")
-    tmpl="$TEMPLATES_DIR/launcher-relay-$to.tmpl"
-    [ -f "$tmpl" ] || die "prepare: template not found: $tmpl"
+    to=$(echo "$manifest_json"       | jq -r ".parallax[$i].to")
+    tmplname=$(echo "$manifest_json" | jq -r ".parallax[$i].template")
+    lens=$(echo "$manifest_json"     | jq -r ".parallax[$i].lens")
+    desc=$(echo "$manifest_json"     | jq -r ".parallax[$i].lens_desc")
+    launcher=$(echo "$manifest_json" | jq -r ".parallax[$i].launcher")
+    tmpl="$TEMPLATES_DIR/launcher-relay-$tmplname.tmpl"
+    [ -f "$tmpl" ] || die "prepare: template not found: $tmpl (peer $to, template '$tmplname')"
     tpl=$(cat "$tmpl")
     rendered="${tpl//\{\{SHARED_PACKET_PATH\}\}/$packet}"
     rendered="${rendered//\{\{LENS_NAME\}\}/$lens}"
@@ -192,15 +201,12 @@ cmd_prepare() {
   printf '%s\n' "$manifest_json" > "$manifest.tmp" && mv "$manifest.tmp" "$manifest"
 
   # Human-facing summary for the orchestrator.
-  local nsub ncx nds nmm nmx
+  local nsub peershape
   nsub=$(echo "$manifest_json" | jq '.counts.subagents')
-  ncx=$(echo "$manifest_json"  | jq '.counts.codex')
-  nds=$(echo "$manifest_json"  | jq '.counts.deepseek')
-  nmm=$(echo "$manifest_json"  | jq '.counts.mimo')
-  nmx=$(echo "$manifest_json"  | jq '.counts.minimax')
+  peershape=$(echo "$manifest_json" | jq -r '.counts.by_peer | to_entries | map("\(.key)=\(.value)") | join(" ")')
 
   echo "prism-launch: run '$run_id' prepared — all checks passed."
-  echo "dispatch shape: subagents=$nsub codex=$ncx deepseek=$nds mimo=$nmm minimax=$nmx"
+  echo "dispatch shape: subagents=$nsub ${peershape:-(no parallax)}"
   echo
   if [ "$nsub" -gt 0 ]; then
     echo "Subagents — issue ONE Agent-tool call each (run_in_background: true);"
