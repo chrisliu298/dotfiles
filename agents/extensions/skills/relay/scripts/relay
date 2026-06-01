@@ -5,6 +5,7 @@ set -euo pipefail
 case "${ANTHROPIC_BASE_URL:-}" in
   *deepseek*)    echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at DeepSeek." >&2; exit 2 ;;
   *xiaomimimo*)  echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at MiMo." >&2; exit 2 ;;
+  *minimax*)     echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at MiniMax." >&2; exit 2 ;;
 esac
 
 # relay — relay protocol v5: call a peer agent
@@ -116,7 +117,7 @@ recover_codex_response() {
 
 # Auto-detect caller and peer from the skill directory this script lives in.
 # Caller is always Claude under the current one-direction protocol; the default
-# peer is Codex. Use --to deepseek or --to mimo to route elsewhere.
+# peer is Codex. Use --to deepseek, --to mimo, or --to minimax to route elsewhere.
 # Returns "from to" (e.g. "claude codex") or empty string if unknown.
 detect_peers() {
   local script_dir
@@ -162,8 +163,8 @@ cmd_req() {
 
   ensure_relay_dir
 
-  # Build effort line (only codex consumes it via frontmatter; deepseek and
-  # mimo have no effort knob and ignore it entirely).
+  # Build effort line (only codex consumes it via frontmatter; deepseek, mimo,
+  # and minimax have no effort knob and ignore it entirely).
   local effort_line=""
   if [ -n "$effort" ] && [ "$to" = "codex" ]; then
     effort_line=$'\n'"effort: $effort"
@@ -236,8 +237,8 @@ cmd_call() {
     fi
   fi
 
-  # Validate effort level. Only codex consumes it; deepseek and mimo have no
-  # effort knob and silently ignore --effort.
+  # Validate effort level. Only codex consumes it; deepseek, mimo, and minimax
+  # have no effort knob and silently ignore --effort.
   if [ "$to" = "codex" ]; then
     case "$effort" in
       medium|xhigh) ;;
@@ -246,8 +247,8 @@ cmd_call() {
   fi
 
   # Build req. cmd_req surfaces effort in frontmatter only for codex; deepseek
-  # (always max via CLAUDE_CODE_EFFORT_LEVEL below) and mimo (no effort knob)
-  # ignore it.
+  # (always max via CLAUDE_CODE_EFFORT_LEVEL below), mimo, and minimax (no effort
+  # knob) ignore it.
   local req_args=(--from "$from" --to "$to" --effort "$effort")
   [ -n "$name" ] || die "call: --name required"
   check_slug "call: --name" "$name"
@@ -259,9 +260,10 @@ cmd_call() {
   local res_path="${req_path%.req.md}.res.md"
   local log_path="${req_path%.req.md}.log"
 
-  # Preflight: check peer binary exists. deepseek and mimo piggyback on the
-  # claude CLI with an env-var envelope that routes to their Anthropic-compatible
-  # endpoints (mirrors _deepseek()/_mimo() in shell/.functions).
+  # Preflight: check peer binary exists. deepseek, mimo, and minimax piggyback
+  # on the claude CLI with an env-var envelope that routes to their
+  # Anthropic-compatible endpoints (mirrors _deepseek()/_mimo()/_minimax() in
+  # shell/.functions).
   local peer_bin
   if [ "$to" = "codex" ]; then
     peer_bin="codex"
@@ -271,8 +273,11 @@ cmd_call() {
   elif [ "$to" = "mimo" ]; then
     peer_bin="claude"
     [ -n "${MIMO_API_KEY:-}" ] || die "call: MIMO_API_KEY not set (required for --to mimo)"
+  elif [ "$to" = "minimax" ]; then
+    peer_bin="claude"
+    [ -n "${MINIMAX_API_KEY:-}" ] || die "call: MINIMAX_API_KEY not set (required for --to minimax)"
   else
-    die "call: unknown peer '$to' — expected 'codex', 'deepseek', or 'mimo'"
+    die "call: unknown peer '$to' — expected 'codex', 'deepseek', 'mimo', or 'minimax'"
   fi
   command -v "$peer_bin" >/dev/null 2>&1 || die "call: '$peer_bin' not found in PATH"
 
@@ -323,6 +328,21 @@ EOF
       ANTHROPIC_DEFAULT_HAIKU_MODEL='mimo-v2.5-pro[1m]'
       CLAUDE_CODE_SUBAGENT_MODEL='mimo-v2.5-pro[1m]'
       claude -p --dangerously-skip-permissions "$peer_prompt")
+  elif [ "$to" = "minimax" ]; then
+    # MiniMax-M3 has no effort knob; thinking/interleaved-thinking is on by
+    # default. API_TIMEOUT_MS and the disable-traffic flag follow MiniMax's
+    # official Claude Code setup; relay calls can run long.
+    peer_cmd=(env -u CLAUDECODE -u TMUX COLORTERM=truecolor
+      ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic
+      ANTHROPIC_AUTH_TOKEN="$MINIMAX_API_KEY"
+      API_TIMEOUT_MS=3000000
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+      ANTHROPIC_MODEL=MiniMax-M3
+      ANTHROPIC_DEFAULT_OPUS_MODEL=MiniMax-M3
+      ANTHROPIC_DEFAULT_SONNET_MODEL=MiniMax-M3
+      ANTHROPIC_DEFAULT_HAIKU_MODEL=MiniMax-M3
+      CLAUDE_CODE_SUBAGENT_MODEL=MiniMax-M3
+      claude -p --dangerously-skip-permissions "$peer_prompt")
   fi
 
   # Invoke peer and capture exit status (don't let set -e abort before checking response)
@@ -370,10 +390,10 @@ Subcommands:
 Call options:
   --name <slug>      Call identifier
   --effort <level>   Reasoning effort for codex: medium (default) or xhigh.
-                     Ignored for deepseek (always max) and mimo (no knob).
+                     Ignored for deepseek (always max), mimo, and minimax (no knob).
   --body-only        Strip frontmatter from response output
   --from <peer>      Override caller detection (normally claude)
-  --to <peer>        Override peer detection (codex, deepseek, or mimo; default codex)
+  --to <peer>        Override peer detection (codex, deepseek, mimo, or minimax; default codex)
 USAGE
 }
 

@@ -88,7 +88,7 @@ cmd_prepare() {
     # Validate + normalize parallax entries.
     | ($px | map(
         (.to // bad("parallax entry missing .to")) as $to
-        | (if ($to|test("^(codex|deepseek|mimo)$")|not) then bad("parallax .to must be codex|deepseek|mimo, got: " + $to) else . end)
+        | (if ($to|test("^(codex|deepseek|mimo|minimax)$")|not) then bad("parallax .to must be codex|deepseek|mimo|minimax, got: " + $to) else . end)
         | (.name // bad("parallax entry missing .name")) as $name
         | (if ($name|test("^[a-z0-9-]+$")|not) then bad("parallax .name must match [a-z0-9-]+, got: " + $name) else . end)
         | (.lens | chktext("parallax .lens")) as $lens
@@ -128,6 +128,7 @@ cmd_prepare() {
     | ($pxn | map(select(.to=="codex"))   | length) as $nc
     | ($pxn | map(select(.to=="deepseek"))| length) as $nd
     | ($pxn | map(select(.to=="mimo"))    | length) as $nm
+    | ($pxn | map(select(.to=="minimax")) | length) as $nx
     | {
         version: 1,
         id: ($base | split("/") | last),
@@ -135,7 +136,7 @@ cmd_prepare() {
         templates_dir: $tdir,
         counts: {
           subagents: ($san|length),
-          codex: $nc, deepseek: $nd, mimo: $nm,
+          codex: $nc, deepseek: $nd, mimo: $nm, minimax: $nx,
           parallax_total: ($pxn|length),
           dispatched_total: (($san|length) + ($pxn|length))
         },
@@ -191,14 +192,15 @@ cmd_prepare() {
   printf '%s\n' "$manifest_json" > "$manifest.tmp" && mv "$manifest.tmp" "$manifest"
 
   # Human-facing summary for the orchestrator.
-  local nsub ncx nds nmm
+  local nsub ncx nds nmm nmx
   nsub=$(echo "$manifest_json" | jq '.counts.subagents')
   ncx=$(echo "$manifest_json"  | jq '.counts.codex')
   nds=$(echo "$manifest_json"  | jq '.counts.deepseek')
   nmm=$(echo "$manifest_json"  | jq '.counts.mimo')
+  nmx=$(echo "$manifest_json"  | jq '.counts.minimax')
 
   echo "prism-launch: run '$run_id' prepared — all checks passed."
-  echo "dispatch shape: subagents=$nsub codex=$ncx deepseek=$nds mimo=$nmm"
+  echo "dispatch shape: subagents=$nsub codex=$ncx deepseek=$nds mimo=$nmm minimax=$nmx"
   echo
   if [ "$nsub" -gt 0 ]; then
     echo "Subagents — issue ONE Agent-tool call each (run_in_background: true);"

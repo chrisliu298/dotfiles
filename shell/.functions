@@ -260,6 +260,42 @@ mmc(){  _mimo --dangerously-skip-permissions --continue "$@"; }
 mmr(){  _mimo --dangerously-skip-permissions --resume "$@"; }
 mmhl(){ (( $# )) || { echo 'Usage: mmhl "<prompt>"'; return 1; }; _mimo -p --dangerously-skip-permissions "${*}"; }
 
+# =============================================================================
+# MiniMax M3 (via Claude Code, Anthropic-compatible endpoint)
+# =============================================================================
+# Routes Claude Code at MiniMax per-invocation, so default `c`/`cc` keep using
+# the Claude subscription. MiniMax-M3 has no OpenAI-style discrete effort tiers:
+# thinking/interleaved-thinking is on by default, and reasoning depth is steered
+# by prompt (per MiniMax's best practices) or the Anthropic-native
+# thinking.budget_tokens — which Claude Code's CLAUDE_CODE_EFFORT_LEVEL has no
+# documented mapping to here. So no effort variants (like MiMo, unlike DeepSeek's
+# high/max). API_TIMEOUT_MS and the disable-traffic flag follow MiniMax's
+# official Claude Code setup. Uses the international endpoint (api.minimax.io);
+# China users would use api.minimaxi.com instead. Requires MINIMAX_API_KEY in
+# env (see ~/.zshenv.local).
+_minimax(){
+    [[ -n "${MINIMAX_API_KEY:-}" ]] || { echo 'MINIMAX_API_KEY not set (see ~/.zshenv.local)' >&2; return 1; }
+    # Drop relay scripts dir from PATH so MiniMax sessions can't shell out to relay.
+    local _mx_path="${PATH//$HOME\/.claude\/skills\/relay\/scripts:/}"
+    _mx_path="${_mx_path%:$HOME/.claude/skills/relay/scripts}"
+    env -u TMUX COLORTERM=truecolor \
+        PATH="$_mx_path" \
+        ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic \
+        ANTHROPIC_AUTH_TOKEN="$MINIMAX_API_KEY" \
+        API_TIMEOUT_MS=3000000 \
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+        ANTHROPIC_MODEL=MiniMax-M3 \
+        ANTHROPIC_DEFAULT_OPUS_MODEL=MiniMax-M3 \
+        ANTHROPIC_DEFAULT_SONNET_MODEL=MiniMax-M3 \
+        ANTHROPIC_DEFAULT_HAIKU_MODEL=MiniMax-M3 \
+        CLAUDE_CODE_SUBAGENT_MODEL=MiniMax-M3 \
+        "$(command -v claude)" "$@"
+}
+mx(){   _minimax --dangerously-skip-permissions "$@"; }
+mxc(){  _minimax --dangerously-skip-permissions --continue "$@"; }
+mxr(){  _minimax --dangerously-skip-permissions --resume "$@"; }
+mxhl(){ (( $# )) || { echo 'Usage: mxhl "<prompt>"'; return 1; }; _minimax -p --dangerously-skip-permissions "${*}"; }
+
 # Show Claude + Codex account emails on local, macmini, and l40s.
 ae() {
     local _c=$'\033[1;36m' _d=$'\033[2m' _r=$'\033[31m' _0=$'\033[0m'

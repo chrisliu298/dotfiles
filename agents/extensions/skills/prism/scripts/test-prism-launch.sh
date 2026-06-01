@@ -72,6 +72,21 @@ SAL=$(jq -r '.subagents[0].launcher' "$MAN")
 [ -f "$SAL" ] && ok "subagent launcher file rendered" || bad "subagent launcher file rendered"
 echo "$SAL" | grep -q 'launcher-subagent-simplicity.md' && ok "subagent lens slugified into filename" || bad "subagent slug filename"
 
+echo "== prepare: minimax peer (parity with deepseek/mimo) =="
+PKTX="$TMP/prism-runx.md"; make_packet "$PKTX"
+CFGX="$TMP/runx-config.json"
+jq -n --arg p "$PKTX" '{shared_packet:$p,parallax:[{to:"minimax",name:"first-principles",lens:"First-Principles",lens_desc:"reason from fundamentals"}],subagents:[]}' > "$CFGX"
+expect_ok "prepare accepts a minimax parallax entry (template resolves)" "$LAUNCH" prepare --config "$CFGX"
+MANX="$TMP/prism-runx-manifest.json"
+[ "$(jq -r '.counts.minimax' "$MANX" 2>/dev/null)" = "1" ] && ok "minimax count = 1" || bad "minimax count = 1"
+[ "$(jq -r '.parallax[0].effort' "$MANX" 2>/dev/null)" = "null" ] && ok "minimax effort is null" || bad "minimax effort is null"
+DRYX=$("$LAUNCH" parallax "$MANX" --dry-run 2>/dev/null)
+echo "$DRYX" | grep -q 'relay call --to minimax --name prism-first-principles <' && ok "minimax dry-run cmd has no --effort" || bad "minimax dry-run no --effort"
+# effort on minimax must be rejected (no effort knob); runs last — clears MANX on the same packet
+CFGXE="$TMP/runxe-config.json"
+jq -n --arg p "$PKTX" '{shared_packet:$p,parallax:[{to:"minimax",name:"x",effort:"xhigh",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CFGXE"
+expect_err "rejects --effort on minimax" "$LAUNCH" prepare --config "$CFGXE"
+
 echo "== prepare: negative cases (fail-closed) =="
 # missing Constraints section
 P2="$TMP/p2.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$P2"
