@@ -119,11 +119,11 @@ dfs() {
     fi
 }
 
-# synckeys — propagate this machine's ~/.zshenv.local API keys to the dfs peers.
-# ~/.zshenv.local holds secrets (DEEPSEEK/MIMO/MINIMAX_API_KEY, …) and is
-# intentionally NOT in the dotfiles repo, so `dfs` never carries it — a new
-# `export FOO_API_KEY=...` added here must reach the other machines separately.
-# synckeys upserts the local `export *_API_KEY=` lines onto each peer (adds
+# synckeys — propagate this machine's ~/.zshenv.local API/plan keys to dfs peers.
+# ~/.zshenv.local holds secrets (DEEPSEEK/MIMO/MINIMAX_API_KEY, MINIMAX_PLAN_KEY,
+# …) and is intentionally NOT in the dotfiles repo, so `dfs` never carries it — a
+# new `export FOO_API_KEY=...` added here must reach the other machines separately.
+# synckeys upserts the local `export *_API_KEY=` / `*_PLAN_KEY=` lines onto each peer (adds
 # missing, updates changed), never deletes peer-only lines or touches non-key
 # config, and never prints key values (the diff lists variable names only). Each
 # applied peer keeps a ~/.zshenv.local.bak for rollback. Dry-run by default; pass
@@ -132,14 +132,14 @@ synckeys() {
     local _c=$'\033[1;36m' _g=$'\033[32m' _y=$'\033[33m' _r=$'\033[31m' _d=$'\033[2m' _0=$'\033[0m'
     local apply=false
     [[ "${1:-}" == apply || "${1:-}" == -y ]] && apply=true
-    printf '\n  %ssynckeys%s  %s%s ~/.zshenv.local API keys to peers%s\n\n' \
+    printf '\n  %ssynckeys%s  %s%s ~/.zshenv.local API/plan keys to peers%s\n\n' \
         "$_c" "$_0" "$_d" "$([[ $apply == true ]] && print propagating || print 'dry-run —')" "$_0"
 
     local src="$HOME/.zshenv.local"
     [[ -f "$src" ]] || { printf '  %s✗%s no %s\n\n' "$_r" "$_0" "$src"; return 1; }
     local local_keys
-    local_keys=$(grep -E '^export [A-Za-z_][A-Za-z0-9_]*_API_KEY=' "$src")
-    [[ -n "$local_keys" ]] || { printf '  %s✗%s no *_API_KEY exports in %s\n\n' "$_r" "$_0" "$src"; return 1; }
+    local_keys=$(grep -E '^export [A-Za-z_][A-Za-z0-9_]*_(API|PLAN)_KEY=' "$src")
+    [[ -n "$local_keys" ]] || { printf '  %s✗%s no *_API_KEY / *_PLAN_KEY exports in %s\n\n' "$_r" "$_0" "$src"; return 1; }
 
     # SSH alias:hostname -s (same peer set + self-skip as dfs)
     local dfs_peers=(macbookpro16:MacBookPro16 macmini:macmini l40s:lambda-scalar)
@@ -156,7 +156,7 @@ synckeys() {
     local h rc=0 peer_keys add upd ok push line var peer_line
     for h in "${hosts[@]}"; do
         if ! peer_keys=$(command ssh -o ConnectTimeout=10 -o BatchMode=yes "$h" \
-                'grep -E "^export [A-Za-z_][A-Za-z0-9_]*_API_KEY=" ~/.zshenv.local 2>/dev/null'); then
+                'grep -E "^export [A-Za-z_][A-Za-z0-9_]*_(API|PLAN)_KEY=" ~/.zshenv.local 2>/dev/null'); then
             printf '  %s%s%s  %s✗ unreachable%s\n' "$_c" "$h" "$_0" "$_r" "$_0"; rc=1; continue
         fi
         add=() upd=() ok=() push=""

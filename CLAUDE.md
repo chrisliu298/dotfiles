@@ -87,4 +87,4 @@ From a non-interactive shell (e.g., an agent invoking it via a tool), use `zsh -
 
 ## Not Backed Up
 
-OAuth tokens, command history, local settings, per-project data, and cache files. API keys live in `~/.zshenv.local` (not in the repo, so `dfs` never carries them) — after adding a new `export *_API_KEY=` locally, run `synckeys` (dry-run) then `synckeys apply` to propagate it to the other machines.
+OAuth tokens, command history, local settings, per-project data, and cache files. API keys live in `~/.zshenv.local` (not in the repo, so `dfs` never carries them) — after adding a new `export *_API_KEY=` or `*_PLAN_KEY=` locally, run `synckeys` (dry-run) then `synckeys apply` to propagate it to the other machines.
