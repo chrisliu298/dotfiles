@@ -29,6 +29,34 @@ Is the outcome unambiguous AND verifiable AND single-step AND reversible?
 | Complicated   | 3–5 user rounds.                       | Full schema, all sections substantive, at least one Gherkin scenario.                   |
 | Complex       | 4–6 user rounds.                       | **Probe contract**, not implementation contract. `Objective` is "learn X by doing Y". `Done when` includes a learning criterion (what fact will be known) and a rollback. |
 
+## Work shape — which artifact to write
+
+Domain sets *interview depth*; **work shape** sets *which artifact* goal-elicit writes. They
+are orthogonal. Once scope is clear, ask one extra question (question-bank §0): "Is this one
+task, a list of similar items, or a staged build with dependencies?"
+
+| Work shape | Signal | Artifact | goal-drive executes it as |
+|---|---|---|---|
+| `one_shot` | One deliverable, a small `done_when` set, no enumerable backlog | `GOAL.md` contract | the whole goal, one unit |
+| `checklist` | Enumerable, homogeneous items — often script-generatable ("parse into a list first") | `.claude/goals/<id>.checklist.json` | batches of items |
+| `phased` | Sequential, heterogeneous stages with distinct per-stage acceptance | `.claude/goals/<id>.plan.md` | one phase at a time |
+
+Rules:
+
+- **Default to `one_shot`.** Promote only on a clear signal. Misclassifying *upward* (a phased
+  doc for a two-step task) is the new annoying failure — when in doubt, write the contract.
+- Decisive test: *can a script enumerate the units?* → checklist. *Does it need a design with
+  staged acceptance?* → phased. Otherwise → contract.
+- Work shape only meaningfully ranges over **Complicated** work. **Clear** is essentially
+  always `one_shot`; **Complex** stays a probe contract (`one_shot`) — you cannot enumerate
+  units you have not discovered yet.
+- `one_shot` writes a contract (optionally with `execution.work_shape: one_shot`). `checklist`
+  and `phased` write **only** their dedicated artifact — never a companion `GOAL.md`. One goal,
+  one artifact. Field semantics: the goal-drive skill's `references/artifact-formats.md`.
+
+goal-elicit still **writes the artifact and stops** regardless of shape. Execution is the
+separate [[goal-drive]] skill's job; goal-elicit never runs it.
+
 ## Worked examples
 
 ### Clear

@@ -7,6 +7,12 @@ The structure for every good elicitation question:
 2. Ask the user to choose, rank, edit, or supply concrete information.
 3. Avoid yes/no until the final approval in Phase 5.
 
+## 0. Work shape (asked once, during triage/converge — sets which artifact)
+
+- "Is this (a) one task with a few steps, (b) a list of similar items to grind through, or (c) a staged build where later steps depend on earlier ones? (a) → a single contract, (b) → a checklist the executor batches, (c) → a phased plan with per-phase acceptance."
+- "Could a script enumerate the units of work (files, symbols, endpoints)? If yes, I'll write a checklist and you (or your script) can fill the item list."
+- "Should commits happen as it runs? Default is no auto-commit; opt in and the executor makes one local commit per verified batch/phase (it never pushes — that stays your call)."
+
 ## 1. Intent
 
 - "What outcome would make you say this was worth the effort? Try to name something a third party could observe."

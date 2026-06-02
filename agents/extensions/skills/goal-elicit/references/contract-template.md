@@ -28,6 +28,27 @@ source_prompt_summary: "User asked to clarify what they wanted before building X
 - `rounds_used` — number of user turns consumed by the interview, including resumed turns.
 - `blocking_unknowns` — empty list if `status: ready`. Non-empty list of P0 questions when `status: blocked`.
 
+### Optional: execution block (for goal-drive)
+
+A contract is handed off and the skill stops. If the user wants it later **driven to done** by
+[[goal-drive]], add an optional `execution:` block to the frontmatter (absent ⇒ elicit-only,
+the default — today's behavior). Full semantics: the goal-drive skill's
+`references/artifact-formats.md`.
+
+```yaml
+execution:
+  work_shape: one_shot          # contracts are ALWAYS one_shot
+  commit_policy: none           # none | per_unit — per_unit AUTHORIZES a local commit per verified unit, no asking
+  authority:
+    allow_paths: ["src/**"]
+    allow_commands: ["pytest"]
+    stop_for: [deploy, db_migration, destructive, protected_branch_push, secrets, network_send]
+```
+
+This block is **one_shot only**. For enumerable or staged work, write the dedicated artifact
+instead (`checklist-template.md` / `phased-doc-template.md`) — **not** a companion `GOAL.md`.
+One goal, one artifact.
+
 ## Body (required sections, in this order)
 
 ```markdown

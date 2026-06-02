@@ -1,31 +1,37 @@
 ---
 name: goal-elicit
 description: |
-  Interview the user and write a verifiable Goal Contract (GOAL.md) to copy/paste
-  into a goal-pursuing agent. Never executes the goal or invokes downstream tools —
-  only produces the document. Use for "clarify what I want", "define
-  done_when/acceptance criteria", "make this unambiguous", XY-problem requests, or
-  untestable success. Skip trivial edits, factual questions, routine commands, and
-  code review.
+  Interview the user and write a verifiable goal artifact — a Goal Contract (GOAL.md), a
+  JSON checklist, or a phased design doc, chosen by triage. Never executes the goal or
+  invokes downstream tools — it writes the artifact and stops; hand off to goal-drive (or
+  any agent) to execute. Use for "clarify what I want", "define done_when/acceptance
+  criteria", "make this unambiguous", "plan this out", XY-problem requests, or untestable
+  success. Skip trivial edits, factual questions, routine commands, and code review.
 user-invocable: true
 allowed-tools: Read, Write, Edit, Bash(git:*), Bash(date:*), AskUserQuestion
 ---
 
 # goal-elicit
 
-Interview the user and write a verifiable Goal Contract. The deliverable is a single file: `GOAL.md`. The skill terminates when that file is written — the user takes the contract from there and pastes it into whichever agent or tool they choose to pursue it.
+Interview the user and write a verifiable goal artifact. The deliverable is a single file, chosen by triage — a Goal Contract (`GOAL.md`), a JSON checklist, or a phased design doc. The skill terminates when that artifact is written — the user takes it from there and hands it to whichever agent or tool pursues it (e.g. [[goal-drive]]).
 
-This skill never plans, edits other files, runs code, or invokes other skills. It writes one document and stops.
+This skill never plans, edits other files, runs code, or invokes other skills. It writes one artifact and stops.
 
 ## What this skill produces
 
-A single file: `GOAL.md` at the repo root (or `$PWD` if not in a git repo). Markdown with YAML frontmatter. Exactly one of three terminal states in the frontmatter:
+**One artifact**, chosen by triage (Phase 0), then the skill stops:
 
-- `ready` — every required field is filled, every `done_when` item is mapped to evidence, the user has explicitly assented. The contract is ready to copy/paste elsewhere.
-- `blocked` — interview hit the round ceiling or the user can't supply enough context. `blocking_unknowns` enumerates what's missing. Tell the user the contract is incomplete and what is needed.
+- **Contract** — `GOAL.md` at the repo root (or `$PWD` if not in a git repo). The default shape. Schema: `references/contract-template.md`.
+- **Checklist** — `.claude/goals/<id>.checklist.json` for enumerable, batchable work. Schema: `references/checklist-template.md`.
+- **Phased doc** — `.claude/goals/<id>.plan.md` for staged builds with per-phase acceptance. Schema: `references/phased-doc-template.md`.
+
+The contract carries one of three terminal states in its frontmatter (the checklist/phased shapes carry the analogous per-unit state — see their templates):
+
+- `ready` — every required field is filled, every `done_when` item is mapped to evidence, the user has explicitly assented. The artifact is ready to use.
+- `blocked` — interview hit the round ceiling or the user can't supply enough context. `blocking_unknowns` enumerates what's missing. Tell the user the artifact is incomplete and what is needed.
 - `draft` — interview in progress; the file is the durable session state.
 
-Schema: see `references/contract-template.md`.
+Execution is **out of scope** — a separate skill, [[goal-drive]], drives any of these artifacts to done. goal-elicit writes the artifact and stops; it never invokes goal-drive.
 
 ## Phase 0 — Triage (Cynefin)
 
@@ -39,6 +45,8 @@ Before asking a single question, classify the request. The triage decides how ag
 
 If the request is Clear, do not run the full interview — it's a tax on simple work. Just confirm scope and write the contract. If you misclassify and find yourself asking a third question for what looked Clear, escalate to Complicated and continue.
 
+Triage also selects the **work shape** — which artifact to write (contract / checklist / phased doc) — orthogonally to the domain. See the "Work shape" section in `references/cynefin-triage.md`. Default to a contract; promote to a checklist (enumerable, script-generatable items) or a phased doc (staged build with per-phase acceptance) only on a clear signal.
+
 ## The interview
 
 Five phases for Complicated/Complex domains. Round count below counts **user turns**, not assistant turns.
@@ -47,7 +55,7 @@ Five phases for Complicated/Complex domains. Round count below counts **user tur
 
 Restate the seed request neutrally. Maintain two distinct fields throughout: `stated_request` (verbatim) and `underlying_goal` (what the user is actually trying to achieve). Ask the smallest set of intent questions needed to populate `underlying_goal`.
 
-Do **not** draft the contract yet. Open a scratch `GOAL.md` with `status: draft` and the YAML frontmatter only.
+Do **not** draft the contract yet. Open a scratch artifact with `status: draft` and the frontmatter only — `GOAL.md` by default, switching to the checklist/phased path under `.claude/goals/<id>.` once triage picks the work shape.
 
 ### Phase 2 — Diverge (1–3 turns)
 
@@ -65,13 +73,15 @@ Use AskUserQuestion when there are 2–4 plausible options — make the options 
 
 ### Phase 4 — Contract (1 turn)
 
-Show the draft `GOAL.md` in compressed form: objective, scope in/out, constraints, acceptance criteria (at least one as Gherkin), `done_when` (each item mapped to evidence), risks, rollback. Ask the user to **approve, edit, or mark blocked** — not yes/no.
+Show the draft artifact in compressed form: objective, scope in/out, constraints, acceptance (at least one Gherkin, or per-item/per-phase acceptance for checklist/phased), `done_when` (each item mapped to evidence), risks, rollback. Ask the user to **approve, edit, or mark blocked** — not yes/no.
 
 ### Phase 5 — Confirm (1 turn)
 
-After incorporating the user's edits, write the final `GOAL.md` with `status: ready`. The final confirmation is *not* "are we good now?" It is:
+After incorporating the user's edits, write the final artifact with `status: ready`. The final confirmation is *not* "are we good now?" It is:
 
-> "I will write this as the Goal Contract unless you change one of these fields: [short list of decisions]."
+> "I will write this as the goal artifact unless you change one of these fields: [short list of decisions]."
+
+If the contract's `execution.commit_policy` is `per_unit`, call it out explicitly — with that setting the executor makes a local commit per verified unit without asking each time.
 
 Once the file is written, tell the user where it is (path) and stop. The user takes it from there.
 
@@ -128,7 +138,7 @@ See `references/anti-patterns.md` for the full failure-mode table with the promp
 
 - **No yes/no until final approval.** Earlier questions must force a choice, rank, or edit.
 - **No leading questions.** Always state your inference and evidence first, then ask the user to choose or correct it.
-- **No faux confidence.** Maintain an explicit `open_questions` ledger in the draft `GOAL.md`. You may not say "I understand" until the ledger is empty or remaining items are marked non-blocking with defaults.
+- **No faux confidence.** Maintain an explicit `open_questions` ledger in the draft artifact. You may not say "I understand" until the ledger is empty or remaining items are marked non-blocking with defaults.
 - **No "are we good now?" loops.** One confirmation protocol at Phase 5, not repeated checks.
 - **No anchoring on first phrasing.** Preserve `stated_request` and `underlying_goal` as separate fields. By round 2, restate at least two plausible interpretations.
 - **No verification theater.** Every `done_when` needs concrete evidence — command, file artifact, metric, or user-visible behavior.
@@ -137,15 +147,15 @@ See `references/anti-patterns.md` for the full failure-mode table with the promp
 
 ## Resumption
 
-If `GOAL.md` already exists in the working directory:
+If a goal artifact already exists in the working directory — `GOAL.md`, or `.claude/goals/<id>.checklist.json` / `.plan.md`:
 
 1. Read it.
-2. If `status: ready`, the contract is already complete. Tell the user where it is and stop. Do not re-interview.
-3. If `status: draft` or `blocked`, identify which fields are blank or in `blocking_unknowns`. Resume the interview by asking only for those fields. Do not re-ask filled fields. Increment `rounds_used` from where it left off.
+2. If `status: ready` (or, for a checklist, all required header fields are filled), the artifact is complete. Tell the user where it is and stop. Do not re-interview.
+3. If `status: draft` or `blocked` (or a checklist whose `items`/header is incomplete), identify which fields are blank or in `blocking_unknowns`. Resume the interview by asking only for those fields. Do not re-ask filled fields. Increment `rounds_used` from where it left off.
 
 ## What this skill must not do
 
-- Do not plan, write code, edit other files, or invoke another skill — ever. The deliverable is `GOAL.md` only.
+- Do not plan, write code, run the goal, or invoke another skill — ever. The deliverable is the artifact (contract, checklist, or phased doc) only. Execution belongs to [[goal-drive]]; hand the artifact off, but do not invoke goal-drive or run the work yourself.
 - Do not infer the user's goal silently and proceed.
 - Do not pretend completion at the round ceiling — write `blocked` instead.
 - Do not relay to Codex or GPT-Pro during the interview unless the user explicitly asks for an external second opinion.
@@ -154,7 +164,9 @@ If `GOAL.md` already exists in the working directory:
 ## Files in this skill
 
 - `SKILL.md` — this file.
-- `references/contract-template.md` — the `GOAL.md` skeleton with all required frontmatter and body sections.
+- `references/contract-template.md` — the `GOAL.md` skeleton with all required frontmatter and body sections (+ the optional `execution:` block for goal-drive).
+- `references/checklist-template.md` — the JSON checklist artifact (enumerable / batched work).
+- `references/phased-doc-template.md` — the phased design-doc artifact (staged work with per-phase acceptance).
 - `references/cynefin-triage.md` — Phase 0 decision tree with worked examples.
 - `references/question-bank.md` — worked questions per taxonomy category.
 - `references/anti-patterns.md` — failure-mode table with the prompt move that engineers each one out.
