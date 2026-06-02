@@ -55,6 +55,7 @@ red='\033[31m'                       # errors, deletions
 # ── Extract fields (single jq call) ─────────────────────────────
 eval "$(echo "$input" | jq -r '
   @sh "model=\(.model.display_name // "")",
+  @sh "effort_level=\(.effort.level // "")",
   @sh "cwd=\(.workspace.current_dir // .cwd // "")",
   @sh "project_dir=\(.workspace.project_dir // "")",
   @sh "used_pct=\(.context_window.used_percentage // "")",
@@ -70,8 +71,7 @@ eval "$(echo "$input" | jq -r '
   @sh "wt_name=\(.worktree.name // "")",
   @sh "wt_branch=\(.worktree.branch // "")",
   @sh "agent_name=\(.agent.name // "")",
-  @sh "vim_mode=\(.vim.mode // "")",
-  @sh "session_name=\(.session_name // "")"
+  @sh "vim_mode=\(.vim.mode // "")"
 ')"
 
 # ── Derived values ───────────────────────────────────────────────
@@ -81,9 +81,6 @@ if [ -n "$project_dir" ]; then
 else
   project="${cwd##*/}"
 fi
-
-# Append session name when set via /rename
-[ -n "$session_name" ] && project="${project} > ${session_name}"
 
 # Git branch — use worktree.branch if available, else detect
 dir_expanded="${cwd/#\~/$HOME}"
@@ -181,7 +178,11 @@ sep="${dim} · ${reset}"
 parts=()
 
 # Session info
-[ -n "$model" ] && parts+=("${dim}${model}${reset}")
+if [ -n "$model" ]; then
+  model_seg="${dim}${model}"
+  [ -n "$effort_level" ] && model_seg+=" ${effort_level}"
+  parts+=("${model_seg}${reset}")
+fi
 [ -n "$project" ] && parts+=("${cyan}${project}${reset}")
 [ -n "$branch_segment" ] && parts+=("$branch_segment")
 [ -n "$wt_name" ] && parts+=("${cyan}[${wt_name}]${reset}")
