@@ -29,7 +29,8 @@ Before editing, **read the full file** (not just the diff) to understand the exi
 - **Docstrings/JSDoc added to a file that doesn't use them.** If the existing code has no docstrings, new code shouldn't either — even on new methods. Match the file's convention.
 - **Single-use variables** declared and used once on the next line — inline them. Exception: keep when the expression is genuinely complex (3+ chained operations) and the name adds real clarity.
 - **Defensive checks at internal boundaries.** AI adds null checks, type guards, and try/catch to every function. For internal code called by trusted codepaths, strip them. Keep defensive code only at real system boundaries (user input, external API responses, untrusted file I/O).
-- **Redundant type annotations and casts.** `as Foo` when already inferred, explicit `: string` on a string variable, etc. Remove unless the file consistently uses explicit annotations.
+- **Deeply nested AI-introduced code.** When stripping the defensive checks above leaves a nesting pyramid — or the AI wrote one to begin with — flatten it with early returns / guard clauses. Scope this to the diff's own code; don't restructure pre-existing control flow (that's refactoring, out of scope).
+- **Redundant type annotations and casts.** `as Foo` when already inferred, explicit `: string` on a string variable, etc. — remove unless the file consistently uses explicit annotations. Casts to `any` used only to silence the type checker are always slop: remove them and fix the underlying type.
 - **Style inconsistencies.** If the file uses `let`, don't switch to `const`. If it doesn't use JSDoc, remove JSDoc. Match existing patterns.
 - **Dead code.** Attributes set but never read, variables assigned but unused.
 - Consistency of the changes with AGENTS.md or CLAUDE.md requirements.
@@ -41,6 +42,8 @@ Before editing, **read the full file** (not just the diff) to understand the exi
 - **Security-rationale comments** — comments explaining WHY a specific security measure is used (timing-safe comparison, CSRF protection, sanitization, constant-time operations). Security reasoning should be explicit even if familiar to experts, because removing the comment risks someone later "simplifying" the code and introducing a vulnerability.
 - **Defensive code at real system boundaries** — input validation at API endpoints, checks on user-provided data, error handling for external services.
 - **Helper functions used more than once** — if a function is called from multiple places, it's a real abstraction, not slop. Only inline single-call helpers.
+
+**Keep behavior unchanged.** Deslop removes noise, not logic — don't alter behavior unless you're fixing a clear bug.
 
 **When in doubt, leave it in.** Under-removal is safer than over-removal.
 

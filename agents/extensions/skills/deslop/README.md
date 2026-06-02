@@ -12,7 +12,8 @@ Invoke with `/deslop` after any AI-assisted coding session.
 - **Docstrings added to files that don't use them** -- matches existing file conventions
 - **Single-use variables** -- declared and used once on the next line
 - **Defensive checks at internal boundaries** -- null checks, type guards, try/catch on internal functions called by trusted codepaths
-- **Redundant type annotations and casts** -- `as Foo` when already inferred
+- **Deeply nested code** -- flattened with early returns where the AI introduced the nesting
+- **Redundant type annotations and casts** -- `as Foo` when already inferred, `as any` used only to silence the type checker
 - **Style inconsistencies** -- naming conventions, `let` vs `const`, annotation density
 - **Dead code** -- attributes set but never read, variables assigned but unused
 
@@ -55,3 +56,5 @@ git clone https://github.com/chrisliu298/deslop.git ~/.codex/skills/deslop
 ## Credits
 
 Based on the original [deslop prompt](https://github.com/lucasb-eyer/dotfiles/blob/master/_codex/prompts/deslop.md) by [@lucasb-eyer](https://github.com/lucasb-eyer).
+
+The deeply-nested / early-returns and `as any` cleanup items were merged from Cursor's [team-kit deslop skill](https://github.com/cursor/plugins/tree/main/cursor-team-kit/skills/deslop).
