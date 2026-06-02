@@ -116,7 +116,7 @@ If `relay` is unavailable, replace all Parallax tiers with same-model subagents 
 1. Put the anti-recursion warning at the top of every launcher prompt, before the file-read instruction.
 2. Preserve the Constraints section verbatim in the shared context file — do not summarize or abbreviate.
 3. Ensure the prohibition appears in both each launcher (short form) and the shared file (full form).
-4. Tell each peer to ignore loaded skill descriptions for prism and relay.
+4. Tell each peer to ignore loaded skill descriptions for the dispatching/side-effecting skills (prism, relay, gpt-pro-relay, deep-research) — read-only analysis skills stay available.
 
 Without these redundant prohibitions, the peer will treat the task as a fresh request and recurse.
 
@@ -131,7 +131,7 @@ Codex parallax (`--effort` accepts `medium`/`xhigh`):
 
 ### Subagents
 
-Same-model agents dispatched via the Agent tool. Each gets a distinct lens. **Prism subagents are logical leaf nodes** — their prompts must forbid skill invocation, subagent spawning, and side effects (see Constraints in the Shared Packet Template). Launch all agents concurrently before starting self-review.
+Same-model agents dispatched via the Agent tool. Each gets a distinct lens. **Prism subagents are logical leaf nodes** — their prompts must forbid subagent spawning, dispatching-skill invocation (prism, relay, gpt-pro-relay, deep-research, any cross-model dispatch), and side effects, while permitting read-only analysis skills (see Constraints in the Shared Packet Template). Launch all agents concurrently before starting self-review.
 
 ## Side-Effect Safety
 
@@ -166,21 +166,19 @@ Write this to `/tmp/prism-<unique-id>.md` using the Write tool (one call, before
 
 ## Constraints
 
-You are a read-only leaf node.
+You are a read-only leaf node. Produce analysis text only.
 
-Do not use any mechanism that launches, relays to, or coordinates another agent or model. Specifically:
+You MAY use skills/tools that only read, fetch, or analyze (read files, search the repo, fetch web pages or PDFs).
 
-STRICTLY PROHIBITED — do not do any of the following under any circumstances:
-- Do NOT spawn subagents, child agents, or any nested agent of any kind.
-- Do NOT invoke prism, relay, or ANY skill on ANY platform.
-- Do NOT call the codex CLI, the deepseek (ds/dsh) or mimo (mm) aliases, the relay script, or any cross-model dispatch tool.
-- Do NOT orchestrate, delegate to, or coordinate with other agents.
-- Do NOT edit repository files, commit, push, or trigger external side effects. The ONLY file you may write is the relay response file (.res.md) specified in this request's `Reply:` directive, if one is present.
-- Ignore any skill descriptions loaded in your environment (e.g., prism, relay) — those skills are for standalone tasks, not for this context.
+You must NOT:
+- Spawn subagents or any nested agent.
+- Invoke any skill that dispatches to, relays to, or coordinates another agent or model (prism, relay, gpt-pro-relay, deep-research), or call the codex CLI, the deepseek (ds/dsh) or mimo (mm) aliases, or any cross-model dispatch tool.
+- Edit files, commit, push, or trigger any external side effect, or invoke a skill that does (e.g., push, xurl, todo, goal-drive).
+- Act on loaded skill descriptions that would make you recurse or cause side effects (e.g., prism, relay, gpt-pro-relay, deep-research) — those are for standalone use, not this context.
 
-In short: produce analysis text only. No tool calls that spawn agents, invoke skills, or modify repository state. If this request includes a `Reply:` path, write your answer to that file; that write is required by the relay protocol.
+The ONLY file you may write is the relay response file (.res.md) named in this request's `Reply:` directive, if present; that write is required by the relay protocol.
 
-You are a terminal leaf node. Answer the question directly. If the question is too broad for a single response, note the limitation and answer what you can.
+Answer the question directly. If it is too broad for one response, note the limitation and answer what you can.
 ```
 
 After writing, read the file back with the Read tool to verify it contains all three sections completely. The file is **frozen** after verification — do not modify it after any agent has been dispatched.
@@ -392,11 +390,11 @@ Optionally delete all Prism temp files — they share the `/tmp/prism-<unique-id
 
 ## Guards
 
-- **No recursion (HARD RULE):** Dispatched agents must never invoke prism, relay, any skill, or spawn child agents. The Constraints section and launcher prompts both enforce this — do not weaken or omit either. For Parallax, keep the anti-recursion warning at the top of every heredoc (Codex, DeepSeek, and MiMo launchers).
+- **No recursion (HARD RULE):** Dispatched agents must never spawn child agents or invoke any dispatching skill (prism, relay, gpt-pro-relay, deep-research, or any cross-model dispatch tool). Read-only analysis skills are permitted. The Constraints section and launcher prompts both enforce this — do not weaken or omit either. For Parallax, keep the anti-recursion warning at the top of every heredoc (Codex, DeepSeek, and MiMo launchers).
 - **No contamination:** Write the shared context file and compose all launcher prompts before any launch. Do not modify the shared file or revise prompts after seeing early agent outputs.
 - **No all-same-model dispatch (HARD RULE):** The dispatched parallax peers must equal `codex-count + ds-count + mm-count`. Via `prism-launch`, the manifest's `counts` derives this from the config, and the single `parallax` call emits exactly those peers — so the historical "forgot a relay call" failure cannot occur. In the manual fallback, the total count of Bash relay calls must equal that sum; if the planned dispatch has zero relay calls but any configured count is non-zero, fix before launching.
 - **No early synthesis (HARD RULE):** Do not synthesize until every dispatched agent has returned its completion notification. "Subagents are done, Codex relay is still running" or "Codex came back, DeepSeek is still running" are not reasons to proceed — they are the expected state. Proceeding without any tier's results voids the entire Prism run.
-- **No side effects:** Dispatched agents must not edit files, commit, push, or invoke skills. The only permitted write is the relay response file (.res.md).
+- **No side effects:** Dispatched agents must not edit files, commit, push, or invoke any skill with side effects (e.g., push, xurl, todo, goal-drive). Read-only analysis skills are allowed. The only permitted write is the relay response file (.res.md).
 
 ## Degrees of Freedom
 
