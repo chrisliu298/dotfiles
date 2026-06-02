@@ -45,14 +45,13 @@ Convergence across diverse lenses is high-confidence signal; divergence surfaces
 
 Override dispatch config with positional args before the question, or use natural language — both work.
 
-**Positional:** `<sub> <codex-count> <codex-effort> <ds-count> <mm-count> <mx-count> [r] <question>`
+**Positional:** `<sub> <codex-count> <codex-effort> <ds-count> <mm-count> <mx-count> <question>`
 - **sub** — number of same-model (Claude) subagents (default: 2)
 - **codex-count** — number of Codex parallax agents (default: 1, `0` to opt out)
 - **codex-effort** — Codex reasoning effort: `m` medium, `x` xhigh (default: `m`)
 - **ds-count** — number of DeepSeek parallax agents (default: 1, `0` to opt out). DeepSeek always runs at `max` (DeepThink) — no effort knob.
 - **mm-count** — number of MiMo parallax agents (default: 1, `0` to opt out). MiMo has no effort knob.
 - **mx-count** — number of MiniMax parallax agents (default: 1, `0` to opt out). MiniMax has no effort knob.
-- **r** — enable anonymous peer review round (default: off)
 
 **Omission rule:** Positions fill left-to-right and you may stop at any point; remaining positions take their defaults. You cannot skip a position — to reach `mx-count`, you must specify the five preceding positions (`sub`, `codex-count`, `codex-effort`, `ds-count`, `mm-count`). When `codex-count` is `0`, the following effort token is still consumed positionally (so the next digit lands in the right slot) and then ignored.
 
@@ -60,14 +59,12 @@ Examples:
 - `prism 2 2 x 2 2 2 Which architecture should we pick?` — 2 sub, 2 Codex (xhigh), 2 DeepSeek (max), 2 MiMo, 2 MiniMax
 - `prism 3 2 x 1 1 1 Why does X happen?` — 3 sub, 2 Codex (xhigh), 1 DeepSeek (max), 1 MiMo, 1 MiniMax
 - `prism 1 0 m 1 0 0 Same-model + DeepSeek` — 1 sub, no Codex, 1 DeepSeek (max), no MiMo, no MiniMax
-- `prism 2 1 m 0 0 0 r Should we launch X?` — 2 sub, 1 Codex (medium), no DeepSeek, no MiMo, no MiniMax, peer review
 - `prism 2 0 m 0 0 0 Solo-claude only` — 2 sub, no parallax at all (degraded — flag to user)
 - `prism Why does X?` — all defaults: 2 sub, 1 Codex (medium), 1 DeepSeek (max), 1 MiMo, 1 MiniMax
-- `prism r Should we launch X?` — all defaults plus peer review (`r` may appear before the question)
 - `prism 3 Why does X?` — 3 sub, defaults for all four parallax tiers (omission rule: trailing positions take defaults)
-- `prism 3 sub, 2 codex xhigh, 1 deepseek, 1 mimo, 1 minimax, with review: Why does X?` — natural language works too
+- `prism 3 sub, 2 codex xhigh, 1 deepseek, 1 mimo, 1 minimax: Why does X?` — natural language works too
 
-**Parsing:** Read tokens left-to-right. A token is config if it is a single digit, an effort letter (`m`/`x`), or the literal `r` (peer review). Map positionally in this order: digit → sub-count, digit → codex-count, letter → codex-effort, digit → ds-count, digit → mm-count, digit → mx-count. The `r` token may appear anywhere among config tokens. The first non-matching token begins the question. Reject effort letters outside `{m, x}` with: "Codex effort must be m or x." Natural language config is also accepted.
+**Parsing:** Read tokens left-to-right. A token is config if it is a single digit or an effort letter (`m`/`x`). Map positionally in this order: digit → sub-count, digit → codex-count, letter → codex-effort, digit → ds-count, digit → mm-count, digit → mx-count. The first non-matching token begins the question. Reject effort letters outside `{m, x}` with: "Codex effort must be m or x." Natural language config is also accepted.
 
 **Every run with `codex-count > 0` MUST include that many Bash relay calls to Codex; every run with `ds-count > 0` MUST include that many to DeepSeek; every run with `mm-count > 0` MUST include that many to MiMo; every run with `mx-count > 0` MUST include that many to MiniMax.** Do not skip, replace with a subagent, or defer. Exceptions: (1) user explicitly set the tier's count to `0`, or (2) `relay` is unavailable (substitute a same-model agent carrying that tier's assigned lens and warn the user about degradation). The dispatch-shape check verifies the counts before launch (Pre-Launch Check #5).
 
@@ -207,9 +204,8 @@ Launcher prompts are stored as committed template files in the `templates/` dire
 | `templates/launcher-subagent.tmpl` | Agent tool (same-model subagents) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
 | `templates/launcher-relay-codex.tmpl` | Bash relay, Codex (GPT `<goal>` style) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
 | `templates/launcher-relay-costar.tmpl` | Bash relay, any CO-STAR peer (DeepSeek, MiMo, MiniMax) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
-| `templates/launcher-reviewer.tmpl` | Agent tool (peer review subagents) | `REVIEW_INDEX_PATH`, `PERSPECTIVE_COUNT`, `REVIEW_LENS_NAME`, `REVIEW_LENS_DESC` |
 
-There is **one relay template per prompting style**, not per peer — `prism-launch` selects it by the `template` field in the peer registry (`relay/peers.json`), so the byte-identical DeepSeek/MiMo/MiniMax launchers are a single shared `launcher-relay-costar.tmpl`. The Codex template uses `<goal>`, `<context>`, `<constraints>`, `<your_lens>` (the GPT-5.5 prompting guide); the CO-STAR template uses `<context>`, `<objective>`, `<constraints>`, `<your_lens>`, `<response_format>` (XML-tagged conventions that suit independent-lineage models). The subagent and reviewer templates use plain markdown. The anti-recursion warning appears at the top of every template.
+There is **one relay template per prompting style**, not per peer — `prism-launch` selects it by the `template` field in the peer registry (`relay/peers.json`), so the byte-identical DeepSeek/MiMo/MiniMax launchers are a single shared `launcher-relay-costar.tmpl`. The Codex template uses `<goal>`, `<context>`, `<constraints>`, `<your_lens>` (the GPT-5.5 prompting guide); the CO-STAR template uses `<context>`, `<objective>`, `<constraints>`, `<your_lens>`, `<response_format>` (XML-tagged conventions that suit independent-lineage models). The subagent template uses plain markdown. The anti-recursion warning appears at the top of every template.
 
 Adding a relay target model is **one stanza in `relay/peers.json`** (transport, endpoint, key var, model id, optional extras, and a `template` style). No `prism-launch` edit is needed — the peer set, counts, effort rules, and template selection all derive from the registry. Add a new template file only if the peer needs a genuinely new prompting style (then set its `template` to match); a CO-STAR peer reuses `launcher-relay-costar.tmpl`.
 
@@ -306,82 +302,6 @@ Starting points — every lens still answers the full question. The adversarial 
 - **Research / exploration**: Breadth-Weighted + Depth-Weighted + Outsider (add *Disconfirming* only if there's a specific claim to stress-test)
 - **Decision / strategy**: First-Principles + *Disconfirming* + Expansionist + Outsider + Executor
 
-## Peer Review (Optional)
-
-Peer review adds a second dispatch wave after all initial agents return. Reviewers read **anonymized** outputs and critique them — surfacing blind spots that even the integrator might share with the initial agents (same-model bias).
-
-**When to use:** Enable with the `r` flag. Recommended for high-stakes decisions, ambiguous tradeoffs, or any question where "what did everyone miss?" is as valuable as "what did everyone say?"
-
-### How it works
-
-1. **Anonymize and persist from disk:** Assign each agent a random letter (A, B, C, …) — shuffle so the mapping is not predictable from dispatch order. **Do not use Write to re-emit agent outputs.** Instead, create perspective files from existing on-disk artifacts using a single Bash call:
-
-   - **Relay agents:** `cp` the `.res.md` file (path is in the Bash completion result). Pipe through `sed` to strip YAML frontmatter and redact lens self-references.
-   - **Subagents:** Extract the final assistant response from the Agent tool's JSONL output file using `jq`, pipe through `sed` for redaction. The output file path is visible in the Agent tool result metadata (e.g., `/private/tmp/claude-501/.../tasks/<agent-id>.output`). The extraction command:
-     ```bash
-     jq -sr '[.[] | select(.type=="assistant")] | last | .message.content |
-       if type=="array" then [.[] | select(.type=="text") | .text] | join("\n") else . end' \
-       "$AGENT_OUTPUT_FILE" | sed 's/Simplicity/[redacted]/gi' \
-       > /tmp/prism-<id>-perspective-<letter>.md
-     ```
-   - **Fallback:** If `jq` extraction fails for a subagent (schema change, missing file), fall back to Write for that single perspective. Log the fallback.
-
-   Batch all `cp`/`jq`/`sed` commands into as few Bash calls as possible. Build `sed` patterns dynamically from the lens names assigned during dispatch.
-
-   **Platform dependency:** The subagent JSONL format and output file path are internal to the Claude Code runtime and may change. The relay `.res.md` path is a stable protocol contract. If the JSONL extraction breaks, the Write fallback activates automatically — no data loss, just degraded token cost.
-
-2. **Anonymization check (fail-closed):** Before building the review index, verify perspective files are clean. Build the grep pattern dynamically from the **actual lens names assigned in this run** — do not use a hardcoded list of all possible terms. Prism architecture terms like "Parallax" or "cross-model" are NOT identity markers — they may appear legitimately when agents discuss Prism itself.
-   ```bash
-   # Only check for the lenses actually used in this run
-   LENSES="LensA|LensB|LensC|LensD"  # substitute actual names
-   grep -ilP "(?i)(${LENSES})" /tmp/prism-<id>-perspective-*.md
-   ```
-   If any assigned lens name survives redaction, fix the `sed` pattern and re-run before proceeding. Do not dispatch reviewers with leaky perspective files.
-
-3. **Build the review index:** Write a lightweight index to `/tmp/prism-<same-id>-review.md`. This file contains **no agent output** — only pointers. Reviewers read the perspective files themselves.
-
-   ```
-   ## Original Question
-
-   Read the shared context file for full question and background:
-   - {SHARED_PACKET_PATH}
-
-   ## Perspectives
-
-   Read each perspective file in full before answering the review questions.
-
-   - Perspective A: /tmp/prism-<same-id>-perspective-A.md
-   - Perspective B: /tmp/prism-<same-id>-perspective-B.md
-   - Perspective C: /tmp/prism-<same-id>-perspective-C.md
-   - ...
-
-   ## Review Questions
-
-   Answer each question concisely. Cite perspectives by letter and quote key phrases.
-
-   1. **Strongest response** — Which perspective is strongest overall, and why?
-   2. **Biggest blind spot** — Which perspective has the most significant gap or weakness?
-   3. **Collective gap** — What did ALL perspectives miss or underweight? This is the most important question.
-   ```
-
-4. **Dispatch reviewers:** Launch **2 same-model subagents** concurrently (`run_in_background: true`). Each reviewer gets a launcher prompt referencing the review index. Reviewers are read-only leaf nodes — same constraints as initial agents. Give each reviewer a distinct review lens:
-   - **Reviewer 1 — Strength-finder:** Weighs which arguments are most well-supported and actionable.
-   - **Reviewer 2 — Gap-hunter:** Weighs what's missing, underexplored, or assumed without evidence.
-
-5. **Wait for both reviewers** before proceeding to synthesis. Same hard gate as the initial round.
-
-### Reviewer Launcher Template
-
-The reviewer launcher is stored in `templates/launcher-reviewer.tmpl`. Render it with `sed`, filling the slots `{{REVIEW_INDEX_PATH}}`, `{{PERSPECTIVE_COUNT}}`, `{{REVIEW_LENS_NAME}}`, and `{{REVIEW_LENS_DESC}}`:
-
-```bash
-sed -e 's|{{REVIEW_INDEX_PATH}}|/tmp/prism-abc123-review.md|g' \
-    -e 's|{{PERSPECTIVE_COUNT}}|4|g' \
-    -e 's|{{REVIEW_LENS_NAME}}|Strength-finder|g' \
-    -e 's|{{REVIEW_LENS_DESC}}|weigh which arguments are most well-supported and actionable|g' \
-    /path/to/templates/launcher-reviewer.tmpl
-```
-
 ## Execution
 
 ### Step 1: Freeze context, compose, verify, launch
@@ -428,17 +348,6 @@ If the diff shows unexpected changes, flag them to the user before proceeding. D
 
 Scan each agent's output for recursion indicators: mentions of "dispatching," "subagent," "relay call," "Prism run," or synthesis-style structure (Consensus/Contested/Unique sections). Flag matches for review — the agent may have spawned nested agents, producing contaminated reasoning.
 
-### Step 3.75: Peer review (if `r` enabled)
-
-Skip this step if peer review was not requested.
-
-1. Anonymize from disk: assign random letter mappings, create perspective files from existing on-disk artifacts using Bash `cp`/`jq`/`sed` (see "How it works" for per-agent-type details). Do not use Write to re-emit agent outputs.
-2. Run the fail-closed anonymization check. Fix any surviving identity markers before proceeding.
-3. Write the review index to `/tmp/prism-<same-id>-review.md` — pointers only, no inlined content. Read it back to verify all perspective paths are correct.
-4. Dispatch 2 reviewer subagents concurrently (`run_in_background: true`) using the Reviewer Launcher Template.
-5. Wait for both reviewers (hard gate — same rules as Step 3).
-6. Carry reviewer findings forward into synthesis — especially answers to "What did ALL perspectives miss?"
-
 ### Step 4: Synthesize
 
 Write a decision brief, not a lens-by-lens report. The user should understand the recommendation and next action in seconds, not minutes.
@@ -471,6 +380,7 @@ Write a decision brief, not a lens-by-lens report. The user should understand th
 
 **Cross-model weighting (internal — surfaces through Why):**
 
+- **Not all answers are equally good — judge each on its merits and reject the weak ones.** Running the assigned lens does not guarantee a sound answer: an agent can produce shallow reasoning, a wrong premise, a misread of the question, or a confident claim with no support. The integrator's job is to *identify and discard* those answers, not to average every response together. Weight by the strength of an answer's reasoning and evidence, not by the fact that an agent produced it (discount weak reasoning, never the model label). Dropping a low-quality answer entirely is a valid, expected outcome — say so in Why when a notable perspective was set aside.
 - Same-model convergence is signal but discounted — shared training = shared blind spots.
 - Parallax (cross-model) confirmation or dissent carries outsized weight — model diversity is prism's entire point.
 - A single well-reasoned point can beat multi-agent consensus driven by shared priors.
@@ -488,7 +398,7 @@ Re-read the user's original question. Verify:
 - No lens-by-lens summary appears outside an optional appendix.
 - Every retained dissent, caveat, or trigger changes a decision, confidence level, or next action.
 
-Optionally delete all Prism temp files — they share the `/tmp/prism-<unique-id>` prefix: shared context (`.md`), config, manifest, rendered launchers (`-launcher-*.md`), parallax out logs (`-out-*.log`), result sentinel (`-result.json`), perspective files (`-perspective-*.md`), and review index (`-review.md`). A single `rm -f /tmp/prism-<unique-id>*` covers them.
+Optionally delete all Prism temp files — they share the `/tmp/prism-<unique-id>` prefix: shared context (`.md`), config, manifest, rendered launchers (`-launcher-*.md`), parallax out logs (`-out-*.log`), and result sentinel (`-result.json`). A single `rm -f /tmp/prism-<unique-id>*` covers them.
 
 ## Guards
 

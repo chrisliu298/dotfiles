@@ -26,8 +26,6 @@ die() { echo "prism-launch: $*" >&2; exit 1; }
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 TEMPLATES_DIR=$(cd "$SCRIPT_DIR/../templates" && pwd 2>/dev/null) \
   || die "templates dir not found next to script ($SCRIPT_DIR/../templates)"
-# Note: launcher-reviewer.tmpl in TEMPLATES_DIR is rendered manually for the
-# optional peer-review wave (see SKILL.md), not by this script.
 
 # ── prepare ──────────────────────────────────────────────────────────────────
 

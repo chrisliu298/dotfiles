@@ -51,7 +51,7 @@ Asking the same question twice gets you the same biases twice. Prism assigns eac
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Self is the primary agent (the one you're talking to). It uses the **Integrator Lens** — weighing holistic coherence, feasibility, and alignment with your goals — and forms its own position while dispatched agents run in parallel.
+Self is the primary agent (the one you're talking to). It uses the **Integrator Lens** — weighing holistic coherence, feasibility, and alignment with your goals — and forms its own position while dispatched agents run in parallel. Not every agent's answer is equally good: as integrator, Self judges each on the strength of its reasoning and evidence, rejecting weak or wrong answers rather than averaging them in.
 
 1. **Freeze context** — build one shared evidence packet with all information needed
 2. **Compose prompts** — word-for-word identical question and context across all agents, only the lens line differs
@@ -157,7 +157,7 @@ Or invoke directly with `prism` — also available to subagents.
 Override dispatch defaults with positional args before the question:
 
 ```
-prism <sub> <codex-count> <codex-effort> <ds-count> <mm-count> <mx-count> [r] <question>
+prism <sub> <codex-count> <codex-effort> <ds-count> <mm-count> <mx-count> <question>
 ```
 
 - `sub` — Claude subagent count (default `2`)
@@ -166,13 +166,12 @@ prism <sub> <codex-count> <codex-effort> <ds-count> <mm-count> <mx-count> [r] <q
 - `ds-count` — DeepSeek parallax count (default `1`, `0` to skip). DeepSeek always runs at `max` (DeepThink) — no effort knob.
 - `mm-count` — MiMo parallax count (default `1`, `0` to skip). MiMo has no effort knob.
 - `mx-count` — MiniMax parallax count (default `1`, `0` to skip). MiniMax has no effort knob.
-- `r` — optional anonymous peer review round
 
 Examples:
 
 - `prism 2 2 x 2 2 2 Which architecture should we pick?` — 2 subagents, 2 Codex (xhigh), 2 DeepSeek (max), 2 MiMo, 2 MiniMax
 - `prism 1 0 m 1 0 0 Same-model + DeepSeek only` — skip Codex, MiMo, and MiniMax
-- `prism 2 1 x 0 0 0 r Should we launch X?` — Codex xhigh, no DeepSeek, no MiMo, no MiniMax, peer review enabled
+- `prism 2 1 x 0 0 0 Should we launch X?` — Codex xhigh, no DeepSeek, no MiMo, no MiniMax
 - `prism Why does X?` — all defaults
 
 ### Example output
