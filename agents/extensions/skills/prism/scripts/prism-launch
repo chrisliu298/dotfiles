@@ -9,7 +9,7 @@ set -euo pipefail
 # emits a single structured result. The same-model subagent half stays in the
 # conversation as Agent-tool calls — a shell script cannot (and must not) launch
 # Claude agents, and `claude -p` is never used for Claude here (it is only
-# relay's transport for DeepSeek/MiMo/MiniMax).
+# relay's transport for DeepSeek/MiMo).
 #
 # Usage:
 #   prism-launch prepare --config <config.json>      # foreground: render + validate + manifest

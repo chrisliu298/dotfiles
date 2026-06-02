@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Claude-only: refuse when invoked from a non-Claude (DeepSeek/MiMo/MiniMax) session.
+# Claude-only: refuse when invoked from a non-Claude (DeepSeek/MiMo) session.
 case "${ANTHROPIC_BASE_URL:-}" in
   *deepseek*)    echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at DeepSeek." >&2; exit 2 ;;
   *xiaomimimo*)  echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at MiMo." >&2; exit 2 ;;
-  *minimax*)     echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at MiniMax." >&2; exit 2 ;;
 esac
 
 # Anti-recursion: every peer relay spawns inherits RELAY_PEER=<peer>. Refuse a
@@ -131,7 +130,7 @@ recover_codex_response() {
 
 # Auto-detect caller and peer from the skill directory this script lives in.
 # Caller is always Claude under the current one-direction protocol; the default
-# peer is Codex. Use --to deepseek, --to mimo, or --to minimax to route elsewhere.
+# peer is Codex. Use --to deepseek or --to mimo to route elsewhere.
 # Returns "from to" (e.g. "claude codex") or empty string if unknown.
 detect_peers() {
   local script_dir
@@ -177,8 +176,8 @@ cmd_req() {
 
   ensure_relay_dir
 
-  # Build effort line (only codex consumes it via frontmatter; deepseek, mimo,
-  # and minimax have no effort knob and ignore it entirely).
+  # Build effort line (only codex consumes it via frontmatter; deepseek and mimo
+  # have no effort knob and ignore it entirely).
   # effort is non-empty only for effort-bearing peers (cmd_call blanks it otherwise).
   local effort_line=""
   if [ -n "$effort" ]; then
@@ -272,8 +271,8 @@ cmd_call() {
   fi
 
   # Build req. cmd_req surfaces effort in frontmatter only for codex; the
-  # claude-env peers (deepseek pinned to max via the registry extra_env, mimo and
-  # minimax with no effort knob) ignore it.
+  # claude-env peers (deepseek pinned to max via the registry extra_env, mimo
+  # with no effort knob) ignore it.
   local req_args=(--from "$from" --to "$to" --effort "$effort")
   [ -n "$name" ] || die "call: --name required"
   check_slug "call: --name" "$name"
@@ -288,19 +287,14 @@ cmd_call() {
   # Preflight: peer binary + required API key. claude-env peers piggyback on the
   # claude CLI with an env envelope routing to their Anthropic-compatible
   # endpoint; codex uses its own CLI. The transport comes from the registry.
-  local peer_bin key_env="" key_env_fb="" auth_token=""
+  local peer_bin key_env="" auth_token=""
   if [ "$transport" = "codex" ]; then
     peer_bin="codex"
   elif [ "$transport" = "claude-env" ]; then
     peer_bin="claude"
     key_env=$(jq -r '.key_env' <<<"$peer_json")
-    # Prefer key_env; fall back to the optional key_env_fallback when it's unset
-    # (minimax: plan key first, pay-as-you-go MINIMAX_API_KEY when the plan is
-    # consumed/commented out, or on a peer that never received the plan key).
-    key_env_fb=$(jq -r '.key_env_fallback // empty' <<<"$peer_json")
     auth_token="${!key_env:-}"
-    if [ -z "$auth_token" ] && [ -n "$key_env_fb" ]; then auth_token="${!key_env_fb:-}"; fi
-    [ -n "$auth_token" ] || die "call: $key_env${key_env_fb:+ (or $key_env_fb)} not set (required for --to $to)"
+    [ -n "$auth_token" ] || die "call: $key_env not set (required for --to $to)"
   else
     die "call: unknown transport '$transport' for peer '$to' in $PEERS"
   fi
@@ -348,7 +342,7 @@ EOF
   else
     local base
     base=$(jq -r '.base' <<<"$peer_json")
-    # Per-peer extras (deepseek's max effort, minimax's timeout) — registry data.
+    # Per-peer extras (e.g. deepseek's max effort) — registry data.
     # Fail closed if a stanza tries to override a safety/identity var: extras are
     # applied last, so an unguarded PATH/RELAY_PEER/auth/model key would win and
     # silently defeat the anti-recursion guard, PATH scrub, or endpoint binding.
@@ -421,10 +415,10 @@ Subcommands:
 Call options:
   --name <slug>      Call identifier
   --effort <level>   Reasoning effort for codex: medium (default) or xhigh.
-                     Ignored for deepseek (always max), mimo, and minimax (no knob).
+                     Ignored for deepseek (always max) and mimo (no knob).
   --body-only        Strip frontmatter from response output
   --from <peer>      Override caller detection (normally claude)
-  --to <peer>        Override peer detection (codex, deepseek, mimo, or minimax; default codex)
+  --to <peer>        Override peer detection (codex, deepseek, or mimo; default codex)
 USAGE
 }
 

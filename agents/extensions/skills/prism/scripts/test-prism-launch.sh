@@ -78,32 +78,16 @@ SAL=$(jq -r '.subagents[0].launcher' "$MAN")
 [ -f "$SAL" ] && ok "subagent launcher file rendered" || bad "subagent launcher file rendered"
 echo "$SAL" | grep -q 'launcher-subagent-simplicity.md' && ok "subagent lens slugified into filename" || bad "subagent slug filename"
 
-echo "== prepare: minimax peer (parity with deepseek/mimo) =="
-PKTX="$TMP/prism-runx.md"; make_packet "$PKTX"
-CFGX="$TMP/runx-config.json"
-jq -n --arg p "$PKTX" '{shared_packet:$p,parallax:[{to:"minimax",name:"first-principles",lens:"First-Principles",lens_desc:"reason from fundamentals"}],subagents:[]}' > "$CFGX"
-expect_ok "prepare accepts a minimax parallax entry (template resolves)" "$LAUNCH" prepare --config "$CFGX"
-MANX="$TMP/prism-runx-manifest.json"
-[ "$(jq -r '.counts.by_peer.minimax' "$MANX" 2>/dev/null)" = "1" ] && ok "minimax count = 1" || bad "minimax count = 1"
-[ "$(jq -r '.parallax[0].effort' "$MANX" 2>/dev/null)" = "null" ] && ok "minimax effort is null" || bad "minimax effort is null"
-[ "$(jq -r '.parallax[0].template' "$MANX" 2>/dev/null)" = "costar" ] && ok "minimax uses shared costar template" || bad "minimax template = costar"
-DRYX=$("$LAUNCH" parallax "$MANX" --dry-run 2>/dev/null)
-echo "$DRYX" | grep -q 'relay call --to minimax --name prism-first-principles <' && ok "minimax dry-run cmd has no --effort" || bad "minimax dry-run no --effort"
-# effort on minimax must be rejected (no effort knob); runs last — clears MANX on the same packet
-CFGXE="$TMP/runxe-config.json"
-jq -n --arg p "$PKTX" '{shared_packet:$p,parallax:[{to:"minimax",name:"x",effort:"xhigh",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CFGXE"
-expect_err "rejects --effort on minimax" "$LAUNCH" prepare --config "$CFGXE"
-
-echo "== prepare + dry-run: all four parallax tiers (default-shape regression guard) =="
+echo "== prepare + dry-run: all three parallax tiers (default-shape regression guard) =="
 PKT4="$TMP/prism-run4.md"; make_packet "$PKT4"
 CFG4="$TMP/run4-config.json"
-jq -n --arg p "$PKT4" '{shared_packet:$p,parallax:[{to:"codex",name:"a",effort:"medium",lens:"Adversarial",lens_desc:"d1"},{to:"deepseek",name:"b",lens:"Completeness",lens_desc:"d2"},{to:"mimo",name:"c",lens:"Consistency",lens_desc:"d3"},{to:"minimax",name:"d",lens:"First-Principles",lens_desc:"d4"}],subagents:[{lens:"Correctness",lens_desc:"d5"}]}' > "$CFG4"
-expect_ok "prepare accepts all four parallax tiers together" "$LAUNCH" prepare --config "$CFG4"
+jq -n --arg p "$PKT4" '{shared_packet:$p,parallax:[{to:"codex",name:"a",effort:"medium",lens:"Adversarial",lens_desc:"d1"},{to:"deepseek",name:"b",lens:"Completeness",lens_desc:"d2"},{to:"mimo",name:"c",lens:"Consistency",lens_desc:"d3"}],subagents:[{lens:"Correctness",lens_desc:"d4"}]}' > "$CFG4"
+expect_ok "prepare accepts all three parallax tiers together" "$LAUNCH" prepare --config "$CFG4"
 MAN4="$TMP/prism-run4-manifest.json"
-[ "$(jq -r '.counts.by_peer.minimax' "$MAN4" 2>/dev/null)" = "1" ] && [ "$(jq -r '.counts.parallax_total' "$MAN4" 2>/dev/null)" = "4" ] && ok "four-tier counts: minimax=1, parallax_total=4" || bad "four-tier counts"
+[ "$(jq -r '.counts.by_peer.mimo' "$MAN4" 2>/dev/null)" = "1" ] && [ "$(jq -r '.counts.parallax_total' "$MAN4" 2>/dev/null)" = "3" ] && ok "three-tier counts: mimo=1, parallax_total=3" || bad "three-tier counts"
 DRY4=$("$LAUNCH" parallax "$MAN4" --dry-run 2>/dev/null)
-[ "$(echo "$DRY4" | grep -c 'relay call --to')" = "4" ] && ok "four-tier dry-run lists exactly 4 relay calls" || bad "four-tier dry-run lists 4 relay calls"
-echo "$DRY4" | grep -q 'relay call --to minimax --name prism-d <' && ok "four-tier dry-run includes minimax with no --effort" || bad "four-tier dry-run minimax shape"
+[ "$(echo "$DRY4" | grep -c 'relay call --to')" = "3" ] && ok "three-tier dry-run lists exactly 3 relay calls" || bad "three-tier dry-run lists 3 relay calls"
+echo "$DRY4" | grep -q 'relay call --to mimo --name prism-c <' && ok "three-tier dry-run includes mimo with no --effort" || bad "three-tier dry-run mimo shape"
 
 echo "== prepare: negative cases (fail-closed) =="
 # missing Constraints section

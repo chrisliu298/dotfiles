@@ -1,6 +1,6 @@
 # Prism
 
-**A skill for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that strengthens any output through parallel multi-agent deliberation across multiple model lineages — Claude (subagents), [Codex](https://github.com/openai/codex) GPT-5.5, [DeepSeek](https://www.deepseek.com/) V4 Pro, [Xiaomi MiMo](https://platform.xiaomimimo.com/) V2.5 Pro, and [MiniMax](https://platform.minimax.io/) M3.**
+**A skill for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that strengthens any output through parallel multi-agent deliberation across multiple model lineages — Claude (subagents), [Codex](https://github.com/openai/codex) GPT-5.5, [DeepSeek](https://www.deepseek.com/) V4 Pro, and [Xiaomi MiMo](https://platform.xiaomimimo.com/) V2.5 Pro.**
 
 > *White light looks simple until it hits a prism — then you see every color was there all along. One question, many angles, nothing hidden.*
 
@@ -39,16 +39,16 @@ Asking the same question twice gets you the same biases twice. Prism assigns eac
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│  User question + shared context                                                         │
-├──────────┬──────────┬──────────┬─────────────┬─────────────┬──────────────┬─────────────┤
-│   Self   │ Agent 1  │ Agent 2  │   Parallax  │   Parallax  │   Parallax   │   Parallax  │
-│ Integra- │ Lens: A  │ Lens: B  │   — Codex   │  — DeepSeek │    — MiMo    │  — MiniMax  │
-│   tor    │ (Claude) │ (Claude) │   Lens: C   │   Lens: D   │   Lens: E    │   Lens: F   │
-│          │          │          │ (relay→GPT) │ (relay→DS4) │ (relay→MiMo) │ (relay→MM3) │
-├──────────┴──────────┴──────────┴─────────────┴─────────────┴──────────────┴─────────────┤
-│  Synthesis: consensus, contested, unique, gaps                                          │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────┐
+│  User question + shared context                                           │
+├──────────┬──────────┬──────────┬─────────────┬─────────────┬──────────────┤
+│   Self   │ Agent 1  │ Agent 2  │   Parallax  │   Parallax  │   Parallax   │
+│ Integra- │ Lens: A  │ Lens: B  │   — Codex   │  — DeepSeek │    — MiMo    │
+│   tor    │ (Claude) │ (Claude) │   Lens: C   │   Lens: D   │   Lens: E    │
+│          │          │          │ (relay→GPT) │ (relay→DS4) │ (relay→MiMo) │
+├──────────┴──────────┴──────────┴─────────────┴─────────────┴──────────────┤
+│  Synthesis: consensus, contested, unique, gaps                            │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
 Self is the primary agent (the one you're talking to). It uses the **Integrator Lens** — weighing holistic coherence, feasibility, and alignment with your goals — and forms its own position while dispatched agents run in parallel. Not every agent's answer is equally good: as integrator, Self judges each on the strength of its reasoning and evidence, rejecting weak or wrong answers rather than averaging them in.
@@ -60,7 +60,7 @@ Self is the primary agent (the one you're talking to). It uses the **Integrator 
 5. **Wait for ALL** — no partial synthesis (one peer finishing first ≠ permission to ignore the others)
 6. **Synthesize** — consensus, contested points, unique insights, blind spots, recommendation
 
-**Default: 7 perspectives** — self + 6 dispatched agents (2 Claude subagents + 1 Codex parallax + 1 DeepSeek parallax + 1 MiMo parallax + 1 MiniMax parallax, all via [Relay](https://github.com/chrisliu298/relay)). Any parallax tier can be opted out individually by setting its count to `0`.
+**Default: 6 perspectives** — self + 5 dispatched agents (2 Claude subagents + 1 Codex parallax + 1 DeepSeek parallax + 1 MiMo parallax, all via [Relay](https://github.com/chrisliu298/relay)). Any parallax tier can be opted out individually by setting its count to `0`.
 
 ### Core rules
 
@@ -79,14 +79,13 @@ Dispatch is handled by a small script, `scripts/prism-launch`, so the orchestrat
    for EVERY run, the agent emits by hand:
    ┌──────────────────────────────────────────────────────────────┐
    │  sed render  +  relay heredoc   ──▶ relay call --to codex    │ ─┐
-   │  sed render  +  relay heredoc   ──▶ relay call --to deepseek │ ─┤ 4 Bash
-   │  sed render  +  relay heredoc   ──▶ relay call --to mimo     │ ─┤ relay calls
-   │  sed render  +  relay heredoc   ──▶ relay call --to minimax  │ ─┘
+   │  sed render  +  relay heredoc   ──▶ relay call --to deepseek │ ─┤ 3 Bash
+   │  sed render  +  relay heredoc   ──▶ relay call --to mimo     │ ─┘ relay calls
    │  Agent(prompt…)  Agent(prompt…) ──▶ 2 Claude subagents       │ ─── 2 Agent calls
    └──────────────────────────────────────────────────────────────┘
    then: manually reconcile the dispatch-shape count,
-         and track 6 separate completion notifications
-   ✗ #1 failure mode: forget one relay call (DeepSeek/MiMo/MiniMax)
+         and track 5 separate completion notifications
+   ✗ #1 failure mode: forget one relay call (DeepSeek/MiMo)
    ✗ ~hundreds of boilerplate tokens reproduced verbatim each run
 ```
 
@@ -107,13 +106,12 @@ Dispatch is handled by a small script, `scripts/prism-launch`, so the orchestrat
             │
             ├──▶ relay → codex    ─┐
             ├──▶ relay → deepseek  ┤  fans out concurrently,
-            ├──▶ relay → mimo      ┤  WAITS for all peers,
-            ├──▶ relay → minimax  ─┘  writes result.json
+            ├──▶ relay → mimo     ─┘  WAITS for all peers, writes result.json
             ▼
         ONE completion notification for the whole parallax tier
    ✓ dispatch-shape mismatch is structurally impossible
    ✓ agent emits ~10 lines of JSON, not N rendered prompts
-   ✓ notifications drop from 6 to 3 (2 subagents + 1 parallax fan)
+   ✓ notifications drop from 5 to 3 (2 subagents + 1 parallax fan)
 ```
 
 The launcher owns only the cross-model half — same-model subagents remain Agent-tool calls, so the notification floor is ~3, not 1. If `prism-launch` is unavailable, Prism falls back to the manual `sed`+heredoc flow.
@@ -138,7 +136,7 @@ Prism's Parallax tiers dispatch cross-model agents via [Relay](https://github.co
 git clone https://github.com/chrisliu298/relay.git ~/.claude/skills/relay
 ```
 
-**DeepSeek / MiMo / MiniMax prerequisite:** for the DeepSeek parallax tier, export `DEEPSEEK_API_KEY`; for the MiMo tier, export `MIMO_API_KEY`; for the MiniMax tier, export `MINIMAX_PLAN_KEY` or `MINIMAX_API_KEY` (the plan key is preferred, with the API key as fallback; e.g., in `~/.zshenv.local`). All are reached via the `claude` CLI with the vendor's Anthropic-compatible endpoint, so no separate binary install is required beyond Claude Code itself.
+**DeepSeek / MiMo prerequisite:** for the DeepSeek parallax tier, export `DEEPSEEK_API_KEY`; for the MiMo tier, export `MIMO_API_KEY` (e.g., in `~/.zshenv.local`). Both are reached via the `claude` CLI with the vendor's Anthropic-compatible endpoint, so no separate binary install is required beyond Claude Code itself.
 
 ---
 
@@ -157,7 +155,7 @@ Or invoke directly with `prism` — also available to subagents.
 Override dispatch defaults with positional args before the question:
 
 ```
-prism <sub> <codex-count> <codex-effort> <ds-count> <mm-count> <mx-count> <question>
+prism <sub> <codex-count> <codex-effort> <ds-count> <mm-count> <question>
 ```
 
 - `sub` — Claude subagent count (default `2`)
@@ -165,13 +163,12 @@ prism <sub> <codex-count> <codex-effort> <ds-count> <mm-count> <mx-count> <quest
 - `codex-effort` — `m` / `x` only (default `m`; Codex relay exposes two effort tiers — medium and xhigh)
 - `ds-count` — DeepSeek parallax count (default `1`, `0` to skip). DeepSeek always runs at `max` (DeepThink) — no effort knob.
 - `mm-count` — MiMo parallax count (default `1`, `0` to skip). MiMo has no effort knob.
-- `mx-count` — MiniMax parallax count (default `1`, `0` to skip). MiniMax has no effort knob.
 
 Examples:
 
-- `prism 2 2 x 2 2 2 Which architecture should we pick?` — 2 subagents, 2 Codex (xhigh), 2 DeepSeek (max), 2 MiMo, 2 MiniMax
-- `prism 1 0 m 1 0 0 Same-model + DeepSeek only` — skip Codex, MiMo, and MiniMax
-- `prism 2 1 x 0 0 0 Should we launch X?` — Codex xhigh, no DeepSeek, no MiMo, no MiniMax
+- `prism 2 2 x 2 2 Which architecture should we pick?` — 2 subagents, 2 Codex (xhigh), 2 DeepSeek (max), 2 MiMo
+- `prism 1 0 m 1 0 Same-model + DeepSeek only` — skip Codex and MiMo
+- `prism 2 1 x 0 0 Should we launch X?` — Codex xhigh, no DeepSeek, no MiMo
 - `prism Why does X?` — all defaults
 
 ### Example output
@@ -239,20 +236,19 @@ The skill includes pre-launch checks that prevent common mistakes:
 
 ## Parallax (Cross-Model)
 
-Parallax is the cross-model tier of Prism. It dispatches agents via [Relay](https://github.com/chrisliu298/relay) to **different models** — different training, different reasoning patterns, different blind spots. Prism currently supports four parallax tiers in parallel:
+Parallax is the cross-model tier of Prism. It dispatches agents via [Relay](https://github.com/chrisliu298/relay) to **different models** — different training, different reasoning patterns, different blind spots. Prism currently supports three parallax tiers in parallel:
 
 | Tier | Model | Effort scale | Strength |
 |---|---|---|---|
 | Codex | GPT-5.5 | `medium`/`xhigh` | Strong agentic coding, two-tier effort control |
 | DeepSeek | DeepSeek V4 Pro (1.6T MoE, open-weight) | `max` only (DeepThink, no knob) | Independent vendor lineage, frontier reasoning; text-only |
 | MiMo | Xiaomi MiMo-V2.5-Pro (1.02T MoE / 42B active, 1M context, open-weight) | no knob | A third independent lineage, distinct from Anthropic and OpenAI; text-only |
-| MiniMax | MiniMax-M3 (frontier agentic-reasoning/coding model) | no knob (thinking on by default) | A fourth independent lineage, distinct from Anthropic, OpenAI, DeepSeek, and Xiaomi; **only multimodal tier — accepts image input (verified)** |
 
 Each tier is dispatched as a separate concurrent Relay call. All Parallax agents receive the same full question and context as every other agent — only the lens differs.
 
 ### Why model diversity matters
 
-Same-model agents share systematic biases from training. A cross-model perspective catches issues that no amount of same-model redundancy will surface. With four parallax tiers, you can stack the diversity: when two or more of Codex, DeepSeek, MiMo, and MiniMax dissent in the same direction, that's a high-signal finding that independent training lineages agree the subagents missed something.
+Same-model agents share systematic biases from training. A cross-model perspective catches issues that no amount of same-model redundancy will surface. With three parallax tiers, you can stack the diversity: when two or more of Codex, DeepSeek, and MiMo dissent in the same direction, that's a high-signal finding that independent training lineages agree the subagents missed something.
 
 Assign each parallax tier a lens that maximizes diversity. For stress-testing tasks (e.g., subagents on Correctness and Simplicity), give one parallax Adversarial and another Falsification. For wide-research or exploratory tasks, use orthogonal exploratory lenses (Breadth-Weighted, Outsider, First-Principles) on the parallax tiers instead — Prism is also valuable when you want broad coverage rather than to attack a proposal. Never assign the same lens to two parallax tiers — that wastes a perspective.
 
@@ -269,4 +265,3 @@ If Relay is not installed, Prism replaces all Parallax tiers with same-model age
 - **Codex** — lens calibration and cross-model validation
 - **DeepSeek V4 Pro** — second cross-model parallax tier added 2026-05
 - **Xiaomi MiMo-V2.5-Pro** — third cross-model parallax tier added 2026-05
-- **MiniMax-M3** — fourth cross-model parallax tier added 2026-05

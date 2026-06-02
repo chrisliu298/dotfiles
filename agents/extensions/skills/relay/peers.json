@@ -20,17 +20,5 @@
     "key_env": "MIMO_API_KEY",
     "model": "mimo-v2.5-pro[1m]",
     "template": "costar"
-  },
-  "minimax": {
-    "transport": "claude-env",
-    "base": "https://api.minimax.io/anthropic",
-    "key_env": "MINIMAX_PLAN_KEY",
-    "key_env_fallback": "MINIMAX_API_KEY",
-    "model": "MiniMax-M3",
-    "extra_env": {
-      "API_TIMEOUT_MS": "3000000",
-      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
-    },
-    "template": "costar"
   }
 }
