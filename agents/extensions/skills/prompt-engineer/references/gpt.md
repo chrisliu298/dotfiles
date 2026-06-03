@@ -8,6 +8,8 @@ GPT-5.5 works best with **outcome-first prompts** that define the target and con
 
 - Describe the destination, not every step. State the target outcome, success criteria, constraints, and available context — then let the model choose the search, tool, or reasoning strategy.
 - Avoid unnecessary absolute rules (ALWAYS, NEVER, must, only) for judgment calls. Reserve absolutes for safety, privacy, and compliance.
+- State **both sides of a tradeoff**, not just the cost to avoid. A one-sided rule ("avoid X, it's expensive") makes the model overfit to avoidance; give the counterweight and GPT-5.5 will weigh it — which it does well.
+- **Instructions don't add capability.** If a task needs exact arithmetic, current/external data, or a deterministic transform, define a tool for it — telling the model to "be accurate" won't create the capability.
 - Add explicit stopping conditions so the model knows when the job is done.
 - Re-evaluate `low` and `medium` reasoning effort before escalating — they cover more ground than you might expect.
 
@@ -736,6 +738,9 @@ Read the prompt and ask what's going wrong. Common issues and fixes:
 | Guesses when context is missing | No gating | Add `<missing_context_gating>` |
 | Tone feels off / inconsistent | No personality block | Add Step 3 personality + collaboration style |
 | Dead-air before first tool call | No preamble | Add the Step 7 preamble pattern |
+| Over-cautious / overfits to one side of a rule | Tradeoff stated as a bare cost or absolute | State both sides so the model can weigh them |
+| "Be accurate" instruction still fails on math or lookups | Capability gap, not an instruction gap | Define a tool; instructions don't add capability |
+| Withholds info it has / over-defers to a fallback | Blunt absolute (e.g. NEVER give wrong X) | Name the authoritative source; reserve absolutes for safety (see `<grounding_rules>`) |
 
 ### 2. Apply targeted fixes
 

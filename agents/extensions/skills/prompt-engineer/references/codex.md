@@ -357,10 +357,13 @@ Read the prompt and ask what's going wrong. Common issues and fixes:
 | Preambles treated as final answers | Phase parameter not preserved | Persist `phase` on assistant items in API integration |
 | Context degrades over long sessions | No compaction | Add `/responses/compact` after milestones |
 | Generic / AI slop frontend | Missing frontend guidance | Add Frontend Tasks section |
+| "Always get it right" instructions but unverified output | Capability/verification gap, not an instruction gap | Give it the tool and a verification step (run tests/build); instructions don't add capability |
+| Overfits to one side of a judgment-call rule | One-sided framing on a non-safety tradeoff | State both sides; keep one-sided absolutes only for safety (git, destructive ops) |
 
 ### 2. Apply targeted fixes
 
 - **Start from the starter prompt** — if the existing prompt diverges significantly, it's often faster to start from the official baseline and add back custom sections
+- **Match capability to mechanism** — when correctness depends on exact computation, current state, or verification, add the tool or a run-tests/build step rather than strengthening the instruction; instructions don't add capability. Reserve one-sided absolutes (NEVER `git reset --hard`) for safety, and state both sides of judgment-call tradeoffs.
 - **Use metaprompting** — ask the model at the end of a turn that underperformed how to improve its own instructions. The following prompt works well:
 
 ```

@@ -78,6 +78,8 @@ DeepSeek V4 has two thinking tiers, controlled by the `CLAUDE_CODE_EFFORT_LEVEL`
 Drawn from teams running V4 in production:
 
 - **Positive framing beats negative.** "Include X, Y, Z" lifts quality more than "don't hallucinate" or "never use Z." Reserve negative constraints for hard safety/policy guardrails.
+- **State both sides of a tradeoff.** A one-sided rule ("avoid X, it costs Y") makes the model overfit to avoidance. Give the counterweight so it can weigh the call rather than hard-coding the conclusion.
+- **Instructions don't add capability.** For exact arithmetic, lookups, or deterministic work, give DeepSeek a tool — it runs inside the Claude Code harness with Bash, file, and web tools — rather than insisting it "calculate correctly." Adjectives don't add ability.
 - **Skip the personality.** Role prompts like "you are a witty developer" reduce consistency. Stay professional and task-focused.
 - **Lighter safety layer.** For agentic tasks with tool access, state explicitly what success looks like AND what the agent must never do — DeepSeek won't refuse risky operations as readily as Claude.
 - **Cache prefixes aggressively.** Put stable instructions and few-shot examples at the very start; per-call variables go at the end. Output tokens cost ~10× cached input on Flash and ~24× on Pro.
@@ -144,6 +146,8 @@ If you see `model="deepseek-chat"` or `model="deepseek-reasoner"` in older code,
 | Refuses to act on agentic task | Over-cautious framing | Drop "never do X" stack; replace with positive success criteria |
 | Hallucinates facts | Negative anti-hallucination prompts | Replace "don't hallucinate" with "cite the source file:line for each claim" |
 | Latency too high | `max` for a routine task | Drop to `high` |
+| Overfits to one side of a rule | Tradeoff stated one-sided | State both the cost and the counterweight |
+| Vague or wrong on math/lookups despite instructions | Capability gap, not an instruction gap | Give a tool; instructions don't add capability |
 
 ### 2. Apply targeted fixes
 

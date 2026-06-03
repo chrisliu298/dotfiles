@@ -54,6 +54,40 @@ Your response will be read aloud by a text-to-speech engine, so never use ellips
 
 Claude is smart enough to infer related constraints from the explanation — it will also avoid other TTS-unfriendly punctuation.
 
+#### State both sides of a tradeoff
+
+When a rule encodes a cost/benefit decision, give Claude both sides — not just the side you want it to avoid. A one-sided instruction makes Claude overfit to the stated cost.
+
+Less effective:
+```
+Avoid escalating to a human unless absolutely necessary — it costs $8 per case.
+```
+
+More effective:
+```
+Escalating to a human costs $8 per case, but resolving a billing error wrong
+costs a refund and customer trust. Escalate when you can't resolve an issue
+confidently; otherwise handle it yourself.
+```
+
+Capable models weigh tradeoffs well when given the full picture; giving only the anti-escalation cost produces brittle behavior.
+
+#### Name the source of truth, not just the failure to avoid
+
+Blunt defensive rules — often patches carried over from an older model — can make Claude *withhold information it actually has*. Name the authoritative source and a fallback condition instead of prohibiting an outcome.
+
+Less effective:
+```
+Never give wrong plan details. Point customers to the account URL.
+```
+
+More effective:
+```
+The provided account context is authoritative for the customer's current or
+grandfathered plan. Answer from it when the needed value is present; redirect
+to the account URL only when it is genuinely absent.
+```
+
 #### Give Claude a role
 
 A role in the system prompt focuses behavior and tone. Even one sentence helps:
@@ -92,6 +126,7 @@ Best practices:
 - Use consistent, descriptive tag names
 - Nest tags when content has natural hierarchy
 - Place long documents at the top of the prompt, with the query/instructions below — this can improve quality by up to 30%
+- Separate role, guidelines, policy, tone, and data into their own tags. Rule of thumb: if you can't tell guidelines from policy from data when reading the prompt, neither can Claude.
 
 #### Use examples (few-shot prompting)
 
@@ -172,6 +207,8 @@ multiplication, and "^" for exponents).
 ### Step 4: Add tool use guidance (if applicable)
 
 Claude benefits from explicit direction. Suggestive language ("could you suggest...") may not trigger tool use — imperative language ("change this function...") does.
+
+**Instructions don't add capability.** If a task needs something Claude can't do reliably on its own — exact arithmetic, data lookups, current facts, deterministic transforms — telling it the result is "critical" or to "always be accurate" won't help. Give it a tool: declare the tool, describe in its schema what it does and when to use it, and instruct Claude to call it. Reserve prose for *reasoning*; use tools for *execution*.
 
 **Proactive action (default to implementing):**
 ```xml

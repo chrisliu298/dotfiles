@@ -8,7 +8,7 @@ Invoke with `/prompt-engineer claude`, `/prompt-engineer gpt`, or `/prompt-engin
 
 ## What It Does
 
-**Writing from scratch:** The skill walks through a structured workflow -- clarify the task, draft using model-specific patterns, then present the complete prompt with design rationale. Each reference file contains concrete XML blocks (output contracts, tool persistence rules, safety controls, frontend aesthetics, etc.) that can be dropped directly into prompts.
+**Writing from scratch:** The skill walks through a structured workflow -- clarify the task, draft using model-specific patterns, run a pre-flight quality pass (structure, capability gaps, tradeoffs, over-constraints), then present the complete prompt with design rationale. Each reference file contains concrete XML blocks (output contracts, tool persistence rules, safety controls, frontend aesthetics, etc.) that can be dropped directly into prompts.
 
 **Refining an existing prompt:** Diagnose what's going wrong using a model-specific failure mode table, apply targeted fixes, and present a before/after diff with reasoning behind each change.
 
