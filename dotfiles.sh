@@ -52,7 +52,6 @@ MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: clau
 
 # name|marketplace — Claude plugins installed + enabled at user scope (claude-only)
 PLUGINS=(
-    "pyright-lsp|claude-plugins-official"
     "code-simplifier|claude-plugins-official"
     "frontend-design|claude-plugins-official"
 )

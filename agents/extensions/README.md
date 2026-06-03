@@ -71,7 +71,6 @@ Managed by the `PLUGINS` table in `dotfiles.sh` — each is installed and enable
 
 | Plugin | Marketplace | Purpose |
 |--------|-------------|---------|
-| pyright-lsp | claude-plugins-official | Python LSP diagnostics |
 | code-simplifier | claude-plugins-official | Simplify/refactor changed code |
 | frontend-design | claude-plugins-official | Distinctive frontend UI generation |
 
