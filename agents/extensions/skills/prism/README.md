@@ -1,6 +1,6 @@
 # Prism
 
-**A skill for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that strengthens any output through parallel multi-agent deliberation across multiple model lineages — Claude (subagents), [Codex](https://github.com/openai/codex) GPT-5.5, [DeepSeek](https://www.deepseek.com/) V4 Pro, and [Xiaomi MiMo](https://platform.xiaomimimo.com/) V2.5 Pro.**
+**A skill for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that strengthens any output through parallel multi-agent deliberation across multiple model lineages — Claude (subagents), [Codex](https://github.com/openai/codex) GPT-5.5, [DeepSeek](https://www.deepseek.com/) V4 Pro, [Xiaomi MiMo](https://platform.xiaomimimo.com/) V2.5 Pro, and [Moonshot Kimi](https://platform.kimi.ai/) K2.6.**
 
 > *White light looks simple until it hits a prism — then you see every color was there all along. One question, many angles, nothing hidden.*
 
