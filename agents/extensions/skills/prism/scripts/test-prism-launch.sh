@@ -78,16 +78,32 @@ SAL=$(jq -r '.subagents[0].launcher' "$MAN")
 [ -f "$SAL" ] && ok "subagent launcher file rendered" || bad "subagent launcher file rendered"
 echo "$SAL" | grep -q 'launcher-subagent-simplicity.md' && ok "subagent lens slugified into filename" || bad "subagent slug filename"
 
-echo "== prepare + dry-run: all three parallax tiers (default-shape regression guard) =="
+echo "== prepare: kimi peer (parity with deepseek/mimo) =="
+PKTX="$TMP/prism-runx.md"; make_packet "$PKTX"
+CFGX="$TMP/runx-config.json"
+jq -n --arg p "$PKTX" '{shared_packet:$p,parallax:[{to:"kimi",name:"first-principles",lens:"First-Principles",lens_desc:"reason from fundamentals"}],subagents:[]}' > "$CFGX"
+expect_ok "prepare accepts a kimi parallax entry (template resolves)" "$LAUNCH" prepare --config "$CFGX"
+MANX="$TMP/prism-runx-manifest.json"
+[ "$(jq -r '.counts.by_peer.kimi' "$MANX" 2>/dev/null)" = "1" ] && ok "kimi count = 1" || bad "kimi count = 1"
+[ "$(jq -r '.parallax[0].effort' "$MANX" 2>/dev/null)" = "null" ] && ok "kimi effort is null" || bad "kimi effort is null"
+[ "$(jq -r '.parallax[0].template' "$MANX" 2>/dev/null)" = "costar" ] && ok "kimi uses shared costar template" || bad "kimi template = costar"
+DRYX=$("$LAUNCH" parallax "$MANX" --dry-run 2>/dev/null)
+echo "$DRYX" | grep -q 'relay call --to kimi --name prism-first-principles <' && ok "kimi dry-run cmd has no --effort" || bad "kimi dry-run no --effort"
+# effort on kimi must be rejected (no effort knob); runs last — clears MANX on the same packet
+CFGXE="$TMP/runxe-config.json"
+jq -n --arg p "$PKTX" '{shared_packet:$p,parallax:[{to:"kimi",name:"x",effort:"xhigh",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CFGXE"
+expect_err "rejects --effort on kimi" "$LAUNCH" prepare --config "$CFGXE"
+
+echo "== prepare + dry-run: all four parallax tiers (default-shape regression guard) =="
 PKT4="$TMP/prism-run4.md"; make_packet "$PKT4"
 CFG4="$TMP/run4-config.json"
-jq -n --arg p "$PKT4" '{shared_packet:$p,parallax:[{to:"codex",name:"a",effort:"medium",lens:"Adversarial",lens_desc:"d1"},{to:"deepseek",name:"b",lens:"Completeness",lens_desc:"d2"},{to:"mimo",name:"c",lens:"Consistency",lens_desc:"d3"}],subagents:[{lens:"Correctness",lens_desc:"d4"}]}' > "$CFG4"
-expect_ok "prepare accepts all three parallax tiers together" "$LAUNCH" prepare --config "$CFG4"
+jq -n --arg p "$PKT4" '{shared_packet:$p,parallax:[{to:"codex",name:"a",effort:"medium",lens:"Adversarial",lens_desc:"d1"},{to:"deepseek",name:"b",lens:"Completeness",lens_desc:"d2"},{to:"mimo",name:"c",lens:"Consistency",lens_desc:"d3"},{to:"kimi",name:"d",lens:"First-Principles",lens_desc:"d4"}],subagents:[{lens:"Correctness",lens_desc:"d5"}]}' > "$CFG4"
+expect_ok "prepare accepts all four parallax tiers together" "$LAUNCH" prepare --config "$CFG4"
 MAN4="$TMP/prism-run4-manifest.json"
-[ "$(jq -r '.counts.by_peer.mimo' "$MAN4" 2>/dev/null)" = "1" ] && [ "$(jq -r '.counts.parallax_total' "$MAN4" 2>/dev/null)" = "3" ] && ok "three-tier counts: mimo=1, parallax_total=3" || bad "three-tier counts"
+[ "$(jq -r '.counts.by_peer.kimi' "$MAN4" 2>/dev/null)" = "1" ] && [ "$(jq -r '.counts.parallax_total' "$MAN4" 2>/dev/null)" = "4" ] && ok "four-tier counts: kimi=1, parallax_total=4" || bad "four-tier counts"
 DRY4=$("$LAUNCH" parallax "$MAN4" --dry-run 2>/dev/null)
-[ "$(echo "$DRY4" | grep -c 'relay call --to')" = "3" ] && ok "three-tier dry-run lists exactly 3 relay calls" || bad "three-tier dry-run lists 3 relay calls"
-echo "$DRY4" | grep -q 'relay call --to mimo --name prism-c <' && ok "three-tier dry-run includes mimo with no --effort" || bad "three-tier dry-run mimo shape"
+[ "$(echo "$DRY4" | grep -c 'relay call --to')" = "4" ] && ok "four-tier dry-run lists exactly 4 relay calls" || bad "four-tier dry-run lists 4 relay calls"
+echo "$DRY4" | grep -q 'relay call --to kimi --name prism-d <' && ok "four-tier dry-run includes kimi with no --effort" || bad "four-tier dry-run kimi shape"
 
 echo "== prepare: negative cases (fail-closed) =="
 # missing Constraints section

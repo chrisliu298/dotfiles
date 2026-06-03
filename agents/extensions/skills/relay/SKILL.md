@@ -2,23 +2,23 @@
 effort: medium
 name: relay
 description: |
-  The ONLY way to call Codex, DeepSeek, or MiMo. Use whenever the user
+  The ONLY way to call Codex, DeepSeek, MiMo, or Kimi. Use whenever the user
   wants to ask, delegate to, or get a second opinion from Codex, DeepSeek,
-  or MiMo. Do NOT run the codex, deepseek (ds), or mimo (mm) CLI
+  MiMo, or Kimi. Do NOT run the codex, deepseek (ds), mimo (mm), or kimi (k) CLI
   directly — from the main agent or a subagent; always use this skill's relay call
   command. Triggers on "ask/have/send to/get/delegate to codex" or the same with
-  "deepseek"/"mimo", "second opinion", "relay".
+  "deepseek"/"mimo"/"kimi", "second opinion", "relay".
 allowed-tools: Read, Write, Bash(relay:*), Bash(find:*), Bash(printf:*)
 user-invocable: true
 ---
 
 # Relay
 
-**Claude-only.** If `ANTHROPIC_BASE_URL` contains `deepseek` or `xiaomimimo`, this skill is unavailable — stop and tell the user: "relay is Claude-only; a non-Claude session cannot orchestrate other models." The relay script also refuses at the shell layer.
+**Claude-only.** If `ANTHROPIC_BASE_URL` contains `deepseek`, `xiaomimimo`, or `moonshot`, this skill is unavailable — stop and tell the user: "relay is Claude-only; a non-Claude session cannot orchestrate other models." The relay script also refuses at the shell layer.
 
-Call Codex, DeepSeek, or MiMo like a function: one command generates the request, invokes the peer, and prints the response.
+Call Codex, DeepSeek, MiMo, or Kimi like a function: one command generates the request, invokes the peer, and prints the response.
 
-> **The peer is a full agent in the Claude Code harness — not a stateless API call.** Relay runs `claude -p` with only the model weights swapped (Codex → GPT-5.5, DeepSeek → V4-Pro, MiMo → MiMo-V2.5-Pro), so the peer has your core tools — Bash, file read/write, Grep/Glob, subagents, multi-step agentic loops. It can see this repo, run commands, and verify its own work; delegate file I/O and shell work directly. Do **not** treat it as a one-shot completion that "can't see the codebase." Web tools (WebFetch/WebSearch) are registered but their backend varies by peer — DeepSeek's works, MiMo's currently returns "no access" — so don't assume browsing without checking. The only constant difference from you is the model behind the harness.
+> **The peer is a full agent in the Claude Code harness — not a stateless API call.** Relay runs `claude -p` with only the model weights swapped (Codex → GPT-5.5, DeepSeek → V4-Pro, MiMo → MiMo-V2.5-Pro, Kimi → Kimi-K2.6), so the peer has your core tools — Bash, file read/write, Grep/Glob, subagents, multi-step agentic loops. It can see this repo, run commands, and verify its own work; delegate file I/O and shell work directly. Do **not** treat it as a one-shot completion that "can't see the codebase." Web tools (WebFetch/WebSearch) are registered but their backend varies by peer — DeepSeek's works, MiMo's currently returns "no access" — so don't assume browsing without checking. The only constant difference from you is the model behind the harness.
 
 ```
 relay call --name <slug> [--to <peer>] [--effort <level>] [--body-only] <<'BODY'
@@ -26,11 +26,11 @@ task
 BODY
 ```
 
-`relay` is in PATH. The caller is always Claude (this is a Claude-only skill); the peer defaults to Codex. Pass `--to deepseek` or `--to mimo` to route elsewhere.
+`relay` is in PATH. The caller is always Claude (this is a Claude-only skill); the peer defaults to Codex. Pass `--to deepseek`, `--to mimo`, or `--to kimi` to route elsewhere.
 
 If a bare `relay` ever returns "command not found" (a sandboxed/non-zsh/reset-env shell that didn't inherit the PATH entry), re-run the **identical** command with the absolute install path — `~/.claude/skills/relay/scripts/relay call …`. That is the whole recovery; do not reconstruct the call by hand.
 
-**All Codex, DeepSeek, and MiMo interactions go through `relay call`.** Do not invoke `codex exec` or the `ds`/`mm` aliases directly, do not spawn agents to run the codex or claude CLI for these purposes, and do not pass model flags (`-m`, `--model`) — the model and invocation method come from the peer registry (`peers.json`), not the call.
+**All Codex, DeepSeek, MiMo, and Kimi interactions go through `relay call`.** Do not invoke `codex exec` or the `ds`/`mm`/`k` aliases directly, do not spawn agents to run the codex or claude CLI for these purposes, and do not pass model flags (`-m`, `--model`) — the model and invocation method come from the peer registry (`peers.json`), not the call.
 
 ## Peer selection
 
@@ -39,12 +39,13 @@ If a bare `relay` ever returns "command not found" (a sandboxed/non-zsh/reset-en
 | **Codex** (default) | Code review, security review, refactoring, agentic coding. GPT-5.5 lineage. Two effort tiers (`medium`/`xhigh`). | `relay call --name ...` (no `--to` needed) |
 | **DeepSeek** | Independent model family for true cross-vendor diversity, frontier reasoning, multi-step analysis. Open-weight V4-Pro (1.6T MoE). Always runs at `max` (DeepThink). Text-only (no image input via relay). | `relay call --to deepseek --name ...` |
 | **MiMo** | Another independent open-weight lineage (Xiaomi MiMo-V2.5-Pro, 1.02T MoE / 42B active, 1M context). Use for a third cross-vendor perspective. No effort knob. Text-only (no image input via relay). | `relay call --to mimo --name ...` |
+| **Kimi** | A fourth independent lineage (Moonshot AI Kimi-K2.6, frontier agentic-coding MoE). Use for another cross-vendor perspective. Thinking is on by default; no effort knob (binary on/off only, no DeepSeek-style tiers). | `relay call --to kimi --name ...` |
 
-Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick DeepSeek or MiMo for a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax. Neither DeepSeek nor MiMo has an effort knob — `--effort` is silently ignored on those calls, so omit it. DeepSeek requires `DEEPSEEK_API_KEY` and MiMo requires `MIMO_API_KEY` in the environment.
+Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick DeepSeek, MiMo, or Kimi for a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax. None of DeepSeek, MiMo, or Kimi has an effort knob — `--effort` is silently ignored on those calls, so omit it. DeepSeek requires `DEEPSEEK_API_KEY`, MiMo requires `MIMO_API_KEY`, and Kimi requires `KIMI_API_KEY` in the environment.
 
 ### Peer registry
 
-Every model-family fact — transport (`codex` CLI vs a generic `claude-env` Anthropic-compatible envelope), endpoint, key variable, model id, effort knob, per-peer extras, and launcher template style — lives once in `peers.json` next to the script. `relay` and `prism-launch` both read it, so **adding a peer to the dispatch path is one stanza** there, not edits across the script, the prism launcher, and the docs. The `claude-env` peers share one code path that differs only by registry data; only Codex has its own transport. Two deliberate exceptions stay in code, not data: a brand-new *transport* needs its own script branch, and a new `claude-env` peer should also get its endpoint added to the inbound Claude-only refusal at the top of the script (a one-line safety guard that must run before the registry is loaded). The interactive `ds`/`mm` launchers in `shell/.functions` are a separate consumer and still carry their own copy — keep them in sync.
+Every model-family fact — transport (`codex` CLI vs a generic `claude-env` Anthropic-compatible envelope), endpoint, key variable, model id, effort knob, per-peer extras, and launcher template style — lives once in `peers.json` next to the script. `relay` and `prism-launch` both read it, so **adding a peer to the dispatch path is one stanza** there, not edits across the script, the prism launcher, and the docs. The `claude-env` peers share one code path that differs only by registry data; only Codex has its own transport. Two deliberate exceptions stay in code, not data: a brand-new *transport* needs its own script branch, and a new `claude-env` peer should also get its endpoint added to the inbound Claude-only refusal at the top of the script (a one-line safety guard that must run before the registry is loaded). The interactive `ds`/`mm`/`k` launchers in `shell/.functions` are a separate consumer and still carry their own copy — keep them in sync.
 
 ### Common Mistakes
 - **Premature failure diagnosis**: If a relay call was launched with `run_in_background: true`, do not inspect `.relay` files or enter the failure flow until the background task's completion notification arrives. No notification means the peer is still running.
@@ -62,7 +63,7 @@ BODY
 
 ## Effort Levels
 
-`--effort` applies to Codex only. DeepSeek always runs at `max` (DeepThink), and MiMo has no effort knob — the flag is silently ignored on those calls, so omit it.
+`--effort` applies to Codex only. DeepSeek always runs at `max` (DeepThink), and MiMo and Kimi have no effort knob (Kimi's thinking is on by default, a binary toggle with no tiers) — the flag is silently ignored on those calls, so omit it.
 
 | Level | When to use |
 |-------|-------------|
@@ -103,13 +104,13 @@ Summary of changes, one per line, with file path and description.
 BODY
 ```
 
-## Prompting DeepSeek and MiMo
+## Prompting DeepSeek, MiMo, and Kimi
 
-Both are independent (non-Anthropic/OpenAI) models that respond well to XML-scaffolded, structured prompts. **Before composing a DeepSeek prompt body, read `~/.claude/skills/relay/references/deepseek.md`** (symlinked to the prompt-engineer reference) — it covers the CO-STAR framework, XML scaffolding conventions, thinking-mode quirks, and DeepThink failure modes. This is not optional — the guide contains model-specific patterns that materially affect output quality. MiMo-V2.5-Pro has no dedicated reference; treat it like DeepSeek.
+All three are independent (non-Anthropic/OpenAI) models that respond well to XML-scaffolded, structured prompts. **Before composing a DeepSeek prompt body, read `~/.claude/skills/relay/references/deepseek.md`** (symlinked to the prompt-engineer reference) — it covers the CO-STAR framework, XML scaffolding conventions, thinking-mode quirks, and DeepThink failure modes. This is not optional — the guide contains model-specific patterns that materially affect output quality. MiMo-V2.5-Pro and Kimi-K2.6 have no dedicated reference; treat them like DeepSeek.
 
-Default to XML scaffolding (DeepSeek V4 was trained heavily on XML-tagged data; MiMo behaves similarly). The CO-STAR sections — `<context>`, `<objective>`, `<style>`, `<tone>`, `<audience>`, `<response_format>` — give the cleanest results for non-trivial tasks. Use positive framing ("include X") over negative constraints ("don't omit X"). Neither has an effort knob — deep/interleaved thinking is always on — so keep system-style meta-instructions out of the prompt body; they degrade under long system prompts. Lead with the outcome and success criteria, then let the model pick the path.
+Default to XML scaffolding (DeepSeek V4 was trained heavily on XML-tagged data; MiMo and Kimi behave similarly). The CO-STAR sections — `<context>`, `<objective>`, `<style>`, `<tone>`, `<audience>`, `<response_format>` — give the cleanest results for non-trivial tasks. Use positive framing ("include X") over negative constraints ("don't omit X"). None has an effort knob — deep/interleaved thinking is always on (Kimi's by default) — so keep system-style meta-instructions out of the prompt body; they degrade under long system prompts. Lead with the outcome and success criteria, then let the model pick the path.
 
-**Example** (swap `--to deepseek` for `--to mimo` to route elsewhere — the prompt shape is identical):
+**Example** (swap `--to deepseek` for `--to mimo` or `--to kimi` to route elsewhere — the prompt shape is identical):
 
 ```bash
 relay call --to deepseek --name pool-design <<'BODY'
@@ -174,11 +175,11 @@ When you have independent subagent work alongside a relay call, **never block on
 
 **Rule: Launch relay calls and subagents concurrently. Never serialize independent work.**
 
-**Never wrap relay in a subagent.** If an Agent task calls `relay` with `run_in_background: true`, the subagent will complete before the peer (Codex, DeepSeek, or MiMo) finishes, and the platform will kill the orphaned peer process. Always call `relay` from the main conversation. If a subagent must call relay (e.g., the skill was invoked before you could prevent it), the Bash call must run in foreground — omit `run_in_background` so the subagent blocks until the peer replies.
+**Never wrap relay in a subagent.** If an Agent task calls `relay` with `run_in_background: true`, the subagent will complete before the peer (Codex, DeepSeek, MiMo, or Kimi) finishes, and the platform will kill the orphaned peer process. Always call `relay` from the main conversation. If a subagent must call relay (e.g., the skill was invoked before you could prevent it), the Bash call must run in foreground — omit `run_in_background` so the subagent blocks until the peer replies.
 
 ## Prism / Parallax
 
-When Relay is used as the Parallax transport inside Prism, the relay call receives the **same full question and same context** as every local reviewer — only the lens (weighing posture) differs. Do not narrow the prompt for the Parallax agent. With three peers available, Prism dispatches each parallax tier independently — Codex, DeepSeek, and MiMo calls run concurrently as separate Bash relay invocations.
+When Relay is used as the Parallax transport inside Prism, the relay call receives the **same full question and same context** as every local reviewer — only the lens (weighing posture) differs. Do not narrow the prompt for the Parallax agent. With four peers available, Prism dispatches each parallax tier independently — Codex, DeepSeek, MiMo, and Kimi calls run concurrently as separate Bash relay invocations.
 
 Launch each relay Bash call with `run_in_background: true` in the same parallel dispatch step as the local reviewer subagents. Do not wrap Relay itself in another subagent layer.
 
@@ -188,4 +189,4 @@ If a Parallax relay call fails (after its background completion notification has
 
 `relay --help` and `relay --version` print usage and version info.
 
-`--to` accepts `codex` (default), `deepseek`, or `mimo`. There is no relay-to-Claude direction — Claude is the sole caller in this protocol.
+`--to` accepts `codex` (default), `deepseek`, `mimo`, or `kimi`. There is no relay-to-Claude direction — Claude is the sole caller in this protocol.

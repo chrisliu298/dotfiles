@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Claude-only: refuse when invoked from a non-Claude (DeepSeek/MiMo) session.
+# Claude-only: refuse when invoked from a non-Claude (DeepSeek/MiMo/Kimi) session.
 case "${ANTHROPIC_BASE_URL:-}" in
   *deepseek*)    echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at DeepSeek." >&2; exit 2 ;;
   *xiaomimimo*)  echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at MiMo." >&2; exit 2 ;;
+  *moonshot*)    echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at Kimi." >&2; exit 2 ;;
 esac
 
 # Anti-recursion: every peer relay spawns inherits RELAY_PEER=<peer>. Refuse a
@@ -130,7 +131,7 @@ recover_codex_response() {
 
 # Auto-detect caller and peer from the skill directory this script lives in.
 # Caller is always Claude under the current one-direction protocol; the default
-# peer is Codex. Use --to deepseek or --to mimo to route elsewhere.
+# peer is Codex. Use --to deepseek, --to mimo, or --to kimi to route elsewhere.
 # Returns "from to" (e.g. "claude codex") or empty string if unknown.
 detect_peers() {
   local script_dir
@@ -176,8 +177,8 @@ cmd_req() {
 
   ensure_relay_dir
 
-  # Build effort line (only codex consumes it via frontmatter; deepseek and mimo
-  # have no effort knob and ignore it entirely).
+  # Build effort line (only codex consumes it via frontmatter; deepseek, mimo,
+  # and kimi have no effort knob and ignore it entirely).
   # effort is non-empty only for effort-bearing peers (cmd_call blanks it otherwise).
   local effort_line=""
   if [ -n "$effort" ]; then
@@ -272,7 +273,7 @@ cmd_call() {
 
   # Build req. cmd_req surfaces effort in frontmatter only for codex; the
   # claude-env peers (deepseek pinned to max via the registry extra_env, mimo
-  # with no effort knob) ignore it.
+  # and kimi with no effort knob — kimi's thinking is on by default) ignore it.
   local req_args=(--from "$from" --to "$to" --effort "$effort")
   [ -n "$name" ] || die "call: --name required"
   check_slug "call: --name" "$name"
@@ -415,10 +416,10 @@ Subcommands:
 Call options:
   --name <slug>      Call identifier
   --effort <level>   Reasoning effort for codex: medium (default) or xhigh.
-                     Ignored for deepseek (always max) and mimo (no knob).
+                     Ignored for deepseek (always max), mimo, and kimi (no knob).
   --body-only        Strip frontmatter from response output
   --from <peer>      Override caller detection (normally claude)
-  --to <peer>        Override peer detection (codex, deepseek, or mimo; default codex)
+  --to <peer>        Override peer detection (codex, deepseek, mimo, or kimi; default codex)
 USAGE
 }
 
