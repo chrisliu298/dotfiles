@@ -411,7 +411,6 @@ cmd_skills() {
 main() {
     cd "$ROOT"
     case "${1:-}" in
-        publish) exec "$ROOT/scripts/publish-skills.sh" ;;
         enable)  cmd_enable "${2:-}"; exit ;;
         disable) cmd_disable "${2:-}"; exit ;;
         skills)  cmd_skills; exit ;;

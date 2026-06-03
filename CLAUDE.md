@@ -39,7 +39,7 @@ dotfiles/
 
 Never edit in `~/.claude/skills/` or `~/.codex/skills/` — those are symlinks. Check `agents/extensions/README.md` for source.
 
-- **Own skills** (`agents/extensions/skills/`): Edit in this repo — this is the single source of truth. Published GitHub repos are synced copies via `./dotfiles.sh publish`.
+- **Own skills** (`agents/extensions/skills/`): Edit in this repo — this is the single source of truth.
 - **Third-party skills** (cloned from GitHub): Edit in the source repo or fork
 - **Best practices**: Read `agents/extensions/references/skill-best-practices.md` before creating or improving skills
 - **Verify vendor guidance**: Before updating skills with vendor/model guidance, check against official current docs—don't preserve stale model names or deprecated API parameters.
