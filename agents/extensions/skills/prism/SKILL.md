@@ -385,7 +385,7 @@ Write a skim-first, verdict-led synthesis, not a lens-by-lens report — the rea
    - Deliverable: the verdict line points at the artifact (`▶ See migration plan below · conf: High · 7/7 agree`), which follows immediately.
    - **When the header is information-dense** — verdict + confidence + a consensus/dissent note that runs long (typical on material-disagreement or cross-model-break runs) — render it as a compact **two-column table** instead of one long `·`-separated line; it is far more readable (same fields, same content):
 
-     | Field | Value |
+     | Summary | Detail |
      |---|---|
      | **Verdict** | NO-SHIP as-is — fix the cluster, then ship |
      | **Confidence** | High |
