@@ -51,9 +51,12 @@ export DISABLE_TELEMETRY=1
 # Grok (xAI Grok Build CLI — used as a relay/prism dispatch target)
 # =============================================================================
 # Stop grok auto-discovering ~/.claude/skills (which includes relay/prism); it
-# gets its own Codex-mirrored set via ~/.grok/skills (dotfiles.sh) instead. Binary
-# is reachable on PATH via ~/.local/bin. Highest-precedence compat override.
+# gets its own Codex-mirrored set via ~/.grok/skills (dotfiles.sh) instead. And
+# stop it reading the global ~/.claude/CLAUDE.md — grok has its own working-
+# principles file at ~/.grok/AGENTS.md (dotfiles.sh). Binary is on PATH via
+# ~/.local/bin. Highest-precedence compat overrides.
 export GROK_CLAUDE_SKILLS_ENABLED=false
+export GROK_CLAUDE_AGENTS_ENABLED=false
 
 # =============================================================================
 # Local secrets (not version controlled)

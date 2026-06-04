@@ -20,6 +20,7 @@ LINKS=(
     "agents/claude/keybindings.json:.claude/keybindings.json"
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
     "agents/codex/AGENTS.md:.codex/AGENTS.md"
+    "agents/grok/AGENTS.md:.grok/AGENTS.md"
 )
 
 # name|source|agents — name * = auto-discover subdirs with SKILL.md

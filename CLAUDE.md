@@ -15,6 +15,7 @@ dotfiles/
 └── agents/
     ├── claude/              # Claude Code (~/.claude/) — CLAUDE.md, settings (copied), keybindings, hooks, statusline
     ├── codex/               # Codex (~/.codex/) — AGENTS.md
+    ├── grok/                # Grok Build (~/.grok/) — AGENTS.md (relay/prism dispatch target)
     └── extensions/skills/   # Global skills (SKILL.md per skill)
 ```
 
@@ -80,7 +81,7 @@ From a non-interactive shell (e.g., an agent invoking it via a tool), use `zsh -
 
 ## Maintenance
 
-- **Sync instructions**: `agents/claude/CLAUDE.md` and `agents/codex/AGENTS.md` share working principles — update both when changing either
+- **Sync instructions**: `agents/claude/CLAUDE.md`, `agents/codex/AGENTS.md`, and `agents/grok/AGENTS.md` share working principles (compatibility diffs only — e.g. Codex's `update_plan`, Claude's `<important>` wrappers) — update all three when changing any
 - **Update docs**: After structural changes, check if `README.md`, `CLAUDE.md`, or `AGENTS.md` reference affected paths
 
 </important>

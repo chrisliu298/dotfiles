@@ -9,6 +9,7 @@ This repository contains personal dotfiles and AI agent configurations for macOS
 - `agents/extensions/skills/`: Local skills (one SKILL.md per skill, symlinked via `dotfiles.sh`)
 - `agents/claude/`: Claude Code config (`CLAUDE.md`, `settings.json`, `hooks/`)
 - `agents/codex/`: Codex config (`AGENTS.md`)
+- `agents/grok/`: Grok Build config (`AGENTS.md`)
 - `dotfiles.sh`: single canonical entrypoint for dotfiles, external repo sync, agent configs, and skill installation
 - `README.md` and `CLAUDE.md`: top-level usage and maintenance docs
 
