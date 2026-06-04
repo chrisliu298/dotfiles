@@ -47,8 +47,8 @@ Convergence across diverse lenses is high-confidence signal; divergence surfaces
 Two layers: a dead-simple positional form for the symmetric common case, and natural language for any deviation.
 
 **Positional — `prism [N] [m|xh] <question>`:**
-- `N` — how many of **each** of the six models (Claude subagents, Codex, Grok Build, Grok Composer, DeepSeek, MiMo). Integer `≥ 1`, default `1`; reject `0` (to drop tiers, use a natural-language exclusion). Total dispatched = `6N` (each count is per model, so cost scales 6×); self does not count.
-- `m|xh` — shared effort for the two tunable tiers (default `m`). The flag is **one knob with two settings**, but each setting maps to a *different word per tier* — Codex and Grok Build do not share an effort vocabulary:
+- `N` — how many of **each** of the six models (Claude subagents, Codex, Grok Build, Grok Composer, DeepSeek, MiMo). Integer `≥ 1`, default `1`; reject `0` (to drop tiers, use a natural-language exclusion). Total dispatched = `6N`; self does not count.
+- `m|xh` — shared effort for the two tunable tiers (default `m`); each setting maps to a *different word per tier* (Codex and Grok Build do not share an effort vocabulary):
   - `m` → Codex `medium` · Grok Build `medium`
   - `xh` → Codex `xhigh` · Grok Build `high`
   - Codex effort is **only** `medium` or `xhigh` (never `high`); Grok Build effort is **only** `medium` or `high` (never `xhigh`). Grok Composer, DeepSeek, and MiMo have no effort knob — always unset.
@@ -79,24 +79,24 @@ Examples:
 
 Parallax is dispatched via `relay` to **different models** (Codex, Grok Build, Grok Composer, DeepSeek, MiMo). Invoke `relay` directly — not via a subagent that calls relay. The value of each tier is model diversity:
 
-- **Codex** brings GPT-5.5's training, its strengths in agentic code review, and two effort tiers (`medium`/`xhigh`).
-- **Grok Build** brings xAI's independent lineage (agentic coding model `grok-build`), distinct from the Anthropic and OpenAI families, with effort tiers `medium`/`high`.
-- **Grok Composer** is xAI's fast variant (Composer 2.5, `grok-composer-2.5-fast`) — **same xAI lineage as Grok Build**, optimized for speed, no effort knob. It adds little *independent* diversity beyond Grok Build, so treat the two Grok tiers as one vendor slot when assigning diversity lenses; reach for Composer when you want a fast xAI take rather than a distinct lineage.
-- **DeepSeek** brings an entirely independent training lineage (open-weight V4-Pro), distinct prompting conventions, and always runs at `max` (DeepThink).
-- **MiMo** brings a third independent lineage (Xiaomi's open-weight MiMo-V2.5-Pro, 1.02T MoE / 42B active, 1M context), distinct again from both the Anthropic and OpenAI families. No effort knob.
+- **Codex** — GPT-5.5 lineage, agentic code-review strength; effort `medium`/`xhigh`.
+- **Grok Build** — xAI's independent lineage (`grok-build`), distinct from Anthropic/OpenAI; effort `medium`/`high`.
+- **Grok Composer** — xAI's fast variant (`grok-composer-2.5-fast`), **same lineage as Grok Build**, no effort knob. Treat the two Grok tiers as **one vendor slot** for diversity lenses; reach for Composer for a fast xAI take.
+- **DeepSeek** — an independent open-weight lineage (V4-Pro); always runs at `max` (DeepThink).
+- **MiMo** — a third independent open-weight lineage (Xiaomi MiMo-V2.5-Pro); no effort knob.
 
-**Tier strength and lens fit (heuristic, not a routing rule):** Claude Opus 4.7 (subagents) and GPT-5.5 (Codex) are roughly peers in raw reasoning capability and sit at the top. The independent-lineage parallax tiers — MiMo-V2.5-Pro and DeepSeek V4-Pro — are each meaningfully weaker on hard reasoning at peak effort, with MiMo slightly ahead of DeepSeek. Grok Build (xAI) is new here and unbenchmarked — treat its placement as provisional (plausibly near the Codex tier on coding; verify before trusting it with the heaviest-reasoning lens), and Grok Composer (its fast variant) weaker still. The rough ranking is **Claude ≈ Codex > {Grok Build provisional, MiMo ≳ DeepSeek} > Grok Composer**. This does *not* reduce the weaker tiers' value — each independent training lineage catches blind spots the others share, which is the entire point of model diversity. The asymmetry should inform lens assignment only:
+**Tier strength and lens fit (heuristic for lens assignment, not a routing rule):** rough reasoning-capability ranking — **Claude ≈ Codex > {Grok Build (provisional, unbenchmarked — verify before the heaviest-reasoning lens), MiMo ≳ DeepSeek} > Grok Composer**. Weaker tiers lose no value: each independent lineage catches blind spots the others share. This informs lens *placement*, not inclusion:
 
 - **Subtle hard-reasoning lenses on risk-bearing questions** (Adversarial / Falsification / Disconfirming on a technical proposal where finding the non-obvious attack is the deliverable): prefer Claude subagent or Codex at `--effort xhigh`. If exactly one lens carries the heaviest reasoning load and it lands on a parallax tier, you've under-resourced the most decision-relevant role; when it must land on one anyway, prefer MiMo over DeepSeek.
 - **Lenses where the value is a different prior** (Outsider, First-Principles, Disconfirming-via-different-frame, Breadth-Weighted, Risk, Alternative-Framing): give these to DeepSeek and MiMo. Their independent lineages are the asset; raw reasoning depth is not the bottleneck.
 - **Parallax lenses comparably hard:** no swap needed.
 - **Never drop DeepSeek or MiMo to "upgrade" a run.** Lineage diversity is non-substitutable; default tier inclusion is unchanged.
 
-This affects assignment only. In synthesis, DeepSeek and MiMo dissent retain full cross-model weight — discount weak reasoning, never the model label. Treat the ranking as approximate; revisit when model versions change (the named model versions above are the canary — when they look stale, this section is stale).
+Assignment only — in synthesis, every tier's dissent keeps full cross-model weight (discount weak reasoning, never the model label). Revisit the ranking when the named model versions look stale.
 
 Assign each tier a lens that maximizes diversity. **Default to orthogonal exploratory lenses** (Breadth-Weighted, Depth-Weighted, Outsider, First-Principles, Disconfirming-via-different-frame) — these almost always extract more from cross-model diversity than a second attack angle. **Reach for an adversarial lens (Adversarial, Falsification, Disconfirming) only when it is much more valuable than another orthogonal lens would be** — i.e., the deliverable hinges on finding a non-obvious flaw, attack, or failure mode, and no other dispatched lens is already covering that ground. When that bar is met, put it on the parallax tier best suited to the reasoning load (see "Tier strength and lens fit"); otherwise skip it. When using multiple parallax tiers, give each a distinct lens — never assign the same lens to two of Codex, DeepSeek, MiMo, or the Grok tiers (that wastes a perspective). Treat grok-build + grok-composer as **one** vendor slot: don't give them two different diversity lenses as if independent (they share the xAI lineage). And don't stack two adversarial lenses unless the task genuinely demands independent attack frames.
 
-You do **not** need to strictly follow each peer's model-specific prompting guide (the [[relay]] skill's **Prompting Codex** / **Prompting DeepSeek** references) when composing Parallax prompts. Prism sends the **same shared prompt** to every model, so tailoring the body per peer would break the identical-prompt invariant — and the launcher templates already handle the only per-peer difference that matters (the wrapper format: Codex's `<goal>` style vs the CO-STAR XML for independent-lineage peers). What still matters is that the shared prompt is **high-quality**: a clear, outcome-first shared packet (Full Question + Context + Constraints) and sharp, distinct lens descriptions. Optimize the prompt's quality, not its per-model fit. (Those references remain useful if you ever hand-tune a single relay call outside Prism.)
+Don't tailor the prompt body per peer — Prism sends the **same shared prompt** to every model (the launcher templates handle the only per-peer difference: Codex `<goal>` style vs CO-STAR XML), so you may skip the [[relay]] skill's per-peer prompting guides here. What matters is shared-prompt **quality** — an outcome-first shared packet (Full Question + Context + Constraints) and sharp, distinct lens descriptions; optimize that, not per-model fit.
 
 **Relay call syntax (exact)** — the command shapes Prism must emit:
 
@@ -129,7 +129,7 @@ BODY
 
 Use a lowercase slug for `--name` (e.g., `prism-adversarial`). Grok Build takes `--effort medium|high`; Codex takes `--effort medium|xhigh`; never pass `--effort` or model flags on DeepSeek, MiMo, or Grok Composer (none has an effort knob). For all other invocation rules — `--name` required, `--to codex` as the default, non-empty heredoc, no model flags — follow the [[relay]] skill rather than restating them. For concurrency (backgrounding, timeouts), follow relay's Async / Parallel section.
 
-**Inspecting Parallax results:** Only read the `.res.md` response file. Never read the `.log` sidecar — it contains the peer's full stderr, which is extremely long and token-heavy. The relay script's Bash output already surfaces diagnostic information for failure cases.
+**Inspecting Parallax results:** Read only the `.res.md` response file — never the `.log` sidecar (token-heavy stderr; the relay script's Bash output already surfaces failure diagnostics).
 
 If `relay` is unavailable, replace all Parallax tiers with same-model subagents and warn the user. Each substitute carries the lens that tier was already assigned — do not re-decide by task category. Relay being unavailable does not change whether adversarial coverage is valuable for this question.
 
@@ -139,9 +139,9 @@ If `relay` is unavailable, replace all Parallax tiers with same-model subagents 
 3. Ensure the prohibition appears in both each launcher (short form) and the shared file (full form).
 4. Tell each peer to ignore loaded skill descriptions for the dispatching/side-effecting skills (prism, relay, gpt-pro-relay, deep-research) — read-only analysis skills stay available.
 
-Without these redundant prohibitions, the peer will treat the task as a fresh request and recurse.
+Without these redundant prohibitions, the peer treats the task as a fresh request and recurses.
 
-**Effort selection for Parallax:** The run-level flag sets the two tunable tiers together — `m` → Codex `--effort medium` + Grok Build `--effort medium`; `xh` → Codex `--effort xhigh` + Grok Build `--effort high` (default `m`). A natural-language modification overrides one tier independently (e.g. "Codex xhigh" alone, or "Grok Build medium"): Codex accepts `medium`/`xhigh` only, Grok Build accepts `medium`/`high` only — never Codex `high`, never Grok Build `xhigh`. DeepSeek, MiMo, and Grok Composer have no effort knob — DeepSeek always runs at `max`; MiMo and Grok Composer take no effort flag at all. Reach for `xh` (or a per-tier override) when a heavy adversarial/falsification lens lands on Codex or Grok Build and needs deeper reasoning; otherwise `m` is the balanced default.
+**Effort selection for Parallax:** `m` → both tunable tiers `medium`; `xh` → Codex `xhigh` + Grok Build `high` (default `m`). Never emit Codex `high` or Grok Build `xhigh`; per-tier vocab and NL overrides are as in Invocation Shorthand. Reach for `xh` (or a per-tier override) when a heavy adversarial/falsification lens lands on Codex or Grok Build; otherwise `m` is the default.
 
 ### Subagents
 
@@ -199,7 +199,7 @@ After writing, read the file back with the Read tool to verify it contains all t
 
 ### Launcher Templates
 
-Launcher prompts are stored as committed template files in the `templates/` directory alongside this SKILL.md. Each template uses `{{PLACEHOLDER}}` slots filled by the `prism-launch` script at dispatch time (see "Dispatch via prism-launch" below). This ensures the "identical prompts" invariant is enforced mechanically — the boilerplate is never regenerated, only the lens-specific values are emitted.
+Launcher prompts are committed template files in `templates/` alongside this SKILL.md, with `{{PLACEHOLDER}}` slots filled by `prism-launch` at dispatch time (see "Dispatch via prism-launch") — so the boilerplate is never hand-regenerated, only lens-specific values are emitted.
 
 **Template files:**
 
@@ -209,17 +209,15 @@ Launcher prompts are stored as committed template files in the `templates/` dire
 | `templates/launcher-relay-codex.tmpl` | Bash relay, Codex (GPT `<goal>` style) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
 | `templates/launcher-relay-costar.tmpl` | Bash relay, any CO-STAR peer (DeepSeek, MiMo, Grok Build, Grok Composer) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
 
-There is **one relay template per prompting style**, not per peer — `prism-launch` selects it by the `template` field in the peer registry (`relay/peers.json`), so the byte-identical DeepSeek/MiMo/Grok launchers are a single shared `launcher-relay-costar.tmpl`. The Codex template uses `<goal>`, `<context>`, `<constraints>`, `<your_lens>` (the GPT-5.5 prompting guide); the CO-STAR template uses `<context>`, `<objective>`, `<constraints>`, `<your_lens>`, `<response_format>` (XML-tagged conventions that suit independent-lineage models). The subagent template uses plain markdown. The anti-recursion warning appears at the top of every template.
-
-Adding a relay target model is **one stanza in `relay/peers.json`** (transport, endpoint, key var, model id, optional extras, and a `template` style). No `prism-launch` edit is needed — the peer set, counts, effort rules, and template selection all derive from the registry. Add a new template file only if the peer needs a genuinely new prompting style (then set its `template` to match); a CO-STAR peer reuses `launcher-relay-costar.tmpl`.
+There is **one relay template per prompting style**, not per peer — `prism-launch` selects it by the `template` field in `relay/peers.json` (Codex uses a GPT `<goal>` style; DeepSeek/MiMo/Grok share the CO-STAR `launcher-relay-costar.tmpl`). The anti-recursion warning is the top line of every template. Adding a relay target is one `relay/peers.json` stanza — no `prism-launch` edit needed; add a new template file only for a genuinely new prompting style.
 
 ### Dispatch via prism-launch
 
-You do **not** render templates or hand-write relay heredocs. The `prism-launch` script — installed at `~/.claude/skills/prism/scripts/prism-launch` — owns the cross-model half of dispatch: it renders every launcher from the templates, validates dispatch shape mechanically, and fans all relay calls out as **one** backgrounded process that waits for every peer and writes a single structured result. This is the documented dispatch path — it eliminates the per-call `sed`+heredoc token cost and makes the most common failure (dispatch-shape mismatch) structurally impossible.
+You do **not** render templates or hand-write relay heredocs. The `prism-launch` script (`~/.claude/skills/prism/scripts/prism-launch`) owns the cross-model half of dispatch: it renders every launcher from the templates, validates dispatch shape mechanically, and fans all relay calls out as **one** backgrounded process that waits for every peer and writes a single structured result.
 
 **Invoke it by its absolute path** — `~/.claude/skills/prism/scripts/prism-launch` — not the bare name. The bare command is on PATH only when the shell inherited the `.zshenv`-injected PATH; a sandboxed/non-zsh/reset-env agent shell will not have it, and a bare-name miss must NOT trigger the manual fallback. The absolute path is the script's real install location, so its templates resolve correctly with no extra handling. (`prism-launch` resolves its sibling `relay` the same way — by install path, falling back to PATH — so `parallax` dispatches even when `relay` is not on PATH either.)
 
-It cannot dispatch Claude subagents — only Claude can invoke the Agent tool, and `claude -p` is never used for Claude here (it is only relay's transport for DeepSeek/MiMo). So you still issue the subagent Agent-tool calls yourself.
+It cannot dispatch Claude subagents (only Claude can invoke the Agent tool, never `claude -p`) — so you still issue the subagent Agent-tool calls yourself.
 
 **You write one line-oriented dispatch file with the Write tool** (one record per agent — never a shell heredoc), then run two commands. The dispatch format is plain `Key: value` lines in blank-line-separated records: no braces, commas, quoting, or escaping, so a free-text lens description can't break it the way hand-authored JSON can. Authoring the config as raw JSON is no longer the default — writing literal text with the Write tool is what removes the escaping surface.
 
@@ -293,17 +291,19 @@ Run these checks before launching. If any fails, rewrite and re-check. **When di
 
 2. **Slot-completion test:** After rendering all launcher prompts via `sed`, verify no `{{` placeholder tokens survive: `grep -c '{{' rendered_launcher`. Also confirm the shared packet path is absolute and identical across all rendered prompts, and that the anti-recursion warning is the first line of every launcher. For relay prompts (Codex, DeepSeek, MiMo, Grok Build, Grok Composer), verify the XML skeleton is well-formed (`<context>`, `<objective>` or `<goal>`, `<constraints>`, `<your_lens>` tags present).
 
-3. **Redundancy test:** Swap any two agents' lenses. If the prompts become incoherent, you have divided labor. This applies across tiers too — a Codex agent's lens and a DeepSeek agent's lens should be swappable in principle (only the prompt format differs).
+3. **Redundancy test:** Swap any two agents' lenses. If the prompts become incoherent, you have divided labor (tell-tale signs: scope, evidence, tools, output format, or deliverables differ between prompts). This applies across tiers too — a Codex agent's lens and a DeepSeek agent's lens should be swappable in principle (only the prompt format differs).
 
-4. **Lens quality test:** Each lens name must be a weighing posture (1-3 words), never a task or role. For each lens, write one sentence explaining what unique axis it covers that no other lens does. If two lenses would produce the same emphasis, replace one. **Adversarial coverage is opt-in, not default:** include a structurally adversarial lens (Adversarial, Falsification, Disconfirming, Risk, or similar) only when having one is *much more valuable* than spending that slot on another orthogonal lens — i.e., the answer turns on surfacing a non-obvious flaw, attack, or failure mode that no other lens is already covering. Before adding one, write one sentence naming the specific risk it exists to catch; if you can't, drop it and use an exploratory lens instead. This applies regardless of task category — a "risk-bearing" task (decision, design, code review, implementation, root-cause claim) does *not* automatically require an adversarial lens; judge whether stress-testing is the binding constraint for *this* question. **Conversely, the omission must also be deliberate:** if the task proposes, evaluates, or changes something and you include *no* adversarial-family lens, write one sentence naming which dispatched lens covers "what could go wrong." If none does, add one — it need not be a full Adversarial lens; a failure-mode-tilted variant of an exploratory lens (e.g., Depth-Weighted on failure modes) can suffice. Silent omission on such a task is a check failure, because an all-constructive dispatch can converge with false confidence when nothing was assigned to attack the proposal. Never assign the same lens to two of Codex, DeepSeek, MiMo, or the Grok tiers — that wastes a perspective. If you do include an adversarial lens and it carries the heaviest reasoning load on a subtle technical question, confirm it is assigned to Claude or Codex (`xhigh`) rather than a parallax tier — and if a parallax tier must take it, prefer MiMo over DeepSeek (see "Tier strength and lens fit" in Parallax).
+4. **Lens quality test:**
+   - Each lens name is a weighing posture (1-3 words), never a task or role.
+   - For each lens, write one sentence naming the unique axis it covers; if two would produce the same emphasis, replace one.
+   - **Adversarial coverage is opt-in:** include an adversarial-family lens (Adversarial, Falsification, Disconfirming, Risk) only when the answer turns on surfacing a non-obvious flaw/attack/failure-mode no other lens is covering — name the specific risk first; if you can't, use an exploratory lens. A "risk-bearing" task (decision, design, code review, implementation, root-cause claim) does *not* automatically require one.
+   - **Omission must also be deliberate:** if the task proposes, evaluates, or changes something and you include *no* adversarial-family lens, name which dispatched lens covers "what could go wrong"; if none does, add one (a failure-mode-tilted exploratory lens — e.g. Depth-Weighted on failure modes — suffices). Silent omission here is a check failure.
+   - Never assign the same lens to two of Codex, DeepSeek, MiMo, or the Grok tiers.
+   - If an adversarial lens carries the heaviest reasoning load on a subtle technical question, assign it to Claude or Codex (`xhigh`) rather than a parallax tier; if a parallax tier must take it, prefer MiMo over DeepSeek (see "Tier strength and lens fit").
 
 5. **Dispatch-shape test (CRITICAL):** First resolve the config — every tier's count defaults to `N`, then apply any natural-language modifications (exclusions → `0`, per-tier counts). Total dispatched agents (Claude subagents + the five parallax tiers) must equal the resolved per-tier counts; self does not count. Enumerate planned calls by type — `--to codex`, `--to grok-build`, `--to grok-composer`, `--to deepseek`, `--to mimo` each equal to that tier's resolved count, and Agent calls equal to the resolved Claude-subagent count. The default symmetric run is `N` of each: `5N` relay calls + `N` Agent calls. If any count mismatches the resolved config, fix before launching. The most common failure is emitting fewer relay calls than the resolved parallax total.
 
 6. **Effort test:** Confirm the run-level flag is applied to both tunable tiers — `m` → Codex `--effort medium` + Grok Build `--effort medium`; `xh` → Codex `--effort xhigh` + Grok Build `--effort high` (default `m`). Where a natural-language modification overrode a tier, confirm that tier uses the stated level instead. Honor the per-tier vocabularies: Codex is **only** `medium`/`xhigh` (reject `high`), Grok Build is **only** `medium`/`high` (reject `xhigh`). Never pass a raw `m`/`xh` flag to relay — map to the full word. DeepSeek, MiMo, and Grok Composer calls must NOT pass `--effort`. State the Codex and Grok Build effort being applied.
-
-### Division-of-labor diagnostic
-
-If any of these differ between agent prompts, you've divided labor: scope, evidence, tools, output format, or deliverables.
 
 ## Lens Assignment
 
@@ -350,9 +350,7 @@ Since you composed the prompts and chose the lenses, your self-review is not ful
 
 **Do not synthesize, summarize, or present results until EVERY dispatched agent — including all Parallax tiers — has returned.** This is a hard gate, not a suggestion. Having "enough" subagents is never a reason to skip the remaining agents. The whole point of Parallax is model diversity — proceeding without it defeats the purpose of Prism. One peer finishing first (Codex, DeepSeek, MiMo, or Grok) is never permission to ignore the others.
 
-**Parallax is slow — that is normal and expected.** Relay calls routinely take 2-5x longer than same-model subagents. DeepSeek calls (always at DeepThink `max`), MiMo calls, Grok Build calls at `--effort high`, and Codex calls at `--effort xhigh` are the slowest. Do not diagnose, retry, report failure, or proceed while a background task is running. With `prism-launch parallax`, **all parallax peers finish under a single completion notification** (the fan waits for every peer before signaling) — so a default `N=1` run yields 2 notifications: the one subagent plus the whole parallax batch (higher `N` adds one per extra subagent). Until both the parallax notification and every subagent notification have arrived, the run is healthy. Do not tell the user you are "still waiting" or suggest proceeding without any tier.
-
-**What to do while waiting:** Work on your self-review (Step 2). If self-review is done, wait silently. Do not synthesize partial results.
+**Parallax is slow** — relay calls routinely take 2-5x longer than subagents (DeepSeek at `max`, Codex `xhigh`, Grok Build `high` are slowest). Do not diagnose, retry, report failure, or proceed while a background task is running. With `prism-launch parallax`, **all parallax peers finish under a single completion notification** — so a default `N=1` run yields 2 notifications (the one subagent + the whole parallax batch; higher `N` adds one per extra subagent). While waiting, work on your self-review (Step 2), then wait silently; do not synthesize partial results.
 
 **Handling failures (after completion notification only):**
 
@@ -374,11 +372,9 @@ Scan each agent's output for recursion indicators: mentions of "dispatching," "s
 
 ### Step 4: Synthesize
 
-Write a skim-first, verdict-led synthesis, not a lens-by-lens report. The user should grasp the recommendation in seconds, not minutes.
+Write a skim-first, verdict-led synthesis, not a lens-by-lens report — the reader should grasp the recommendation, confidence, and any cross-model dissent in seconds. The verdict line carries those three; the body carries the reasoning.
 
 **Default budget: ~100-150 words in the visible main path.** If you're writing more, you're hedging or scaffolding — compress. Deliverables are bounded by the artifact; the optional appendix is uncounted.
-
-The reader should grasp the recommendation, confidence, and any cross-model dissent in the first ~3 seconds, then read on only for the reasoning. The verdict line carries the first three; the body carries the reasoning.
 
 **Default skeleton — the verdict line is fixed and always first; the body below it flexes by mode (see Mode adaptation):**
 
@@ -426,14 +422,11 @@ The reader should grasp the recommendation, confidence, and any cross-model diss
 
 **Cross-model weighting (internal — surfaces through the verdict line, tally, and Why):**
 
-- **Not all answers are equally good — judge each on its merits and reject the weak ones.** Running the assigned lens does not guarantee a sound answer: an agent can produce shallow reasoning, a wrong premise, a misread of the question, or a confident claim with no support. The integrator's job is to *identify and discard* those answers, not to average every response together. Weight by the strength of an answer's reasoning and evidence, not by the fact that an agent produced it (discount weak reasoning, never the model label). Dropping a low-quality answer entirely is a valid, expected outcome — say so in Why when a notable perspective was set aside.
-- Same-model convergence is signal but discounted — shared training = shared blind spots.
-- Parallax (cross-model) confirmation or dissent carries outsized weight — model diversity is prism's entire point.
-- A single well-reasoned point can beat multi-agent consensus driven by shared priors.
+- Judge each answer on its reasoning and evidence, not on the fact that an agent produced it (discount weak reasoning, never the model label). Discarding a shallow, wrong-premise, off-topic, or unsupported answer entirely is valid — say so in Why when a notable perspective is set aside.
+- Same-model convergence is discounted (shared training = shared blind spots); parallax (cross-model) confirmation or dissent carries outsized weight — model diversity is prism's entire point.
+- A single well-reasoned point can beat consensus driven by shared priors. If you cannot articulate why dissent is wrong, downgrade confidence on the verdict line rather than expanding dissent into a paragraph.
 
-If you cannot articulate why dissent is wrong, downgrade confidence on the verdict line rather than expanding dissent into a paragraph.
-
-The synthesis reflects your judgment as integrator — agents are advisors, not a voting bloc. The tally line shows lineage alignment; it does not cast votes that decide the answer. Convergence is evidence, not a vote.
+Agents advise; they do not vote. The tally shows lineage alignment, not the decision rule — convergence is evidence, not a vote.
 
 ### Step 5: Grounding check
 
@@ -457,9 +450,9 @@ Optionally delete all Prism temp files — they share the `/tmp/prism-<unique-id
 
 ## Degrees of Freedom
 
-The core principle (redundancy, not division of labor), the prompt template structure, and the hard completion gate are load-bearing constraints — do not relax them. Everything else — lens choices, synthesis categories, agent count beyond the minimum, pre-launch check order — is flexible guidance that you should adapt to the task.
+The core principle (redundancy, not division of labor), the launcher-template structure, and the hard completion gate are load-bearing — do not relax them. Flexible: lens choices, synthesis body framing, agent count beyond the minimum, pre-launch check order.
 
-**Synthesis adaptation:** The verdict line is fixed (always first, fixed token order — see Step 4); the body below it (tally, Dissent, Why, Do now) flexes to the task. The integrator should actively adapt the body frame when the task calls for it — merge sections, reorder, or add task-specific sections. A deliverable question puts the artifact immediately after the verdict line with design rationale behind it; a pure risk assessment might elevate the Dissent line and triggers above Why. Rigid adherence to the body structure when it doesn't fit the question is a failure of integration — but the verdict line stays put regardless, so the reader's first-glance scan always works.
+**Synthesis adaptation:** the verdict line is fixed and always first (Step 4); the body below it flexes — merge, reorder, or add task-specific sections when the task calls for it. The verdict line stays put regardless, so the first-glance scan always works.
 
 ## When to Use Prism
 
