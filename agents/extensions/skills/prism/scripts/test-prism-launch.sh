@@ -343,6 +343,77 @@ touch /tmp/prism-mtest.md /tmp/prism-mtest-manifest.json /tmp/prism-mtest-launch
 "$LAUNCH" clean /tmp/prism-mtest-manifest.json >/dev/null
 [ ! -e /tmp/prism-mtest.md ] && [ ! -e /tmp/prism-mtest-launcher-x.md ] && ok "clean by manifest path strips suffix and clears the whole run" || bad "clean manifest-path partial clean"; rm -f /tmp/prism-mtest*
 
+echo "== scaffold --preset: pre-filled, dispatchable lenses =="
+SCP=$("$LAUNCH" scaffold --preset review --packet /tmp/prism-pp.md)
+[ "$(printf '%s\n' "$SCP" | grep -c FILL)" = "0" ] && ok "scaffold --preset leaves no FILL placeholder" || bad "preset has FILL"
+[ "$(printf '%s\n' "$SCP" | grep -c '^Type:')" = "6" ] && ok "scaffold --preset emits 6 records (N=1)" || bad "preset record count"
+printf '%s\n' "$SCP" | grep -q '^Lens: Adversarial' && ok "preset 'review' puts a heavy lens on slot 1" || bad "preset slot-1 lens"
+expect_err "scaffold rejects an unknown --preset" "$LAUNCH" scaffold --preset nope
+expect_err "scaffold rejects --preset with --n > 1" "$LAUNCH" scaffold --n 2 --preset review
+# a preset scaffold round-trips through prepare (lenses are valid, not FILL)
+printf '## Full Question\nq\n\n## Context\nc\n' > /tmp/prism-pp.md
+"$LAUNCH" scaffold --preset review --packet /tmp/prism-pp.md > /tmp/prism-pp.dispatch
+expect_ok "a preset scaffold round-trips through prepare" "$LAUNCH" prepare --dispatch /tmp/prism-pp.dispatch
+# prepare prints the expected-notification count (capture first — grep -q on the pipe would SIGPIPE prepare mid-dump)
+"$LAUNCH" prepare --dispatch /tmp/prism-pp.dispatch >"$TMP/ppnotif.out" 2>/dev/null
+grep -q 'wait for 2 completion notification' "$TMP/ppnotif.out" && ok "prepare prints the expected-notification count" || bad "notification-count line"
+
+echo "== parallax --only: single-peer retry targeting (dry-run) =="
+MPP=/tmp/prism-pp-manifest.json
+"$LAUNCH" parallax "$MPP" --only codex --dry-run 2>/dev/null | grep -q 'relay call --to codex --name prism-correctness' && ok "--only matches a peer by model" || bad "--only by model"
+"$LAUNCH" parallax "$MPP" --only outsider --dry-run 2>/dev/null | grep -q 'relay call --to mimo --name prism-outsider' && ok "--only matches a peer by lens slug" || bad "--only by slug"
+"$LAUNCH" parallax "$MPP" --only prism-correctness --dry-run 2>/dev/null | grep -q 'relay call --to codex' && ok "--only matches a peer by relay name" || bad "--only by name"
+expect_err "--only refuses an unknown peer" "$LAUNCH" parallax "$MPP" --only nope --dry-run
+
+echo "== parallax --only: real (fake-relay) retry + merge, fail-closed =="
+# Build a fake skill tree so prism-launch resolves a STUB relay sibling (no network,
+# no recursion). This exercises the real merge path the dry-run tests can't reach.
+FT="$TMP/ft"; mkdir -p "$FT/prism/scripts" "$FT/relay/scripts"
+cp "$LAUNCH" "$FT/prism/scripts/prism-launch"
+ln -s "$HERE/../templates"        "$FT/prism/templates"
+ln -s "$HERE/../../relay/peers.json" "$FT/relay/peers.json"
+cat > "$FT/relay/scripts/relay" <<'FAKE'
+#!/usr/bin/env bash
+name=""; while [ $# -gt 0 ]; do case "$1" in --name) name="${2:-}"; shift 2 ;; *) shift ;; esac; done
+res="$(cd "$(dirname "$0")/.." && pwd)/FAKE-$name.res.md"; echo "fake response body" > "$res"
+echo "relay: response → $res" >&2
+FAKE
+chmod +x "$FT/relay/scripts/relay"
+FL="$FT/prism/scripts/prism-launch"
+FPK="$TMP/prism-fakeonly.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$FPK"
+printf 'Shared-Packet: %s\n\nType: parallax\nTo: codex\nEffort: m\nLens: Alpha\nLens-Desc: weigh a\n\nType: parallax\nTo: deepseek\nLens: Beta\nLens-Desc: weigh b\n' "$FPK" > "$TMP/fakeonly.dispatch"
+"$FL" prepare --dispatch "$TMP/fakeonly.dispatch" >/dev/null 2>&1
+FMAN="$TMP/prism-fakeonly-manifest.json"; FRES="$TMP/prism-fakeonly-result.json"
+"$FL" parallax "$FMAN" >/dev/null 2>&1
+{ [ "$(jq '.results|length' "$FRES" 2>/dev/null)" = "2" ] && [ "$(jq '.succeeded' "$FRES" 2>/dev/null)" = "2" ]; } && ok "fake fan wrote a 2-peer result" || bad "fake fan result"
+"$FL" parallax "$FMAN" --only codex >/dev/null 2>&1
+{ [ "$(jq '.results|length' "$FRES")" = "2" ] && [ "$(jq '[.results[]|select(.name=="prism-alpha")]|length' "$FRES")" = "1" ]; } && ok "--only retry replaces one peer (no dup; count stays 2)" || bad "--only merge replace"
+# fail-closed: an EMPTY existing result must not be silently kept empty
+: > "$FRES"; "$FL" parallax "$FMAN" --only codex >/dev/null 2>&1
+{ [ -s "$FRES" ] && jq -e '(.results|type)=="array"' "$FRES" >/dev/null 2>&1; } && ok "--only fails closed on an empty result.json" || bad "--only empty-result corruption"
+# fail-closed: a MALFORMED existing result must not silently corrupt
+printf 'not json{' > "$FRES"; "$FL" parallax "$FMAN" --only codex >/dev/null 2>&1
+{ [ -s "$FRES" ] && jq -e '(.results|type)=="array"' "$FRES" >/dev/null 2>&1; } && ok "--only fails closed on a malformed result.json" || bad "--only malformed-result corruption"
+
+echo "== results: structured view from result.json =="
+# empty/malformed result.json is rejected, not printed as a blank summary
+: > /tmp/prism-empty-result.json
+printf '{"id":"prism-empty","shared_packet":"/tmp/prism-empty.md"}' > /tmp/prism-empty-manifest.json
+expect_err "results rejects an empty result.json" "$LAUNCH" results /tmp/prism-empty-manifest.json
+rm -f /tmp/prism-empty*
+printf '{"id":"prism-pp","expected":2,"succeeded":2,"failed":0,"results":[{"to":"codex","name":"prism-correctness","status":"done","res":"/tmp/a.res.md","log":"/tmp/a.log"},{"to":"mimo","name":"prism-outsider","status":"done","res":"/tmp/b.res.md","log":"/tmp/b.log"}]}' > /tmp/prism-pp-result.json
+RES=$("$LAUNCH" results "$MPP")
+printf '%s\n' "$RES" | grep -q '/tmp/a.res.md' && printf '%s\n' "$RES" | grep -q '2/2 succeeded' && ok "results prints each peer's .res.md path + summary" || bad "results output"
+expect_ok "results exits 0 when all peers succeeded" "$LAUNCH" results "$MPP"
+printf '{"id":"prism-pp","expected":1,"succeeded":0,"failed":1,"results":[{"to":"mimo","name":"prism-outsider","status":"error","res":null,"log":"/tmp/b.log"}]}' > /tmp/prism-pp-result.json
+expect_err "results exits non-zero when a peer failed" "$LAUNCH" results "$MPP"
+printf '{"id":"prism-nores","shared_packet":"/tmp/prism-nores.md"}' > /tmp/prism-nores-manifest.json
+expect_err "results errors when no result file exists yet" "$LAUNCH" results /tmp/prism-nores-manifest.json
+"$LAUNCH" clean pp >/dev/null; rm -f /tmp/prism-nores*
+
+echo "== subcommand --help =="
+"$LAUNCH" scaffold --help 2>/dev/null | grep -q 'Usage:' && ok "scaffold --help prints usage" || bad "scaffold --help"
+
 echo
 echo "==== $pass passed, $fail failed ===="
 [ "$fail" -eq 0 ]

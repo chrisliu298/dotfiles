@@ -360,6 +360,9 @@ cmd_prepare() {
 
   echo "prism-launch: run '$run_id' prepared — all checks passed."
   echo "dispatch shape: subagents=$nsub ${peershape:-(no parallax)}"
+  local ptot nnotif; ptot=$(echo "$manifest_json" | jq '.counts.parallax_total'); nnotif=$nsub
+  [ "$ptot" -gt 0 ] && nnotif=$((nsub + 1))
+  echo "wait for $nnotif completion notification(s): one per subagent ($nsub)$([ "$ptot" -gt 0 ] && echo ' + one for the parallax batch')."
   echo
   # Actionable next-steps FIRST (the bulky subagent launcher dump goes last, so the
   # parallax command and manifest path stay easy to find at any N).
@@ -390,10 +393,11 @@ cmd_prepare() {
 # ── parallax ─────────────────────────────────────────────────────────────────
 
 cmd_parallax() {
-  local manifest="" dry_run=false
+  local manifest="" dry_run=false only=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --dry-run) dry_run=true; shift ;;
+      --only)    [ $# -ge 2 ] || die "parallax: --only requires a peer name"; only="$2"; shift 2 ;;
       -*)        die "parallax: unknown flag: $1" ;;
       *)         [ -z "$manifest" ] || die "parallax: unexpected argument: $1"; manifest="$1"; shift ;;
     esac
@@ -428,6 +432,64 @@ cmd_parallax() {
   elif command -v timeout >/dev/null 2>&1; then TIMEOUT_BIN=timeout
   elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_BIN=gtimeout; fi
   [ -z "$TIMEOUT_BIN" ] && [ "$PEER_TIMEOUT" != "0" ] && echo "prism-parallax: warning: no timeout/gtimeout in PATH — per-peer timeout disabled" >&2
+
+  # --only <name>: re-dispatch a SINGLE peer (retry) and merge its result into the
+  # existing <id>-result.json, leaving the other peers' results intact. The name
+  # matches the relay --name (with or without the prism- prefix) or the lens slug.
+  if [ -n "$only" ]; then
+    local oi to name effort launcher log
+    # Match by relay name (prism-<slug> or <slug>), lens slug, or model (.to). A
+    # model that ran multiple peers (N>1) is ambiguous — require the lens name then.
+    oi=$(jq -r --arg q "$only" '
+      [.parallax[] | (.name == ("prism-"+$q)) or (.name==$q) or (.slug==$q) or (.to==$q)] as $m
+      | ($m | map(select(.)) | length) as $cnt
+      | if $cnt == 0 then "none" elif $cnt > 1 then "ambig" else ($m | index(true) | tostring) end' "$manifest")
+    case "$oi" in
+      none)  die "parallax --only: no peer matching '$only' (names: $(jq -r '[.parallax[].slug]|join(", ")' "$manifest"))" ;;
+      ambig) die "parallax --only: '$only' matches multiple peers — use a specific lens name (one of: $(jq -r '[.parallax[].slug]|join(", ")' "$manifest"))" ;;
+    esac
+    to=$(jq -r ".parallax[$oi].to" "$manifest")
+    name=$(jq -r ".parallax[$oi].name" "$manifest")
+    effort=$(jq -r ".parallax[$oi].effort // \"\"" "$manifest")
+    launcher=$(jq -r ".parallax[$oi].launcher" "$manifest")
+    log=$(jq -r ".parallax[$oi].log" "$manifest")
+    [ -f "$launcher" ] || die "parallax --only: launcher missing (re-run prepare): $launcher"
+    set -- "$relay_bin" call --to "$to" --name "$name"
+    [ -n "$effort" ] && set -- "$@" --effort "$effort"
+    if $dry_run; then
+      echo "prism-parallax: DRY RUN --only — 1 peer call, nothing dispatched."
+      echo "  $* < $launcher"
+      exit 0
+    fi
+    [ -n "$TIMEOUT_BIN" ] && set -- "$TIMEOUT_BIN" "$PEER_TIMEOUT" "$@"
+    echo "prism-parallax: re-dispatching $to/$name (retry)" >&2
+    local ec=0; "$@" < "$launcher" >/dev/null 2>"$log" || ec=$?
+    local res status; res=$(sed -n 's/^relay: response → //p' "$log" 2>/dev/null | tail -1)
+    if [ -n "$res" ] && [ -s "$res" ] && [ "$ec" = "0" ]; then status=done; else status=error; res=""; fi
+    local newentry id; id=$(jq -r '.id' "$manifest")
+    newentry=$(jq -n --arg to "$to" --arg name "$name" --arg status "$status" --arg res "$res" --arg log "$log" \
+        '{to:$to, name:$name, status:$status, res:(if $res=="" then null else $res end), log:$log}')
+    # Merge into the existing result ONLY if it is non-empty, valid JSON with a
+    # .results array. Empty/malformed (e.g. an interrupted prior fan) → write a
+    # fresh result with just this peer rather than corrupting it (fail closed).
+    if [ -s "$result" ] && jq -e '(.results | type) == "array"' "$result" >/dev/null 2>&1; then
+      if ! jq --argjson new "$newentry" '
+        (.results | map(.name) | index($new.name)) as $i
+        | .results = (if $i == null then .results + [$new] else (.results[0:$i] + [$new] + .results[($i+1):]) end)
+        | .succeeded = ([.results[]|select(.status=="done")]|length)
+        | .failed    = ([.results[]|select(.status!="done")]|length)
+        | .expected  = (.results|length)' "$result" > "$result.tmp"; then
+        rm -f "$result.tmp"; die "parallax --only: could not merge retry result into $result"
+      fi
+      mv "$result.tmp" "$result"
+    else
+      printf '%s\n' "$newentry" | jq -s --arg id "$id" \
+        '{id:$id, expected:(.|length), succeeded:([.[]|select(.status=="done")]|length), failed:([.[]|select(.status!="done")]|length), results:.}' > "$result"
+    fi
+    echo "prism-parallax: $to/$name → $status${res:+  $res}"
+    echo "result: $result"
+    if [ "$status" = "done" ]; then return 0; else return 1; fi
+  fi
 
   # Verify every launcher exists before launching anything.
   local i to name effort launcher
@@ -541,16 +603,61 @@ $(jq -n --arg to "$to" --arg name "$name" --arg status "$status" --arg res "$res
 
 # ── scaffold ─────────────────────────────────────────────────────────────────
 
+# Standard one-line weighing-posture descriptions for the common lenses, used to
+# pre-fill --preset scaffolds (refine as needed). Unknown names get a generic stub.
+lens_desc_for() {
+  case "$1" in
+    Adversarial)         echo "weigh the strongest attacks, flaws, and failure modes — find what breaks" ;;
+    Correctness)         echo "weigh correctness guarantees and edge cases" ;;
+    Simplicity)          echo "weigh the approach with the fewest moving parts" ;;
+    Pragmatist)          echo "weigh the fastest workable path that ships" ;;
+    First-Principles)    echo "weigh how this looks rebuilt from the goal up, ignoring the current shape" ;;
+    Outsider)            echo "weigh how a newcomer with no prior context would approach it" ;;
+    Evolutionary)        echo "weigh how the design will extend, age, and absorb future change" ;;
+    Feasibility)         echo "weigh what is realistically buildable with the resources at hand" ;;
+    Falsification)       echo "weigh what evidence would prove the leading hypothesis wrong" ;;
+    Causal)              echo "weigh the actual cause-and-effect chain down to the root" ;;
+    Risk)                echo "weigh what could go wrong and the blast radius if it does" ;;
+    Depth-Weighted)      echo "weigh deep, thorough analysis of the core over breadth" ;;
+    Breadth-Weighted)    echo "weigh wide coverage of options and angles over depth" ;;
+    Disconfirming)       echo "weigh the evidence that most directly contradicts the leading choice" ;;
+    Disconfirming-via-different-frame) echo "weigh an alternate prior or framing that recasts the question" ;;
+    Expansionist)        echo "weigh the most ambitious version of the goal" ;;
+    Executor)            echo "weigh the concrete next actions and what it takes to ship" ;;
+    Clarity)             echo "weigh how clearly the message lands for its reader" ;;
+    Audience)            echo "weigh how the intended audience will actually receive it" ;;
+    Alternative-Framing) echo "weigh a fundamentally different framing of the problem" ;;
+    *)                   echo "weigh the $1 axis — refine this description" ;;
+  esac
+}
+
+# Six distinct lenses per task-type preset, in canonical tier order (heaviest-
+# reasoning first, so it lands on the subagent/codex slots). Returns 1 if unknown.
+preset_lenses() {
+  case "$1" in
+    review)    echo "Adversarial Correctness Simplicity Pragmatist First-Principles Outsider" ;;
+    design)    echo "Adversarial Evolutionary Simplicity Feasibility First-Principles Outsider" ;;
+    diagnosis) echo "Falsification Causal Risk Depth-Weighted Disconfirming-via-different-frame Outsider" ;;
+    compare)   echo "Disconfirming Simplicity Feasibility Pragmatist First-Principles Outsider" ;;
+    research)  echo "Depth-Weighted Breadth-Weighted First-Principles Alternative-Framing Outsider Disconfirming-via-different-frame" ;;
+    decision)  echo "Disconfirming First-Principles Expansionist Feasibility Outsider Executor" ;;
+    writing)   echo "Adversarial Clarity Audience Simplicity Outsider First-Principles" ;;
+    *) return 1 ;;
+  esac
+}
+
 # Emit a ready-to-fill dispatch skeleton for the symmetric default (N of every
-# model, one shared effort). Replace each "FILL" Lens / Lens-Desc, then Write it
-# as the dispatch file. Removes the mechanical Type/To/Effort/order boilerplate.
+# model, one shared effort). With --preset <task-type>, pre-fill six lenses (N=1).
+# Otherwise replace each "FILL" Lens / Lens-Desc, then Write it as the dispatch
+# file. Removes the mechanical Type/To/Effort/order boilerplate.
 cmd_scaffold() {
-  local n=1 effort="m" packet=""
+  local n=1 effort="m" packet="" preset=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --n)      [ $# -ge 2 ] || die "scaffold: --n requires a value";      n="$2";      shift 2 ;;
       --effort) [ $# -ge 2 ] || die "scaffold: --effort requires a value"; effort="$2"; shift 2 ;;
       --packet) [ $# -ge 2 ] || die "scaffold: --packet requires a value"; packet="$2"; shift 2 ;;
+      --preset) [ $# -ge 2 ] || die "scaffold: --preset requires a value"; preset="$2"; shift 2 ;;
       -*) die "scaffold: unknown flag: $1" ;;
       *)  die "scaffold: unexpected argument: $1" ;;
     esac
@@ -565,11 +672,29 @@ cmd_scaffold() {
   esac
   [ -n "$packet" ] || packet="/tmp/prism-<id>.md"
 
+  if [ -n "$preset" ]; then
+    [ "$n" -eq 1 ] || die "scaffold: --preset is for the N=1 default; for N>1, fill lenses by hand"
+    local names; names=$(preset_lenses "$preset") \
+      || die "scaffold: unknown --preset '$preset' (try: review design diagnosis compare research decision writing)"
+    set -- $names
+    printf 'Shared-Packet: %s\n\n' "$packet"
+    printf '# Preset "%s" (effort=%s): six lenses pre-filled in canonical tier order.\n' "$preset" "$ef"
+    printf '# Edit any Lens / Lens-Desc to taste; write the Shared-Packet file before prepare.\n\n'
+    printf 'Type: subagent\nLens: %s\nLens-Desc: %s\n\n' "$1" "$(lens_desc_for "$1")"
+    printf 'Type: parallax\nTo: codex\nEffort: %s\nLens: %s\nLens-Desc: %s\n\n' "$cdx" "$2" "$(lens_desc_for "$2")"
+    printf 'Type: parallax\nTo: grok-build\nEffort: %s\nLens: %s\nLens-Desc: %s\n\n' "$gbe" "$3" "$(lens_desc_for "$3")"
+    printf 'Type: parallax\nTo: grok-composer\nLens: %s\nLens-Desc: %s\n\n' "$4" "$(lens_desc_for "$4")"
+    printf 'Type: parallax\nTo: deepseek\nLens: %s\nLens-Desc: %s\n\n' "$5" "$(lens_desc_for "$5")"
+    printf 'Type: parallax\nTo: mimo\nLens: %s\nLens-Desc: %s\n\n' "$6" "$(lens_desc_for "$6")"
+    return 0
+  fi
+
   printf 'Shared-Packet: %s\n\n' "$packet"
   printf '# Symmetric scaffold: N=%s of each of the six models, effort=%s.\n' "$n" "$ef"
   printf '# Replace every "FILL" Lens / Lens-Desc (prepare rejects any leftover FILL).\n'
   printf '# Order is the canonical tier order — put your heaviest-reasoning (e.g. Adversarial)\n'
-  printf '# lens on a subagent or codex. Write the Shared-Packet file before running prepare.\n\n'
+  printf '# lens on a subagent or codex. Write the Shared-Packet file before running prepare.\n'
+  printf '# Tip: --preset review|design|diagnosis|compare|research|decision|writing pre-fills lenses (N=1).\n\n'
   local k i=0
   k=1; while [ "$k" -le "$n" ]; do
     i=$((i+1)); printf 'Type: subagent\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$i"; k=$((k+1))
@@ -616,6 +741,29 @@ cmd_clean() {
   echo "prism-launch: removed $matches artifact(s) matching ${base}*"
 }
 
+# ── results ──────────────────────────────────────────────────────────────────
+
+# Print each parallax peer's status + .res.md path from <id>-result.json (written
+# by `parallax`), so the orchestrator reads one structured view instead of parsing
+# the backgrounded task's stdout. Exits non-zero if any peer failed.
+cmd_results() {
+  local manifest="${1:-}"
+  [ -n "$manifest" ] || die "results: <manifest.json> required"
+  [ -f "$manifest" ] || die "results: manifest not found: $manifest"
+  command -v jq >/dev/null 2>&1 || die "results: jq not found in PATH"
+  local packet base result
+  packet=$(jq -r '.shared_packet' "$manifest")
+  base="${packet%.md}"; result="${base}-result.json"
+  [ -f "$result" ] || die "results: no result file yet ($result) — has the parallax fan finished?"
+  [ -s "$result" ] && jq -e '(.results | type) == "array"' "$result" >/dev/null 2>&1 \
+    || die "results: result file is empty or malformed: $result"
+  echo "prism-launch: parallax results for '$(jq -r '.id // "?"' "$result")'"
+  jq -r '.results[] | "  [" + (if .status=="done" then "done " else "ERROR" end) + "] " + .to + "  " + .name + "  " + (.res // ("(failed — see " + .log + ")"))' "$result"
+  # Recompute counts from .results rather than trusting (possibly stale) counters.
+  echo "summary: $(jq -r '([.results[]|select(.status=="done")]|length) as $ok | "\($ok)/\(.results|length) succeeded, \((.results|length)-$ok) failed"' "$result")"
+  [ "$(jq '[.results[]|select(.status!="done")]|length' "$result")" -eq 0 ]
+}
+
 # ── main ─────────────────────────────────────────────────────────────────────
 
 cmd_help() {
@@ -623,21 +771,26 @@ cmd_help() {
 prism-launch — Prism dispatch launcher (parallax fan-out + dispatch prep)
 
 Usage:
-  prism-launch scaffold [--n <N>] [--effort m|xh] [--packet <path>]  # print a fill-in dispatch skeleton
+  prism-launch scaffold [--n <N>] [--effort m|xh] [--preset <type>] [--packet <path>]  # fill-in dispatch skeleton
   prism-launch prepare  --dispatch <dispatch-file>   # default: line-oriented control file
   prism-launch prepare  --config   <config.json>     # escape hatch: raw JSON (one of the two)
   prism-launch parallax <manifest.json> [--dry-run]
+  prism-launch parallax <manifest.json> --only <peer-name>   # re-dispatch ONE peer (retry), merge into result
+  prism-launch results  <manifest.json>              # print each peer's status + .res.md path
   prism-launch clean    <run-id | packet-path>       # rm -f /tmp/prism-<id>*
-  prism-launch --help | --version
+  prism-launch --help | --version  ·  prism-launch <subcommand> --help
 
 scaffold:  emit a ready-to-fill dispatch skeleton for the symmetric default (N of each of the
            six models, one shared effort). Replace each "FILL" Lens/Lens-Desc, then Write it.
+           --preset <review|design|diagnosis|compare|research|decision|writing> pre-fills six
+           lenses by task type (N=1).
 prepare:   validate the dispatch/config, render all launchers from templates, write a manifest;
            inject the canonical ## Constraints into the shared packet if absent (so you author
            the packet with just Full Question + Context). Pass exactly one of --dispatch
            (compiled to the canonical config) or --config. See the prism SKILL.md.
-parallax:  fan out every relay call as ONE backgrounded process, wait for all,
-           write a structured result. Run with run_in_background: true.
+parallax:  fan out every relay call as ONE backgrounded process, wait for all, write a structured
+           result. Run with run_in_background: true. --only <name> retries a single failed peer.
+results:   print each parallax peer's status + .res.md path from the run's result.json.
 clean:     remove every temp artifact for a run (/tmp/prism-<id>*).
 
 Env:
@@ -656,6 +809,7 @@ case "$sub" in
   prepare)  cmd_prepare  "$@" ;;
   parallax) cmd_parallax "$@" ;;
   scaffold) cmd_scaffold "$@" ;;
+  results)  cmd_results  "$@" ;;
   clean)    cmd_clean    "$@" ;;
-  *)        die "unknown subcommand: $sub (use prepare|parallax|scaffold|clean)" ;;
+  *)        die "unknown subcommand: $sub (use prepare|parallax|scaffold|results|clean)" ;;
 esac
