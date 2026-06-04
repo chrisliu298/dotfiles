@@ -120,7 +120,7 @@ dfs() {
 }
 
 # synckeys — propagate this machine's ~/.zshenv.local API/plan keys to dfs peers.
-# ~/.zshenv.local holds secrets (DEEPSEEK/MIMO/KIMI_API_KEY, …) and is
+# ~/.zshenv.local holds secrets (DEEPSEEK/MIMO_API_KEY, …) and is
 # intentionally NOT in the dotfiles repo, so `dfs` never carries it — a
 # new `export FOO_API_KEY=...` added here must reach the other machines separately.
 # synckeys upserts the local `export *_API_KEY=` / `*_PLAN_KEY=` lines onto each peer (adds
@@ -283,7 +283,7 @@ xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex ex
 # `[1m]` suffix (that's MiMo-only below; the DeepSeek endpoint has no such
 # variant). Requires DEEPSEEK_API_KEY in env (see ~/.zshenv.local).
 #
-# NOTE: _deepseek/_mimo/_kimi below duplicate the model id, endpoint, and
+# NOTE: _deepseek/_mimo below duplicate the model id, endpoint, and
 # extras that also live in agents/extensions/skills/relay/peers.json — the
 # relay/prism source of truth. These interactive launchers are a separate
 # consumer; if you change a model id or endpoint, update peers.json too (and
@@ -341,38 +341,6 @@ mm(){   _mimo --dangerously-skip-permissions "$@"; }
 mmc(){  _mimo --dangerously-skip-permissions --continue "$@"; }
 mmr(){  _mimo --dangerously-skip-permissions --resume "$@"; }
 mmhl(){ (( $# )) || { echo 'Usage: mmhl "<prompt>"'; return 1; }; _mimo -p --dangerously-skip-permissions "${*}"; }
-
-# =============================================================================
-# Kimi (via Claude Code, Anthropic-compatible endpoint)
-# =============================================================================
-# Routes Claude Code at Moonshot Kimi per-invocation, so default `c`/`cc` keep
-# using the Claude subscription. kimi-k2.6 has no graduated reasoning-effort
-# tiers: thinking is a binary on/off (the API's thinking.type, enabled by
-# default) with no low/medium/high/max scale, so CLAUDE_CODE_EFFORT_LEVEL is a
-# no-op here (like MiMo, unlike DeepSeek's high/max). ENABLE_TOOL_SEARCH=false
-# follows Moonshot's official Claude Code setup. Uses the international endpoint
-# (api.moonshot.ai). Requires KIMI_API_KEY in env (see ~/.zshenv.local).
-_kimi(){
-    [[ -n "${KIMI_API_KEY:-}" ]] || { echo 'KIMI_API_KEY not set (see ~/.zshenv.local)' >&2; return 1; }
-    # Drop relay scripts dir from PATH so Kimi sessions can't shell out to relay.
-    local _k_path="${PATH//$HOME\/.claude\/skills\/relay\/scripts:/}"
-    _k_path="${_k_path%:$HOME/.claude/skills/relay/scripts}"
-    env -u TMUX COLORTERM=truecolor \
-        PATH="$_k_path" \
-        ENABLE_TOOL_SEARCH=false \
-        ANTHROPIC_BASE_URL=https://api.moonshot.ai/anthropic \
-        ANTHROPIC_AUTH_TOKEN="$KIMI_API_KEY" \
-        ANTHROPIC_MODEL=kimi-k2.6 \
-        ANTHROPIC_DEFAULT_OPUS_MODEL=kimi-k2.6 \
-        ANTHROPIC_DEFAULT_SONNET_MODEL=kimi-k2.6 \
-        ANTHROPIC_DEFAULT_HAIKU_MODEL=kimi-k2.6 \
-        CLAUDE_CODE_SUBAGENT_MODEL=kimi-k2.6 \
-        "$(command -v claude)" "$@"
-}
-k(){   _kimi --dangerously-skip-permissions "$@"; }
-kc(){  _kimi --dangerously-skip-permissions --continue "$@"; }
-kr(){  _kimi --dangerously-skip-permissions --resume "$@"; }
-khl(){ (( $# )) || { echo 'Usage: khl "<prompt>"'; return 1; }; _kimi -p --dangerously-skip-permissions "${*}"; }
 
 # Show Claude + Codex account emails on local, macmini, and l40s.
 ae() {

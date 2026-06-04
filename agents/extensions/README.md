@@ -23,7 +23,7 @@ Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via
 
 Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
-> DeepSeek, MiMo, and Kimi are reached **through** Claude Code via the `ds`/`mm`/`k`/… aliases (see `shell/.functions`), so they inherit the Claude column directly.
+> DeepSeek and MiMo are reached **through** Claude Code via the `ds`/`mm`/… aliases (see `shell/.functions`), so they inherit the Claude column directly. Grok is reached as a relay/prism dispatch target (no interactive alias).
 
 | Skill | C | X | Default | Source · Description |
 |-------|:-:|:-:|:-------:|----------------------|
@@ -38,10 +38,10 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 | jina                    | ✓ | ✓ | on     | local — Fetch web content / search via Jina AI |
 | keep-warm               | ✓ | — | on     | local — Cache heartbeat (uses Claude-only scheduling tools) |
 | pdf                     | ✓ | ✓ | on     | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex) — PDF read/edit |
-| prism                   | ✓ | — | on     | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to Codex + DeepSeek + MiMo + Kimi via relay) |
+| prism                   | ✓ | — | on     | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to Codex + DeepSeek + MiMo + Grok via relay) |
 | prompt-engineer         | ✓ | ✓ | on     | local — Prompt writing per-vendor best practices |
 | push                    | ✓ | ✓ | on     | local — Push to remote (auto-picks single vs atomic commits) |
-| relay                   | ✓ | — | on     | local — Cross-agent relay from Claude to Codex/DeepSeek/MiMo/Kimi (Claude-only caller) |
+| relay                   | ✓ | — | on     | local — Cross-agent relay from Claude to Codex/DeepSeek/MiMo/Grok (Claude-only caller) |
 | skill-creator           | ✓ | — | on     | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
 | todo                    | ✓ | ✓ | on     | local — TODO.md tracking across sessions |
 | xurl                    | ✓ | ✓ | on     | local — X/Twitter via the `xurl` CLI |

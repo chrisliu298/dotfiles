@@ -21,12 +21,16 @@
     "model": "mimo-v2.5-pro[1m]",
     "template": "costar"
   },
-  "kimi": {
-    "transport": "claude-env",
-    "base": "https://api.moonshot.ai/anthropic",
-    "key_env": "KIMI_API_KEY",
-    "model": "kimi-k2.6",
-    "extra_env": { "ENABLE_TOOL_SEARCH": "false" },
+  "grok-build": {
+    "transport": "grok",
+    "model": "grok-build",
+    "effort_values": ["low", "medium", "high"],
+    "default_effort": "medium",
+    "template": "costar"
+  },
+  "grok-composer": {
+    "transport": "grok",
+    "model": "grok-composer-2.5-fast",
     "template": "costar"
   }
 }

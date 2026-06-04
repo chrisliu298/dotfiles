@@ -78,32 +78,45 @@ SAL=$(jq -r '.subagents[0].launcher' "$MAN")
 [ -f "$SAL" ] && ok "subagent launcher file rendered" || bad "subagent launcher file rendered"
 echo "$SAL" | grep -q 'launcher-subagent-simplicity.md' && ok "subagent lens slugified into filename" || bad "subagent slug filename"
 
-echo "== prepare: kimi peer (parity with deepseek/mimo) =="
-PKTX="$TMP/prism-runx.md"; make_packet "$PKTX"
-CFGX="$TMP/runx-config.json"
-jq -n --arg p "$PKTX" '{shared_packet:$p,parallax:[{to:"kimi",name:"first-principles",lens:"First-Principles",lens_desc:"reason from fundamentals"}],subagents:[]}' > "$CFGX"
-expect_ok "prepare accepts a kimi parallax entry (template resolves)" "$LAUNCH" prepare --config "$CFGX"
-MANX="$TMP/prism-runx-manifest.json"
-[ "$(jq -r '.counts.by_peer.kimi' "$MANX" 2>/dev/null)" = "1" ] && ok "kimi count = 1" || bad "kimi count = 1"
-[ "$(jq -r '.parallax[0].effort' "$MANX" 2>/dev/null)" = "null" ] && ok "kimi effort is null" || bad "kimi effort is null"
-[ "$(jq -r '.parallax[0].template' "$MANX" 2>/dev/null)" = "costar" ] && ok "kimi uses shared costar template" || bad "kimi template = costar"
-DRYX=$("$LAUNCH" parallax "$MANX" --dry-run 2>/dev/null)
-echo "$DRYX" | grep -q 'relay call --to kimi --name prism-first-principles <' && ok "kimi dry-run cmd has no --effort" || bad "kimi dry-run no --effort"
-# effort on kimi must be rejected (no effort knob); runs last — clears MANX on the same packet
-CFGXE="$TMP/runxe-config.json"
-jq -n --arg p "$PKTX" '{shared_packet:$p,parallax:[{to:"kimi",name:"x",effort:"xhigh",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CFGXE"
-expect_err "rejects --effort on kimi" "$LAUNCH" prepare --config "$CFGXE"
-
-echo "== prepare + dry-run: all four parallax tiers (default-shape regression guard) =="
+echo "== prepare + dry-run: all three parallax tiers (default-shape regression guard) =="
 PKT4="$TMP/prism-run4.md"; make_packet "$PKT4"
 CFG4="$TMP/run4-config.json"
-jq -n --arg p "$PKT4" '{shared_packet:$p,parallax:[{to:"codex",name:"a",effort:"medium",lens:"Adversarial",lens_desc:"d1"},{to:"deepseek",name:"b",lens:"Completeness",lens_desc:"d2"},{to:"mimo",name:"c",lens:"Consistency",lens_desc:"d3"},{to:"kimi",name:"d",lens:"First-Principles",lens_desc:"d4"}],subagents:[{lens:"Correctness",lens_desc:"d5"}]}' > "$CFG4"
-expect_ok "prepare accepts all four parallax tiers together" "$LAUNCH" prepare --config "$CFG4"
+jq -n --arg p "$PKT4" '{shared_packet:$p,parallax:[{to:"codex",name:"a",effort:"medium",lens:"Adversarial",lens_desc:"d1"},{to:"deepseek",name:"b",lens:"Completeness",lens_desc:"d2"},{to:"mimo",name:"c",lens:"Consistency",lens_desc:"d3"}],subagents:[{lens:"Correctness",lens_desc:"d5"}]}' > "$CFG4"
+expect_ok "prepare accepts all three parallax tiers together" "$LAUNCH" prepare --config "$CFG4"
 MAN4="$TMP/prism-run4-manifest.json"
-[ "$(jq -r '.counts.by_peer.kimi' "$MAN4" 2>/dev/null)" = "1" ] && [ "$(jq -r '.counts.parallax_total' "$MAN4" 2>/dev/null)" = "4" ] && ok "four-tier counts: kimi=1, parallax_total=4" || bad "four-tier counts"
+[ "$(jq -r '.counts.parallax_total' "$MAN4" 2>/dev/null)" = "3" ] && ok "three-tier counts: parallax_total=3" || bad "three-tier counts"
 DRY4=$("$LAUNCH" parallax "$MAN4" --dry-run 2>/dev/null)
-[ "$(echo "$DRY4" | grep -c 'relay call --to')" = "4" ] && ok "four-tier dry-run lists exactly 4 relay calls" || bad "four-tier dry-run lists 4 relay calls"
-echo "$DRY4" | grep -q 'relay call --to kimi --name prism-d <' && ok "four-tier dry-run includes kimi with no --effort" || bad "four-tier dry-run kimi shape"
+[ "$(echo "$DRY4" | grep -c 'relay call --to')" = "3" ] && ok "three-tier dry-run lists exactly 3 relay calls" || bad "three-tier dry-run lists 3 relay calls"
+
+echo "== prepare + dry-run: grok parallax tiers (effort vs no-knob) =="
+PKTG="$TMP/prism-grok.md"; make_packet "$PKTG"
+# grok-build (effort high) + grok-composer (no effort) accepted together
+CFGG="$TMP/grok-config.json"
+jq -n --arg p "$PKTG" '{shared_packet:$p,parallax:[{to:"grok-build",name:"gb",effort:"high",lens:"Adversarial",lens_desc:"d1"},{to:"grok-composer",name:"gc",lens:"Outsider",lens_desc:"d2"}],subagents:[]}' > "$CFGG"
+expect_ok "prepare accepts grok-build (effort high) + grok-composer (no effort)" "$LAUNCH" prepare --config "$CFGG"
+MANG="$TMP/prism-grok-manifest.json"
+[ "$(jq -r '.parallax[0].effort' "$MANG" 2>/dev/null)" = "high" ] && ok "grok-build effort = high" || bad "grok-build effort = high"
+[ "$(jq -r '.parallax[0].template' "$MANG" 2>/dev/null)" = "costar" ] && ok "grok-build uses costar template (registry)" || bad "grok-build template = costar"
+[ "$(jq -r '.counts.by_peer."grok-build"' "$MANG" 2>/dev/null)" = "1" ] && ok "grok-build count = 1" || bad "grok-build count = 1"
+[ "$(jq -r '.parallax[1].effort' "$MANG" 2>/dev/null)" = "null" ] && ok "grok-composer effort is null" || bad "grok-composer effort is null"
+[ "$(jq -r '.parallax[1].template' "$MANG" 2>/dev/null)" = "costar" ] && ok "grok-composer uses costar template (registry)" || bad "grok-composer template = costar"
+[ "$(jq -r '.counts.by_peer."grok-composer"' "$MANG" 2>/dev/null)" = "1" ] && ok "grok-composer count = 1" || bad "grok-composer count = 1"
+
+# grok-build rejects an out-of-range effort (effort_values are low/medium/high only)
+CGE="$TMP/grok-badeffort.json"; jq -n --arg p "$PKTG" '{shared_packet:$p,parallax:[{to:"grok-build",name:"x",effort:"xhigh",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CGE"
+expect_err "rejects invalid grok-build effort (xhigh)" "$LAUNCH" prepare --config "$CGE"
+
+# grok-composer rejects ANY effort (it has no effort_values)
+CGC="$TMP/grok-composer-effort.json"; jq -n --arg p "$PKTG" '{shared_packet:$p,parallax:[{to:"grok-composer",name:"x",effort:"high",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CGC"
+expect_err "rejects --effort on grok-composer (no knob)" "$LAUNCH" prepare --config "$CGC"
+
+# dry-run: grok-build carries --effort high; grok-composer carries no --effort.
+# The rejection cases above re-ran prepare on the same packet, which clears prior
+# artifacts (one packet = one run) — regenerate the valid manifest first.
+"$LAUNCH" prepare --config "$CFGG" >/dev/null 2>&1
+DRYG=$("$LAUNCH" parallax "$MANG" --dry-run 2>/dev/null)
+echo "$DRYG" | grep -q 'relay call --to grok-build --name prism-gb --effort high' && ok "grok-build dry-run cmd has --effort high" || bad "grok-build dry-run --effort high"
+echo "$DRYG" | grep -q 'relay call --to grok-composer --name prism-gc <' && ok "grok-composer dry-run cmd has no --effort" || bad "grok-composer dry-run no --effort"
 
 echo "== prepare: negative cases (fail-closed) =="
 # missing Constraints section

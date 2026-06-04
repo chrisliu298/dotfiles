@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Anti-recursion: a dispatched relay peer inherits RELAY_PEER=<peer>. A peer must
+# never trigger prism (mirrors the relay script's own RELAY_PEER guard). This is the
+# authoritative block; the relay PATH scrub of this script's dir is defense in depth.
+if [ -n "${RELAY_PEER:-}" ]; then
+  echo "prism-launch: refused — nested Prism launch from inside a '$RELAY_PEER' peer subprocess (anti-recursion)." >&2
+  exit 2
+fi
+
 # prism-launch — Prism dispatch launcher
 #
 # Owns the cross-model (Parallax) half of a Prism run: renders launcher prompts
@@ -9,7 +17,7 @@ set -euo pipefail
 # emits a single structured result. The same-model subagent half stays in the
 # conversation as Agent-tool calls — a shell script cannot (and must not) launch
 # Claude agents, and `claude -p` is never used for Claude here (it is only
-# relay's transport for DeepSeek/MiMo/Kimi).
+# relay's transport for DeepSeek/MiMo).
 #
 # Usage:
 #   prism-launch prepare --config <config.json>      # foreground: render + validate + manifest
@@ -47,6 +55,8 @@ dp_norm_effort() {
   case "$e" in
     m|medium) printf 'medium' ;;
     x|xhigh)  printf 'xhigh'  ;;
+    l|low)    printf 'low'    ;;
+    h|high)   printf 'high'   ;;
     -|'')     printf ''       ;;
     *)        printf '%s' "$1" ;;   # pass original through; the jq pass validates it against the peer registry
   esac
@@ -424,7 +434,7 @@ cmd_parallax() {
     launcher=$(jq -r ".parallax[$i].launcher" "$manifest")
     local log; log=$(jq -r ".parallax[$i].log" "$manifest")
 
-    # Build the relay command; only codex takes --effort.
+    # Build the relay command; pass --effort when the manifest carries one (codex, grok-build).
     set -- "$relay_bin" call --to "$to" --name "$name"
     [ -n "$effort" ] && set -- "$@" --effort "$effort"
     [ -n "$TIMEOUT_BIN" ] && set -- "$TIMEOUT_BIN" "$PEER_TIMEOUT" "$@"
