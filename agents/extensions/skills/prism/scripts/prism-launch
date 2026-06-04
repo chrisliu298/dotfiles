@@ -397,7 +397,7 @@ cmd_parallax() {
   # Per-peer timeout wrapper (optional — coreutils on macOS). Set
   # PRISM_PEER_TIMEOUT=0 to disable the cap entirely (peers run unbounded; the
   # only backstop is the outer Bash-tool timeout, which kills all peers at once).
-  local TIMEOUT_BIN="" PEER_TIMEOUT="${PRISM_PEER_TIMEOUT:-1800}"
+  local TIMEOUT_BIN="" PEER_TIMEOUT="${PRISM_PEER_TIMEOUT:-3600}"
   if [ "$PEER_TIMEOUT" = "0" ]; then
     echo "prism-parallax: per-peer timeout disabled (PRISM_PEER_TIMEOUT=0)" >&2
   elif command -v timeout >/dev/null 2>&1; then TIMEOUT_BIN=timeout
@@ -533,7 +533,7 @@ parallax:  fan out every relay call as ONE backgrounded process, wait for all,
            write a structured result. Run with run_in_background: true.
 
 Env:
-  PRISM_PEER_TIMEOUT  per-peer timeout in seconds (default 1800; 0 = no cap; needs coreutils timeout).
+  PRISM_PEER_TIMEOUT  per-peer timeout in seconds (default 3600; 0 = no cap; needs coreutils timeout).
 USAGE
 }
 

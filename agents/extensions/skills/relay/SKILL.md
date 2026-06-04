@@ -175,6 +175,8 @@ When you have independent subagent work alongside a relay call, **never block on
 
 **Background the Bash call**: Use `run_in_background: true` on the Bash tool so the relay call runs concurrently with your subagents. The platform sends a completion notification when the background task finishes — do not poll, do not inspect `.relay` files, and do not enter the failure diagnosis flow before that notification arrives.
 
+**Give it a generous timeout.** Relay peers are full agents and can run long (Codex `xhigh`, DeepSeek/MiMo DeepThink, Grok at `high` routinely take many minutes). A Bash-tool `timeout` that fires mid-run kills the peer and wastes every token it already spent — favor completion over a tight bound. Set `timeout: 3600000` (60 min) on the backgrounded Bash call; relay has no internal per-call cap, so this outer timeout is the only bound.
+
 **Rule: Launch relay calls and subagents concurrently. Never serialize independent work.**
 
 **Never wrap relay in a subagent.** If an Agent task calls `relay` with `run_in_background: true`, the subagent will complete before the peer (Codex, DeepSeek, MiMo, or Grok) finishes, and the platform will kill the orphaned peer process. Always call `relay` from the main conversation. If a subagent must call relay (e.g., the skill was invoked before you could prevent it), the Bash call must run in foreground — omit `run_in_background` so the subagent blocks until the peer replies.

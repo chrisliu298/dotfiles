@@ -277,9 +277,9 @@ Format rules: `Shared-Packet:` appears once. Each record starts at `Type: parall
 
 `prepare` normalizes the dispatch file into `/tmp/prism-<id>-config.normalized.json` (the canonical JSON, kept for audit) before validating. **`prepare --config <config.json>` remains supported** as the machine/escape-hatch interface — it accepts that same JSON shape directly, also written with the Write tool (literal content, never a heredoc). Both paths run identical validation, rendering, and manifest logic; `--dispatch` is just a literal-text front-end that removes the JSON-escaping surface.
 
-`prepare` prints the rendered subagent launcher file paths — pass each file's **contents** as the prompt of an Agent-tool call. It validates `lens`/`lens_desc` (rejecting `</` and `{{` as an injection guard; comparison operators like `>` are allowed), enforces distinct lens names and distinct relay `name`s, rejects `effort` on DeepSeek/MiMo/Grok Composer, and rejects a `shared_packet` path containing whitespace. `parallax` writes `<id>-result.json` (`{id, expected, succeeded, failed, results:[{to,name,status,res,log}]}`) and prints each peer's `.res.md` path; read those on completion (the `log` field is relay's own diagnostics for a failed peer — never relay's token-heavy `.log` sidecar). Use `~/.claude/skills/prism/scripts/prism-launch parallax <manifest> --dry-run` to preview the exact relay commands without dispatching. Per-peer timeout defaults to 1800s (`PRISM_PEER_TIMEOUT`; set `=0` to disable the per-peer cap, leaving only the outer Bash-tool timeout); set the backgrounded Bash call's `timeout` above that (e.g. `1860000`).
+`prepare` prints the rendered subagent launcher file paths — pass each file's **contents** as the prompt of an Agent-tool call. It validates `lens`/`lens_desc` (rejecting `</` and `{{` as an injection guard; comparison operators like `>` are allowed), enforces distinct lens names and distinct relay `name`s, rejects `effort` on DeepSeek/MiMo/Grok Composer, and rejects a `shared_packet` path containing whitespace. `parallax` writes `<id>-result.json` (`{id, expected, succeeded, failed, results:[{to,name,status,res,log}]}`) and prints each peer's `.res.md` path; read those on completion (the `log` field is relay's own diagnostics for a failed peer — never relay's token-heavy `.log` sidecar). Use `~/.claude/skills/prism/scripts/prism-launch parallax <manifest> --dry-run` to preview the exact relay commands without dispatching. Per-peer timeout defaults to 3600s (`PRISM_PEER_TIMEOUT`; set `=0` to disable the per-peer cap, leaving only the outer Bash-tool timeout) — deliberately generous, since a peer killed mid-run wastes every token it spent; set the backgrounded Bash call's `timeout` above that (e.g. `3660000`).
 
-**Manual fallback (last resort — only if the script file is genuinely missing):** A bare-name "command not found" is NOT a trigger — re-invoke by the absolute path above. The manual flow applies only when `~/.claude/skills/prism/scripts/prism-launch` does not exist at all (a broken install). First try to repair the install (`cd ~/dotfiles && ./dotfiles.sh`); if that is not possible, render each launcher with `sed -e 's|{{SHARED_PACKET_PATH}}|...|g' -e 's|{{LENS_NAME}}|...|g' -e 's|{{LENS_DESC}}|...|g' templates/launcher-<kind>.tmpl`, then dispatch one `relay call --to <peer> --name prism-<slug> [--effort <medium|xhigh>]` heredoc per parallax tier (background each, `timeout: 1860000`). This is the degraded pre-`prism-launch` flow; prefer the script.
+**Manual fallback (last resort — only if the script file is genuinely missing):** A bare-name "command not found" is NOT a trigger — re-invoke by the absolute path above. The manual flow applies only when `~/.claude/skills/prism/scripts/prism-launch` does not exist at all (a broken install). First try to repair the install (`cd ~/dotfiles && ./dotfiles.sh`); if that is not possible, render each launcher with `sed -e 's|{{SHARED_PACKET_PATH}}|...|g' -e 's|{{LENS_NAME}}|...|g' -e 's|{{LENS_DESC}}|...|g' templates/launcher-<kind>.tmpl`, then dispatch one `relay call --to <peer> --name prism-<slug> [--effort <medium|xhigh>]` heredoc per parallax tier (background each, `timeout: 3660000`). This is the degraded pre-`prism-launch` flow; prefer the script.
 
 ## Pre-Launch Checks
 
@@ -334,7 +334,7 @@ Starting points — every lens still answers the full question. These are 3-lens
 2. Assign lenses (run the redundancy and lens-quality checks — these are yours to judge), then write the line-oriented dispatch file (`/tmp/prism-<id>.dispatch`) with the Write tool — `Shared-Packet:` plus one record per parallax peer and per subagent. See "Dispatch via prism-launch". (The `--config` JSON form is still accepted as an escape hatch.)
 3. **`~/.claude/skills/prism/scripts/prism-launch prepare --dispatch /tmp/prism-<id>.dispatch`** (foreground). This compiles the dispatch file into the canonical config, validates the packet and records its path (it does not copy or hash it — do not mutate the packet after this point), renders all launchers, runs checks 1/2/5/6, and writes `<id>-manifest.json`. If it exits non-zero, fix the dispatch file and re-run — nothing has been dispatched.
 4. Launch all dispatched agents concurrently (`run_in_background: true`). **Dispatch checklist:**
-   - **Parallax — ONE backgrounded Bash call:** `~/.claude/skills/prism/scripts/prism-launch parallax /tmp/prism-<id>-manifest.json` (set the Bash tool `timeout` above `PRISM_PEER_TIMEOUT`, e.g. `1860000`). This fans out every Codex/DeepSeek/MiMo/Grok call, waits for all, and yields a single completion notification. Compose this call FIRST.
+   - **Parallax — ONE backgrounded Bash call:** `~/.claude/skills/prism/scripts/prism-launch parallax /tmp/prism-<id>-manifest.json` (set the Bash tool `timeout` above `PRISM_PEER_TIMEOUT`, e.g. `3660000`). This fans out every Codex/DeepSeek/MiMo/Grok call, waits for all, and yields a single completion notification. Compose this call FIRST.
    - **Subagents:** one **Agent** tool call per subagent, using the contents of the rendered launcher file (`prepare` printed the paths) as the prompt. Never use `claude -p` for these.
    - The manifest's `counts` is the authoritative dispatch shape — there is no per-relay-call count to reconcile by hand, because `prism-launch` emits exactly the configured calls.
 
@@ -387,6 +387,16 @@ Write a skim-first, verdict-led synthesis, not a lens-by-lens report — the rea
    - Confidence is **always shown** — the *absence* of a `⚠ dissent` clause is itself the all-clear signal.
    - The `⚠ dissent` clause appears **only** when a dispatched agent dissents. On a cross-model break the tally and Dissent line already name the peers, so the verdict clause stays a bare `⚠ dissent`; name a peer inline (`⚠ DeepSeek dissent`) only for a minor dissent that has no tally. `⚠` is the only routine glyph — reserve it for dissent; never decorate confidence or the verdict with emoji or boxes.
    - Deliverable: the verdict line points at the artifact (`▶ See migration plan below · conf: High · 7/7 agree`), which follows immediately.
+   - **When the header is information-dense** — verdict + confidence + a consensus/dissent note that runs long (typical on material-disagreement or cross-model-break runs) — render it as a compact **two-column table** instead of one long `·`-separated line; it is far more readable (same fields, same content):
+
+     | | |
+     |---|---|
+     | **Verdict** | NO-SHIP as-is — fix the cluster, then ship |
+     | **Confidence** | High |
+     | **Consensus** | 6 reviewers convergent — 1 severity split, 1 finding discounted |
+     | **Dissent** | DeepSeek+MiMo, same direction *(omit the row when there is none)* |
+
+     Keep the single `·`-separated line for simple converged runs where it stays short.
 
 2. **Model-tier tally** — one line, **only on a cross-model break** (a parallax lineage dissents). Group by model lineage (not by lens): each dispatched lineage with `✓` (aligned) or `⚠` (dissented), then the takeaway.
 
@@ -394,7 +404,7 @@ Write a skim-first, verdict-led synthesis, not a lens-by-lens report — the rea
 
    Omit on full convergence (all `✓` — the header's `n/n agree` already says so) and on an intra-lineage split (a by-lineage tally cannot show a split *inside* one lineage — use the `Tradeoff:` line instead). List only the lineages actually dispatched (treat the two Grok tiers as one `Grok` lineage). A lineage that ran several agents collapses to one `✓`/`⚠`: mark `⚠` if **any** member raised a cross-model dissent you could not refute (a lineage's dissent is never averaged away by its other members agreeing), and resolve its aligned position by strongest reasoning, not majority vote. This tally is the **one sanctioned exception** to the per-lens-attribution ban below: it attributes by *lineage* (the load-bearing cross-model signal), never lens-by-lens.
 
-3. **Dissent** — its own labeled line **on a cross-model break**, placed above Why: the peer(s), the *specific* argument, and what would resolve it ("DeepSeek+MiMo: shared state needed for atomic txns — bounded by the spike gate; revisit if p99 > 50ms"). When dissent is minor, fold it into a Why bullet instead. Never compress dissent to a bare model name — the argument and its resolution path are the signal.
+3. **Dissent** — its own labeled line **on a cross-model break**, placed above Why: the peer(s), the *specific* argument, and what would resolve it ("DeepSeek+MiMo: shared state needed for atomic txns — bounded by the spike gate; revisit if p99 > 50ms"). With **two or more distinct dissents**, a `Peer(s) | Argument | Resolution / trigger` table beats stacked lines. When dissent is minor, fold it into a Why bullet instead. Never compress dissent to a bare model name — the argument and its resolution path are the signal.
 
 4. **Why** — 2-4 tight bullets of decisive reasoning. Each bullet is conclusion **plus** its basis ("Removes the shared-state layer — root cause of 3/5 recent incidents"), never a bare label ("simpler"). Fold confidence basis in when it helps.
 
@@ -411,6 +421,12 @@ Write a skim-first, verdict-led synthesis, not a lens-by-lens report — the rea
 
 - On a **cross-model break**, two or more parallax peers (Codex, DeepSeek, MiMo, Grok) dissenting in the *same direction* is an especially strong signal — say so. The Moderate cap fires only when a *parallax* lineage dissents.
 - **All-subagent run** (no parallax dispatched — e.g. every cross-model tier excluded via natural language): a cross-model break is impossible, so within-Claude splits are **Material disagreement** however clean the split looks — no tally, no Moderate cap. Flag the missing cross-model diversity, since the `⚠`-absence all-clear cannot mean cross-model corroboration here.
+- **`Tradeoff:`** (material disagreement) is an option comparison — render it as a small table, not prose:
+
+  | Option | Optimizes | Cost / risk |
+  |--------|-----------|-------------|
+  | A | … | … |
+  | B | … | … |
 
 **Banned in the main path:**
 

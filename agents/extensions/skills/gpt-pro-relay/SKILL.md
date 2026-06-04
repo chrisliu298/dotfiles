@@ -39,7 +39,7 @@ gpt-pro --run-id <id> [--max-wait <sec>]             # reattach / recover
 | Flag | Purpose |
 |---|---|
 | `--run-id <id>` | Reattach to an existing run (recovery); skips submit, then waits for the result (blocking fetch on macmini, poll loop over SSH). |
-| `--max-wait <sec>` | Poll deadline on the SSH path (default 3600 = 60 min). Ignored on macmini, where the engine's own 60-min cap and the Bash-tool `timeout` bound the run. |
+| `--max-wait <sec>` | Poll deadline on the SSH path (default 7200 = 120 min — generous so a queued run isn't killed mid-flight). Ignored on macmini, where the engine's own 60-min cap and the Bash-tool `timeout` bound the run. |
 | `--dry-run` | Print the resolved run-id and transport, then exit. No Pro quota used. |
 
 Want the answer in a file? Redirect: `gpt-pro < prompt.md > answer.md`.
@@ -89,10 +89,10 @@ If they invoked the skill directly or named gpt-pro in their request, they've co
 
 ## Background and timeout
 
-On a remote machine `gpt-pro` runs its own poll loop for up to `--max-wait` (default 60 min); on macmini it blocks on the engine directly (the engine's cap and the Bash-tool `timeout` bound it there). Either way, always wrap the Bash invocation in:
+On a remote machine `gpt-pro` runs its own poll loop for up to `--max-wait` (default 120 min); on macmini it blocks on the engine directly (the engine's cap and the Bash-tool `timeout` bound it there). The default is deliberately generous — a queued or long Pro run killed by a tight timeout wastes the tokens it already spent, so favor completion. Either way, always wrap the Bash invocation in:
 
 - `run_in_background: true`
-- `timeout: 3600000` (60 min)
+- `timeout: 7260000` (120 min)
 
 Wait for the completion notification. Do NOT poll the output from the agent side — the wrapper is already polling. Keep the Bash-tool `timeout` at or above `--max-wait`.
 

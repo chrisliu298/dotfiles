@@ -16,7 +16,7 @@ set -euo pipefail
 # the run-id, diagnostics, and the engine's JSONL all go to stderr.
 #
 # What this wrapper deliberately does NOT do (lives in SKILL.md): the Bash-tool
-# envelope (run_in_background:true, timeout:3600000), the Pro-quota cost gate,
+# envelope (run_in_background:true, timeout:7260000), the Pro-quota cost gate,
 # and prompt composition. Those are the caller's judgment, not the shell's.
 
 VERSION=1
@@ -41,19 +41,19 @@ Usage:
 
 Options:
   --run-id <id>      Reattach to an existing run (recovery only); skips submit.
-  --max-wait <sec>   Caller-side poll deadline (default 3600 = 60 min).
+  --max-wait <sec>   Caller-side poll deadline (default 7200 = 120 min).
   --dry-run          Print the resolved run-id and transport, then exit. No quota used.
 
 Output: response on stdout; run-id + diagnostics + engine JSONL on stderr.
 Exit:   0 ok · 1 error/empty · 2 usage · 3 worker timeout · 4 not found
         · 124 timed out, still pending (recover with --run-id) · 255 SSH transport unknown
 
-Always wrap the Bash call in run_in_background:true, timeout:3600000.
+Always wrap the Bash call in run_in_background:true, timeout:7260000.
 USAGE
 }
 
 # ---- parse args ----
-RUN_ID=""; REATTACH=false; MAX_WAIT=3600; DRY=false
+RUN_ID=""; REATTACH=false; MAX_WAIT=7200; DRY=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --run-id)     [ $# -ge 2 ] || die 2 "--run-id requires a value"; RUN_ID="$2"; REATTACH=true; shift 2 ;;
