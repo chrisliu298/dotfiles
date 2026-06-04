@@ -24,7 +24,7 @@
   "grok-build": {
     "transport": "grok",
     "model": "grok-build",
-    "effort_values": ["low", "medium", "high"],
+    "effort_values": ["medium", "high"],
     "default_effort": "medium",
     "template": "costar"
   },

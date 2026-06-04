@@ -334,7 +334,14 @@ cmd_prepare() {
   # Human-facing summary for the orchestrator.
   local nsub peershape
   nsub=$(echo "$manifest_json" | jq '.counts.subagents')
-  peershape=$(echo "$manifest_json" | jq -r '.counts.by_peer | to_entries | map("\(.key)=\(.value)") | join(" ")')
+  # Display in canonical (docs) order — codex, the two Grok tiers, then DeepSeek, MiMo —
+  # not jq's alphabetical key order; any future peer not in the list is appended.
+  peershape=$(echo "$manifest_json" | jq -r '
+    .counts.by_peer as $bp
+    | ["codex","grok-build","grok-composer","deepseek","mimo"] as $ord
+    | ($ord + ($bp | keys | map(select(. as $k | ($ord | index($k)) == null))))
+    | map(select($bp[.] != null) | "\(.)=\($bp[.])")
+    | join(" ")')
 
   echo "prism-launch: run '$run_id' prepared — all checks passed."
   echo "dispatch shape: subagents=$nsub ${peershape:-(no parallax)}"

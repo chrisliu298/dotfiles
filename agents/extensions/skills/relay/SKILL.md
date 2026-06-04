@@ -39,10 +39,10 @@ If a bare `relay` ever returns "command not found" (a sandboxed/non-zsh/reset-en
 | **Codex** (default) | Code review, security review, refactoring, agentic coding. GPT-5.5 lineage. Two effort tiers (`medium`/`xhigh`). | `relay call --name ...` (no `--to` needed) |
 | **DeepSeek** | Independent model family for true cross-vendor diversity, frontier reasoning, multi-step analysis. Open-weight V4-Pro (1.6T MoE). Always runs at `max` (DeepThink). Text-only (no image input via relay). | `relay call --to deepseek --name ...` |
 | **MiMo** | Another independent open-weight lineage (Xiaomi MiMo-V2.5-Pro, 1.02T MoE / 42B active, 1M context). Use for a third cross-vendor perspective. No effort knob. Text-only (no image input via relay). | `relay call --to mimo --name ...` |
-| **Grok Build** | An independent xAI lineage (`grok-build`), xAI's agentic coding model. Runs via grok's own CLI in headless mode (not Anthropic-compatible). Effort `low`/`medium`/`high` (default `medium`). | `relay call --to grok-build --name ...` |
+| **Grok Build** | An independent xAI lineage (`grok-build`), xAI's agentic coding model. Runs via grok's own CLI in headless mode (not Anthropic-compatible). Effort `medium`/`high` (default `medium`). | `relay call --to grok-build --name ...` |
 | **Grok Composer** | xAI's fast model (`grok-composer-2.5-fast`) — same lineage as Grok Build, lighter/cheaper. Use as a faster xAI option (not a distinct cross-vendor perspective). No effort knob. | `relay call --to grok-composer --name ...` |
 
-Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick DeepSeek, MiMo, or Grok Build for a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax (Grok Composer is a faster xAI variant, not a distinct lineage from Grok Build). Of these, only Grok Build has an effort knob (`low`/`medium`/`high`); DeepSeek, MiMo, and Grok Composer ignore `--effort`, so omit it for them. DeepSeek requires `DEEPSEEK_API_KEY` and MiMo requires `MIMO_API_KEY` in the environment; Grok uses its own cached login (no key var).
+Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick DeepSeek, MiMo, or Grok Build for a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax (Grok Composer is a faster xAI variant, not a distinct lineage from Grok Build). Of these, only Grok Build has an effort knob (`medium`/`high`); DeepSeek, MiMo, and Grok Composer ignore `--effort`, so omit it for them. DeepSeek requires `DEEPSEEK_API_KEY` and MiMo requires `MIMO_API_KEY` in the environment; Grok uses its own cached login (no key var).
 
 ### Peer registry
 
@@ -64,12 +64,13 @@ BODY
 
 ## Effort Levels
 
-`--effort` applies to Codex and Grok Build. Codex accepts `medium`/`xhigh`; Grok Build accepts `low`/`medium`/`high` (default `medium`) — xAI's only real reasoning tiers (the `xhigh`/`max` that grok's `--help` lists clamp to `high`). DeepSeek always runs at `max` (DeepThink), and MiMo and Grok Composer have no effort knob — the flag is silently ignored or omitted on those calls.
+`--effort` applies to Codex and Grok Build. Codex accepts `medium`/`xhigh`; Grok Build accepts `medium`/`high` (default `medium`). DeepSeek always runs at `max` (DeepThink), and MiMo and Grok Composer have no effort knob — the flag is silently ignored or omitted on those calls.
 
 | Level | When to use |
 |-------|-------------|
-| `medium` | **Default for Codex.** Balanced starting point for code review, tests, bug fixes, and most refactoring. |
+| `medium` | **Default for Codex and Grok Build.** Balanced starting point for code review, tests, bug fixes, and most refactoring. |
 | `xhigh` | Codex only. Hard architecture work, deep security review, or eval-bound tasks worth the extra latency. |
+| `high` | Grok Build only — its deeper reasoning tier. Use for hard analysis where the extra latency is worth it. |
 
 Before raising effort, improve the prompt first — add outcome-first success criteria, stop rules, verification steps, and completeness criteria.
 

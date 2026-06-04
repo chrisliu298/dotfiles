@@ -78,7 +78,7 @@ SAL=$(jq -r '.subagents[0].launcher' "$MAN")
 [ -f "$SAL" ] && ok "subagent launcher file rendered" || bad "subagent launcher file rendered"
 echo "$SAL" | grep -q 'launcher-subagent-simplicity.md' && ok "subagent lens slugified into filename" || bad "subagent slug filename"
 
-echo "== prepare + dry-run: all three parallax tiers (default-shape regression guard) =="
+echo "== prepare + dry-run: a 3-peer subset (mixed-tier guard; legacy — not the N=1 default) =="
 PKT4="$TMP/prism-run4.md"; make_packet "$PKT4"
 CFG4="$TMP/run4-config.json"
 jq -n --arg p "$PKT4" '{shared_packet:$p,parallax:[{to:"codex",name:"a",effort:"medium",lens:"Adversarial",lens_desc:"d1"},{to:"deepseek",name:"b",lens:"Completeness",lens_desc:"d2"},{to:"mimo",name:"c",lens:"Consistency",lens_desc:"d3"}],subagents:[{lens:"Correctness",lens_desc:"d5"}]}' > "$CFG4"
@@ -87,6 +87,16 @@ MAN4="$TMP/prism-run4-manifest.json"
 [ "$(jq -r '.counts.parallax_total' "$MAN4" 2>/dev/null)" = "3" ] && ok "three-tier counts: parallax_total=3" || bad "three-tier counts"
 DRY4=$("$LAUNCH" parallax "$MAN4" --dry-run 2>/dev/null)
 [ "$(echo "$DRY4" | grep -c 'relay call --to')" = "3" ] && ok "three-tier dry-run lists exactly 3 relay calls" || bad "three-tier dry-run lists 3 relay calls"
+
+echo "== prepare: default five-tier shape + canonical display order =="
+PKT5="$TMP/prism-run5.md"; make_packet "$PKT5"
+CFG5="$TMP/run5-config.json"
+# tiers deliberately scrambled in the config; the dispatch-shape display must still be canonical
+jq -n --arg p "$PKT5" '{shared_packet:$p,parallax:[{to:"mimo",name:"a",lens:"L1",lens_desc:"d"},{to:"codex",name:"b",effort:"medium",lens:"L2",lens_desc:"d"},{to:"deepseek",name:"c",lens:"L3",lens_desc:"d"},{to:"grok-composer",name:"d",lens:"L4",lens_desc:"d"},{to:"grok-build",name:"e",effort:"high",lens:"L5",lens_desc:"d"}],subagents:[{lens:"L6",lens_desc:"d"}]}' > "$CFG5"
+OUT5=$("$LAUNCH" prepare --config "$CFG5" 2>/dev/null)
+MAN5="$TMP/prism-run5-manifest.json"
+[ "$(jq -r '.counts.parallax_total' "$MAN5" 2>/dev/null)" = "5" ] && ok "default five-tier counts: parallax_total=5" || bad "five-tier counts"
+echo "$OUT5" | grep -q 'dispatch shape: subagents=1 codex=1 grok-build=1 grok-composer=1 deepseek=1 mimo=1' && ok "dispatch shape printed in canonical order (not alphabetical)" || bad "dispatch shape canonical order"
 
 echo "== prepare + dry-run: grok parallax tiers (effort vs no-knob) =="
 PKTG="$TMP/prism-grok.md"; make_packet "$PKTG"
@@ -102,9 +112,11 @@ MANG="$TMP/prism-grok-manifest.json"
 [ "$(jq -r '.parallax[1].template' "$MANG" 2>/dev/null)" = "costar" ] && ok "grok-composer uses costar template (registry)" || bad "grok-composer template = costar"
 [ "$(jq -r '.counts.by_peer."grok-composer"' "$MANG" 2>/dev/null)" = "1" ] && ok "grok-composer count = 1" || bad "grok-composer count = 1"
 
-# grok-build rejects an out-of-range effort (effort_values are low/medium/high only)
+# grok-build effort_values are medium/high only — reject both xhigh (Codex's word) and low (dropped from the registry)
 CGE="$TMP/grok-badeffort.json"; jq -n --arg p "$PKTG" '{shared_packet:$p,parallax:[{to:"grok-build",name:"x",effort:"xhigh",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CGE"
 expect_err "rejects invalid grok-build effort (xhigh)" "$LAUNCH" prepare --config "$CGE"
+CGL="$TMP/grok-loweffort.json"; jq -n --arg p "$PKTG" '{shared_packet:$p,parallax:[{to:"grok-build",name:"x",effort:"low",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CGL"
+expect_err "rejects invalid grok-build effort (low — no longer in registry)" "$LAUNCH" prepare --config "$CGL"
 
 # grok-composer rejects ANY effort (it has no effort_values)
 CGC="$TMP/grok-composer-effort.json"; jq -n --arg p "$PKTG" '{shared_packet:$p,parallax:[{to:"grok-composer",name:"x",effort:"high",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CGC"
