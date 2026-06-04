@@ -2,11 +2,12 @@
 effort: low
 description: |
   Maintain a single TODO.md at the project root so task state survives session
-  boundaries, compaction, and multi-day gaps. Use for large or long-running
-  work — multi-day refactors, migrations, or anything spanning several
-  sessions. Also trigger on "/todo", "track this", "checkpoint", or "save for
-  next time". Do NOT trigger on small one-shot tasks (a single bug fix, rename,
-  or one-liner), in-session-only todo tracking, or when there's no clear
+  boundaries, compaction, and multi-day gaps. Use only for work large or complex
+  enough that the native in-session checklist can't track it well — multi-day
+  refactors, migrations, or anything spanning several sessions. Also trigger on
+  "/todo", "track this", "checkpoint", or "save for next time". Do NOT trigger on
+  small one-shot tasks (a single bug fix, rename, or one-liner), work the native
+  checklist handles fine, in-session-only todo tracking, or when there's no clear
   project root.
 user-invocable: true
 ---
@@ -18,6 +19,8 @@ Maintain a single `TODO.md` at the project root so task state survives session b
 The native in-session task list (`TaskCreate` / `TodoWrite`) covers within-session granularity — steps within an item, decisions made right now. `TODO.md` is the durable layer above it: high-level items that need to outlast the current context window. The two are complementary, not competing.
 
 ## When to use
+
+This skill is a step up from the native in-session checklist (`TaskCreate` / `TodoWrite`), not a replacement for it. Default to the native checklist. Only reach for `TODO.md` when the task is large or complex enough that the native list can't hold it well — too many moving parts to keep straight in one window, or state that must outlast the session. If the native checklist tracks the whole task comfortably, stay there.
 
 Reach for this skill when:
 
