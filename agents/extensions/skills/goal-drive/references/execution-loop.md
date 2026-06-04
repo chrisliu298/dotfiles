@@ -24,6 +24,9 @@ exception**, not by per-step approval. Read this before driving the first unit; 
 5. ACT       do the work, strictly inside `authority` (allow_paths / allow_commands) and scope
              (scope_out / anti-goals). Reversible, in-scope actions only without asking.
 6. VERIFY    run the unit's acceptance (acceptance_per_item / phase Acceptance / each done_when item).
+             Surface the verifier's REAL output into the transcript — the command + a bounded
+             excerpt of its result / exit code (≤~20 lines), not just a pass/fail claim. The
+             status-line summary is a claim; the raw output is the evidence (see Terminal markers).
                pass → LEDGER it (step 7)
                fail → repair, up to `repair_budget` attempts (default 3), recording each failed
                       attempt in the unit's evidence/note. Still failing → mark the unit
@@ -39,7 +42,9 @@ exception**, not by per-step approval. Read this before driving the first unit; 
              (inspect the diff directly — do not invoke /review or any other skill). Then set
              frontmatter status: complete. Report: units done, evidence, commits made (or "none —
              commit_policy off"), blocked/deferred items, anything cleaned up. OFFER to push (see
-             Commit cadence). Do not push unasked.
+             Commit cadence). Do not push unasked. Finally — after the report and push offer — echo
+             the top-level verification output and emit the `GOAL-DRIVE COMPLETE` marker as the
+             final line of the report (see Terminal markers).
 ```
 
 Ordering is load-bearing: **verify before ledger, ledger before commit.** Never mark `done`
@@ -73,6 +78,10 @@ goal-drive is autonomous between these. It stops and hands back only for:
    Reversible two-way-door actions (working-tree edits, tests, generated files, local commits,
    revertible refactors) proceed without asking.
 5. **Explicit user interjection.**
+
+On any of these, print the `GOAL-DRIVE STOPPED: <id> — <reason>: <one line>` marker (canonical form
+and reason tags in § Terminal markers) as the first line of the hand-back, before describing what
+you need from the user.
 
 Not stop conditions: "a batch finished," "a phase finished," "it's been a while." A boundary
 is a checkpoint *of state*, not a request for *permission*. Asking "continue?" at every
@@ -151,4 +160,41 @@ One compact line per completed unit — observability without ceremony:
 ```
 
 No prose summaries, no phase tables, no "here's what I did" narration. The artifact and
-`git log` are the durable report; the status line is the live ticker.
+`git log` are the durable report; the status line is the live ticker; the terminal markers
+below are the outer completion / stop signals.
+
+## Terminal markers (transcript evidence)
+
+**This section is the canonical definition of the two terminal markers.** A session-scoped
+guardrail — Claude Code's `/goal`, which the user may set between goal-elicit and goal-drive (see
+goal-elicit's `references/goal-guardrail.md`) — can only judge the **conversation transcript**: its
+evaluator has no file or tool access, so the artifact ledger and a terse status line are invisible
+to it. goal-drive emits two machine-stable markers (useful for humans too, whether or not `/goal`
+is set); goal-elicit's condition matches them by **prefix**.
+
+- **On completion** — the final line of the FINISH report (printed AFTER the report prose and the
+  push offer), only after the goal-completion predicate has actually passed:
+
+  ```
+  GOAL-DRIVE COMPLETE: <id> — <n>/<n> <units> verified
+  ```
+
+  `<units>` = `done_when` (contract) | `items` (checklist) | `phases` (phased doc). Echo the real
+  top-level verification output (command + exit/result, a bounded excerpt) in the report just above
+  it. The marker is emitted ONLY from this evidence-gated branch, so it cannot be reached by
+  narrating "done" — no passing verification in the transcript ⇒ no marker.
+
+- **On every by-exception stop** (the five Stop conditions above) — as the first line of the
+  hand-back:
+
+  ```
+  GOAL-DRIVE STOPPED: <id> — <blocked_unit|scope_drift|unclear_authority|one_way_door|user_interjection>: <one line>
+  ```
+
+  A goal-completion-predicate failure at FINISH (all units done but the `done_when` predicate
+  fails) is also a stop — emit `GOAL-DRIVE STOPPED: <id> — blocked_unit: done_when predicate failed: <detail>`.
+  A legitimate stop is a terminal state too; surfacing it lets the `/goal` guardrail clear instead
+  of pushing "keep working" against a stop that SHOULD happen.
+
+goal-elicit's `references/goal-guardrail.md` derives its `/goal` condition from these prefixes — if
+you change a marker's wording here, mirror it there.

@@ -54,8 +54,14 @@ while unverified units remain AND no exception:
     ledger: flip to done with evidence — patch the artifact in place (never regenerate)
     if commit_policy == per_unit → one local git commit for this verified unit
     emit a compact status line: unit · evidence · next · active stop-conditions
-on all-done → run the goal-completion check → report; OFFER to push (tell the user to run /push)
+on all-done → run the goal-completion check → report; OFFER to push (tell the user to run /push); then echo evidence + the `GOAL-DRIVE COMPLETE: <id>` marker as the final line
+on exception → print the `GOAL-DRIVE STOPPED: <id> — <reason>` marker first, then hand back
 ```
+
+The two terminal markers (`GOAL-DRIVE COMPLETE` / `GOAL-DRIVE STOPPED`) make completion and
+legitimate stops visible in the transcript — the only thing Claude Code's optional `/goal`
+guardrail can read. Emit them in the exact form `references/execution-loop.md` § Terminal markers
+defines (canonical there); they cost nothing when `/goal` is unused.
 
 ## Checkpoints are by exception, not by schedule
 

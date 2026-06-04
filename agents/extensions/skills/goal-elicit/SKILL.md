@@ -85,6 +85,17 @@ If the contract's `execution.commit_policy` is `per_unit`, call it out explicitl
 
 Once the file is written, tell the user where it is (path) and stop. The user takes it from there.
 
+**Optional `/goal` guardrail (Claude Code only).** If the artifact is *executable and ready* — a
+contract with an `execution:` block, a checklist with non-empty `items`, or a phased doc with a
+`## Phases` section (an `authority` block is optional for all of these) — also emit a
+ready-to-paste `/goal "..."` block for the user to run *before* [[goal-drive]]. It keeps the
+session working until goal-drive prints its completion marker, and treats a by-exception stop as
+terminal too. Fill the condition template from `references/goal-guardrail.md` using the artifact's
+`done_when`/acceptance and the terminal markers (it also gives the per-shape "ready" test and the
+emit/skip gates). Emitting the text is **not** execution — goal-elicit never runs `/goal` or any
+hook. Skip it for Clear one-shot goals, for `blocked`/`draft` artifacts, and on Codex (no `/goal`);
+it degrades to inert advisory text.
+
 ## Question batching
 
 - **3–5 questions per turn** by default. **Drop to 2** if any question is cognitively heavy.
@@ -170,5 +181,6 @@ If a goal artifact already exists in the working directory — `GOAL.md`, or `.c
 - `references/cynefin-triage.md` — Phase 0 decision tree with worked examples.
 - `references/question-bank.md` — worked questions per taxonomy category.
 - `references/anti-patterns.md` — failure-mode table with the prompt move that engineers each one out.
+- `references/goal-guardrail.md` — the optional Phase 5 `/goal` guardrail: condition template, per-shape derivation, and caveats (Claude Code only).
 
 Read the references when you need them — not all up front. Long-form material is there so the model loads it only when relevant.
