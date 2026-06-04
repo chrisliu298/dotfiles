@@ -27,27 +27,142 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 TEMPLATES_DIR=$(cd "$SCRIPT_DIR/../templates" && pwd 2>/dev/null) \
   || die "templates dir not found next to script ($SCRIPT_DIR/../templates)"
 
+# ── --dispatch parser ─────────────────────────────────────────────────────────
+# Compiles the line-oriented dispatch format into the same JSON shape that
+# --config accepts; cmd_prepare's existing validation/render path then runs
+# unchanged. This parser does NO business validation (peers, efforts, duplicates,
+# injection) — that stays single-sourced in the jq pass below. Its only job is to
+# assemble JSON safely (via `jq -n --arg`, never string concatenation), so the
+# orchestrator authors a literal, escaping-free file with the Write tool instead
+# of raw JSON.
+
+DISPATCH_CONFIG=""
+DP_packet=""; DP_px=""; DP_sa=""
+DP_type=""; DP_to=""; DP_name=""; DP_effort=""; DP_lens=""; DP_desc=""; DP_in=0; DP_seen=""
+
+dp_trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; s="${s%"${s##*[![:space:]]}"}"; printf '%s' "$s"; }
+
+dp_norm_effort() {
+  local e; e=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  case "$e" in
+    m|medium) printf 'medium' ;;
+    x|xhigh)  printf 'xhigh'  ;;
+    -|'')     printf ''       ;;
+    *)        printf '%s' "$1" ;;   # pass original through; the jq pass validates it against the peer registry
+  esac
+}
+
+# Emit the in-progress record as one JSON object onto the parallax/subagent
+# accumulators. Parallax Name defaults to the slugified Lens when omitted.
+dp_flush() {
+  [ "$DP_in" -eq 1 ] || { DP_in=0; return 0; }
+  local obj
+  case "$DP_type" in
+    parallax)
+      obj=$(jq -n --arg to "$DP_to" --arg name "$DP_name" --arg effort "$DP_effort" \
+                  --arg lens "$DP_lens" --arg desc "$DP_desc" '
+        ($lens | ascii_downcase | gsub("[^a-z0-9]+"; "-") | gsub("(^-|-$)"; "")) as $auto
+        | {to:$to, lens:$lens, lens_desc:$desc, name:(if $name != "" then $name else $auto end)}
+        + (if $effort != "" then {effort:$effort} else {} end)')
+      DP_px="$DP_px$obj"$'\n' ;;
+    subagent)
+      [ -z "$DP_to$DP_name$DP_effort" ] || die "prepare: --dispatch subagent record must not set To/Name/Effort (those are parallax-only; did you mean 'Type: parallax'?)"
+      obj=$(jq -n --arg lens "$DP_lens" --arg desc "$DP_desc" '{lens:$lens, lens_desc:$desc}')
+      DP_sa="$DP_sa$obj"$'\n' ;;
+    *) die "prepare: --dispatch record has invalid or missing Type '$DP_type' (must be 'parallax' or 'subagent')" ;;
+  esac
+  DP_type=""; DP_to=""; DP_name=""; DP_effort=""; DP_lens=""; DP_desc=""; DP_in=0
+}
+
+# Parse a --dispatch file into a normalized config JSON file. Sets DISPATCH_CONFIG
+# to that path; die()s on any structural error.
+dispatch_to_config() {
+  local file="$1" line t key val lineno=0
+  DP_packet=""; DP_px=""; DP_sa=""
+  DP_type=""; DP_to=""; DP_name=""; DP_effort=""; DP_lens=""; DP_desc=""; DP_in=0; DP_seen=""
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    lineno=$((lineno + 1))
+    t=$(dp_trim "$line")
+    [ -z "$t" ] && { dp_flush; continue; }
+    case "$t" in
+      \#*) continue ;;                       # comment line
+      *:*) key=$(dp_trim "${t%%:*}"); val=$(dp_trim "${t#*:}") ;;
+      *)   die "prepare: --dispatch line $lineno missing ':' separator: $line" ;;
+    esac
+    case "$key" in
+      Shared-Packet)
+        [ -z "$DP_packet" ] || die "prepare: --dispatch has more than one Shared-Packet line"
+        DP_packet="$val" ;;
+      Type)
+        dp_flush; DP_in=1; DP_type="$val"; DP_seen="" ;;
+      To|Name|Effort|Lens|Lens-Desc)
+        [ "$DP_in" -eq 1 ] || die "prepare: --dispatch line $lineno: '$key' appears before any 'Type:' record"
+        case " $DP_seen " in *" $key "*) die "prepare: --dispatch line $lineno: duplicate '$key' in one record" ;; esac
+        DP_seen="$DP_seen $key"
+        case "$key" in
+          To)        DP_to="$val" ;;
+          Name)      DP_name="$val" ;;
+          Effort)    DP_effort=$(dp_norm_effort "$val") ;;
+          Lens)      DP_lens="$val" ;;
+          Lens-Desc) DP_desc="$val" ;;
+        esac ;;
+      *) die "prepare: --dispatch line $lineno: unknown key '$key' (valid: Shared-Packet, Type, To, Name, Effort, Lens, Lens-Desc)" ;;
+    esac
+  done < "$file"
+  dp_flush
+
+  [ -n "$DP_packet" ] || die "prepare: --dispatch missing required 'Shared-Packet:' line"
+  case "$DP_packet" in
+    /*) ;;
+    *)  die "prepare: --dispatch Shared-Packet must be an absolute path: $DP_packet" ;;
+  esac
+  case "$DP_packet" in
+    *[[:space:]]*|*'*'*|*'?'*|*'['*) die "prepare: --dispatch Shared-Packet must not contain whitespace or glob characters: $DP_packet" ;;
+  esac
+
+  local pxj saj cfg gen
+  pxj=$(printf '%s' "$DP_px" | jq -s '.')
+  saj=$(printf '%s' "$DP_sa" | jq -s '.')
+  cfg=$(jq -n --arg p "$DP_packet" --argjson px "$pxj" --argjson sa "$saj" \
+        '{shared_packet:$p, parallax:$px, subagents:$sa}')
+  gen="${DP_packet%.md}-config.normalized.json"
+  printf '%s\n' "$cfg" > "$gen" || die "prepare: could not write normalized config: $gen"
+  DISPATCH_CONFIG="$gen"
+}
+
 # ── prepare ──────────────────────────────────────────────────────────────────
 
 cmd_prepare() {
-  local config=""
+  local config="" dispatch=""
   while [ $# -gt 0 ]; do
     case "$1" in
-      --config) [ $# -ge 2 ] || die "prepare: --config requires a value"; config="$2"; shift 2 ;;
-      -*)       die "prepare: unknown flag: $1" ;;
-      *)        die "prepare: unexpected argument: $1" ;;
+      --config)   [ $# -ge 2 ] || die "prepare: --config requires a value";   config="$2";   shift 2 ;;
+      --dispatch) [ $# -ge 2 ] || die "prepare: --dispatch requires a value"; dispatch="$2"; shift 2 ;;
+      -*)         die "prepare: unknown flag: $1" ;;
+      *)          die "prepare: unexpected argument: $1" ;;
     esac
   done
-  [ -n "$config" ] || die "prepare: --config <config.json> required"
-  [ -f "$config" ] || die "prepare: config file not found: $config"
+  [ -n "$config" ] && [ -n "$dispatch" ] && die "prepare: pass --config OR --dispatch, not both"
+  [ -z "$config" ] && [ -z "$dispatch" ] && die "prepare: --config <config.json> or --dispatch <dispatch-file> required"
   command -v jq >/dev/null 2>&1 || die "prepare: jq not found in PATH"
+  # --dispatch: compile the line-oriented file into the canonical config JSON,
+  # then fall through to the exact same validation/render path as --config.
+  if [ -n "$dispatch" ]; then
+    [ -f "$dispatch" ] || die "prepare: dispatch file not found: $dispatch"
+    dispatch_to_config "$dispatch"   # sets DISPATCH_CONFIG; die()s on a parse error
+    config="$DISPATCH_CONFIG"
+  fi
+  [ -f "$config" ] || die "prepare: config file not found: $config"
 
   # Peer registry — relay's sibling file, the single source of truth for which
   # peers exist, their effort knobs, and their launcher template style.
   local PEERS="$SCRIPT_DIR/../../relay/peers.json"
   [ -f "$PEERS" ] || die "prepare: peer registry not found at \$SCRIPT_DIR/../../relay/peers.json ($PEERS)"
 
-  jq -e . "$config" >/dev/null 2>&1 || die "prepare: config is not valid JSON: $config"
+  local cfgerr
+  cfgerr=$(jq -e . "$config" 2>&1 >/dev/null) || die "prepare: config is not valid JSON: $config
+  jq: ${cfgerr:-no parse detail}. Common causes: trailing comma, unescaped quote, unbalanced braces. Author the config with the Write tool (literal content), or use --dispatch — never a shell heredoc."
   jq -e . "$PEERS"  >/dev/null 2>&1 || die "prepare: peer registry is not valid JSON: $PEERS"
 
   local packet
@@ -68,8 +183,11 @@ cmd_prepare() {
   local manifest="${run_base}-manifest.json"
   local run_id; run_id=$(basename "$run_base")
   # Clear any stale artifacts from a prior run on the same packet so a failed
-  # prepare cannot leave an authoritative-looking manifest/result behind.
+  # prepare cannot leave an authoritative-looking manifest/result behind. Never
+  # delete the normalized config the current --dispatch run just generated (it is
+  # $config here, read by the jq pass below) — only a stale one from a prior run.
   rm -f "$manifest" "${run_base}-result.json"
+  [ "$config" = "${run_base}-config.normalized.json" ] || rm -f "${run_base}-config.normalized.json"
 
   # Single jq pass: validate structure/enums/effort/injection/dup-lenses, then
   # emit the authoritative manifest (computed names, launcher paths, counts).
@@ -80,8 +198,10 @@ cmd_prepare() {
       --argjson peers "$(cat "$PEERS")" '
     def bad($m): error($m);
     def chktext($field):
-      if (type != "string") or (. == "") then bad($field + " must be a non-empty string")
-      elif test("</") or test("\\{\\{") then bad($field + " may not contain </ or {{ (injection guard): " + .)
+      if (type != "string") then bad($field + " must be a non-empty string")
+      elif test("^[[:space:]]*$") then bad($field + " must not be empty or all-whitespace")
+      elif test("</") then bad($field + " contains \"</\" (injection guard — it can break the CO-STAR XML scaffolding). Rephrase without the literal \"</\", e.g. write \"closing tag\". Offending value: " + .)
+      elif test("\\{\\{") then bad($field + " contains \"{{\" (injection guard — it collides with the template {{SLOT}} markers). Rephrase without the literal \"{{\", e.g. write \"double-brace placeholder\". Offending value: " + .)
       else . end;
 
     (.shared_packet) as $pkt
@@ -124,6 +244,7 @@ cmd_prepare() {
         (.lens | chktext("subagent .lens")) as $lens
         | (.lens_desc | chktext("subagent .lens_desc")) as $desc
         | ($lens | ascii_downcase | gsub("[^a-z0-9]+"; "-") | gsub("(^-|-$)"; "")) as $slug
+        | (if $slug == "" then bad("subagent .lens must contain at least one [a-z0-9] character to form a launcher filename: " + $lens) else . end)
         | { lens: $lens, lens_desc: $desc, slug: $slug, launcher: ($base + "-launcher-subagent-" + $slug + ".md") }
       )) as $san
 
@@ -132,6 +253,8 @@ cmd_prepare() {
     | (if ($lenses|length) != ($lenses|unique|length) then bad("duplicate lens name in run; every agent needs a distinct lens") else . end)
     | ($pxn | map(.name)) as $names
     | (if ($names|length) != ($names|unique|length) then bad("duplicate parallax name; each relay --name must be distinct (it keys the per-peer log)") else . end)
+    | ($san | map(.slug)) as $saslugs
+    | (if ($saslugs|length) != ($saslugs|unique|length) then bad("two subagent lenses slugify to the same launcher filename; make the lens names more distinct") else . end)
 
     # Per-peer counts derived from the dispatch, not a hardcoded peer list.
     | ($pxn | group_by(.to) | map({key: .[0].to, value: length}) | from_entries) as $by_peer
@@ -381,11 +504,14 @@ cmd_help() {
 prism-launch — Prism dispatch launcher (parallax fan-out + dispatch prep)
 
 Usage:
-  prism-launch prepare  --config <config.json>
+  prism-launch prepare  --dispatch <dispatch-file>   # default: line-oriented control file
+  prism-launch prepare  --config   <config.json>     # escape hatch: raw JSON (one of the two)
   prism-launch parallax <manifest.json> [--dry-run]
   prism-launch --help | --version
 
-prepare:   validate config, render all launchers from templates, write a manifest.
+prepare:   validate the dispatch/config, render all launchers from templates, write a
+           manifest. Pass exactly one of --dispatch (compiled to the canonical config) or
+           --config. See the prism SKILL.md for the dispatch-file format.
 parallax:  fan out every relay call as ONE backgrounded process, wait for all,
            write a structured result. Run with run_in_background: true.
 

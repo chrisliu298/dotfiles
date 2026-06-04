@@ -167,6 +167,102 @@ echo "$DRY" | grep -q 'relay call --to codex --name prism-evolutionary --effort 
 echo "$DRY" | grep -q 'relay call --to deepseek --name prism-first-principles <' && ok "deepseek dry-run cmd has no --effort" || bad "deepseek dry-run no --effort"
 [ -f "$TMP/prism-run1-result.json" ] && bad "dry-run must NOT write a result file" || ok "dry-run writes no result file"
 
+echo "== prepare --dispatch: happy path (line-oriented front-end) =="
+PKTD="$TMP/prism-rund.md"; make_packet "$PKTD"
+DISP="$TMP/prism-rund.dispatch"
+cat > "$DISP" <<DSP
+Shared-Packet: $PKTD
+
+# a comment line, ignored
+Type: parallax
+To: codex
+Name: adversarial
+Effort: x
+Lens: Adversarial
+Lens-Desc: weigh the "strongest" attacks: braces {x} and < > are fine
+
+Type: parallax
+To: deepseek
+Lens: First-Principles
+Lens-Desc: reason from fundamentals
+
+Type: subagent
+Lens: Simplicity
+Lens-Desc: weigh fewest moving parts
+DSP
+expect_ok "prepare --dispatch succeeds" "$LAUNCH" prepare --dispatch "$DISP"
+MAND="$TMP/prism-rund-manifest.json"
+[ -f "$MAND" ] && ok "dispatch: manifest written" || bad "dispatch: manifest written"
+[ -f "$TMP/prism-rund-config.normalized.json" ] && ok "dispatch: normalized config written for audit" || bad "dispatch: normalized config written"
+jq -e '.parallax[0].lens == "Adversarial" and .subagents[0].lens == "Simplicity"' "$TMP/prism-rund-config.normalized.json" >/dev/null 2>&1 && ok "dispatch: normalized config has expected shape" || bad "dispatch: normalized config shape"
+[ "$(jq -r '.counts.dispatched_total' "$MAND" 2>/dev/null)" = "3" ] && ok "dispatch: dispatched_total = 3" || bad "dispatch: dispatched_total = 3"
+[ "$(jq -r '.parallax[0].effort' "$MAND" 2>/dev/null)" = "xhigh" ] && ok "dispatch: Effort 'x' normalized to xhigh" || bad "dispatch: Effort x -> xhigh"
+[ "$(jq -r '.parallax[0].name' "$MAND" 2>/dev/null)" = "prism-adversarial" ] && ok "dispatch: explicit Name used" || bad "dispatch: explicit Name used"
+[ "$(jq -r '.parallax[1].name' "$MAND" 2>/dev/null)" = "prism-first-principles" ] && ok "dispatch: Name derived from Lens when omitted" || bad "dispatch: Name derived from Lens"
+[ "$(jq -r '.parallax[1].effort' "$MAND" 2>/dev/null)" = "null" ] && ok "dispatch: deepseek effort null" || bad "dispatch: deepseek effort null"
+DLAUNCH=$(jq -r '.parallax[0].launcher' "$MAND")
+grep -qF 'braces {x} and < > are fine' "$DLAUNCH" && ok "dispatch: quote/brace/colon desc rendered verbatim (no escaping)" || bad "dispatch: desc rendered verbatim"
+
+echo "== prepare --dispatch: negative cases (fail-closed) =="
+expect_err "rejects --config and --dispatch together" "$LAUNCH" prepare --config "$CFG" --dispatch "$DISP"
+
+DNP="$TMP/dnp.dispatch"; printf 'Type: subagent\nLens: X\nLens-Desc: y\n' > "$DNP"
+expect_err "rejects dispatch missing Shared-Packet" "$LAUNCH" prepare --dispatch "$DNP"
+
+DUK="$TMP/duk.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nModel: codex\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DUK"
+expect_err "rejects dispatch unknown key" "$LAUNCH" prepare --dispatch "$DUK"
+
+DBT="$TMP/dbt.dispatch"; printf 'Shared-Packet: %s\n\nTo: codex\nType: parallax\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DBT"
+expect_err "rejects dispatch key before any Type record" "$LAUNCH" prepare --dispatch "$DBT"
+
+DED="$TMP/ded.dispatch"; printf 'Shared-Packet: %s\n\nType: parallax\nTo: deepseek\nEffort: x\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DED"
+expect_err "rejects dispatch Effort on deepseek (downstream guard)" "$LAUNCH" prepare --dispatch "$DED"
+
+DRP="$TMP/drp.dispatch"; printf 'Shared-Packet: relative/path.md\n\nType: subagent\nLens: X\nLens-Desc: y\n' > "$DRP"
+expect_err "rejects dispatch relative Shared-Packet" "$LAUNCH" prepare --dispatch "$DRP"
+
+# distinct lens names that slugify identically — caught by the new subagent-slug guard
+DSC="$TMP/dsc.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nLens: First Principles\nLens-Desc: a\n\nType: subagent\nLens: First-Principles\nLens-Desc: b\n' "$PKTD" > "$DSC"
+expect_err "rejects subagent lens slug collision" "$LAUNCH" prepare --dispatch "$DSC"
+
+echo "== prepare --dispatch: hardening from review (fail-closed + parity) =="
+# duplicate key within one record must fail closed (silent last-wins overwrite otherwise)
+DDK="$TMP/ddk.dispatch"; printf 'Shared-Packet: %s\n\nType: parallax\nTo: codex\nLens: A\nLens: B\nLens-Desc: d\n' "$PKTD" > "$DDK"
+expect_err "rejects duplicate key within one record" "$LAUNCH" prepare --dispatch "$DDK"
+
+# parallax-only keys on a subagent record (silent wrong-dispatch otherwise)
+DST="$TMP/dst.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nTo: codex\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DST"
+expect_err "rejects To/Name/Effort on a subagent record" "$LAUNCH" prepare --dispatch "$DST"
+
+# all-whitespace Lens-Desc via dispatch (trim -> empty -> rejected)
+DWS="$TMP/dws.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nLens: X\nLens-Desc:    \n' "$PKTD" > "$DWS"
+expect_err "rejects all-whitespace Lens-Desc (dispatch)" "$LAUNCH" prepare --dispatch "$DWS"
+
+# parity: all-whitespace lens_desc via --config must now also be rejected
+CWS="$TMP/cws.json"; jq -n --arg p "$PKTD" '{shared_packet:$p,parallax:[],subagents:[{lens:"X",lens_desc:"   "}]}' > "$CWS"
+expect_err "rejects all-whitespace lens_desc (--config parity)" "$LAUNCH" prepare --config "$CWS"
+
+# subagent lens that slugifies to the empty string -> degenerate filename
+DES="$TMP/des.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nLens: !!!\nLens-Desc: y\n' "$PKTD" > "$DES"
+expect_err "rejects subagent lens that slugifies to empty" "$LAUNCH" prepare --dispatch "$DES"
+
+# injection guard must not be bypassable via the dispatch path
+DIN="$TMP/din.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nLens: X\nLens-Desc: discuss the {{SLOT}} marker\n' "$PKTD" > "$DIN"
+expect_err "injection guard ({{) not bypassable via dispatch" "$LAUNCH" prepare --dispatch "$DIN"
+
+echo "== prepare --dispatch: positive coverage (effort case, empty accumulator) =="
+# uppercase Effort normalizes (case-insensitive)
+PKTE="$TMP/prism-rune.md"; make_packet "$PKTE"
+DEF="$TMP/def.dispatch"; printf 'Shared-Packet: %s\n\nType: parallax\nTo: codex\nEffort: X\nLens: Adversarial\nLens-Desc: d\n' "$PKTE" > "$DEF"
+expect_ok "accepts uppercase Effort (case-insensitive)" "$LAUNCH" prepare --dispatch "$DEF"
+[ "$(jq -r '.parallax[0].effort' "$TMP/prism-rune-manifest.json" 2>/dev/null)" = "xhigh" ] && ok "dispatch: 'Effort: X' normalized to xhigh" || bad "dispatch: Effort X -> xhigh"
+
+# subagents-only dispatch exercises the empty-parallax accumulator ([], not an error)
+PKTZ="$TMP/prism-runz.md"; make_packet "$PKTZ"
+DZ="$TMP/dz.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nLens: Simplicity\nLens-Desc: fewest parts\n' "$PKTZ" > "$DZ"
+expect_ok "accepts a subagents-only dispatch (empty parallax accumulator)" "$LAUNCH" prepare --dispatch "$DZ"
+[ "$(jq -r '.counts.parallax_total' "$TMP/prism-runz-manifest.json" 2>/dev/null)" = "0" ] && ok "dispatch: empty parallax accumulator -> parallax_total 0" || bad "dispatch: empty parallax -> 0"
+
 echo
 echo "==== $pass passed, $fail failed ===="
 [ "$fail" -eq 0 ]
