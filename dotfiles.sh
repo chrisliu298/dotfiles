@@ -30,8 +30,8 @@ SKILLS=(
     # side-effecting skills like gpt-pro-relay/push — those are allowed. Only the
     # claude-only entries below (relay, prism, keep-warm, skill-creator) are left off
     # grok; relay and prism are additionally blocked from being triggered (RELAY_PEER
-    # guard + PATH scrub of both script dirs + GROK_CLAUDE_SKILLS_ENABLED=false set in
-    # the relay grok transport).
+    # guard + PATH scrub of both script dirs + the GROK_CLAUDE_*_ENABLED=false compat
+    # suite set in .zshenv and the relay grok transport).
     "*|./agents/extensions/skills|claude,codex,grok"
     # Relay: claude-only caller; targets Codex, DeepSeek, MiMo, and Grok via the script
     "relay|./agents/extensions/skills/relay|claude"
