@@ -80,6 +80,11 @@ paired with measurable behavior.>
 ## Scope out / non-goals
 - <Tempting adjacent work that must NOT be done>
 
+## Guidance (optional — for open-ended or ambitious goals; omit for Clear-domain tasks)
+- Starting point: <where to begin — a file, module, command, or hypothesis to try first; a hint, not a lock>
+- Avoid: <approaches or paths already known to be dead ends>
+- Reference: <path to an existing plan/research/profile the executor should read first, rather than rediscover>
+
 ## Constraints
 - Stack: <languages, frameworks, versions>
 - Style: <linting, formatting, conventions to match>
@@ -121,6 +126,7 @@ Then …
 
 ## Observability / evidence
 - <Where evidence will appear: log path, UI page, file diff, metric dashboard>
+- <Optional, for ambitious/multi-step goals: the progress signal to re-check during the work — a metric trend or done-count — not only the final proof>
 
 ## Risks and mitigations
 | Risk | Likelihood | Impact | Mitigation |

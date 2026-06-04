@@ -69,10 +69,13 @@ The structure for every good elicitation question:
 - "What's the current state of the thing you want to change? Working but ugly? Half-broken? Greenfield?"
 - "Are there branches, draft PRs, or scratch files I should look at before I start?"
 - "What context should I *not* spend time rediscovering — what do you already know is true?"
+- "If you had to guess where the work should start — a file, module, or command — what's your best bet? I'll record it as a starting point, not a constraint."
+- "Any approach or path the executor should *not* spend time on, even if it looks promising? (e.g. 'the bug is in the serializer — don't rewrite the parser')"
 
 ## 9. Success criteria
 
 - "What observable facts would prove this is done? Name commands, files, or behavior I can check."
+- "Can you put a number on it? 'Reduce build time 30%' beats 'make builds faster.' If no number is meaningful, name the closest measurable proxy — don't invent a metric that doesn't reflect the outcome."
 - "What would make you reject the result even if everything else worked?"
 - "If we ran this 100 times, what fraction has to succeed?"
 - "What's the minimum amount of evidence I should report when I claim success?"
@@ -100,6 +103,7 @@ The structure for every good elicitation question:
 ## 13. Observability
 
 - "Where will evidence appear when this works — logs, metrics, UI, file diff, test output, user reports?"
+- "For an ambitious or multi-step goal: what single signal shows partial progress before it's fully done — a metric trend, a count of done units, a coverage delta? (Skip if the only meaningful signal is the final check.)"
 - "What signal would tell you it's *not* working — error rate, latency spike, user complaint, missing log line?"
 - "Is there an existing dashboard or alert I should reuse, or do we need to add one?"
 

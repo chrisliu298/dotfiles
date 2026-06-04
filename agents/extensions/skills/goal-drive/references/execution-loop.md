@@ -32,13 +32,21 @@ exception**, not by per-step approval. Read this before driving the first unit; 
              metric, or observed behavior). PATCH the artifact in place. THEN, iff
              commit_policy == per_unit, make one local commit for this verified unit. Emit the
              status line. Loop to 3.
-8. FINISH    run the goal-completion predicate (see per-shape rules below). Set frontmatter
-             status: complete. Report: units done, evidence, commits made (or "none — commit_policy
-             off"), blocked/deferred items. OFFER to push (see Commit cadence). Do not push unasked.
+8. FINISH    run the goal-completion predicate (see per-shape rules below). If the run used repair
+             attempts or touched files beyond the final solution, do a **bounded cleanup pass**
+             first: inspect the cumulative diff for dead code, scratch files, and debug leftovers
+             from abandoned attempts, and remove only what is clearly execution debris and in-scope
+             (inspect the diff directly — do not invoke /review or any other skill). Then set
+             frontmatter status: complete. Report: units done, evidence, commits made (or "none —
+             commit_policy off"), blocked/deferred items, anything cleaned up. OFFER to push (see
+             Commit cadence). Do not push unasked.
 ```
 
 Ordering is load-bearing: **verify before ledger, ledger before commit.** Never mark `done`
-or commit on intent.
+or commit on intent. **Never satisfy acceptance by weakening the verifier** — deleting or
+skipping tests, lowering a threshold, narrowing coverage, disabling a check, or swapping a real
+check for a mock — unless the artifact explicitly authorizes it. That games the criterion, not
+meets it.
 
 ### Per-shape specifics
 
