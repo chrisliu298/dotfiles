@@ -370,56 +370,79 @@ git diff --stat HEAD
 
 If the diff shows unexpected changes, flag them to the user before proceeding. Discard the offending agent's output — an agent that violated read-only constraints may have reasoned from a corrupted state.
 
-Scan each agent's output for recursion indicators: mentions of "dispatching," "subagent," "relay call," "Prism run," or synthesis-style structure (Consensus/Contested/Unique sections). Flag matches for review — the agent may have spawned nested agents, producing contaminated reasoning.
+Scan each agent's output for recursion indicators: mentions of "dispatching," "subagent," "relay call," "Prism run," or synthesis-style structure (a `▶` verdict line, a model-tier tally, `Dissent:`/`Why:`/`Do now:` sections, or older `Consensus/Contested/Unique` sections). Flag matches for review — the agent may have spawned nested agents, producing contaminated reasoning.
 
 ### Step 4: Synthesize
 
-Write a decision brief, not a lens-by-lens report. The user should understand the recommendation and next action in seconds, not minutes.
+Write a skim-first, verdict-led synthesis, not a lens-by-lens report. The user should grasp the recommendation in seconds, not minutes.
 
-**Default budget: ~150-300 words.** If you're writing more, you're hedging or scaffolding — compress. Deliverables are bounded by the artifact, not commentary.
+**Default budget: ~100-150 words in the visible main path.** If you're writing more, you're hedging or scaffolding — compress. Deliverables are bounded by the artifact; the optional appendix is uncounted.
 
-**Default structure (in this order):**
+The reader should grasp the recommendation, confidence, and any cross-model dissent in the first ~3 seconds, then read on only for the reasoning. The verdict line carries the first three; the body carries the reasoning.
 
-1. **Answer** — 1-3 sentences stating the recommendation or conclusion directly. For deliverable questions (code, plan, document), the artifact is the answer — put it here, before rationale.
+**Default skeleton — the verdict line is fixed and always first; the body below it flexes by mode (see Mode adaptation):**
 
-2. **Do now** — 1-3 ranked actions, verb-first. Only immediate actions worth ranking. No "consider" or "maybe" unless tied to a concrete trigger.
+1. **Verdict line** — one line, the first thing the eye hits. Fixed token order, `·`-separated:
 
-3. **Why** — 2-4 bullets of decisive reasoning. Fold confidence inline when it helps ("Moderate confidence — Parallax dissented on X"). Surface cross-model agreement or dissent here only when it materially changes confidence.
+   `▶ <verdict, aim ≤12 words> · conf: <High|Moderate|Low> · <n>/<total> agree[ · ⚠ dissent]`
 
-4. **Watch / Dissent** — 0-3 concrete triggers that would change the recommendation, or the single strongest dissent stated fairly with how you weighed it. Skip entirely if nothing is decision-relevant. Never manufacture caveats.
+   - `<n>/<total>` counts **perspectives that returned, including self** (a default 6-perspective run is `/6`) — *not* dispatched-only, *not* lineages. The tally below counts *lineages*; the two denominators intentionally differ. (Self is a perspective here even though it does not count toward *dispatch* shape elsewhere.)
+   - For an **exploratory question** with no proposition to vote on, swap `<n>/<total> agree` for `<n>/<total> aligned` (or `· converging` / `· divergent`) and let `▶` state the synthesized finding rather than a recommendation. Confidence is still shown.
+   - Confidence is **always shown** — the *absence* of a `⚠ dissent` clause is itself the all-clear signal.
+   - The `⚠ dissent` clause appears **only** when a dispatched agent dissents. On a cross-model break the tally and Dissent line already name the peers, so the verdict clause stays a bare `⚠ dissent`; name a peer inline (`⚠ DeepSeek dissent`) only for a minor dissent that has no tally. `⚠` is the only routine glyph — reserve it for dissent; never decorate confidence or the verdict with emoji or boxes.
+   - Deliverable: the verdict line points at the artifact (`▶ See migration plan below · conf: High · 6/6 agree`), which follows immediately.
 
-**Mode adaptation (pick before writing):**
+2. **Model-tier tally** — one line, **only on a cross-model break** (a parallax lineage dissents). Group by model lineage (not by lens): each dispatched lineage with `✓` (aligned) or `⚠` (dissented), then the takeaway.
 
-- **Converged** (lenses + Parallax agree): Answer + Do now + short Why only. Skip Watch/Dissent.
-- **Material disagreement**: Add `Tradeoff` or `Decision point` after Why — name the two options, what each optimizes, why you chose. Dissent stays in Watch/Dissent.
-- **Cross-model break** (subagents converge, one or more Parallax tiers dissent): cap confidence at moderate. Lead Watch/Dissent with the Parallax argument — cross-model disagreement is the highest-signal finding and must not be buried. When two or more parallax peers (Codex, DeepSeek, MiMo, Grok) dissent in the *same direction*, treat this as an especially strong signal (independent model lineages agree the subagents missed something).
-- **Deliverable**: artifact in Answer; Why becomes design rationale; Do now covers integration/review steps.
+   `Claude ✓  Codex ✓  DeepSeek ⚠  MiMo ⚠   → 2 independent lineages dissent, same direction`
+
+   Omit on full convergence (all `✓` — the header's `n/n agree` already says so) and on an intra-lineage split (a by-lineage tally cannot show a split *inside* one lineage — use the `Tradeoff:` line instead). List only the lineages actually dispatched (treat the two Grok tiers as one `Grok` lineage). A lineage that ran several agents collapses to one `✓`/`⚠`: mark `⚠` if **any** member raised a cross-model dissent you could not refute (a lineage's dissent is never averaged away by its other members agreeing), and resolve its aligned position by strongest reasoning, not majority vote. This tally is the **one sanctioned exception** to the per-lens-attribution ban below: it attributes by *lineage* (the load-bearing cross-model signal), never lens-by-lens.
+
+3. **Dissent** — its own labeled line **on a cross-model break**, placed above Why: the peer(s), the *specific* argument, and what would resolve it ("DeepSeek+MiMo: shared state needed for atomic txns — bounded by the spike gate; revisit if p99 > 50ms"). When dissent is minor, fold it into a Why bullet instead. Never compress dissent to a bare model name — the argument and its resolution path are the signal.
+
+4. **Why** — 2-4 tight bullets of decisive reasoning. Each bullet is conclusion **plus** its basis ("Removes the shared-state layer — root cause of 3/5 recent incidents"), never a bare label ("simpler"). Fold confidence basis in when it helps.
+
+5. **Do now** — 1-3 verb-first actions, often a single arrow chain (`spike B → kill the A RFC → freeze schema`). Skip if the verdict is itself the action.
+
+**Mode adaptation (the verdict line never moves; the body flexes):**
+
+| Mode | Tally | Dissent line | Body |
+|------|-------|--------------|------|
+| **Converged** — all perspectives agree | omit | omit | Why (+ Do now). Often 3-5 lines total. |
+| **Material disagreement** — ≥2 agents oppose on the core question (not peripheral caveats), not following lineage cleanly | omit | fold into Why | `Tradeoff:` (the two options + what each optimizes) before Do now |
+| **Cross-model break** — subagents converge, a parallax lineage dissents | **mandatory** | **leads the body**, above Why | cap confidence at Moderate |
+| **Deliverable** | per the run | per the run | artifact right after the verdict line; Why = design rationale; Do now = integration/review |
+
+- On a **cross-model break**, two or more parallax peers (Codex, DeepSeek, MiMo, Grok) dissenting in the *same direction* is an especially strong signal — say so. The Moderate cap fires only when a *parallax* lineage dissents.
+- **All-subagent run** (no parallax dispatched, e.g. `prism 2 0 0 0 0 0`): a cross-model break is impossible, so within-Claude splits are **Material disagreement** however clean the split looks — no tally, no Moderate cap. Flag the missing cross-model diversity, since the `⚠`-absence all-clear cannot mean cross-model corroboration here.
 
 **Banned in the main path:**
 
-- Per-lens attribution ("Agent A said…", "The Simplicity lens noted…"). Move to an optional `<details>Per-lens notes</details>` appendix at the very bottom only if the user asked, or if disagreement is deep enough to require lens-level audit.
-- Synthesis narration ("Weighing the perspectives…", "After considering the arguments…"). The recommendation carries the reasoning.
+- Per-lens attribution ("the Simplicity lens noted…", "Agent A said…"). The model-tier **tally line is the sole exception** (by lineage, not lens). Deeper per-lens notes go in an optional `<details>Per-lens detail</details>` appendix at the very bottom — only if the user asked, or disagreement is deep enough to need a lens-level audit.
+- Synthesis narration ("Weighing the perspectives…", "After considering the arguments…"). The verdict line and Why carry the reasoning.
 - Generic contingencies ("if requirements change"). Only concrete, observable triggers.
-- Standalone `Confidence and basis` / `Key dissent` / `Contingencies` sections. Their content folds into Why and Watch/Dissent, and only when decision-relevant.
+- Routine chrome: emoji beyond the reserved `⚠`, ASCII-art boxes, traffic-light symbols. Use words for confidence; `▶` for the verdict line; `✓`/`⚠` in the tally. A plain `→` (or `then`) as a prose separator in a Do-now chain or a tally takeaway is fine — it is text, not chrome.
+- Standalone `Confidence and basis` / `Key dissent` / `Contingencies` sections. Their content folds into the verdict line, Dissent line, and Why — and only when decision-relevant.
 
-**Cross-model weighting (internal — surfaces through Why):**
+**Cross-model weighting (internal — surfaces through the verdict line, tally, and Why):**
 
 - **Not all answers are equally good — judge each on its merits and reject the weak ones.** Running the assigned lens does not guarantee a sound answer: an agent can produce shallow reasoning, a wrong premise, a misread of the question, or a confident claim with no support. The integrator's job is to *identify and discard* those answers, not to average every response together. Weight by the strength of an answer's reasoning and evidence, not by the fact that an agent produced it (discount weak reasoning, never the model label). Dropping a low-quality answer entirely is a valid, expected outcome — say so in Why when a notable perspective was set aside.
 - Same-model convergence is signal but discounted — shared training = shared blind spots.
 - Parallax (cross-model) confirmation or dissent carries outsized weight — model diversity is prism's entire point.
 - A single well-reasoned point can beat multi-agent consensus driven by shared priors.
 
-If you cannot articulate why dissent is wrong, downgrade confidence in Why rather than expanding dissent into a paragraph.
+If you cannot articulate why dissent is wrong, downgrade confidence on the verdict line rather than expanding dissent into a paragraph.
 
-The synthesis reflects your judgment as integrator — agents are advisors, not a voting bloc. Convergence is evidence, not a vote.
+The synthesis reflects your judgment as integrator — agents are advisors, not a voting bloc. The tally line shows lineage alignment; it does not cast votes that decide the answer. Convergence is evidence, not a vote.
 
 ### Step 5: Grounding check
 
 Re-read the user's original question. Verify:
 
 - Your synthesis answers it directly. If they asked for a deliverable, you produced one.
-- The first section tells the user what to do.
-- No lens-by-lens summary appears outside an optional appendix.
+- The verdict line leads, in fixed token order (`▶ verdict · conf: … · n/total agree[ · ⚠ dissent]`), and confidence is shown.
+- On a cross-model break, the tally line and a dedicated Dissent line are present and sit above Why; on a material disagreement a `Tradeoff:` line carries the split (no tally); on full convergence all three are omitted.
+- No per-lens summary appears in the main path — the model-tier tally is by lineage, not lens; lens-by-lens notes live only in an optional appendix.
 - Every retained dissent, caveat, or trigger changes a decision, confidence level, or next action.
 
 Optionally delete all Prism temp files — they share the `/tmp/prism-<unique-id>` prefix: shared context (`.md`), dispatch file (`.dispatch`), normalized/config JSON (`-config*.json`), manifest, rendered launchers (`-launcher-*.md`), parallax out logs (`-out-*.log`), and result sentinel (`-result.json`). A single `rm -f /tmp/prism-<unique-id>*` covers them.
@@ -436,7 +459,7 @@ Optionally delete all Prism temp files — they share the `/tmp/prism-<unique-id
 
 The core principle (redundancy, not division of labor), the prompt template structure, and the hard completion gate are load-bearing constraints — do not relax them. Everything else — lens choices, synthesis categories, agent count beyond the minimum, pre-launch check order — is flexible guidance that you should adapt to the task.
 
-**Synthesis adaptation:** The default structure (Answer, Do now, Why, Watch/Dissent — see Step 4) suits most analysis and decision questions. But the integrator should actively adapt the synthesis frame when the task calls for it — merge sections, reorder, or add task-specific sections. A deliverable question needs the artifact front and center in Answer with design rationale behind it; a pure risk assessment might elevate Watch/Dissent above Why. Rigid adherence to the default structure when it doesn't fit the question is a failure of integration.
+**Synthesis adaptation:** The verdict line is fixed (always first, fixed token order — see Step 4); the body below it (tally, Dissent, Why, Do now) flexes to the task. The integrator should actively adapt the body frame when the task calls for it — merge sections, reorder, or add task-specific sections. A deliverable question puts the artifact immediately after the verdict line with design rationale behind it; a pure risk assessment might elevate the Dissent line and triggers above Why. Rigid adherence to the body structure when it doesn't fit the question is a failure of integration — but the verdict line stays put regardless, so the reader's first-glance scan always works.
 
 ## When to Use Prism
 
