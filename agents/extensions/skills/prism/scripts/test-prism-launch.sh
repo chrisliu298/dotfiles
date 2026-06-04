@@ -131,10 +131,23 @@ echo "$DRYG" | grep -q 'relay call --to grok-build --name prism-gb --effort high
 echo "$DRYG" | grep -q 'relay call --to grok-composer --name prism-gc <' && ok "grok-composer dry-run cmd has no --effort" || bad "grok-composer dry-run no --effort"
 
 echo "== prepare: negative cases (fail-closed) =="
-# missing Constraints section
-P2="$TMP/p2.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$P2"
+# missing a still-required section (## Context) → fail-closed
+P2="$TMP/p2.md"; printf '## Full Question\nq\n' > "$P2"
 C2="$TMP/c2.json"; jq -n --arg p "$P2" '{shared_packet:$p,parallax:[],subagents:[{lens:"X",lens_desc:"y"}]}' > "$C2"
-expect_err "rejects packet missing a required section" "$LAUNCH" prepare --config "$C2"
+expect_err "rejects packet missing a required section (## Context)" "$LAUNCH" prepare --config "$C2"
+
+# missing ## Constraints → prepare INJECTS the canonical block (not a failure)
+P2c="$TMP/p2c.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$P2c"
+C2c="$TMP/c2c.json"; jq -n --arg p "$P2c" '{shared_packet:$p,parallax:[],subagents:[{lens:"Xc",lens_desc:"y"}]}' > "$C2c"
+expect_ok "injects canonical Constraints when the packet omits them" "$LAUNCH" prepare --config "$C2c"
+{ grep -q '^## Constraints' "$P2c" && grep -q 'read-only leaf node' "$P2c"; } && ok "packet gained the verbatim Constraints" || bad "Constraints not injected into packet"
+# idempotent: re-running prepare must not double-inject
+"$LAUNCH" prepare --config "$C2c" >/dev/null 2>&1
+[ "$(grep -c '^## Constraints' "$P2c")" = "1" ] && ok "Constraints injection is idempotent (no double on re-run)" || bad "Constraints double-injected on re-run"
+# present-but-abbreviated ## Constraints (missing the anti-recursion guard) → fail-closed
+P2a="$TMP/p2a.md"; printf '## Full Question\nq\n\n## Context\nc\n\n## Constraints\nBe nice.\n' > "$P2a"
+C2a="$TMP/c2a.json"; jq -n --arg p "$P2a" '{shared_packet:$p,parallax:[],subagents:[{lens:"Xa",lens_desc:"y"}]}' > "$C2a"
+expect_err "rejects a ## Constraints section missing the anti-recursion guard" "$LAUNCH" prepare --config "$C2a"
 
 # relative shared_packet
 C3="$TMP/c3.json"; jq -n '{shared_packet:"relative/path.md",parallax:[],subagents:[]}' > "$C3"
@@ -287,6 +300,48 @@ PKTZ="$TMP/prism-runz.md"; make_packet "$PKTZ"
 DZ="$TMP/dz.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nLens: Simplicity\nLens-Desc: fewest parts\n' "$PKTZ" > "$DZ"
 expect_ok "accepts a subagents-only dispatch (empty parallax accumulator)" "$LAUNCH" prepare --dispatch "$DZ"
 [ "$(jq -r '.counts.parallax_total' "$TMP/prism-runz-manifest.json" 2>/dev/null)" = "0" ] && ok "dispatch: empty parallax accumulator -> parallax_total 0" || bad "dispatch: empty parallax -> 0"
+
+echo "== scaffold: symmetric dispatch skeleton =="
+SC=$("$LAUNCH" scaffold --n 1 --effort m --packet /tmp/prism-sc.md)
+[ "$(printf '%s\n' "$SC" | grep -c '^Type:')" = "6" ] && ok "scaffold --n 1 emits 6 records" || bad "scaffold n=1 record count"
+printf '%s\n' "$SC" | grep -q '^Shared-Packet: /tmp/prism-sc.md' && ok "scaffold honors --packet" || bad "scaffold --packet"
+printf '%s\n' "$SC" | grep -q '^To: codex'    && printf '%s\n' "$SC" | grep -q '^To: mimo' && ok "scaffold lists all five parallax tiers" || bad "scaffold tiers"
+SCX=$("$LAUNCH" scaffold --n 2 --effort xh)
+[ "$(printf '%s\n' "$SCX" | grep -c '^Type:')" = "12" ] && ok "scaffold --n 2 emits 12 records" || bad "scaffold n=2 record count"
+[ "$(printf '%s\n' "$SCX" | grep -c '^Effort: x')" = "2" ] && [ "$(printf '%s\n' "$SCX" | grep -c '^Effort: h')" = "2" ] && ok "scaffold --effort xh -> codex x, grok-build h" || bad "scaffold xh effort mapping"
+expect_err "scaffold rejects a bad --effort" "$LAUNCH" scaffold --effort high2
+# a filled scaffold round-trips through prepare
+make_packet /tmp/prism-scrt.md
+"$LAUNCH" scaffold --n 1 --effort m --packet /tmp/prism-scrt.md \
+  | sed 's/^Lens: FILL-1$/Lens: L1/;s/^Lens: FILL-2$/Lens: L2/;s/^Lens: FILL-3$/Lens: L3/;s/^Lens: FILL-4$/Lens: L4/;s/^Lens: FILL-5$/Lens: L5/;s/^Lens: FILL-6$/Lens: L6/;s/^Lens-Desc: FILL$/Lens-Desc: weigh it/' > /tmp/prism-scrt.dispatch
+expect_ok "a filled scaffold round-trips through prepare" "$LAUNCH" prepare --dispatch /tmp/prism-scrt.dispatch
+# a half-filled scaffold (leftover FILL-<n> lens) must be rejected, not dispatched
+make_packet /tmp/prism-schalf.md
+"$LAUNCH" scaffold --n 1 --effort m --packet /tmp/prism-schalf.md \
+  | sed 's/^Lens-Desc: FILL$/Lens-Desc: weigh it/' > /tmp/prism-schalf.dispatch   # descs filled, lens names left as FILL-<n>
+expect_err "prepare rejects a half-filled scaffold (leftover FILL placeholder)" "$LAUNCH" prepare --dispatch /tmp/prism-schalf.dispatch
+rm -f /tmp/prism-sc* /tmp/prism-scrt* /tmp/prism-schalf*
+
+echo "== clean: removes run artifacts, refuses unsafe targets =="
+touch /tmp/prism-cleantest.md /tmp/prism-cleantest-manifest.json /tmp/prism-cleantest-launcher-x.md
+"$LAUNCH" clean /tmp/prism-cleantest.md >/dev/null
+[ ! -e /tmp/prism-cleantest.md ] && [ ! -e /tmp/prism-cleantest-manifest.json ] && ok "clean removes /tmp/prism-<id>* by packet path" || bad "clean by path"
+touch /tmp/prism-cleanid-manifest.json
+"$LAUNCH" clean cleanid >/dev/null
+[ ! -e /tmp/prism-cleanid-manifest.json ] && ok "clean removes by bare run id" || bad "clean by id"
+expect_err "clean refuses an empty/whole-prefix target" "$LAUNCH" clean prism-
+expect_err "clean requires a target" "$LAUNCH" clean
+# safety: glob / .. / slash in the target must be refused BEFORE any rm (the blocker)
+SENTINEL=/tmp/prism-DONOTDELETE-sentinel.md; touch "$SENTINEL"
+expect_err "clean refuses a glob target ('*')"      "$LAUNCH" clean '*'
+expect_err "clean refuses a glob target ('a*')"     "$LAUNCH" clean 'a*'
+expect_err "clean refuses a '..' traversal target"  "$LAUNCH" clean '/tmp/prism-../../etc/x.md'
+expect_err "clean refuses a '/' in the run id"      "$LAUNCH" clean 'foo/bar'
+[ -e "$SENTINEL" ] && ok "clean left unrelated /tmp/prism-* files intact" || bad "clean glob-injection wiped sentinel"; rm -f "$SENTINEL"
+# a manifest path is stripped to the run base, not a partial clean
+touch /tmp/prism-mtest.md /tmp/prism-mtest-manifest.json /tmp/prism-mtest-launcher-x.md
+"$LAUNCH" clean /tmp/prism-mtest-manifest.json >/dev/null
+[ ! -e /tmp/prism-mtest.md ] && [ ! -e /tmp/prism-mtest-launcher-x.md ] && ok "clean by manifest path strips suffix and clears the whole run" || bad "clean manifest-path partial clean"; rm -f /tmp/prism-mtest*
 
 echo
 echo "==== $pass passed, $fail failed ===="

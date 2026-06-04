@@ -96,7 +96,7 @@ Assignment only — in synthesis, every tier's dissent keeps full cross-model we
 
 Assign each tier a lens that maximizes diversity. **Default to orthogonal exploratory lenses** (Breadth-Weighted, Depth-Weighted, Outsider, First-Principles, Disconfirming-via-different-frame) — these almost always extract more from cross-model diversity than a second attack angle. **Reach for an adversarial lens (Adversarial, Falsification, Disconfirming) only when it is much more valuable than another orthogonal lens would be** — i.e., the deliverable hinges on finding a non-obvious flaw, attack, or failure mode, and no other dispatched lens is already covering that ground. When that bar is met, put it on the parallax tier best suited to the reasoning load (see "Tier strength and lens fit"); otherwise skip it. When using multiple parallax tiers, give each a distinct lens — never assign the same lens to two of Codex, DeepSeek, MiMo, or the Grok tiers (that wastes a perspective). Treat grok-build + grok-composer as **one** vendor slot: don't give them two different diversity lenses as if independent (they share the xAI lineage). And don't stack two adversarial lenses unless the task genuinely demands independent attack frames.
 
-Don't tailor the prompt body per peer — Prism sends the **same shared prompt** to every model (the launcher templates handle the only per-peer difference: Codex `<goal>` style vs CO-STAR XML), so you may skip the [[relay]] skill's per-peer prompting guides here. What matters is shared-prompt **quality** — an outcome-first shared packet (Full Question + Context + Constraints) and sharp, distinct lens descriptions; optimize that, not per-model fit.
+Don't tailor the prompt body per peer — Prism sends the **same shared prompt** to every model (the launcher templates handle the only per-peer difference: Codex `<goal>` style vs CO-STAR XML), so you may skip the [[relay]] skill's per-peer prompting guides here. What matters is shared-prompt **quality** — an outcome-first shared packet (Full Question + Context) and sharp, distinct lens descriptions; optimize that, not per-model fit.
 
 **Relay call syntax (exact)** — the command shapes Prism must emit:
 
@@ -153,13 +153,13 @@ Dispatched agents are **read-only** — no edits, commits, deploys, or external 
 
 ## Shared Context
 
-Build one shared evidence packet (Full Question + Context + Constraints) before composing prompts. Prefer compact digests over full file dumps. Write it to a temporary file once; every agent receives a short launcher prompt referencing this file plus its unique lens. If the packet cannot be duplicated cleanly across all agents, the task is too large for Prism.
+Build one shared evidence packet (Full Question + Context; `prepare` injects the canonical Constraints) before composing prompts. Prefer compact digests over full file dumps. Write it to a temporary file once; every agent receives a short launcher prompt referencing this file plus its unique lens. If the packet cannot be duplicated cleanly across all agents, the task is too large for Prism.
 
 **Reference materials (REQUIRED):** Before building the shared packet, identify all reference materials relevant to the question — CLAUDE.md files, READMEs, config files, documentation, skill definitions, style guides, or any file an agent would need to reason about the task. Include the **absolute paths** of these files in the Context section of the shared packet so every agent can read them. Agents cannot discover references on their own; if a path is not listed, the agent will not consult it.
 
 ### Shared Packet Template
 
-Write this to `/tmp/prism-<unique-id>.md` using the Write tool (one call, before any dispatch). Use a unique identifier (e.g., timestamp + random suffix) to prevent collisions between concurrent Prism runs.
+Write this to `/tmp/prism-<unique-id>.md` using the Write tool (one call, before any dispatch). Use a unique identifier (e.g., timestamp + random suffix) to prevent collisions between concurrent Prism runs. **Write only Full Question + Context (with Reference Materials)** — `prism-launch prepare` injects the canonical `## Constraints` block (the verbatim read-only / anti-recursion text) when it's absent, so you never hand-copy it and it can't be fat-fingered.
 
 ```
 ## Full Question
@@ -177,25 +177,9 @@ Write this to `/tmp/prism-<unique-id>.md` using the Write tool (one call, before
 - /path/to/relevant/file1
 - /path/to/relevant/file2
 - ...
-
-## Constraints
-
-You are a read-only leaf node. Produce analysis text only.
-
-You MAY use skills/tools that only read, fetch, or analyze (read files, search the repo, fetch web pages or PDFs).
-
-You must NOT:
-- Spawn subagents or any nested agent.
-- Invoke any skill that dispatches to, relays to, or coordinates another agent or model (prism, relay, gpt-pro-relay, deep-research), or call the codex or grok CLIs, the deepseek (ds/dsh) or mimo (mm) aliases, or any cross-model dispatch tool.
-- Edit files, commit, push, or trigger any external side effect, or invoke a skill that does (e.g., push, xurl, todo, goal-drive).
-- Act on loaded skill descriptions that would make you recurse or cause side effects (e.g., prism, relay, gpt-pro-relay, deep-research) — those are for standalone use, not this context.
-
-The ONLY file you may write is the relay response file (.res.md) named in this request's `Reply:` directive, if present; that write is required by the relay protocol.
-
-Answer the question directly. If it is too broad for one response, note the limitation and answer what you can.
 ```
 
-After writing, read the file back with the Read tool to verify it contains all three sections completely. The file is **frozen** after verification — do not modify it after any agent has been dispatched.
+`prepare` appends the canonical `## Constraints` (from `templates/shared-constraints.md`) if you omitted it — idempotent, so a re-run won't double it. (If you want a bespoke Constraints block, include a `## Constraints` section yourself and prepare leaves it untouched.) The packet is **frozen** once `prepare` runs — do not modify it after, since dispatched agents read it live. `Write` already confirms success, so no read-back is needed.
 
 ### Launcher Templates
 
@@ -219,7 +203,7 @@ You do **not** render templates or hand-write relay heredocs. The `prism-launch`
 
 It cannot dispatch Claude subagents (only Claude can invoke the Agent tool, never `claude -p`) — so you still issue the subagent Agent-tool calls yourself.
 
-**You write one line-oriented dispatch file with the Write tool** (one record per agent — never a shell heredoc), then run two commands. The dispatch format is plain `Key: value` lines in blank-line-separated records: no braces, commas, quoting, or escaping, so a free-text lens description can't break it the way hand-authored JSON can. Authoring the config as raw JSON is no longer the default — writing literal text with the Write tool is what removes the escaping surface.
+**You write one line-oriented dispatch file with the Write tool** (one record per agent — never a shell heredoc), then run two commands. For the symmetric default, run `~/.claude/skills/prism/scripts/prism-launch scaffold --n <N> --effort m|xh` first — it prints a ready-to-fill skeleton (correct records, canonical model order, and effort tokens) so you only replace the `FILL` lens names + descriptions. The dispatch format is plain `Key: value` lines in blank-line-separated records: no braces, commas, quoting, or escaping, so a free-text lens description can't break it the way hand-authored JSON can. Authoring the config as raw JSON is no longer the default — writing literal text with the Write tool is what removes the escaping surface.
 
 Write `/tmp/prism-<id>.dispatch` with the **Write tool**:
 
@@ -277,7 +261,7 @@ Format rules: `Shared-Packet:` appears once. Each record starts at `Type: parall
 
 `prepare` normalizes the dispatch file into `/tmp/prism-<id>-config.normalized.json` (the canonical JSON, kept for audit) before validating. **`prepare --config <config.json>` remains supported** as the machine/escape-hatch interface — it accepts that same JSON shape directly, also written with the Write tool (literal content, never a heredoc). Both paths run identical validation, rendering, and manifest logic; `--dispatch` is just a literal-text front-end that removes the JSON-escaping surface.
 
-`prepare` prints the rendered subagent launcher file paths — pass each file's **contents** as the prompt of an Agent-tool call. It validates `lens`/`lens_desc` (rejecting `</` and `{{` as an injection guard; comparison operators like `>` are allowed), enforces distinct lens names and distinct relay `name`s, rejects `effort` on DeepSeek/MiMo/Grok Composer, and rejects a `shared_packet` path containing whitespace. `parallax` writes `<id>-result.json` (`{id, expected, succeeded, failed, results:[{to,name,status,res,log}]}`) and prints each peer's `.res.md` path; read those on completion (the `log` field is relay's own diagnostics for a failed peer — never relay's token-heavy `.log` sidecar). Use `~/.claude/skills/prism/scripts/prism-launch parallax <manifest> --dry-run` to preview the exact relay commands without dispatching. Per-peer timeout defaults to 3600s (`PRISM_PEER_TIMEOUT`; set `=0` to disable the per-peer cap, leaving only the outer Bash-tool timeout) — deliberately generous, since a peer killed mid-run wastes every token it spent; set the backgrounded Bash call's `timeout` above that (e.g. `3660000`).
+`prepare` prints each subagent launcher's **contents inline** (delimited, with its path) — copy the contents straight into an Agent-tool call, no separate Read needed. It validates `lens`/`lens_desc` (rejecting `</` and `{{` as an injection guard; comparison operators like `>` are allowed), enforces distinct lens names and distinct relay `name`s, rejects `effort` on DeepSeek/MiMo/Grok Composer, and rejects a `shared_packet` path containing whitespace. `parallax` writes `<id>-result.json` (`{id, expected, succeeded, failed, results:[{to,name,status,res,log}]}`) and prints each peer's `.res.md` path to its own stdout — i.e. the backgrounded task's `.output` file, which is short and **safe to Read** for the paths. (Never Read a *subagent's* `.output` — that's the full JSONL transcript and overflows context; the subagent's result arrives in its completion notification instead.) Read the `.res.md` files on completion; the `log` field is relay's own diagnostics for a failed peer — never relay's token-heavy `.log` sidecar. Use `~/.claude/skills/prism/scripts/prism-launch parallax <manifest> --dry-run` to preview the exact relay commands without dispatching. Per-peer timeout defaults to 3600s (`PRISM_PEER_TIMEOUT`; set `=0` to disable the per-peer cap, leaving only the outer Bash-tool timeout) — deliberately generous, since a peer killed mid-run wastes every token it spent; set the backgrounded Bash call's `timeout` above that (e.g. `3660000`).
 
 **Manual fallback (last resort — only if the script file is genuinely missing):** A bare-name "command not found" is NOT a trigger — re-invoke by the absolute path above. The manual flow applies only when `~/.claude/skills/prism/scripts/prism-launch` does not exist at all (a broken install). First try to repair the install (`cd ~/dotfiles && ./dotfiles.sh`); if that is not possible, render each launcher with `sed -e 's|{{SHARED_PACKET_PATH}}|...|g' -e 's|{{LENS_NAME}}|...|g' -e 's|{{LENS_DESC}}|...|g' templates/launcher-<kind>.tmpl`, then dispatch one `relay call --to <peer> --name prism-<slug> [--effort <medium|xhigh>]` heredoc per parallax tier (background each, `timeout: 3660000`). This is the degraded pre-`prism-launch` flow; prefer the script.
 
@@ -287,7 +271,7 @@ Run these checks before launching. If any fails, rewrite and re-check. **When di
 
 0. **Relay availability test (if any parallax tier > 0):** Run `command -v relay` to check if the relay command is in PATH. This is the sole test — do not glob for relay files or references to determine availability. If the command exists, relay is available.
 
-1. **Shared-file test:** Verify the shared context file was written and read back successfully. Confirm every rendered launcher references the same absolute file path. The shared file must be frozen before any dispatch.
+1. **Shared-file test:** Verify the shared context file was written (the Write tool confirms this — no read-back needed). Confirm every rendered launcher references the same absolute file path. The shared file must be frozen before any dispatch.
 
 2. **Slot-completion test:** After rendering all launcher prompts via `sed`, verify no `{{` placeholder tokens survive: `grep -c '{{' rendered_launcher`. Also confirm the shared packet path is absolute and identical across all rendered prompts, and that the anti-recursion warning is the first line of every launcher. For relay prompts (Codex, DeepSeek, MiMo, Grok Build, Grok Composer), verify the XML skeleton is well-formed (`<context>`, `<objective>` or `<goal>`, `<constraints>`, `<your_lens>` tags present).
 
@@ -330,12 +314,12 @@ Starting points — every lens still answers the full question. These are 3-lens
 
 ### Step 1: Freeze context, compose, verify, launch
 
-1. Build one canonical shared packet (Full Question + Context + Constraints). Write it to `/tmp/prism-<unique-id>.md` with the Write tool.
+1. Build one canonical shared packet (Full Question + Context — `prepare` injects the Constraints). Write it to `/tmp/prism-<unique-id>.md` with the Write tool.
 2. Assign lenses (run the redundancy and lens-quality checks — these are yours to judge), then write the line-oriented dispatch file (`/tmp/prism-<id>.dispatch`) with the Write tool — `Shared-Packet:` plus one record per parallax peer and per subagent. See "Dispatch via prism-launch". (The `--config` JSON form is still accepted as an escape hatch.)
 3. **`~/.claude/skills/prism/scripts/prism-launch prepare --dispatch /tmp/prism-<id>.dispatch`** (foreground). This compiles the dispatch file into the canonical config, validates the packet and records its path (it does not copy or hash it — do not mutate the packet after this point), renders all launchers, runs checks 1/2/5/6, and writes `<id>-manifest.json`. If it exits non-zero, fix the dispatch file and re-run — nothing has been dispatched.
 4. Launch all dispatched agents concurrently (`run_in_background: true`). **Dispatch checklist:**
    - **Parallax — ONE backgrounded Bash call:** `~/.claude/skills/prism/scripts/prism-launch parallax /tmp/prism-<id>-manifest.json` (set the Bash tool `timeout` above `PRISM_PEER_TIMEOUT`, e.g. `3660000`). This fans out every Codex/DeepSeek/MiMo/Grok call, waits for all, and yields a single completion notification. Compose this call FIRST.
-   - **Subagents:** one **Agent** tool call per subagent, using the contents of the rendered launcher file (`prepare` printed the paths) as the prompt. Never use `claude -p` for these.
+   - **Subagents:** one **Agent** tool call per subagent, using the launcher **contents `prepare` printed inline** as the prompt (the file path is shown only as a fallback). Never use `claude -p` for these.
    - The manifest's `counts` is the authoritative dispatch shape — there is no per-relay-call count to reconcile by hand, because `prism-launch` emits exactly the configured calls.
 
 Do not poll or sleep-loop — the system notifies you when agents finish. (A bare-name "command not found" is not a fallback trigger — invoke by the absolute path above. The manual `sed`+heredoc flow applies only if the script file is genuinely missing, per "Manual fallback" above.)
@@ -454,7 +438,7 @@ Re-read the user's original question. Verify:
 - No per-lens summary appears in the main path — the model-tier tally is by lineage, not lens; lens-by-lens notes live only in an optional appendix.
 - Every retained dissent, caveat, or trigger changes a decision, confidence level, or next action.
 
-Optionally delete all Prism temp files — they share the `/tmp/prism-<unique-id>` prefix: shared context (`.md`), dispatch file (`.dispatch`), normalized/config JSON (`-config*.json`), manifest, rendered launchers (`-launcher-*.md`), parallax out logs (`-out-*.log`), and result sentinel (`-result.json`). A single `rm -f /tmp/prism-<unique-id>*` covers them.
+Optionally delete all Prism temp files with `~/.claude/skills/prism/scripts/prism-launch clean <id>` (or `rm -f /tmp/prism-<unique-id>*`) — both clear the whole `/tmp/prism-<unique-id>` prefix: shared context (`.md`), dispatch file (`.dispatch`), normalized/config JSON, manifest, rendered launchers, parallax out logs, and result sentinel.
 
 ## Guards
 
