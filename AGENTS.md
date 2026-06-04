@@ -19,7 +19,7 @@ This repository contains personal dotfiles and AI agent configurations for macOS
 - `uv venv && source .venv/bin/activate`: initialize local Python environment for script-based skills.
 
 ## Editing Skills
-Before modifying a skill, read `agents/extensions/README.md` to determine its source. Never edit files in `~/.claude/skills/` or `~/.codex/skills/` — those are symlinks.
+Before modifying a skill, read `agents/extensions/README.md` to determine its source. Never edit files in `~/.claude/skills/`, `~/.codex/skills/`, or `~/.grok/skills/` — those are symlinks.
 
 - **Own skills** (listed under `agents/extensions/skills/`): Edit in this repo — this is the single source of truth.
 - **Third-party skills** (cloned from GitHub): Edit in the source repo or fork

@@ -37,7 +37,7 @@ dotfiles/
 
 ## Editing Skills
 
-Never edit in `~/.claude/skills/` or `~/.codex/skills/` — those are symlinks. Check `agents/extensions/README.md` for source.
+Never edit in `~/.claude/skills/`, `~/.codex/skills/`, or `~/.grok/skills/` — those are symlinks. Check `agents/extensions/README.md` for source.
 
 - **Own skills** (`agents/extensions/skills/`): Edit in this repo — this is the single source of truth.
 - **Third-party skills** (cloned from GitHub): Edit in the source repo or fork

@@ -15,7 +15,7 @@ How symlinks work in this dotfiles repo.
 `dotfiles.sh` has two symlink systems:
 
 1. **LINKS array** (line 8): maps `source:destination` — repo-relative source → `$HOME`-relative destination. Processed by `install_links()` which calls `ensure_symlink()` for each entry.
-2. **SKILLS array** (line 27): maps skill directories into `~/.claude/skills/` and `~/.codex/skills/`. Processed by `install_skills()`. Stale skill symlinks are cleaned up aggressively.
+2. **SKILLS array** (line 27): maps skill directories into `~/.claude/skills/`, `~/.codex/skills/`, and `~/.grok/skills/`. Processed by `install_skills()`. Stale skill symlinks are cleaned up aggressively.
 
 Both use the same `ensure_symlink()` helper.
 
