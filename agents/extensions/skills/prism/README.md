@@ -16,7 +16,7 @@ Every agent answers the **whole** question with the **full** context. Only the
 
 ```
                         ┌──────────────────────────────┐
-                        │     ONE complete question     │
+                        │     ONE complete question    │
                         └───────────────┬──────────────┘
                                         │  same Q · same context · same scope
         ┌──────────────┬────────────────┼────────────────┬──────────────┐
