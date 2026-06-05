@@ -294,6 +294,10 @@ _deepseek(){
     # Drop relay scripts dir from PATH so DeepSeek sessions can't shell out to relay.
     local _ds_path="${PATH//$HOME\/.claude\/skills\/relay\/scripts:/}"
     _ds_path="${_ds_path%:$HOME/.claude/skills/relay/scripts}"
+    # deepseek-v4-pro is text-only — deny multimodal Reads so an image/PDF Read
+    # errors at the tool gate instead of failing the request. Mirrors the relay
+    # script's claude-env branch.
+    local _ds_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
     env -u TMUX COLORTERM=truecolor \
         PATH="$_ds_path" \
         ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic \
@@ -304,7 +308,7 @@ _deepseek(){
         ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-pro \
         ANTHROPIC_SMALL_FAST_MODEL=deepseek-v4-pro \
         CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-pro \
-        "$(command -v claude)" "$@"
+        "$(command -v claude)" --disallowedTools "$_ds_deny" "$@"
 }
 ds(){   CLAUDE_CODE_EFFORT_LEVEL=max  _deepseek --dangerously-skip-permissions "$@"; }
 dsh(){  CLAUDE_CODE_EFFORT_LEVEL=high _deepseek --dangerously-skip-permissions "$@"; }
@@ -327,6 +331,10 @@ _mimo(){
     # Drop relay scripts dir from PATH so MiMo sessions can't shell out to relay.
     local _mm_path="${PATH//$HOME\/.claude\/skills\/relay\/scripts:/}"
     _mm_path="${_mm_path%:$HOME/.claude/skills/relay/scripts}"
+    # mimo-v2.5-pro is text-only (image support lives in mimo-v2.5/-omni) — deny
+    # multimodal Reads so image data isn't silently dropped. Mirrors the relay
+    # script's claude-env branch.
+    local _mm_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
     env -u TMUX COLORTERM=truecolor \
         PATH="$_mm_path" \
         ANTHROPIC_BASE_URL=https://api.xiaomimimo.com/anthropic \
@@ -337,7 +345,7 @@ _mimo(){
         ANTHROPIC_DEFAULT_HAIKU_MODEL='mimo-v2.5-pro[1m]' \
         ANTHROPIC_SMALL_FAST_MODEL='mimo-v2.5-pro[1m]' \
         CLAUDE_CODE_SUBAGENT_MODEL='mimo-v2.5-pro[1m]' \
-        "$(command -v claude)" "$@"
+        "$(command -v claude)" --disallowedTools "$_mm_deny" "$@"
 }
 mm(){   _mimo --dangerously-skip-permissions "$@"; }
 mmc(){  _mimo --dangerously-skip-permissions --continue "$@"; }
