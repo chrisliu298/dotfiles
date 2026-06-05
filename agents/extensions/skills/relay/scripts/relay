@@ -399,7 +399,12 @@ EOF
       "ANTHROPIC_SMALL_FAST_MODEL=$model"
       "CLAUDE_CODE_SUBAGENT_MODEL=$model")
     if [ "${#extra_env[@]}" -gt 0 ]; then peer_cmd+=("${extra_env[@]}"); fi
-    peer_cmd+=(claude -p --dangerously-skip-permissions "$peer_prompt")
+    # deepseek-v4-pro and mimo-v2.5-pro are text-only (mimo image support lives in
+    # mimo-v2.5/-omni, not -pro; deepseek V4 input type is text/string). A peer that
+    # Reads an image/PDF would error (DeepSeek) or get the data silently dropped
+    # (MiMo), so deny multimodal Reads up front. Comma-separated, no spaces → one arg.
+    local img_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
+    peer_cmd+=(claude -p --dangerously-skip-permissions --disallowedTools "$img_deny" "$peer_prompt")
   fi
 
   # Invoke peer and capture exit status (don't let set -e abort before checking response)
