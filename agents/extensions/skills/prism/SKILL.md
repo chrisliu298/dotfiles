@@ -383,7 +383,7 @@ git diff --stat HEAD
 
 If the diff shows unexpected changes, flag them to the user before proceeding. Discard the offending agent's output — an agent that violated read-only constraints may have reasoned from a corrupted state.
 
-Scan each agent's output for recursion indicators: mentions of "dispatching," "subagent," "relay call," "Prism run," or synthesis-style structure (a `▶` verdict line, a model-tier tally, `Dissent:`/`Why:`/`Do now:` sections, or older `Consensus/Contested/Unique` sections). Flag matches for review — the agent may have spawned nested agents, producing contaminated reasoning.
+Scan each agent's output for recursion indicators: mentions of "dispatching," "subagent," "relay call," "Prism run," or synthesis-style structure (a model-tier tally, `Dissent:`/`Why:`/`Do now:` sections, or older `Consensus/Contested/Unique` sections). Flag matches for review — the agent may have spawned nested agents, producing contaminated reasoning.
 
 ### Step 4: Synthesize
 
@@ -395,13 +395,13 @@ Write a skim-first, verdict-led synthesis, not a lens-by-lens report — the rea
 
 1. **Verdict line** — one line, the first thing the eye hits. Fixed token order, `·`-separated:
 
-   `▶ <verdict, aim ≤12 words> · conf: <High|Moderate|Low> · <n>/<total> agree[ · ⚠ dissent]`
+   `<verdict, aim ≤12 words> · conf: <High|Moderate|Low> · <n>/<total> agree[ · ⚠ dissent]`
 
    - `<n>/<total>` counts **perspectives that returned, including self** (the default `N=1` run is `/7`: self + 6 dispatched) — *not* dispatched-only, *not* lineages. The tally below counts *lineages*; the two denominators intentionally differ. (Self is a perspective here even though it does not count toward *dispatch* shape elsewhere.)
-   - For an **exploratory question** with no proposition to vote on, swap `<n>/<total> agree` for `<n>/<total> aligned` (or `· converging` / `· divergent`) and let `▶` state the synthesized finding rather than a recommendation. Confidence is still shown.
+   - For an **exploratory question** with no proposition to vote on, swap `<n>/<total> agree` for `<n>/<total> aligned` (or `· converging` / `· divergent`) and let the verdict line state the synthesized finding rather than a recommendation. Confidence is still shown.
    - Confidence is **always shown** — the *absence* of a `⚠ dissent` clause is itself the all-clear signal.
    - The `⚠ dissent` clause appears **only** when a dispatched agent dissents. On a cross-model break the tally and Dissent line already name the peers, so the verdict clause stays a bare `⚠ dissent`; name a peer inline (`⚠ DeepSeek dissent`) only for a minor dissent that has no tally. `⚠` is the only routine glyph — reserve it for dissent; never decorate confidence or the verdict with emoji or boxes.
-   - Deliverable: the verdict line points at the artifact (`▶ See migration plan below · conf: High · 7/7 agree`), which follows immediately.
+   - Deliverable: the verdict line points at the artifact (`See migration plan below · conf: High · 7/7 agree`), which follows immediately.
    - **When the header is information-dense** — verdict + confidence + a consensus/dissent note that runs long (typical on material-disagreement or cross-model-break runs) — render it as a compact **two-column table** instead of one long `·`-separated line; it is far more readable (same fields, same content):
 
      | Summary | Detail |
@@ -448,7 +448,7 @@ Write a skim-first, verdict-led synthesis, not a lens-by-lens report — the rea
 - Per-lens attribution ("the Simplicity lens noted…", "Agent A said…"). The model-tier **tally line is the sole exception** (by lineage, not lens). Deeper per-lens notes go in an optional `<details>Per-lens detail</details>` appendix at the very bottom — only if the user asked, or disagreement is deep enough to need a lens-level audit.
 - Synthesis narration ("Weighing the perspectives…", "After considering the arguments…"). The verdict line and Why carry the reasoning.
 - Generic contingencies ("if requirements change"). Only concrete, observable triggers.
-- Routine chrome: emoji beyond the reserved `⚠`, ASCII-art boxes, traffic-light symbols. Use words for confidence; `▶` for the verdict line; `✓`/`⚠` in the tally. A plain `→` (or `then`) as a prose separator in a Do-now chain or a tally takeaway is fine — it is text, not chrome.
+- Routine chrome: emoji beyond the reserved `⚠`, ASCII-art boxes, traffic-light symbols. Use words for confidence and `✓`/`⚠` in the tally. A plain `→` (or `then`) as a prose separator in a Do-now chain or a tally takeaway is fine — it is text, not chrome.
 - Standalone `Confidence and basis` / `Key dissent` / `Contingencies` sections. Their content folds into the verdict line, Dissent line, and Why — and only when decision-relevant.
 
 **Cross-model weighting (internal — surfaces through the verdict line, tally, and Why):**
@@ -464,7 +464,7 @@ Agents advise; they do not vote. The tally shows lineage alignment, not the deci
 Re-read the user's original question. Verify:
 
 - Your synthesis answers it directly. If they asked for a deliverable, you produced one.
-- The verdict line leads, in fixed token order (`▶ verdict · conf: … · n/total agree[ · ⚠ dissent]`), and confidence is shown.
+- The verdict line leads, in fixed token order (`verdict · conf: … · n/total agree[ · ⚠ dissent]`), and confidence is shown.
 - On a cross-model break, the tally line and a dedicated Dissent line are present and sit above Why; on a material disagreement a `Tradeoff:` line carries the split (no tally); on full convergence all three are omitted.
 - No per-lens summary appears in the main path — the model-tier tally is by lineage, not lens; lens-by-lens notes live only in an optional appendix.
 - Every retained dissent, caveat, or trigger changes a decision, confidence level, or next action.

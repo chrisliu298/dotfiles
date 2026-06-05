@@ -34,7 +34,7 @@ Every agent answers the **whole** question with the **full** context. Only the
                        └───────┬───────┘
                                ▼
                     ┌──────────────────────┐
-                    │  one decision brief  │  ▶ verdict · conf · n/total agree
+                    │  one decision brief  │  verdict · conf · n/total agree
                     └──────────────────────┘
 ```
 
@@ -138,7 +138,7 @@ backgrounded process. The Integrator stays in the loop for the judgment.
            [ERROR] mimo     prism-outsider      (failed — retry)
        └─ retry one peer:  parallax <manifest> --only mimo
 
- 7  synthesize ─────────────►  ▶ verdict · conf · n/total agree [ · ⚠ dissent ]
+ 7  synthesize ─────────────►  verdict · conf · n/total agree [ · ⚠ dissent ]
                                (read each .res.md; weigh; write the brief)
 
  8  clean ─────────────────►  prism-launch clean <id>     rm -f /tmp/prism-<id>*
@@ -191,7 +191,7 @@ Skim-first: the reader grasps the recommendation, confidence, and any cross-mode
 dissent in seconds, then reads on only for the reasoning.
 
 ```
-  ▶ Pick Option B (event-driven) · conf: Moderate · 4/6 agree · ⚠ DeepSeek+MiMo dissent
+  Pick Option B (event-driven) · conf: Moderate · 4/6 agree · ⚠ DeepSeek+MiMo dissent
   Claude ✓  Codex ✓  DeepSeek ⚠  MiMo ⚠   → 2 independent lineages dissent, same direction
   Dissent — DeepSeek+MiMo: shared state needed for atomic txns; bounded by the spike gate.
   Why
