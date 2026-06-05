@@ -88,13 +88,13 @@ Parallax is dispatched via `relay` to **different models** (Codex, Grok Build, G
 **Tier strength and lens fit (heuristic for lens assignment, not a routing rule):** rough reasoning-capability ranking — **Claude ≈ Codex > {Grok Build (provisional, unbenchmarked — verify before the heaviest-reasoning lens), MiMo ≳ DeepSeek} > Grok Composer**. Weaker tiers lose no value: each independent lineage catches blind spots the others share. This informs lens *placement*, not inclusion:
 
 - **Subtle hard-reasoning lenses on risk-bearing questions** (Adversarial / Falsification / Disconfirming on a technical proposal where finding the non-obvious attack is the deliverable): prefer Claude subagent or Codex at `--effort xhigh`. If exactly one lens carries the heaviest reasoning load and it lands on a parallax tier, you've under-resourced the most decision-relevant role; when it must land on one anyway, prefer MiMo over DeepSeek.
-- **Lenses where the value is a different prior** (Outsider, First-Principles, Disconfirming-via-different-frame, Breadth-Weighted, Risk, Alternative-Framing): give these to DeepSeek and MiMo. Their independent lineages are the asset; raw reasoning depth is not the bottleneck.
+- **Lenses where the value is a different prior** (Outsider, First-Principles, Reframe, Breadth-Weighted, Lateral-Generative, Stakeholder): give these to DeepSeek and MiMo. Their independent lineages are the asset; raw reasoning depth is not the bottleneck.
 - **Parallax lenses comparably hard:** no swap needed.
 - **Never drop DeepSeek or MiMo to "upgrade" a run.** Lineage diversity is non-substitutable; default tier inclusion is unchanged.
 
 Assignment only — in synthesis, every tier's dissent keeps full cross-model weight (discount weak reasoning, never the model label). Revisit the ranking when the named model versions look stale.
 
-Assign each tier a lens that maximizes diversity. **Default to orthogonal exploratory lenses** (Breadth-Weighted, Depth-Weighted, Outsider, First-Principles, Disconfirming-via-different-frame) — these almost always extract more from cross-model diversity than a second attack angle. **Reach for an adversarial lens (Adversarial, Falsification, Disconfirming) only when it is much more valuable than another orthogonal lens would be** — i.e., the deliverable hinges on finding a non-obvious flaw, attack, or failure mode, and no other dispatched lens is already covering that ground. When that bar is met, put it on the parallax tier best suited to the reasoning load (see "Tier strength and lens fit"); otherwise skip it. When using multiple parallax tiers, give each a distinct lens — never assign the same lens to two of Codex, DeepSeek, MiMo, or the Grok tiers (that wastes a perspective). Treat grok-build + grok-composer as **one** vendor slot: don't give them two different diversity lenses as if independent (they share the xAI lineage). And don't stack two adversarial lenses unless the task genuinely demands independent attack frames.
+Assign each tier a lens that maximizes diversity. **Default to orthogonal exploratory lenses** (Breadth-Weighted, Depth-Weighted, Outsider, First-Principles, Reframe) — these almost always extract more from cross-model diversity than a second attack angle. **Reach for an adversarial lens (Adversarial, Falsification, Disconfirming) only when it is much more valuable than another orthogonal lens would be** — i.e., the deliverable hinges on finding a non-obvious flaw, attack, or failure mode, and no other dispatched lens is already covering that ground. When that bar is met, put it on the parallax tier best suited to the reasoning load (see "Tier strength and lens fit"); otherwise skip it. When using multiple parallax tiers, give each a distinct lens — never assign the same lens to two of Codex, DeepSeek, MiMo, or the Grok tiers (that wastes a perspective). Treat grok-build + grok-composer as **one** vendor slot: don't give them two different diversity lenses as if independent (they share the xAI lineage). And don't stack two adversarial lenses unless the task genuinely demands independent attack frames.
 
 Don't tailor the prompt body per peer — Prism sends the **same shared prompt** to every model (the launcher templates handle the only per-peer difference: Codex `<goal>` style vs CO-STAR XML), so you may skip the [[relay]] skill's per-peer prompting guides here. What matters is shared-prompt **quality** — an outcome-first shared packet (Full Question + Context) and sharp, distinct lens descriptions; optimize that, not per-model fit.
 
@@ -280,6 +280,7 @@ Run these checks before launching. If any fails, rewrite and re-check. **When di
 4. **Lens quality test:**
    - Each lens name is a weighing posture (1-3 words), never a task or role.
    - For each lens, write one sentence naming the unique axis it covers; if two would produce the same emphasis, replace one.
+   - **Select by axis family — one per family:** map each lens to its family in the Lens Axes table and field at most one lens per family. Two lenses from the same family are near-duplicates that fail the redundancy test in spirit even when their names differ; field a second from a family only when you can state how the two differ *on this task*. This is the primary guard against the over-served Reframe / Challenge / Delivery clusters — choose by axis, not by scanning names.
    - **Adversarial coverage is opt-in:** include an adversarial-family lens (Adversarial, Falsification, Disconfirming, Risk) only when the answer turns on surfacing a non-obvious flaw/attack/failure-mode no other lens is covering — name the specific risk first; if you can't, use an exploratory lens. A "risk-bearing" task (decision, design, code review, implementation, root-cause claim) does *not* automatically require one.
    - **Omission must also be deliberate:** if the task proposes, evaluates, or changes something and you include *no* adversarial-family lens, name which dispatched lens covers "what could go wrong"; if none does, add one (a failure-mode-tilted exploratory lens — e.g. Depth-Weighted on failure modes — suffices). Silent omission here is a check failure.
    - Never assign the same lens to two of Codex, DeepSeek, MiMo, or the Grok tiers.
@@ -295,20 +296,38 @@ A lens is a **weighing posture**, not a task variant. Do not put the task noun i
 
 Choose lenses on **orthogonal tradeoff axes**. Before adding one, write one sentence explaining how it differs from every existing lens. If you cannot name a distinct axis, do not add it. The symmetric default dispatches six agents (one per model), so aim for **six distinct postures**; if the task can't support that many, exclude a tier via natural language rather than giving two agents the same lens. At `N ≥ 2` (multiple agents per model), give each copy a distinct lens where the task supports it; deliberate same-*posture* redundancy to reduce variance on a pivotal question is allowed, but each agent still needs a **distinct lens name** (e.g. `Adversarial-A` / `Adversarial-B`) — `prism-launch` rejects duplicate names. Note that `N=1` gives only one Claude subagent slot: when a risk-bearing question wants its adversarial lens on Claude or Codex (Check #4), either accept it on Codex at `xh`, bump `N`, or exclude a Parallax tier via NL to free a Claude slot.
 
-**`Disconfirming` vs `Disconfirming-via-different-frame`:** these are not interchangeable. `Disconfirming` is adversarial — it directly attacks a specific claim and is subject to the opt-in gate in the Lens quality test. `Disconfirming-via-different-frame` is exploratory — its value is an alternate prior or framing, not stress-testing — so it counts as an orthogonal default, not the adversarial slot. Do not relabel an attack posture as a frame to evade the opt-in gate.
+### Lens Axes
+
+Lenses are grouped into **axis families**. Two lenses in the *same* family are near-substitutes — fielding both wastes a slot and silently fails the redundancy test. **Pick at most one lens per family per run;** field two (or more) from one family only when each earns its slot by a distinct on-task emphasis (the redundancy test must still pass). Two task types legitimately do this: **research/exploration**, where probing the option/framing space *is* the deliverable, so several Reframe/Search lenses (`First-Principles` rebuild-from-goal vs `Outsider` another-field's-eyes vs `Lateral-Generative` pattern-break) are the point; and **writing**, where `Clarity` (is it clear) and `Audience` (fit to the reader) are distinct Human/Value emphases. Everywhere else, aim for six different families. This is the unit of selection — **choose by axis, not by scanning names.**
+
+| Axis family | What it weighs | Member lenses |
+|---|---|---|
+| **Search** | coverage vs depth | Breadth-Weighted · Depth-Weighted |
+| **Reframe** | a different basis, prior, frame, or non-obvious option | First-Principles · Outsider · Reframe · Lateral-Generative |
+| **Evidence** | empirical grounding and correctness | Empirical · Correctness |
+| **Mechanism** | cause and effect | Causal |
+| **Challenge** *(opt-in)* | attack, downside, disproof | Adversarial · Falsification · Disconfirming · Risk |
+| **Human / Value** | affected parties and reception | Stakeholder · Audience · Clarity |
+| **Delivery** | ship-ability and minimalism | Pragmatist · Simplicity |
+| **Time** | lifecycle, sequencing, reversibility | Temporal |
+| **Self** | holistic synthesis (orchestrator only) | Integrator |
+
+Lenses added to close coverage gaps: **`Empirical`** (the measurement / base-rate axis — for "did X actually improve it?", perf, and A/B claims; no other lens demands a baseline + metric), **`Stakeholder`** (affected parties and second-order effects — distinct from `Audience`, which is only *reception*), **`Temporal`** (promoted from the old `Evolutionary`, now covering lifecycle *and* sequencing/reversibility), **`Lateral-Generative`** (deliberate novelty, distinct from breadth), and **`Reframe`** (merges the former `Alternative-Framing` + `Disconfirming-via-different-frame`). Retired as near-duplicates: `Expansionist` (→ `Lateral-Generative` / `Breadth-Weighted`) and `Feasibility` + `Executor` (→ `Pragmatist`; `Executor` was a role, not a posture). The menu stays **open** — mint a task-specific lens when you can name its axis in one sentence and slot it into (or beside) a family.
+
+**`Disconfirming` vs `Reframe`:** these are not interchangeable. `Disconfirming` is adversarial (Challenge family) — it directly attacks a specific claim and is subject to the opt-in gate in the Lens quality test. `Reframe` is exploratory (Reframe family) — its value is an alternate prior or framing, not stress-testing — so it counts as an orthogonal default, not the adversarial slot. Do not relabel an attack posture as a frame to evade the opt-in gate.
 
 ### Suggested lenses by task type
 
-Starting points — every lens still answers the full question. These are 3-lens cores; the symmetric default dispatches **six** agents, so extend each set to six distinct postures with orthogonal exploratory lenses (Outsider, First-Principles, Depth-Weighted, Breadth-Weighted, Disconfirming-via-different-frame). The adversarial slot (italicized below) is a *candidate*, not a default: keep it only if stress-testing is the binding constraint for this specific question (see Lens quality test); otherwise replace it with an orthogonal exploratory lens.
+Starting points — every lens still answers the full question. The symmetric default dispatches **six** agents, so each set below is six distinct postures; most span six different axis families (research and writing deliberately field two from one family — see Lens Axes). The seven `prism-launch scaffold --preset` sets pre-fill these (Implementation has no preset — compose it by hand). The adversarial-family slot (italicized) is a *candidate*, not a default: keep it only if stress-testing is the binding constraint for this specific question (see Lens quality test); otherwise replace it with another family's lens.
 
-- **Code review**: Correctness + Simplicity + *Adversarial*
-- **Architecture / design**: Evolutionary + Simplicity + *Adversarial*
-- **Implementation**: Correctness + Pragmatist + *Adversarial*
-- **Diagnosis / root cause**: Causal + *Falsification* + *Risk*
-- **Option comparison**: Simplicity + Feasibility + *Disconfirming*
-- **Writing / communication**: Clarity + Audience + *Adversarial*
-- **Research / exploration**: Breadth-Weighted + Depth-Weighted + Outsider (add *Disconfirming* only if there's a specific claim to stress-test)
-- **Decision / strategy**: First-Principles + *Disconfirming* + Expansionist + Outsider + Executor
+- **Code review**: *Adversarial* + Correctness + Simplicity + Depth-Weighted + Temporal + Outsider
+- **Architecture / design**: First-Principles + *Adversarial* + Simplicity + Stakeholder + Temporal + Empirical
+- **Implementation**: Correctness + Pragmatist + *Adversarial* + Depth-Weighted + Outsider + Temporal
+- **Diagnosis / root cause**: Causal + *Falsification* + Empirical + Depth-Weighted + Temporal + Outsider
+- **Option comparison**: First-Principles + Empirical + Simplicity + Stakeholder + Temporal + *Disconfirming*
+- **Writing / communication**: Clarity + Audience + *Adversarial* + Simplicity + Outsider + Empirical
+- **Research / exploration**: First-Principles + Breadth-Weighted + Depth-Weighted + Outsider + Empirical + Lateral-Generative
+- **Decision / strategy**: First-Principles + Empirical + Stakeholder + Temporal + Pragmatist + *Disconfirming*
 
 ## Execution
 

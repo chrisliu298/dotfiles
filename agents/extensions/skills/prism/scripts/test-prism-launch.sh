@@ -37,7 +37,7 @@ cat > "$CFG" <<JSON
 {
   "shared_packet": "$PKT",
   "parallax": [
-    {"to":"codex","name":"evolutionary","effort":"medium","lens":"Evolutionary","lens_desc":"weigh clean extension"},
+    {"to":"codex","name":"temporal","effort":"medium","lens":"Temporal","lens_desc":"weigh clean extension"},
     {"to":"deepseek","name":"first-principles","lens":"First-Principles","lens_desc":"reason from fundamentals"},
     {"to":"mimo","name":"outsider","lens":"Outsider","lens_desc":"weigh a newcomer view"}
   ],
@@ -56,12 +56,12 @@ MAN="$TMP/prism-run1-manifest.json"
 [ "$(jq -r '.counts.by_peer.deepseek' "$MAN" 2>/dev/null)" = "1" ] && ok "deepseek count = 1" || bad "deepseek count = 1"
 [ "$(jq -r '.counts.by_peer.mimo' "$MAN" 2>/dev/null)" = "1" ] && ok "mimo count = 1" || bad "mimo count = 1"
 [ "$(jq -r '.counts.dispatched_total' "$MAN" 2>/dev/null)" = "5" ] && ok "dispatched_total = 5" || bad "dispatched_total = 5"
-[ "$(jq -r '.parallax[0].name' "$MAN" 2>/dev/null)" = "prism-evolutionary" ] && ok "relay name prefixed with prism-" || bad "relay name prefixed with prism-"
+[ "$(jq -r '.parallax[0].name' "$MAN" 2>/dev/null)" = "prism-temporal" ] && ok "relay name prefixed with prism-" || bad "relay name prefixed with prism-"
 [ "$(jq -r '.parallax[1].effort' "$MAN" 2>/dev/null)" = "null" ] && ok "deepseek effort is null" || bad "deepseek effort is null"
 [ "$(jq -r '.parallax[0].effort' "$MAN" 2>/dev/null)" = "medium" ] && ok "codex effort = medium" || bad "codex effort = medium"
 [ "$(jq -r '.parallax[0].template' "$MAN" 2>/dev/null)" = "codex" ] && ok "codex uses codex template (registry)" || bad "codex template = codex"
 [ "$(jq -r '.parallax[1].template' "$MAN" 2>/dev/null)" = "costar" ] && ok "deepseek uses shared costar template (registry)" || bad "deepseek template = costar"
-case "$(jq -r '.parallax[0].log' "$MAN" 2>/dev/null)" in *-out-prism-evolutionary.log) ok "manifest log path matches runtime (prism- prefixed)" ;; *) bad "manifest log path prism- prefixed" ;; esac
+case "$(jq -r '.parallax[0].log' "$MAN" 2>/dev/null)" in *-out-prism-temporal.log) ok "manifest log path matches runtime (prism- prefixed)" ;; *) bad "manifest log path prism- prefixed" ;; esac
 
 echo "== prepare: launcher rendering =="
 CXL=$(jq -r '.parallax[0].launcher' "$MAN")
@@ -69,7 +69,7 @@ CXL=$(jq -r '.parallax[0].launcher' "$MAN")
 head -1 "$CXL" | grep -q '^CRITICAL:' && ok "launcher starts with anti-recursion CRITICAL line" || bad "launcher CRITICAL line"
 ! grep -q '{{' "$CXL" && ok "no surviving {{slots}} in launcher" || bad "no surviving {{slots}}"
 grep -qF "$PKT" "$CXL" && ok "shared_packet path substituted into launcher" || bad "packet path substituted"
-grep -q 'Evolutionary' "$CXL" && ok "lens name substituted into launcher" || bad "lens name substituted"
+grep -q 'Temporal' "$CXL" && ok "lens name substituted into launcher" || bad "lens name substituted"
 # Template-by-style: codex renders <goal>, costar peers render <objective>.
 DSL=$(jq -r '.parallax[1].launcher' "$MAN")
 grep -q '<goal>' "$CXL" && ok "codex launcher uses <goal> scaffolding" || bad "codex <goal> scaffolding"
@@ -201,7 +201,7 @@ echo "== parallax: --dry-run (no network) =="
 DRY=$("$LAUNCH" parallax "$MAN" --dry-run 2>/dev/null)
 echo "$DRY" | grep -q 'DRY RUN' && ok "dry-run announces itself" || bad "dry-run announces itself"
 [ "$(echo "$DRY" | grep -c 'relay call --to')" = "3" ] && ok "dry-run lists exactly 3 relay calls" || bad "dry-run lists 3 relay calls"
-echo "$DRY" | grep -q 'relay call --to codex --name prism-evolutionary --effort medium' && ok "codex dry-run cmd has --effort medium" || bad "codex dry-run --effort"
+echo "$DRY" | grep -q 'relay call --to codex --name prism-temporal --effort medium' && ok "codex dry-run cmd has --effort medium" || bad "codex dry-run --effort"
 echo "$DRY" | grep -q 'relay call --to deepseek --name prism-first-principles <' && ok "deepseek dry-run cmd has no --effort" || bad "deepseek dry-run no --effort"
 [ -f "$TMP/prism-run1-result.json" ] && bad "dry-run must NOT write a result file" || ok "dry-run writes no result file"
 

@@ -603,45 +603,54 @@ $(jq -n --arg to "$to" --arg name "$name" --arg status "$status" --arg res "$res
 
 # ── scaffold ─────────────────────────────────────────────────────────────────
 
-# Standard one-line weighing-posture descriptions for the common lenses, used to
-# pre-fill --preset scaffolds (refine as needed). Unknown names get a generic stub.
+# Standard one-line weighing-posture descriptions for the common lenses, grouped by
+# axis family (see SKILL.md "Lens Axes"), used to pre-fill --preset scaffolds (refine
+# as needed). The menu is open — unknown names get a generic stub, not an error.
 lens_desc_for() {
   case "$1" in
-    Adversarial)         echo "weigh the strongest attacks, flaws, and failure modes — find what breaks" ;;
-    Correctness)         echo "weigh correctness guarantees and edge cases" ;;
-    Simplicity)          echo "weigh the approach with the fewest moving parts" ;;
-    Pragmatist)          echo "weigh the fastest workable path that ships" ;;
-    First-Principles)    echo "weigh how this looks rebuilt from the goal up, ignoring the current shape" ;;
-    Outsider)            echo "weigh how a newcomer with no prior context would approach it" ;;
-    Evolutionary)        echo "weigh how the design will extend, age, and absorb future change" ;;
-    Feasibility)         echo "weigh what is realistically buildable with the resources at hand" ;;
-    Falsification)       echo "weigh what evidence would prove the leading hypothesis wrong" ;;
-    Causal)              echo "weigh the actual cause-and-effect chain down to the root" ;;
-    Risk)                echo "weigh what could go wrong and the blast radius if it does" ;;
-    Depth-Weighted)      echo "weigh deep, thorough analysis of the core over breadth" ;;
+    # Search axis
     Breadth-Weighted)    echo "weigh wide coverage of options and angles over depth" ;;
+    Depth-Weighted)      echo "weigh deep, thorough analysis of the core over breadth" ;;
+    # Reframe axis
+    First-Principles)    echo "weigh how this looks rebuilt from the goal up, ignoring the current shape" ;;
+    Outsider)            echo "weigh how a newcomer from another field would approach it" ;;
+    Reframe)             echo "weigh an alternate prior or problem framing that recasts the question (exploratory, not an attack)" ;;
+    Lateral-Generative)  echo "weigh deliberately non-obvious options via analogy, inversion, or constraint removal — novelty over coverage" ;;
+    # Evidence axis
+    Empirical)           echo "weigh the claim by what is measurable: baseline, metric, magnitude, base rate — distrust unmeasured assertions" ;;
+    Correctness)         echo "weigh correctness guarantees and edge cases" ;;
+    # Mechanism axis
+    Causal)              echo "weigh the actual cause-and-effect chain down to the root" ;;
+    # Challenge axis (opt-in)
+    Adversarial)         echo "weigh the strongest attacks, flaws, and failure modes — find what breaks" ;;
+    Falsification)       echo "weigh what evidence would prove the leading hypothesis wrong" ;;
     Disconfirming)       echo "weigh the evidence that most directly contradicts the leading choice" ;;
-    Disconfirming-via-different-frame) echo "weigh an alternate prior or framing that recasts the question" ;;
-    Expansionist)        echo "weigh the most ambitious version of the goal" ;;
-    Executor)            echo "weigh the concrete next actions and what it takes to ship" ;;
-    Clarity)             echo "weigh how clearly the message lands for its reader" ;;
+    Risk)                echo "weigh what could go wrong and the blast radius if it does" ;;
+    # Human / Value axis
+    Stakeholder)         echo "weigh who is affected and how: incentives, who bears the cost, second-order effects on the people and systems it touches" ;;
     Audience)            echo "weigh how the intended audience will actually receive it" ;;
-    Alternative-Framing) echo "weigh a fundamentally different framing of the problem" ;;
+    Clarity)             echo "weigh how clearly the message lands for its reader" ;;
+    # Delivery axis
+    Pragmatist)          echo "weigh the workable path that ships under real constraints — resources, sequencing, what it takes to execute" ;;
+    Simplicity)          echo "weigh the approach with the fewest moving parts" ;;
+    # Time axis
+    Temporal)            echo "weigh how the answer changes over time: lifecycle, sequencing, reversibility (one-way vs two-way doors), path dependence" ;;
     *)                   echo "weigh the $1 axis — refine this description" ;;
   esac
 }
 
 # Six distinct lenses per task-type preset, in canonical tier order (heaviest-
-# reasoning first, so it lands on the subagent/codex slots). Returns 1 if unknown.
+# reasoning first, so it lands on the subagent/codex slots). Each set spreads across
+# distinct axis families (see SKILL.md "Lens Axes"). Returns 1 if unknown.
 preset_lenses() {
   case "$1" in
-    review)    echo "Adversarial Correctness Simplicity Pragmatist First-Principles Outsider" ;;
-    design)    echo "Adversarial Evolutionary Simplicity Feasibility First-Principles Outsider" ;;
-    diagnosis) echo "Falsification Causal Risk Depth-Weighted Disconfirming-via-different-frame Outsider" ;;
-    compare)   echo "Disconfirming Simplicity Feasibility Pragmatist First-Principles Outsider" ;;
-    research)  echo "Depth-Weighted Breadth-Weighted First-Principles Alternative-Framing Outsider Disconfirming-via-different-frame" ;;
-    decision)  echo "Disconfirming First-Principles Expansionist Feasibility Outsider Executor" ;;
-    writing)   echo "Adversarial Clarity Audience Simplicity Outsider First-Principles" ;;
+    review)    echo "Adversarial Correctness Simplicity Depth-Weighted Temporal Outsider" ;;
+    design)    echo "First-Principles Adversarial Simplicity Stakeholder Temporal Empirical" ;;
+    diagnosis) echo "Causal Falsification Empirical Depth-Weighted Temporal Outsider" ;;
+    compare)   echo "First-Principles Empirical Simplicity Stakeholder Temporal Disconfirming" ;;
+    research)  echo "First-Principles Breadth-Weighted Depth-Weighted Outsider Empirical Lateral-Generative" ;;
+    decision)  echo "First-Principles Empirical Stakeholder Temporal Pragmatist Disconfirming" ;;
+    writing)   echo "Adversarial Clarity Audience Simplicity Outsider Empirical" ;;
     *) return 1 ;;
   esac
 }
