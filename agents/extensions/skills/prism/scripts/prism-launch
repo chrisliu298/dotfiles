@@ -201,6 +201,16 @@ cmd_prepare() {
     # hole the injection is meant to close, so fail closed on it.
     die "prepare: the packet's ## Constraints section is missing the anti-recursion guard ('read-only leaf node'). Remove the section to let prepare inject the canonical block, or restore the verbatim text from templates/shared-constraints.md."
   fi
+  # How-to-answer: a presentation-only block (verdict-first, cite sources, no
+  # preamble). Unlike Constraints it carries no safety load, so it is injected
+  # AFTER Constraints (so it's the freshest instruction before the agent answers)
+  # and never fails closed on a bespoke section. Idempotent — present → left as-is.
+  if ! grep -q '^## How to answer' "$packet"; then
+    local hfile="$TEMPLATES_DIR/shared-how-to-answer.md"
+    [ -f "$hfile" ] || die "prepare: canonical how-to-answer template missing: $hfile"
+    { printf '\n'; cat "$hfile"; } >> "$packet" || die "prepare: could not inject how-to-answer into $packet"
+    echo "prism-launch: injected canonical ## How to answer into $(basename "$packet")" >&2
+  fi
 
   # run_base: shared_packet path minus a trailing .md. All run artifacts hang off it.
   local run_base="${packet%.md}"
@@ -794,8 +804,8 @@ scaffold:  emit a ready-to-fill dispatch skeleton for the symmetric default (N o
            --preset <review|design|diagnosis|compare|research|decision|writing> pre-fills six
            lenses by task type (N=1).
 prepare:   validate the dispatch/config, render all launchers from templates, write a manifest;
-           inject the canonical ## Constraints into the shared packet if absent (so you author
-           the packet with just Full Question + Context). Pass exactly one of --dispatch
+           inject the canonical ## Constraints and ## How to answer into the shared packet if
+           absent (so you author the packet with just Full Question + Context). Pass one of --dispatch
            (compiled to the canonical config) or --config. See the prism SKILL.md.
 parallax:  fan out every relay call as ONE backgrounded process, wait for all, write a structured
            result. Run with run_in_background: true. --only <name> retries a single failed peer.

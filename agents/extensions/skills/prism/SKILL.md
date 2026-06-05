@@ -153,13 +153,13 @@ Dispatched agents are **read-only** — no edits, commits, deploys, or external 
 
 ## Shared Context
 
-Build one shared evidence packet (Full Question + Context; `prepare` injects the canonical Constraints) before composing prompts. Prefer compact digests over full file dumps. Write it to a temporary file once; every agent receives a short launcher prompt referencing this file plus its unique lens. If the packet cannot be duplicated cleanly across all agents, the task is too large for Prism.
+Build one shared evidence packet (Full Question + Context; `prepare` injects the canonical Constraints and How-to-answer) before composing prompts. Prefer compact digests over full file dumps. Write it to a temporary file once; every agent receives a short launcher prompt referencing this file plus its unique lens. If the packet cannot be duplicated cleanly across all agents, the task is too large for Prism.
 
 **Reference materials (REQUIRED):** Before building the shared packet, identify all reference materials relevant to the question — CLAUDE.md files, READMEs, config files, documentation, skill definitions, style guides, or any file an agent would need to reason about the task. Include the **absolute paths** of these files in the Context section of the shared packet so every agent can read them. Agents cannot discover references on their own; if a path is not listed, the agent will not consult it.
 
 ### Shared Packet Template
 
-Write this to `/tmp/prism-<unique-id>.md` using the Write tool (one call, before any dispatch). Use a unique identifier (e.g., timestamp + random suffix) to prevent collisions between concurrent Prism runs. **Write only Full Question + Context (with Reference Materials)** — `prism-launch prepare` injects the canonical `## Constraints` block (the verbatim read-only / anti-recursion text) when it's absent, so you never hand-copy it and it can't be fat-fingered.
+Write this to `/tmp/prism-<unique-id>.md` using the Write tool (one call, before any dispatch). Use a unique identifier (e.g., timestamp + random suffix) to prevent collisions between concurrent Prism runs. **Write only Full Question + Context (with Reference Materials)** — `prism-launch prepare` injects the canonical `## Constraints` block (the verbatim read-only / anti-recursion text) and the `## How to answer` block (presentation guidance: verdict-first, cite sources, no preamble) when they're absent, so you never hand-copy them and they can't be fat-fingered.
 
 ```
 ## Full Question
@@ -179,7 +179,7 @@ Write this to `/tmp/prism-<unique-id>.md` using the Write tool (one call, before
 - ...
 ```
 
-`prepare` appends the canonical `## Constraints` (from `templates/shared-constraints.md`) if you omitted it — idempotent, so a re-run won't double it. (If you want a bespoke Constraints block, include a `## Constraints` section yourself and prepare leaves it untouched.) The packet is **frozen** once `prepare` runs — do not modify it after, since dispatched agents read it live. `Write` already confirms success, so no read-back is needed.
+`prepare` appends the canonical `## Constraints` (from `templates/shared-constraints.md`) and `## How to answer` (from `templates/shared-how-to-answer.md`) if you omitted them — idempotent, so a re-run won't double either. (If you want a bespoke version of either, include that `##` section yourself and prepare leaves it untouched; Constraints additionally fails closed if a bespoke block drops the anti-recursion guard, How-to-answer carries no such safety load.) The packet is **frozen** once `prepare` runs — do not modify it after, since dispatched agents read it live. `Write` already confirms success, so no read-back is needed.
 
 ### Launcher Templates
 
@@ -335,7 +335,7 @@ Starting points — every lens still answers the full question. The symmetric de
 
 Invoke `prism-launch` by its absolute path `~/.claude/skills/prism/scripts/prism-launch` (abbreviated `PL` below; see the absolute-path rule above).
 
-1. **Write the packet** `/tmp/prism-<id>.md` — just `## Full Question` + `## Context` (with Reference Materials). No Constraints; `prepare` injects them.
+1. **Write the packet** `/tmp/prism-<id>.md` — just `## Full Question` + `## Context` (with Reference Materials). No Constraints or How-to-answer; `prepare` injects them.
 2. **Scaffold the dispatch:** `PL scaffold --preset <task-type> --packet /tmp/prism-<id>.md` (or `--n 1 --effort m|xh` for blank slots). Edit the lenses, Write to `/tmp/prism-<id>.dispatch`.
 3. **Prepare:** `PL prepare --dispatch /tmp/prism-<id>.dispatch` — prints the parallax command, the expected notification count, and each subagent launcher's contents.
 4. **Launch concurrently:** one backgrounded `PL parallax <manifest>` Bash call + one Agent call per subagent (paste the inline launcher contents). Then wait for every notification.
@@ -345,7 +345,7 @@ The numbered steps below are the authoritative detail; the Quick Start is the sh
 
 ### Step 1: Freeze context, compose, verify, launch
 
-1. Build one canonical shared packet (Full Question + Context — `prepare` injects the Constraints). Write it to `/tmp/prism-<unique-id>.md` with the Write tool.
+1. Build one canonical shared packet (Full Question + Context — `prepare` injects the Constraints and How-to-answer). Write it to `/tmp/prism-<unique-id>.md` with the Write tool.
 2. Assign lenses (run the redundancy and lens-quality checks — these are yours to judge), then write the line-oriented dispatch file (`/tmp/prism-<id>.dispatch`) with the Write tool — `Shared-Packet:` plus one record per parallax peer and per subagent. See "Dispatch via prism-launch". (The `--config` JSON form is still accepted as an escape hatch.)
 3. **`~/.claude/skills/prism/scripts/prism-launch prepare --dispatch /tmp/prism-<id>.dispatch`** (foreground). This compiles the dispatch file into the canonical config, validates the packet and records its path (it does not copy or hash it — do not mutate the packet after this point), renders all launchers, runs checks 1/2/5/6, and writes `<id>-manifest.json`. If it exits non-zero, fix the dispatch file and re-run — nothing has been dispatched.
 4. Launch all dispatched agents concurrently (`run_in_background: true`). **Dispatch checklist:**

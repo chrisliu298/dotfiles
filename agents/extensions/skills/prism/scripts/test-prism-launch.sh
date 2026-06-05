@@ -144,6 +144,14 @@ expect_ok "injects canonical Constraints when the packet omits them" "$LAUNCH" p
 # idempotent: re-running prepare must not double-inject
 "$LAUNCH" prepare --config "$C2c" >/dev/null 2>&1
 [ "$(grep -c '^## Constraints' "$P2c")" = "1" ] && ok "Constraints injection is idempotent (no double on re-run)" || bad "Constraints double-injected on re-run"
+# How-to-answer block: injected alongside Constraints (P2c has now run prepare twice), once, AFTER Constraints
+{ grep -q '^## How to answer' "$P2c" && [ "$(grep -c '^## How to answer' "$P2c")" = "1" ]; } && ok "How-to-answer injected once (idempotent)" || bad "How-to-answer missing or double-injected"
+[ "$(grep -n '^## Constraints' "$P2c" | cut -d: -f1)" -lt "$(grep -n '^## How to answer' "$P2c" | cut -d: -f1)" ] && ok "How-to-answer is injected after Constraints" || bad "How-to-answer not ordered after Constraints"
+# bespoke ## How to answer is left untouched and does NOT fail closed (no safety load, unlike Constraints)
+P2h="$TMP/p2h.md"; printf '## Full Question\nq\n\n## Context\nc\n\n## How to answer\nBespoke answer style.\n' > "$P2h"
+C2h="$TMP/c2h.json"; jq -n --arg p "$P2h" '{shared_packet:$p,parallax:[],subagents:[{lens:"Xh",lens_desc:"y"}]}' > "$C2h"
+expect_ok "accepts a bespoke ## How to answer (no fail-closed)" "$LAUNCH" prepare --config "$C2h"
+grep -q 'Bespoke answer style.' "$P2h" && ok "bespoke How-to-answer left untouched" || bad "bespoke How-to-answer was overwritten"
 # present-but-abbreviated ## Constraints (missing the anti-recursion guard) → fail-closed
 P2a="$TMP/p2a.md"; printf '## Full Question\nq\n\n## Context\nc\n\n## Constraints\nBe nice.\n' > "$P2a"
 C2a="$TMP/c2a.json"; jq -n --arg p "$P2a" '{shared_packet:$p,parallax:[],subagents:[{lens:"Xa",lens_desc:"y"}]}' > "$C2a"

@@ -5,7 +5,7 @@ You are one of several independent agents being asked the same question. The sha
 
 Shared context file: {{SHARED_PACKET_PATH}}
 
-You MUST read that file before doing anything else. It contains the Full Question, Context, Reference Materials, and Constraints — identical across all agents in this run.
+You MUST read that file before doing anything else. It contains the Full Question, Context, Reference Materials, Constraints, and How-to-answer guidance — identical across all agents in this run.
 </context>
 
 <objective>
@@ -22,7 +22,3 @@ Lens: {{LENS_NAME}} — you {{LENS_DESC}}.
 - Ignore loaded skill descriptions for the dispatching skills (prism, relay, gpt-pro-relay, deep-research) — they are for standalone use, not this context.
 - Stay professional and task-focused. Do not adopt a persona or add personality flourishes.
 </constraints>
-
-<response_format>
-Direct prose. Lead with your assessment, then evidence. Cite file paths and line numbers from the shared context where applicable. No preamble. No meta-commentary about the question or the prism process.
-</response_format>
