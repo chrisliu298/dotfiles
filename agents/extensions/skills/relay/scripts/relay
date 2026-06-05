@@ -336,7 +336,9 @@ EOF
   # Build peer invocation from the registry row — three transports, not N peers.
   # codex and grok each use their own CLI; claude-env wraps `claude -p` in an
   # Anthropic-compatible envelope whose endpoint/key/model/extras all come from the
-  # registry. The five ANTHROPIC_*_MODEL vars all take the same model id (harness-required).
+  # registry. The six model vars all take the same model id (harness-required) —
+  # incl. ANTHROPIC_SMALL_FAST_MODEL, else background calls fall back to a hardcoded
+  # Haiku id that DeepSeek/MiMo gateways bill as their cheap flash/lite tier.
   local -a peer_cmd
   local model
   model=$(jq -r '.model' <<<"$peer_json")
@@ -381,7 +383,7 @@ EOF
     while IFS=$'\t' read -r k v; do
       [ -n "$k" ] || continue
       case "$k" in
-        PATH|RELAY_PEER|ANTHROPIC_BASE_URL|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_MODEL|ANTHROPIC_DEFAULT_OPUS_MODEL|ANTHROPIC_DEFAULT_SONNET_MODEL|ANTHROPIC_DEFAULT_HAIKU_MODEL|CLAUDE_CODE_SUBAGENT_MODEL)
+        PATH|RELAY_PEER|ANTHROPIC_BASE_URL|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_MODEL|ANTHROPIC_DEFAULT_OPUS_MODEL|ANTHROPIC_DEFAULT_SONNET_MODEL|ANTHROPIC_DEFAULT_HAIKU_MODEL|ANTHROPIC_SMALL_FAST_MODEL|CLAUDE_CODE_SUBAGENT_MODEL)
           die "call: peer '$to' extra_env may not override reserved env var '$k' (registry safety guard)" ;;
       esac
       extra_env+=("$k=$v")
@@ -394,6 +396,7 @@ EOF
       "ANTHROPIC_DEFAULT_OPUS_MODEL=$model"
       "ANTHROPIC_DEFAULT_SONNET_MODEL=$model"
       "ANTHROPIC_DEFAULT_HAIKU_MODEL=$model"
+      "ANTHROPIC_SMALL_FAST_MODEL=$model"
       "CLAUDE_CODE_SUBAGENT_MODEL=$model")
     if [ "${#extra_env[@]}" -gt 0 ]; then peer_cmd+=("${extra_env[@]}"); fi
     peer_cmd+=(claude -p --dangerously-skip-permissions "$peer_prompt")
