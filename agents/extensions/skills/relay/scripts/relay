@@ -399,12 +399,25 @@ EOF
       "ANTHROPIC_SMALL_FAST_MODEL=$model"
       "CLAUDE_CODE_SUBAGENT_MODEL=$model")
     if [ "${#extra_env[@]}" -gt 0 ]; then peer_cmd+=("${extra_env[@]}"); fi
-    # deepseek-v4-pro and mimo-v2.5-pro are text-only (mimo image support lives in
-    # mimo-v2.5/-omni, not -pro; deepseek V4 input type is text/string). A peer that
-    # Reads an image/PDF would error (DeepSeek) or get the data silently dropped
-    # (MiMo), so deny multimodal Reads up front. Comma-separated, no spaces → one arg.
-    local img_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
-    peer_cmd+=(claude -p --dangerously-skip-permissions --disallowedTools "$img_deny" "$peer_prompt")
+    # claude-env peers always run headless (claude -p). Deny two unrelated hazard
+    # classes up front:
+    #   1. Multimodal Reads — deepseek-v4-pro / mimo-v2.5-pro are text-only (mimo
+    #      image support lives in mimo-v2.5/-omni, not -pro; deepseek V4 input type
+    #      is text/string), so an image/PDF Read errors (DeepSeek) or is silently
+    #      dropped (MiMo). This is a model-capability limit.
+    #   2. Interactive consent gates — ExitPlanMode and AskUserQuestion block
+    #      waiting for a human to approve a plan / answer a question; in a headless
+    #      run there is none, so they deadlock until the timeout (verified: both
+    #      return a pending "Exit plan mode?" / "Answer questions?" gate).
+    #      EnterPlanMode itself runs fine but only leads into that dead end. This is
+    #      an execution-mode limit, independent of which model is behind the harness
+    #      — so it is NOT mirrored in the interactive ds/mm launchers, where a human
+    #      is present and plan mode is useful.
+    # --disallowedTools is variadic (<tools...>): a non-flag token right after it is
+    # swallowed as another tool name, so keep --dangerously-skip-permissions AFTER
+    # it — that dashed token ends the list, leaving the prompt as the lone positional.
+    local peer_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf),EnterPlanMode,ExitPlanMode,AskUserQuestion'
+    peer_cmd+=(claude -p --disallowedTools "$peer_deny" --dangerously-skip-permissions "$peer_prompt")
   fi
 
   # Invoke peer and capture exit status (don't let set -e abort before checking response)
