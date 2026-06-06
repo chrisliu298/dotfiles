@@ -98,6 +98,8 @@ Assign each tier a lens that maximizes diversity. **Default to orthogonal explor
 
 Don't tailor the prompt body per peer — Prism sends the **same shared prompt** to every model (the launcher templates handle the only per-peer difference: Codex `<goal>` style vs CO-STAR XML), so you may skip the [[relay]] skill's per-peer prompting guides here. What matters is shared-prompt **quality** — an outcome-first shared packet (Full Question + Context) and sharp, distinct lens descriptions; optimize that, not per-model fit.
 
+**Web access is not a dispatch concern — don't verify it.** Every peer can reach the web (WebFetch + WebSearch both work, save two minor gaps — DeepSeek's WebFetch and MiMo's WebSearch — neither load-bearing here; see [[relay]]). More to the point, Prism front-loads all evidence in the shared packet (that's what Reference Materials is for), so agents reason over the provided Context rather than browsing. Do **not** spend a dispatch-time step checking what the relay transport supports — it's settled and irrelevant to a well-built run.
+
 **Relay call syntax (exact)** — the command shapes Prism must emit:
 
 ```bash
