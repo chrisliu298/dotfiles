@@ -404,16 +404,17 @@ Write a skim-first, verdict-led synthesis, not a lens-by-lens report — the rea
    - Confidence is **always shown** — the *absence* of a `⚠ dissent` clause is itself the all-clear signal.
    - The `⚠ dissent` clause appears **only** when a dispatched agent dissents. On a cross-model break the tally and Dissent line already name the peers, so the verdict clause stays a bare `⚠ dissent`; name a peer inline (`⚠ DeepSeek dissent`) only for a minor dissent that has no tally. `⚠` is the only routine glyph — reserve it for dissent; never decorate confidence or the verdict with emoji or boxes.
    - Deliverable: the verdict line points at the artifact (`See migration plan below · conf: High · 7/7 agree`), which follows immediately.
-   - **When the header is information-dense** — verdict + confidence + a consensus/dissent note that runs long (typical on material-disagreement or cross-model-break runs) — render it as a compact **two-column table** instead of one long `·`-separated line; it is far more readable (same fields, same content):
+   - **Render the header as a compact two-column table whenever it is dense — independent of whether the run converged.** "Dense" is any one of: the verdict needs more than ~12 words, there is a caveat or secondary item to carry, or there is a dissent note. Convergence does **not** license the single line — a converged run with a long verdict or a caveat still tables. A caveat gets its **own row**; never pack it into the verdict clause. Same fields, same content, far more readable:
 
      | Summary | Detail |
      |---|---|
      | **Verdict** | NO-SHIP as-is — fix the cluster, then ship |
      | **Confidence** | High |
      | **Consensus** | 6 reviewers convergent — 1 severity split, 1 finding discounted |
+     | **Caveat** | 1 latent high-severity item to resolve first *(omit row if none)* |
      | **Dissent** | DeepSeek+MiMo, same direction *(omit the row when there is none)* |
 
-     Keep the single `·`-separated line for simple converged runs where it stays short.
+     Use the single `·`-separated line **only** when verdict + confidence + tally genuinely fit one short line — a converged run with a ≤12-word verdict and no caveat. When in doubt, table it.
 
 2. **Model-tier tally** — one line, **only on a cross-model break** (a parallax lineage dissents). Group by model lineage (not by lens): each dispatched lineage with `✓` (aligned) or `⚠` (dissented), then the takeaway.
 
@@ -466,7 +467,7 @@ Agents advise; they do not vote. The tally shows lineage alignment, not the deci
 Re-read the user's original question. Verify:
 
 - Your synthesis answers it directly. If they asked for a deliverable, you produced one.
-- The verdict line leads, in fixed token order (`verdict · conf: … · n/total agree[ · ⚠ dissent]`), and confidence is shown.
+- The header leads — the single `·`-separated verdict line only when it fits one short line, otherwise the two-column table (dense = verdict >~12 words, a caveat, or a dissent note) — in fixed field order (`verdict · conf: … · n/total agree[ · ⚠ dissent]`), with confidence shown and any caveat in its own row, not the verdict.
 - On a cross-model break, the tally line and a dedicated Dissent line are present and sit above Why; on a material disagreement a `Tradeoff:` line carries the split (no tally); on full convergence all three are omitted.
 - No per-lens summary appears in the main path — the model-tier tally is by lineage, not lens; lens-by-lens notes live only in an optional appendix.
 - Every retained dissent, caveat, or trigger changes a decision, confidence level, or next action.
