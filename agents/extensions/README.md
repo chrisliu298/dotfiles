@@ -57,7 +57,7 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 
 ### Discovery quirks (not managed here)
 
-- **Plugin-provided skills**: Some skills (e.g., `lecture-refine`) come from Claude marketplace plugins and live in `~/.claude/skills/` as regular directories, not symlinks.
+- **Plugin-provided skills**: Some skills (e.g., `frontend-design`) come from Claude marketplace plugins and live in `~/.claude/skills/` as regular directories, not symlinks.
 
 ## MCP Servers
 
