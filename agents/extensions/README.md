@@ -32,6 +32,7 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | autoresearch            | ✱ | ✱ | ✱ | manual | local — Karpathy-faithful experiment loop |
 | defuddle                | ✓ | ✓ | ✓ | on     | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
 | deslop                  | ✓ | ✓ | ✓ | on     | local — Strip AI-slop from code changes |
+| digest                  | ✓ | ✓ | ✓ | on     | local — Re-layer a dense reply into a skim-first review surface |
 | goal-elicit             | ✓ | ✓ | ✓ | on     | local — Multi-round interview → verifiable Goal Contract |
 | gpt-pro-relay           | ✓ | ✓ | ✓ | on     | local — SSH to ChatGPT Pro Extended on macmini |
 | humanizer               | ✓ | ✓ | ✓ | on     | [blader/humanizer][c-hu] — Remove AI signatures from text |
