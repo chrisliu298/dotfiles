@@ -23,15 +23,15 @@ management-by-exception.)
  load → reconcile against the repo  (trust only verified facts)
      │
      ▼
- ┌──────────────── the loop ─────────────────┐
- │ while units remain AND no exception:       │
- │   select  next pending unit                │
- │   announce  (declarative, not a permission)│
- │   act       (reversible · in-scope · in-authority)
- │   verify    against the unit's acceptance  │
- │   ledger    → patch the artifact in place  │
- │   commit    (optional: one local, per unit)│
- └─────────────────────┬─────────────────────┘
+ ┌──────────────── the loop ──────────────────────────┐
+ │ while units remain AND no exception:               │
+ │   select  next pending unit                        │
+ │   announce  (declarative, not a permission)        │
+ │   act       (reversible · in-scope · in-authority) │
+ │   verify    against the unit's acceptance          │
+ │   ledger    → patch the artifact in place          │
+ │   commit    (optional: one local, per unit)        │
+ └─────────────────────┬──────────────────────────────┘
         ┌──────────────┴───────────────┐
         ▼                               ▼
     all done                          exception
