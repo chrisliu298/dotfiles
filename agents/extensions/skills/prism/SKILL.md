@@ -427,13 +427,15 @@ Since you composed the prompts and chose the lenses, your self-review is not ful
 
 ### Step 3.5: Safety check
 
-Before synthesizing, verify no dispatched agent modified the working tree:
+Before synthesizing, check whether a dispatched agent violated read-only by writing to the working tree:
 
 ```bash
 git diff --stat HEAD
 ```
 
-If the diff shows unexpected changes, flag them to the user before proceeding. Discard the offending agent's output — an agent that violated read-only constraints may have reasoned from a corrupted state.
+**NEVER revert, restore, checkout, stash, reset, or clean the working tree — not even changes that look "unexpected" (HARD RULE).** `git diff` here is **read-only detection only**; you never "clean up" what it shows. The tree may hold *uncommitted* work that is **not yours**: the user's in-progress edits, or a **concurrent prism / Claude Code session** running in the same repo. Discarding it is **unrecoverable** — this is a real incident (a concurrent prism run wiped an uncommitted change it found but had not made), not a hypothetical.
+
+If the diff shows changes, do **not** assume your agents made them, and do **not** auto-attribute or undo them — **flag them to the user and let them decide.** "Discard the offending agent's output" means *ignore that agent's `.res.md` text in synthesis* (it may have reasoned from a corrupted state); it is **never** a git operation on the tree. If you need a clean baseline, commit your *own* work first — never revert someone else's.
 
 Scan each agent's output for recursion indicators: mentions of "dispatching," "subagent," "relay call," "Prism run," or synthesis-style structure (a model-tier tally, `Dissent:`/`Why:`/`Do now:` sections, or older `Consensus/Contested/Unique` sections). Flag matches for review — the agent may have spawned nested agents, producing contaminated reasoning.
 
@@ -532,6 +534,7 @@ Optionally delete all Prism temp files with `~/.claude/skills/prism/scripts/pris
 - **No all-same-model dispatch (HARD RULE):** The dispatched parallax peers must equal the resolved parallax counts — `5N` by default (`N` each of Codex, Grok Build, Grok Composer, DeepSeek, MiMo), minus any tier excluded by natural language. Via `prism-launch`, the manifest's `counts` derives this from the config, and the single `parallax` call emits exactly those peers — so the historical "forgot a relay call" failure cannot occur. In the manual fallback, the total count of Bash relay calls must equal that sum; if the planned dispatch has zero relay calls but any configured count is non-zero, fix before launching.
 - **No early synthesis (HARD RULE):** Do not synthesize until every dispatched agent has returned its completion notification. "Subagents are done, Codex relay is still running" or "Codex came back, DeepSeek is still running" are not reasons to proceed — they are the expected state. Proceeding without any tier's results voids the entire Prism run.
 - **No side effects:** Dispatched agents must not edit files, commit, push, or invoke any skill with side effects (e.g., push, xurl, todo, goal-drive). Read-only analysis skills are allowed. The only permitted write is the relay response file (.res.md).
+- **No working-tree reverts (HARD RULE):** Neither the orchestrator nor any dispatched agent may run a git command that discards or hides uncommitted work — `git restore`, `git checkout <path>` / branch switch, `git reset`, `git stash`, `git clean`, `git rm`. The repo routinely holds the user's *or a concurrent prism/Claude session's* uncommitted changes; reverting them is unrecoverable (this is a real incident, not hypothetical). Only read-only git is allowed: `git status`, `git diff`, `git log`, `git show`. To get a clean baseline, commit your own work — never undo someone else's. See Step 3.5.
 
 ## Degrees of Freedom
 
