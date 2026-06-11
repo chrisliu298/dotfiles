@@ -414,3 +414,18 @@ ae() {
     printf '\n'
     rm -rf "$tmpdir"
 }
+
+# ccusage across local + macmini + l40s. Reuses adb's SSH mirrors
+# (.cache/remotes/<host>/claude/projects/) — already the layout ccusage needs.
+# Refreshes the mirrors first; pass `--stale` to skip the sync and use what's
+# cached. Extra args pass through to ccusage (default subcommand: daily).
+ccusage-all() {
+    local adb="$HOME/Developer/GitHub/adb"
+    if [[ "$1" == "--stale" ]]; then
+        shift
+    else
+        "$adb/sync.sh" >/dev/null 2>&1
+    fi
+    CLAUDE_CONFIG_DIR="$HOME/.claude,$adb/.cache/remotes/macmini/claude,$adb/.cache/remotes/l40s/claude" \
+        npx -y ccusage@latest "${@:-daily}"
+}
