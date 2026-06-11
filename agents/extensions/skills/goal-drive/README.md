@@ -67,8 +67,8 @@ the progress report.
 
 ## Terminal markers & guardrails
 
-Every run ends with a machine-stable, human-readable marker — `GOAL-DRIVE COMPLETE: <id>` or
-`GOAL-DRIVE STOPPED: <id> — <reason>` — emitted on **every runtime**. Claude Code's optional `/goal`
+Every run ends with a machine-stable, human-readable marker — `GOAL-DRIVE COMPLETE: <id> — <n>/<n> verified`
+or `GOAL-DRIVE STOPPED: <id> — <reason>` — emitted on **every runtime**. Claude Code's optional `/goal`
 guardrail reads these to keep a session working until done; Codex has its own native `/goal`
 executor (point it at the artifact file); Grok has neither. See goal-elicit's
 `references/goal-guardrail.md`.

@@ -63,10 +63,10 @@ Terminal states (frontmatter): **`ready`** (every `done_when` mapped to evidence
 The artifact is the handoff. For an executable, ready artifact, goal-elicit also emits a
 ready-to-paste **`/goal`** block (advisory text — it never runs `/goal` itself):
 
-- **Claude Code** — a marker-keyed condition pasted *before* goal-drive; a Stop hook keeps the
-  session working until goal-drive prints `GOAL-DRIVE COMPLETE`.
+- **Claude Code** — a `/goal` condition that watches the transcript for goal-drive's completion
+  marker, pasted *before* goal-drive; a Stop hook keeps the session working until it appears.
 - **Codex** — a one-line objective that **points at the artifact file**; Codex's own native `/goal`
-  drives it to done (enable with `codex features enable goals`).
+  drives it to done (may need `codex features enable goals`).
 - **Grok** — no `/goal`; just run goal-drive.
 
 Mechanism, templates, and caveats: `references/goal-guardrail.md`.
