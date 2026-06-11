@@ -46,7 +46,7 @@ Options:
 
 Output: response on stdout; run-id + diagnostics + engine JSONL on stderr.
 Exit:   0 ok · 1 error/empty · 2 usage · 3 worker timeout · 4 not found
-        · 124 timed out, still pending (recover with --run-id) · 255 SSH transport unknown
+        · 124 timed out, still pending (recover with --run-id) · 255 SSH transport unknown (reattach with --run-id)
 
 Always wrap the Bash call in run_in_background:true, timeout:7260000.
 USAGE
@@ -99,7 +99,8 @@ if $DRY; then
   echo "gpt-pro: run_id=$RUN_ID transport=$($LOCAL && echo local || echo ssh) mode=$($REATTACH && echo reattach || echo submit)" >&2
   exit 0
 fi
-echo "gpt-pro: run_id=$RUN_ID" >&2
+echo "gpt-pro: run_id=$RUN_ID transport=$($LOCAL && echo local || echo ssh) mode=$($REATTACH && echo reattach || echo submit)" >&2
+echo "gpt-pro: recover_with=gpt-pro --run-id $RUN_ID" >&2
 
 # Emit ONLY on a non-empty body — refuse ambiguous success. The engine returning
 # rc 0 with an empty body is a real anomaly (extraction failure), not an answer.
@@ -154,7 +155,7 @@ if ! $REATTACH; then
   case $rc in
     0)   cat "$ERR" >&2 2>/dev/null || true ;;                                   # submitted
     255) cat "$ERR" >&2 2>/dev/null || true
-         die 255 "submit never confirmed for $RUN_ID; safe to retry (same prompt reattaches)" ;;
+         die 255 "submit state unknown for $RUN_ID; do NOT start a fresh run — first reattach: gpt-pro --run-id $RUN_ID (if that exits 4, the submit never landed; only then resubmit)" ;;
     *)   cat "$ERR" >&2 2>/dev/null || true; exit "$rc" ;;                        # usage/conflict/etc.
   esac
 fi
