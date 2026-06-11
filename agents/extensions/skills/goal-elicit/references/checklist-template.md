@@ -35,4 +35,4 @@ goal-elicit rules:
   **stable, unique `id`** (the executor's idempotency key).
 - `state` ∈ `pending | done | blocked`. A `done` item needs non-empty `evidence`; a `blocked`
   item needs its reason in `note`. `commit_policy` defaults to `none`; `repair_budget` to `3`.
-- Write the file and **STOP**. [[goal-drive]] executes it; goal-elicit does not.
+- Write the file and **STOP**. goal-drive executes it; goal-elicit does not.

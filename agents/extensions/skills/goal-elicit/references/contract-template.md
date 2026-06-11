@@ -31,7 +31,7 @@ source_prompt_summary: "User asked to clarify what they wanted before building X
 ### Optional: execution block (for goal-drive)
 
 A contract is handed off and the skill stops. If the user wants it later **driven to done** by
-[[goal-drive]], add an optional `execution:` block to the frontmatter (absent ⇒ elicit-only,
+goal-drive, add an optional `execution:` block to the frontmatter (absent ⇒ elicit-only,
 the default — today's behavior). Full semantics: the goal-drive skill's
 `references/artifact-formats.md`.
 

@@ -31,7 +31,7 @@ The contract carries one of three terminal states in its frontmatter (the checkl
 - `blocked` — interview hit the round ceiling or the user can't supply enough context. `blocking_unknowns` enumerates what's missing. Tell the user the artifact is incomplete and what is needed.
 - `draft` — interview in progress; the file is the durable session state.
 
-Execution is **out of scope** — a separate skill, [[goal-drive]], drives any of these artifacts to done. goal-elicit writes the artifact and stops; it never invokes goal-drive.
+Execution is **out of scope** — a separate skill, goal-drive, drives any of these artifacts to done. goal-elicit writes the artifact and stops; it never invokes goal-drive.
 
 ## Phase 0 — Triage (Cynefin)
 
@@ -88,7 +88,7 @@ Once the file is written, tell the user where it is (path) and stop. The user ta
 **Optional `/goal` guardrail (Claude Code only).** If the artifact is *executable and ready* — a
 contract with an `execution:` block, a checklist with non-empty `items`, or a phased doc with a
 `## Phases` section (an `authority` block is optional for all of these) — also emit a
-ready-to-paste `/goal "..."` block for the user to run *before* [[goal-drive]]. It keeps the
+ready-to-paste `/goal "..."` block for the user to run *before* goal-drive. It keeps the
 session working until goal-drive prints its completion marker, and treats a by-exception stop as
 terminal too. Fill the condition template from `references/goal-guardrail.md` using the artifact's
 `done_when`/acceptance and the terminal markers (it also gives the per-shape "ready" test and the
@@ -166,7 +166,7 @@ If a goal artifact already exists in the working directory — `GOAL.md`, or `.c
 
 ## What this skill must not do
 
-- Do not plan, write code, run the goal, or invoke another skill — ever. The deliverable is the artifact (contract, checklist, or phased doc) only. Execution belongs to [[goal-drive]]; hand the artifact off, but do not invoke goal-drive or run the work yourself.
+- Do not plan, write code, run the goal, or invoke another skill — ever. The deliverable is the artifact (contract, checklist, or phased doc) only. Execution belongs to goal-drive; hand the artifact off, but do not invoke goal-drive or run the work yourself.
 - Do not infer the user's goal silently and proceed.
 - Do not pretend completion at the round ceiling — write `blocked` instead.
 - Do not relay to Codex or GPT-Pro during the interview unless the user explicitly asks for an external second opinion.

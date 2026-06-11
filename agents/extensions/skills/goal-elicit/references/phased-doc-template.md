@@ -47,4 +47,4 @@ goal-elicit rules:
   delivery: the user approves the *plan* once; goal-drive executes the phases without
   per-phase re-approval.
 - Co-write the design prose with the user (the contract interview produces it), then split
-  into phases together. Write the file and **STOP**. [[goal-drive]] executes it.
+  into phases together. Write the file and **STOP**. goal-drive executes it.

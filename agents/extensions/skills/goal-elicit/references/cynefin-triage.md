@@ -55,7 +55,7 @@ Rules:
   one artifact. Field semantics: the goal-drive skill's `references/artifact-formats.md`.
 
 goal-elicit still **writes the artifact and stops** regardless of shape. Execution is the
-separate [[goal-drive]] skill's job; goal-elicit never runs it.
+separate goal-drive skill's job; goal-elicit never runs it.
 
 ## Worked examples
 
