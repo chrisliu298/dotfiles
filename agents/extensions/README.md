@@ -1,6 +1,6 @@
 # Extensions
 
-Agent extensions for Claude and Codex. **Skills**, **MCP servers**, and a curated set of **plugins** are managed by `dotfiles.sh`.
+Agent extensions for Claude, Codex, and Grok. **Skills**, **MCP servers**, and a curated set of **plugins** are managed by `dotfiles.sh`.
 
 | Type | What it does | Managed by |
 |------|--------------|------------|
@@ -33,6 +33,7 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | defuddle                | ✓ | ✓ | ✓ | on     | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
 | deslop                  | ✓ | ✓ | ✓ | on     | local — Strip AI-slop from code changes |
 | digest                  | ✓ | ✓ | ✓ | on     | local — Re-layer a dense reply into a skim-first review surface |
+| goal-drive              | ✓ | ✓ | ✓ | on     | local — Drive a goal artifact (GOAL.md / checklist / phased doc) to verified done |
 | goal-elicit             | ✓ | ✓ | ✓ | on     | local — Multi-round interview → verifiable Goal Contract |
 | gpt-pro-relay           | ✓ | ✓ | ✓ | on     | local — SSH to ChatGPT Pro Extended on macmini |
 | humanizer               | ✓ | ✓ | ✓ | on     | [blader/humanizer][c-hu] — Remove AI signatures from text |
@@ -43,6 +44,7 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | prism                   | ✓ | — | — | on     | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to Codex + DeepSeek + MiMo + Grok via relay) |
 | prompt-engineer         | ✓ | ✓ | ✓ | on     | local — Prompt writing per-vendor best practices |
 | push                    | ✓ | ✓ | ✓ | on     | local — Push to remote (auto-picks single vs atomic commits) |
+| rehydrate               | ✓ | ✓ | ✓ | on     | local — Recover post-compaction detail from the raw session transcript |
 | relay                   | ✓ | — | — | on     | local — Cross-agent relay from Claude to Codex/DeepSeek/MiMo/Grok (Claude-only caller) |
 | skill-creator           | ✓ | — | — | on     | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
 | todo                    | ✓ | ✓ | ✓ | on     | local — TODO.md tracking across sessions |
