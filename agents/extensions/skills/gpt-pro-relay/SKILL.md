@@ -152,6 +152,33 @@ just omitting citations: that line tells the caller a deliberate skip from a mis
 does it actually say that) before relying on it. A fact-heavy answer with no sources *and* no
 "no external sources needed" line is ungrounded — re-prompt or discount it.
 
+## Calibration block
+
+For **judgment tasks** — analysis, recommendations, design, second opinions — have gpt-pro end
+with a reasons-based calibration block. Its slowness and cost make a self-graded score *more*
+tempting and *no* better calibrated, so ask for assumptions and failure modes, not a number.
+**Skip it for deterministic lookups or mechanical transforms.** Paste this into `prompt.md`
+(alongside the grounding directive when both apply):
+
+```text
+## Calibration
+
+End your response with this block exactly:
+- Key assumptions: 1-3 the answer depends on ("none material" only if true)
+- Most likely wrong because: the strongest failure mode, missing info, or counterargument
+- Would change my conclusion: the specific fact, test, or counterexample that would flip it
+- Best next check: the single source, test, or lookup that would most reduce uncertainty
+- Verify before acting: specific current/high-stakes claims to check ("none" for pure reasoning)
+
+No numeric %, probability, star rating, or High/Medium/Low label — this block is for routing and
+verification, not a calibrated probability.
+```
+
+**On return**, treat it as the action plan: run the `Best next check` and verify the listed
+claims before relying on the answer. Because a re-query costs another 5–20 min and real quota, a
+targeted check is almost always cheaper than re-running. Discount any answer that self-asserts
+confidence in place of naming its assumptions.
+
 ## Cost gate
 
 Pro Extended runs cost real Pro quota and take 5–20 minutes per prompt. Confirm with the user before invoking *unless* they explicitly named gpt-pro:

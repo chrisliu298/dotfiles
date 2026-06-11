@@ -140,6 +140,24 @@ then the diffs grouped by file. Cap at 400 words excluding diffs.
 BODY
 ```
 
+## Calibration handoff
+
+For **judgment tasks** — analysis, review, design, research, second opinions — ask the peer to end its answer with a reasons-based calibration block, then act on it when the response returns. **Skip it for mechanical or code-changing calls** (run-a-command, apply-a-defined-change): there the trust signal is tests, diffs, and the `verify:` frontmatter, not a self-report. Don't ask for a number — verbalized confidence from these models is poorly calibrated (clusters at round numbers, skews overconfident), so a `%` or `High/Med/Low` manufactures false precision the orchestrator can't discount.
+
+Add to the prompt body — inside `<output_contract>` for Codex, `<response_format>` for DeepSeek/MiMo/Grok:
+
+```text
+End with a ## Calibration block:
+- Key assumptions: 1-3 the answer rests on ("none material" only if true)
+- Most likely wrong because: the strongest failure mode, missing info, or counterargument
+- Would change my conclusion: the specific fact, test, or counterexample that would flip it
+- Verify before acting: specific current/high-stakes claims to check ("none" for pure reasoning)
+
+No numeric %, probability, or High/Medium/Low label — this block is for routing and verification, not a calibrated probability.
+```
+
+**On return, use it — otherwise it is decoration.** Verify the listed claims before passing the answer up; re-query with corrected context if a Key assumption conflicts with what you know; seek a tie-breaker (another peer or `/prism`) if "Most likely wrong because" attacks the core conclusion. Ignore any self-confidence score a peer volunteers anyway — the assumptions and failure mode are the signal, not a self-graded number.
+
 ## Output
 
 The script prints the response file content to stdout. The response has YAML frontmatter followed by free-form markdown:

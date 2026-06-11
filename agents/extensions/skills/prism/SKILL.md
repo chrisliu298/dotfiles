@@ -457,6 +457,7 @@ Write a skim-first, verdict-led synthesis, not a lens-by-lens report — the rea
 **Cross-model weighting (internal — surfaces through the verdict line, tally, and Why):**
 
 - Judge each answer on its reasoning and evidence, not on the fact that an agent produced it (discount weak reasoning, never the model label). Discarding a shallow, wrong-premise, off-topic, or unsupported answer entirely is valid — say so in Why when a notable perspective is set aside.
+- Ignore any self-reported confidence a dispatched agent volunteers (numeric, %, or High/Med/Low) — prism confidence is computed by the orchestrator from cross-model agreement + reasoning quality, never from an agent's self-score, so a confident-but-shallow lens must not outweigh a well-reasoned dissent. Treat a volunteered score only as a cue to read the caveat beside it; do not instruct dispatched agents to self-score.
 - Same-model convergence is discounted (shared training = shared blind spots); parallax (cross-model) confirmation or dissent carries outsized weight — model diversity is prism's entire point.
 - A single well-reasoned point can beat consensus driven by shared priors. If you cannot articulate why dissent is wrong, downgrade confidence on the verdict line rather than expanding dissent into a paragraph.
 
