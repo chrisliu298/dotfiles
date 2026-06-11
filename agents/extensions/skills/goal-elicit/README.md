@@ -19,14 +19,14 @@ stops. Execution is a separate concern — its partner, goal-drive.
    vague ask
        │
        ▼
- ┌──────────────── goal-elicit ─────────────────┐
- │ Phase 0  triage   — Cynefin: how hard to ask │
- │ Phase 1  orient   — restate the intent       │
- │ Phase 2  diverge  — widen; 2 interpretations │
- │ Phase 3  converge — forced-choice decisions  │
- │ Phase 4  contract — show the compressed draft│
- │ Phase 5  confirm  — write status: ready      │
- └───────────────────────┬──────────────────────┘
+ ┌──────────────── goal-elicit ──────────────────┐
+ │ Phase 0  triage   — Cynefin: how hard to ask  │
+ │ Phase 1  orient   — restate the intent        │
+ │ Phase 2  diverge  — widen; 2 interpretations  │
+ │ Phase 3  converge — forced-choice decisions   │
+ │ Phase 4  contract — show the compressed draft │
+ │ Phase 5  confirm  — write status: ready       │
+ └───────────────────────┬───────────────────────┘
                          ▼
                one artifact, then STOP
    GOAL.md · .goals/<id>.checklist.json · .goals/<id>.plan.md
