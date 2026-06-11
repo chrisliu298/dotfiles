@@ -1,7 +1,7 @@
 # Phased design-doc template (goal-plan/v1)
 
 For a **sequential, heterogeneous build** with per-phase acceptance (post pattern 2). Written
-to `.claude/goals/<id>.plan.md`. Authoritative format: the goal-drive skill's
+to `.goals/<id>.plan.md` (legacy artifacts under `.claude/goals/` are still recognized). Authoritative format: the goal-drive skill's
 `references/artifact-formats.md`; this is the scaffold.
 
 ```markdown

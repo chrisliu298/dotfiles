@@ -38,8 +38,8 @@ task, a list of similar items, or a staged build with dependencies?"
 | Work shape | Signal | Artifact | goal-drive executes it as |
 |---|---|---|---|
 | `one_shot` | One deliverable, a small `done_when` set, no enumerable backlog | `GOAL.md` contract | the whole goal, one unit |
-| `checklist` | Enumerable, homogeneous items — often script-generatable ("parse into a list first") | `.claude/goals/<id>.checklist.json` | batches of items |
-| `phased` | Sequential, heterogeneous stages with distinct per-stage acceptance | `.claude/goals/<id>.plan.md` | one phase at a time |
+| `checklist` | Enumerable, homogeneous items — often script-generatable ("parse into a list first") | `.goals/<id>.checklist.json` | batches of items |
+| `phased` | Sequential, heterogeneous stages with distinct per-stage acceptance | `.goals/<id>.plan.md` | one phase at a time |
 
 Rules:
 

@@ -10,7 +10,7 @@ description: |
   unclear or no artifact exists, run goal-elicit first. Skip for one-off edits and factual
   questions.
 user-invocable: true
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, Skill
 ---
 
 # goal-drive
@@ -21,6 +21,12 @@ that artifact (or any conforming one) and drives it. The two compose as a pipeli
 `goal-elicit → artifact → goal-drive` — but goal-drive also runs standalone on a
 **bring-your-own** artifact you wrote or generated with a script.
 
+**Runtime portability.** One source of truth for Claude Code, Codex, and Grok — the skill never
+detects its runtime. Defaults are agent-neutral. The terminal markers are emitted on every runtime;
+Claude Code's `/goal` guardrail consumes them, while Codex has its own native `/goal` executor that
+can drive the artifact directly (point it at the file) and Grok has neither — see goal-elicit's
+`references/goal-guardrail.md`.
+
 This skill is **modeless on purpose**. There is no "execution mode" you enter or exit. The
 artifact on disk is the state; "continue" always means "advance the next unit the artifact
 says is unfinished." That single property is what keeps it from becoming a heavyweight plan
@@ -30,9 +36,11 @@ mode. (Raskin/Norman on modes; Meyer's Design by Contract; management-by-excepti
 
 One artifact, in one of three shapes — full spec in `references/artifact-formats.md`:
 
-- **Contract** `GOAL.md` (or `.claude/goals/<id>.goal.md`) — executable when it carries an `execution:` block; the whole goal is one unit.
-- **Checklist** `.claude/goals/<id>.checklist.json` — enumerable items processed in batches.
-- **Phased doc** `.claude/goals/<id>.plan.md` — sequential phases with per-phase acceptance.
+- **Contract** `GOAL.md` (or `.goals/<id>.goal.md`) — executable when it carries an `execution:` block; the whole goal is one unit.
+- **Checklist** `.goals/<id>.checklist.json` — enumerable items processed in batches.
+- **Phased doc** `.goals/<id>.plan.md` — sequential phases with per-phase acceptance.
+
+Existing artifacts under the legacy `.claude/goals/` are still read and driven in place (search `.goals/` first, then `.claude/goals/`); new artifacts use `.goals/`. Full rule: `references/artifact-formats.md` § Where artifacts live.
 
 A hand-written or script-generated file is valid as long as it meets the **bring-your-own
 conformance** in `references/artifact-formats.md`. goal-drive never *generates* the work list
@@ -54,14 +62,15 @@ while unverified units remain AND no exception:
     ledger: flip to done with evidence — patch the artifact in place (never regenerate)
     if commit_policy == per_unit → one local git commit for this verified unit
     emit a compact status line: unit · evidence · next · active stop-conditions
-on all-done → run the goal-completion check → report; OFFER to push (tell the user to run /push); then echo evidence + the `GOAL-DRIVE COMPLETE: <id>` marker as the final line
+on all-done → run the goal-completion check → report; offer to push (you may invoke a push skill once the user assents — remote push is a one-way door); then echo evidence + the `GOAL-DRIVE COMPLETE: <id> — …` marker as the final line
 on exception → print the `GOAL-DRIVE STOPPED: <id> — <reason>` marker first, then hand back
 ```
 
 The two terminal markers (`GOAL-DRIVE COMPLETE` / `GOAL-DRIVE STOPPED`) make completion and
-legitimate stops visible in the transcript — the only thing Claude Code's optional `/goal`
-guardrail can read. Emit them in the exact form `references/execution-loop.md` § Terminal markers
-defines (canonical there); they cost nothing when `/goal` is unused.
+legitimate stops machine-visible in the transcript on **every runtime** — and are the one signal
+Claude Code's optional `/goal` guardrail can read. Always emit them in the exact form
+`references/execution-loop.md` § Terminal markers defines (canonical there); they cost nothing when
+no guardrail consumes them.
 
 ## Checkpoints are by exception, not by schedule
 
@@ -79,30 +88,44 @@ report. (See `execution-loop.md` for the full stop/authority rules.)
 
 ## Composition — own vs delegate
 
+goal-drive **may invoke other skills to reach the goal** — e.g. a push/ship skill for verified
+commits, a task-tracker, or a multi-model review skill — using whatever your runtime provides (some,
+like cross-model review, are Claude-only). Two bounds: an invoked skill must be **in scope and within
+the artifact's `authority`** (it may not redefine or expand the goal), and any **one-way-door or
+external-dispatch** effect it would cause still needs explicit assent (see Must not). The **one
+rail: it never re-elicits** — no interview, no question bank, and it never invokes [[goal-elicit]]
+to restart elicitation (run goal-elicit only if the user explicitly asks). And when goal-drive is
+**itself running as a dispatched / leaf agent** (e.g. a review/orchestration subagent or relay
+peer), it inherits that caller's read-only-leaf contract: it invokes no dispatching skill — anything
+that spawns subagents, relays to another model, or runs an orchestration — and takes no side effect
+beyond its artifact. It otherwise stays modeless.
+
 - **Own:** the loop, per-unit verification, the state ledger, resumption, the per-unit local
-  commit (the when + the message), and the `## Related Goals` pointer line.
-- **Commits:** when `commit_policy: per_unit`, goal-drive makes a **local** commit per verified
-  unit itself (via `Bash` git — cheap, single-purpose). It does **not** push and does **not**
-  invoke the [[push]] skill. At FINISH it **offers** — tells the user to run `/push`. Remote
-  push, secret-scan, non-ff handling, and atomic-vs-single grouping are `push`'s job, triggered
-  by the user.
+  commit (the when + the message), and the `## Related Goals` pointer line. These are the
+  executor's core — goal-drive does them itself rather than delegating.
+- **Commits & push:** when `commit_policy: per_unit`, goal-drive makes a **local** commit per
+  verified unit itself (via `Bash` git — cheap, single-purpose). At FINISH it may **invoke a push
+  skill** to push — but remote push is a one-way door, so it gets the user's go-ahead first (see
+  Must not) and never pushes unprompted. Remote secret-scan, non-ff handling, and atomic-vs-single
+  grouping are a push skill's job.
 - **Cross-session orientation:** for a multi-goal/multi-day backlog, write **one pointer line**
-  directly to a `## Related Goals` section at the bottom of `TODO.md` (goal-drive has `Edit`).
-  Do **not** invoke the [[todo]] skill — it owns a different single-active-task format. Never
-  mirror per-item state into `TODO.md`.
-- **Multi-model review** ([[relay]]/[[prism]]): not goal-drive's job — if the user wants it,
-  they invoke it separately. goal-drive does not.
+  directly to a `## Related Goals` section at the bottom of `TODO.md` (goal-drive has `Edit`). You
+  may invoke a task-tracking skill if the user wants it, but never **mirror per-item goal state**
+  into `TODO.md` — it owns a different single-active-task format.
+- **Multi-model review:** available if the goal calls for it (or the user asks); not something
+  goal-drive reaches for by default.
 
 ## Must not
 
-- **Do not re-elicit.** No interview, no question bank. If the artifact is missing or
-  ambiguous, say "run goal-elicit first" or ask the *minimum* to proceed — then stop expanding.
+- **Do not re-elicit (the one skill rail).** No interview, no question bank; never invoke
+  [[goal-elicit]] to restart elicitation. If the artifact is missing or ambiguous, say "run
+  goal-elicit first" or ask the *minimum* to proceed — then stop expanding. Every *other* skill is
+  allowed within the artifact's scope/authority — see Composition.
 - **Do not enter a mode.** No "execution mode" banner, no enter/exit ceremony, no per-step approval.
 - **Do not claim done without evidence.** A unit is `done` only after its acceptance verifies (no verification theater).
 - **Do not exceed the contract.** `scope_out`/anti-goals and `authority` remain binding during execution; new ideas go to `## Emergent` (MoSCoW "Won't this time") unless the user promotes them.
 - **Do not regenerate the artifact.** Patch state in place so a script's extra fields and the file's history survive.
-- **Do not invoke another skill.** goal-drive owns its loop, makes its own local commits, and writes its own `## Related Goals` pointer line. It never invokes goal-elicit, push, todo, relay, or prism — it *offers* `/push` and lets the user trigger it.
-- **Do not push, deploy, or take any one-way-door action** without explicit assent.
+- **Do not push, deploy, or take any one-way-door action** without explicit assent — even when invoking a skill (e.g. push) that would perform it.
 
 ## Resumption
 

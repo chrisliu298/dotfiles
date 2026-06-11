@@ -1,7 +1,7 @@
 # Checklist template (goal-checklist/v1)
 
 For **enumerable, homogeneous** work the executor processes in batches (e.g. a script-parsed
-list of files/symbols/endpoints). Written to `.claude/goals/<id>.checklist.json`. The
+list of files/symbols/endpoints). Written to `.goals/<id>.checklist.json` (legacy artifacts under `.claude/goals/` are still recognized). The
 authoritative format and state model live in the goal-drive skill's
 `references/artifact-formats.md`; this is the fill-in scaffold.
 

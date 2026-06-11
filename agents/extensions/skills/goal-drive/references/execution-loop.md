@@ -39,10 +39,12 @@ exception**, not by per-step approval. Read this before driving the first unit; 
              attempts or touched files beyond the final solution, do a **bounded cleanup pass**
              first: inspect the cumulative diff for dead code, scratch files, and debug leftovers
              from abandoned attempts, and remove only what is clearly execution debris and in-scope
-             (inspect the diff directly — do not invoke /review or any other skill). Then set
+             (inspect the diff directly — a bounded inline pass; no need to spin up a separate
+             review/cleanup skill for this). Then set
              frontmatter status: complete. Report: units done, evidence, commits made (or "none —
-             commit_policy off"), blocked/deferred items, anything cleaned up. OFFER to push (see
-             Commit cadence). Do not push unasked. Finally — after the report and push offer — echo
+             commit_policy off"), blocked/deferred items, anything cleaned up. OFFER to push — you
+             may invoke a push skill once the user assents (remote push is a one-way door); do not
+             push unasked (see Commit cadence). Finally — after the report and push offer — echo
              the top-level verification output and emit the `GOAL-DRIVE COMPLETE` marker as the
              final line of the report (see Terminal markers).
 ```
@@ -123,7 +125,7 @@ On invocation against an artifact with progress:
    - **contract:** reconcile each `[x]` `done_when` item; uncheck any whose evidence no longer
      holds; resume from the first unchecked item.
    If a claimed-`done` unit is contradicted by the codebase, **surface the drift and stop** —
-   do not silently re-execute. (Same discipline the [[todo]] skill uses for `TODO.md`.)
+   do not silently re-execute. (Same discipline a task-tracking skill uses for `TODO.md`.)
 3. **Blocked units are skipped, not retried** — unless the user signalled the blocker is
    resolved (explicitly, or by editing the unit's state back to `pending`). If the *next* unit
    is `blocked`, stop and report it rather than advancing. Emit a status line noting any
@@ -138,18 +140,20 @@ On invocation against an artifact with progress:
   never per assistant turn. Use the phase's `Commit:` line as the message when present;
   otherwise a short `<scope>: <unit summary>`. goal-drive makes the commit itself (it has
   `Bash` git access).
-- **Push is separate and never automatic.** goal-drive does not push and does not invoke the
-  push skill. At FINISH (or on request) it **offers** — i.e. tells the user "run `/push` to
-  push these N commits." Pushing, remote secret-scan, non-fast-forward handling, and
-  atomic-vs-single grouping are the [[push]] skill's job, triggered by the user.
+- **Push is separate and never automatic.** goal-drive does not push as a side effect of the
+  loop. At FINISH (or on request) it **offers** to push, and may **invoke a push skill** to do it
+  once the user assents — remote push is a one-way door (`network_send` / `protected_branch_push`),
+  so it never pushes unprompted. Remote secret-scan, non-fast-forward handling, and atomic-vs-single
+  grouping are a push skill's job.
 
 ## Cross-session orientation
 
 For a multi-goal / multi-day backlog, append **one pointer line** to a `## Related Goals`
-section at the bottom of `TODO.md` **directly** (goal-drive has `Edit`) — do **not** invoke the
-[[todo]] skill (it owns a different single-active-task format). Format:
-`- <id>: <one-line objective> — see .claude/goals/<id>.<ext> (<done>/<total>)`. Never mirror
-per-item state into `TODO.md`.
+section at the bottom of `TODO.md` **directly** (goal-drive has `Edit`). You may invoke a
+task-tracking skill if the user wants it, but never **mirror per-item state** into `TODO.md`
+— it owns a different single-active-task format. Format:
+`- <id>: <one-line objective> — see <artifact-path> (<done>/<total>)`, where `<artifact-path>` is
+the artifact's actual location (`.goals/<id>.<ext>`, legacy `.claude/goals/<id>.<ext>`, or `GOAL.md`).
 
 ## Status line format
 
@@ -165,12 +169,12 @@ below are the outer completion / stop signals.
 
 ## Terminal markers (transcript evidence)
 
-**This section is the canonical definition of the two terminal markers.** A session-scoped
-guardrail — Claude Code's `/goal`, which the user may set between goal-elicit and goal-drive (see
-goal-elicit's `references/goal-guardrail.md`) — can only judge the **conversation transcript**: its
-evaluator has no file or tool access, so the artifact ledger and a terse status line are invisible
-to it. goal-drive emits two machine-stable markers (useful for humans too, whether or not `/goal`
-is set); goal-elicit's condition matches them by **prefix**.
+**This section is the canonical definition of the two terminal markers.** They are machine-stable,
+human-readable transcript evidence on **every runtime** — a script or reader can grep for them
+regardless of agent. On Claude Code they additionally feed the optional `/goal` guardrail (which
+the user may set between goal-elicit and goal-drive; see goal-elicit's `references/goal-guardrail.md`),
+whose evaluator has no file or tool access — so the artifact ledger and a terse status line are
+invisible to it, but these markers are not. goal-elicit's condition matches them by **prefix**.
 
 - **On completion** — the final line of the FINISH report (printed AFTER the report prose and the
   push offer), only after the goal-completion predicate has actually passed:

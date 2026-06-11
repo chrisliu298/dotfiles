@@ -1,6 +1,6 @@
 # GOAL.md template
 
-The Goal Contract is a single Markdown file with YAML frontmatter. Path: `GOAL.md` at the repo root, or `$PWD` if not in a git repo. If the user wants to track multiple goals at once, write to `.claude/goals/<YYYYMMDD-HHMM>-<slug>.goal.md` instead and tell them.
+The Goal Contract is a single Markdown file with YAML frontmatter. Path: `GOAL.md` at the repo root, or `$PWD` if not in a git repo. If the user wants to track multiple goals at once, write to `.goals/<YYYYMMDD-HHMM>-<slug>.goal.md` instead and tell them (existing `.claude/goals/<id>.goal.md` contracts from an earlier version are still read and updated in place).
 
 ## Frontmatter (required)
 

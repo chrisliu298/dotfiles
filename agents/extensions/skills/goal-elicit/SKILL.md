@@ -17,13 +17,15 @@ Interview the user and write a verifiable goal artifact. The deliverable is a si
 
 This skill never plans, edits other files, runs code, or invokes other skills. It writes one artifact and stops.
 
+**Runtime portability.** One source of truth for Claude Code, Codex, and Grok — the skill never detects its runtime. Defaults are agent-neutral. An optional `/goal` handoff (Phase 5) exists on **both Claude Code and Codex** — Claude's `/goal` is a Stop-hook guardrail over goal-drive, Codex's is a native executor (see `references/goal-guardrail.md`); Grok has neither. A Claude-only tool is used when present and degrades to plain text otherwise (e.g. `AskUserQuestion` → numbered plain-text options; see Phase 3).
+
 ## What this skill produces
 
 **One artifact**, chosen by triage (Phase 0), then the skill stops:
 
-- **Contract** — `GOAL.md` at the repo root (or `$PWD` if not in a git repo). The default shape. Schema: `references/contract-template.md`.
-- **Checklist** — `.claude/goals/<id>.checklist.json` for enumerable, batchable work. Schema: `references/checklist-template.md`.
-- **Phased doc** — `.claude/goals/<id>.plan.md` for staged builds with per-phase acceptance. Schema: `references/phased-doc-template.md`.
+- **Contract** — `GOAL.md` at the repo root (or `$PWD` if not in a git repo); for multiple goals, `.goals/<id>.goal.md` (legacy `.claude/goals/` still read). The default shape. Schema: `references/contract-template.md`.
+- **Checklist** — `.goals/<id>.checklist.json` for enumerable, batchable work. Schema: `references/checklist-template.md`.
+- **Phased doc** — `.goals/<id>.plan.md` for staged builds with per-phase acceptance. Schema: `references/phased-doc-template.md`.
 
 The contract carries one of three terminal states in its frontmatter (the checklist/phased shapes carry the analogous per-unit state — see their templates):
 
@@ -55,7 +57,7 @@ Five phases for Complicated/Complex domains. Round count below counts **user tur
 
 Restate the seed request neutrally. Maintain two distinct fields throughout: `stated_request` (verbatim) and `underlying_goal` (what the user is actually trying to achieve). Ask the smallest set of intent questions needed to populate `underlying_goal`.
 
-Do **not** draft the contract yet. Open a scratch artifact with `status: draft` and the frontmatter only — `GOAL.md` by default, switching to the checklist/phased path under `.claude/goals/<id>.` once triage picks the work shape.
+Do **not** draft the contract yet. Open a scratch artifact with `status: draft` and the frontmatter only — `GOAL.md` by default, switching to the checklist/phased path under `.goals/<id>.` once triage picks the work shape.
 
 ### Phase 2 — Diverge (1–3 turns)
 
@@ -69,7 +71,7 @@ Present the leading interpretation, the unresolved choices, and your recommended
 
 > "I infer X because Y. Plausible alternatives are A and B. Which is right?"
 
-Use AskUserQuestion when there are 2–4 plausible options — make the options force a decision with consequences. Use free-text questions when the answer space is open. Both are fine; no single tool is required.
+When there are 2–4 plausible options, ask a **forced-choice** question — present them as a labelled, numbered list where each option carries its consequence, so the user must pick, rank, or edit (never a bare yes/no, no "or something else" escape). If your runtime has a structured question tool (Claude Code's `AskUserQuestion`), use it to render the choice; otherwise write the numbered options inline in your reply and have the user answer with a number/letter or an edit. Use free-text questions when the answer space is open. The force-a-decision property is what matters, not the widget.
 
 ### Phase 4 — Contract (1 turn)
 
@@ -85,16 +87,15 @@ If the contract's `execution.commit_policy` is `per_unit`, call it out explicitl
 
 Once the file is written, tell the user where it is (path) and stop. The user takes it from there.
 
-**Optional `/goal` guardrail (Claude Code only).** If the artifact is *executable and ready* — a
-contract with an `execution:` block, a checklist with non-empty `items`, or a phased doc with a
-`## Phases` section (an `authority` block is optional for all of these) — also emit a
-ready-to-paste `/goal "..."` block for the user to run *before* goal-drive. It keeps the
-session working until goal-drive prints its completion marker, and treats a by-exception stop as
-terminal too. Fill the condition template from `references/goal-guardrail.md` using the artifact's
-`done_when`/acceptance and the terminal markers (it also gives the per-shape "ready" test and the
-emit/skip gates). Emitting the text is **not** execution — goal-elicit never runs `/goal` or any
-hook. Skip it for Clear one-shot goals, for `blocked`/`draft` artifacts, and on Codex (no `/goal`);
-it degrades to inert advisory text.
+**Optional `/goal` guardrail.** If the artifact is *executable and ready* (a contract with an
+`execution:` block, a checklist with non-empty `items`, or a phased doc with a `## Phases` section),
+also emit a ready-to-paste `/goal` block — `/goal` exists on **both Claude Code and Codex** (Grok
+has none). On Claude Code it's a condition that watches the transcript for goal-drive's
+completion/stop markers, pasted *before* goal-drive; on Codex it's a one-line objective that
+**points at the artifact file** and drives it natively (the file path is the handoff). Build the right form(s) from `references/goal-guardrail.md` (templates,
+per-shape "ready" test, the 4000-char/enable caveats). Emitting the text is **not** execution —
+goal-elicit never runs `/goal` or any hook. Skip it for Clear one-shot goals and `blocked`/`draft`
+artifacts; on Grok just run goal-drive.
 
 ## Question batching
 
@@ -158,7 +159,7 @@ See `references/anti-patterns.md` for the full failure-mode table with the promp
 
 ## Resumption
 
-If a goal artifact already exists in the working directory — `GOAL.md`, or `.claude/goals/<id>.checklist.json` / `.plan.md`:
+If a goal artifact already exists in the working directory — `GOAL.md`, or `<id>.checklist.json` / `.plan.md` under `.goals/` (or, for artifacts from an earlier version, the legacy `.claude/goals/`):
 
 1. Read it.
 2. If `status: ready` (or, for a checklist, all required header fields are filled), the artifact is complete. Tell the user where it is and stop. Do not re-interview.
@@ -169,7 +170,7 @@ If a goal artifact already exists in the working directory — `GOAL.md`, or `.c
 - Do not plan, write code, run the goal, or invoke another skill — ever. The deliverable is the artifact (contract, checklist, or phased doc) only. Execution belongs to goal-drive; hand the artifact off, but do not invoke goal-drive or run the work yourself.
 - Do not infer the user's goal silently and proceed.
 - Do not pretend completion at the round ceiling — write `blocked` instead.
-- Do not relay to Codex or GPT-Pro during the interview unless the user explicitly asks for an external second opinion.
+- Do not seek an external second opinion from another model or agent during the interview unless the user explicitly asks for one.
 - Do not over-question Clear-domain tasks. Fast-lane them.
 
 ## Files in this skill
@@ -181,6 +182,6 @@ If a goal artifact already exists in the working directory — `GOAL.md`, or `.c
 - `references/cynefin-triage.md` — Phase 0 decision tree with worked examples.
 - `references/question-bank.md` — worked questions per taxonomy category.
 - `references/anti-patterns.md` — failure-mode table with the prompt move that engineers each one out.
-- `references/goal-guardrail.md` — the optional Phase 5 `/goal` guardrail: condition template, per-shape derivation, and caveats (Claude Code only).
+- `references/goal-guardrail.md` — the optional Phase 5 `/goal` guardrail (Claude Code + Codex): emit templates for both, per-shape derivation, and caveats.
 
 Read the references when you need them — not all up front. Long-form material is there so the model loads it only when relevant.

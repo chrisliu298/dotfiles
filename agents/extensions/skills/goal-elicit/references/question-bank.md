@@ -11,7 +11,7 @@ The structure for every good elicitation question:
 
 - "Is this (a) one task with a few steps, (b) a list of similar items to grind through, or (c) a staged build where later steps depend on earlier ones? (a) → a single contract, (b) → a checklist the executor batches, (c) → a phased plan with per-phase acceptance."
 - "Could a script enumerate the units of work (files, symbols, endpoints)? If yes, I'll write a checklist and you (or your script) can fill the item list."
-- "Should commits happen as it runs? Default is no auto-commit; opt in and the executor makes one local commit per verified batch/phase (it never pushes — that stays your call)."
+- "Should commits happen as it runs? Default is no auto-commit; opt in and the executor makes one local commit per verified batch/phase (it does not push unprompted — at finish it may invoke a push skill once you assent, but remote push stays your call)."
 
 ## 1. Intent
 

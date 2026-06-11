@@ -34,11 +34,16 @@ runtime states. Do not conflate artifact status with unit state.)
 
 ## Where artifacts live
 
-Aligned with `goal-elicit`'s convention (`contract-template.md`):
+Aligned with `goal-elicit`'s convention (`contract-template.md`). **New artifacts** are written to
+the agent-neutral `.goals/` directory at the repo root; **existing** artifacts under the legacy
+`.claude/goals/` are still read and patched in place (search `.goals/` first, then `.claude/goals/`).
+Never move or copy a legacy artifact — that would orphan its `id` (and any active `/goal` condition
+keyed on it).
 
-- **Contract:** `GOAL.md` at the repo root (or `$PWD`), or `.claude/goals/<id>.goal.md` for multiple goals.
-- **Checklist:** `.claude/goals/<id>.checklist.json`
-- **Phased doc:** `.claude/goals/<id>.plan.md`
+- **Contract:** `GOAL.md` at the repo root (or `$PWD`), or `.goals/<id>.goal.md` for multiple goals.
+- **Checklist:** `.goals/<id>.checklist.json`
+- **Phased doc:** `.goals/<id>.plan.md`
+- **Legacy (read / resume only):** `.claude/goals/<id>.{goal.md,checklist.json,plan.md}` — recognized, never newly created.
 
 `<id>` is `<YYYYMMDD>-<HHMM>-<slug>` (slug ≤ 30 chars), the same id format goal-elicit uses.
 
@@ -106,7 +111,7 @@ section with at least one item carrying an evidence source. The `execution:` blo
 
 ---
 
-## Shape B — Checklist (`.claude/goals/<id>.checklist.json`)
+## Shape B — Checklist (`.goals/<id>.checklist.json`)
 
 For **enumerable, homogeneous** work processed in batches (e.g. a script-parsed list).
 
@@ -150,7 +155,7 @@ entries each have `id` + `state`. `batch_size` defaults to 1, `commit_policy` to
 
 ---
 
-## Shape C — Phased doc (`.claude/goals/<id>.plan.md`)
+## Shape C — Phased doc (`.goals/<id>.plan.md`)
 
 For a **sequential, heterogeneous build** with distinct per-phase acceptance.
 

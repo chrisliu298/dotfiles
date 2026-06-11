@@ -26,7 +26,7 @@ Failure modes that elicitation skills fall into, with the concrete prompt move t
 | User fatigue                 | Even good elicitation is exhausting at scale.                  | 3–5 questions per turn (2 if heavy). Running summary every 2 rounds. Hard cap at round 8.               |
 | False completion at the cap  | Skill pretends `ready` to dodge the round limit.               | At round 8, write either a complete contract *or* `blocked` with `blocking_unknowns` populated. Mid-flight assertion in SKILL.md. |
 | Chatty wrap-up               | Skill summarizes at the end with no actionable artifact.       | The artifact *is* the deliverable. Tell the user where `GOAL.md` is and stop — no prose summary.        |
-| Skill-on-skill recursion     | Skill calls /goal-elicit recursively or invokes other skills.  | Forbidden in SKILL.md. Only `Read`, `Write`, `Edit`, narrow `Bash`, and `AskUserQuestion` are allowed.  |
+| Skill-on-skill recursion     | Skill calls goal-elicit recursively or invokes other skills.  | Forbidden in SKILL.md. The skill only reads/writes/edits files, runs narrow `Bash` (git/date), and asks forced-choice questions (a structured tool when available, else plain text) — it invokes no other skill. |
 
 ## Empirical reminder
 
