@@ -9,8 +9,11 @@ description: >-
   failure-mode-sensitive reviews — and whenever you would otherwise spawn 2+
   independent reviewers for one question. Skip for trivial lookups, deterministic
   transforms, routine small edits, mechanical syncs, and single-correct-answer
-  tasks. When you invoke it, choose N and m/xh yourself; default N=1/m and scale
-  only when decision risk justifies the 6N-agent cost.
+  tasks. With no config tokens, autonomously decide N, effort, and gpt-pro from
+  the question every time (N=1/m is the bottom-rung anchor, never a lazy default);
+  with any explicit config (e.g. `prism 2 xh gp`), honor it verbatim and skip
+  auto-sizing. Scale above the anchor only when decision risk justifies the
+  6N-agent cost.
 user-invocable: true
 allowed-tools:
   - Agent
@@ -47,7 +50,7 @@ Convergence across diverse lenses is high-confidence signal; divergence surfaces
 | **Parallax — MiMo** | **Bash** (`relay call --to mimo`) | Cross-model agents via relay to Xiaomi MiMo-V2.5-Pro |
 | **GPT-Pro (opt-in)** | **Bash** (`gpt-pro < prompt.md`) | Additive ChatGPT Pro Extended lenses via [[gpt-pro-relay]] — orchestrator-direct, **not** relay; slow + quota-burning; off by default (see GPT-Pro tier) |
 
-**Default: all six models at `N=1`** — self + 1 Claude subagent + 1 each of Codex, Grok Build, Grok Composer, DeepSeek, MiMo = **6 dispatched + self** (7 perspectives). Required dispatch: **`N` Agent calls + 1 backgrounded `prism-launch parallax` call that fans out the `5N` relay calls** (manual fallback: `5N` separate Bash relay calls). Self does not count. All six models are always included at the chosen `N`; the only way to deviate — exclude a tier, or give a tier its own count or effort — is an explicit natural-language modification (see Invocation Shorthand). **GPT-Pro is the lone exception to "always included": it is a separate opt-in tier with its own count, default `0`, never part of the symmetric `N` — added only via an explicit `+<G> gp` clause (see Invocation Shorthand → GPT-Pro tier).**
+**Symmetric baseline — all six models at `N=1`/`m`** (the bottom-rung anchor, not a fire-without-thinking default): self + 1 Claude subagent + 1 each of Codex, Grok Build, Grok Composer, DeepSeek, MiMo = **6 dispatched + self** (7 perspectives). This shape is what an autonomous no-config decision *lands on* for the minimal case and what an explicit-but-partial config *fills omitted dimensions from* — a bare invocation always routes through the decision procedure (see **Choosing N, effort, and gpt-pro**) and never emits this by shortcut. Required dispatch: **`N` Agent calls + 1 backgrounded `prism-launch parallax` call that fans out the `5N` relay calls** (manual fallback: `5N` separate Bash relay calls). Self does not count. All six models are always included at the chosen `N`; the only way to deviate — exclude a tier, or give a tier its own count or effort — is an explicit natural-language modification (see Invocation Shorthand). **GPT-Pro is the lone exception to "always included": it is a separate opt-in tier with its own count, default `0`, never part of the symmetric `N` — added only via an explicit `+<G> gp` clause (see Invocation Shorthand → GPT-Pro tier).**
 
 ### Invocation Shorthand
 
@@ -64,14 +67,14 @@ Both tokens are optional and **positional** — at most one `N`, then at most on
 - **Slot 1:** a standalone integer → `N`; a standalone `m`/`xh` → effort (with `N` defaulting to `1`); anything else → the question starts here.
 - **Slot 2** (only if Slot 1 was `N`): a standalone `m`/`xh` → effort; anything else → the question starts here.
 - There is no third config slot, so once a slot isn't filled the rest is the question verbatim — a *second* integer, or any word, is always question text. Examples: `prism 2 3 reasons?` → `N=2`, question "3 reasons?"; `prism xh root cause?` → effort `xh`, question "root cause?"; `prism migration plan` → question "migration plan" (Slot 1 `migration` is neither a standalone integer nor `m`/`xh`).
-- **Escape:** if the question's own first word is a bare integer, `m`, or `xh` and you want default config, put `--` first — everything after `--` is question text.
+- **Escape:** if the question's own first word is a bare integer, `m`, or `xh`, put `--` first — everything after `--` is question text. `--` is not a config token; it leaves zero config tokens, so the invocation routes to the autonomous decision (see **Config-presence gate**), not to a pinned baseline.
 
-Examples:
-- `prism Why does X?` — 1 of each, medium → 6 agents + self.
-- `prism 2 Why does X?` — 2 of each, medium → 12 + self.
-- `prism xh Why does X?` — 1 of each, high tier (Codex `xhigh`, Grok Build `high`).
-- `prism 2 xh Why does X?` — 2 of each, high tier.
-- `prism -- 2 reasons to refactor?` — default N=1, medium; the `--` makes the leading `2` question text instead of `N`, so the question is "2 reasons to refactor?".
+Examples (an explicit config token skips auto-sizing; **no** token → autonomous decision):
+- `prism Why does X?` — no config token → autonomously decide N/effort/gpt-pro from the question.
+- `prism 2 Why does X?` — explicit: 2 of each, effort fills to `m`, no gpt-pro → 12 + self; no auto-sizing.
+- `prism xh Why does X?` — explicit: effort `xh` (Codex `xhigh`, Grok Build `high`), N fills to 1 → 6 + self; no auto-sizing.
+- `prism 2 xh Why does X?` — explicit: 2 of each, high tier; no auto-sizing.
+- `prism -- 2 reasons to refactor?` — the `--` makes the leading `2` question text, leaving zero config tokens, so the question is "2 reasons to refactor?" and N/effort/gpt-pro are decided autonomously.
 
 **Additive GPT-Pro clause — `+<G> gp`:** an optional leading-config clause adds `G` ChatGPT Pro Extended lenses via [[gpt-pro-relay]], on top of the normal lineup. `G` is a positive integer; the count is **independent of `N`** and **defaults to `0`** (gpt-pro is never dispatched unless named). Canonical spelling is the short `+<G> gp` (`gp` = gpt-pro, written as its own token with a space — unambiguous, it does not collide with **G**rok); accepted synonyms in the leading config zone are the explicit `+<G> gpt-pro`, `+ <G> /gpt-pro-relay`, and `plus <G> gpt-pro lenses`. Naming gpt-pro is the cost consent (it burns real Pro quota and 5–20 min/lens — see GPT-Pro tier). Resolve it like any other config modifier, then dispatch per the GPT-Pro tier section.
 - `prism 2 xh +2 gp <question>` → 2 of each of the six models at xhigh **plus** 2 gpt-pro lenses (12 dispatched + 2 gpt-pro + self = 15 perspectives).
@@ -88,13 +91,22 @@ Examples:
 
 `N` and `m`/`xh` set the symmetric baseline; named modifications override specific tiers on top of it (an explicit exclusion overrides the "all six always included" default; on conflicting clauses the more specific or later one wins). Resolve to a final per-tier table, then dispatch exactly that — every tier with resolved count > 0 MUST be dispatched at that count (do not skip, substitute, or defer; exception: `relay` unavailable → substitute a same-model subagent carrying that tier's lens and warn). You — the orchestrator — own resolving the shorthand and NL into the dispatch records; `prepare` then validates the *authored* dispatch file and emits the authoritative manifest counts, but it cannot know your intended `N`, so confirm the resolved shape matches your intent before running it (Pre-Launch Check #5).
 
+### Config-presence gate (the routing decision)
+
+Before anything else, the parser's result routes the invocation down exactly one of two paths — keyed on **what the parser resolved**, never on a re-reading of the raw string:
+
+- **Any config token present** — a positional `N` or `m`/`xh` (Slot 1 or 2), a `+<G> gp` clause, *or* a leading natural-language modification (a tier name paired with a config action) → **honor it verbatim and skip auto-sizing.** Every dimension the user did **not** specify falls to its stated default (`N`→`1`, effort→`m`, `G`→`0`, all six tiers included) — a *stated default*, not an autonomous decision. Do not consult the decision table; do not "improve" the user's `N`, effort, or gpt-pro count. Partial config is still explicit config: `prism 2 <q>` is `N=2`/`m`/no-gpt-pro, full stop — never an invitation to auto-pick effort.
+- **Zero config tokens** (the question begins immediately; `--` also lands here, since it leaves no tokens) → **autonomously decide** `N`, effort, and gpt-pro per **Choosing N, effort, and gpt-pro**. Run that decision every time; the absence of tokens is never permission to fire the baseline without reasoning.
+
+A bare tier name *inside the question* ("why is there no DeepSeek fallback?") is **not** a config token (see Natural-language modifications) — it does not flip the gate to the explicit path.
+
 ### Choosing N, effort, and gpt-pro (decide autonomously — don't ask)
 
-When the user gives only a question (no `N`, no `m`/`xh`, no `+G gp`), pick them all yourself — do not ask. Use the smallest run whose extra perspectives could change the action, confidence, or rollback plan. **Default down:** each `+1` to `N` adds a full six-model slate and slower synthesis; never raise `N` or effort just to "be thorough."
+**This section runs only when the Config-presence gate routed you here — i.e. the invocation had zero config tokens.** (If the user gave any explicit config, the gate already pinned the shape; honor it and skip this table entirely.) On a bare question, pick `N`, effort, and gpt-pro all yourself — do not ask. Use the smallest run whose extra perspectives could change the action, confidence, or rollback plan. **Default down:** each `+1` to `N` adds a full six-model slate and slower synthesis; never raise `N` or effort just to "be thorough." **Start at the bottom rung and justify each step up:** land on the *lowest* row whose situation actually matches; if you cannot name the specific extra perspective an added agent or `xh` pass would contribute, you are at the anchor. Auto-deciding is mandatory, but "decide" means *size to the question*, not *size up*.
 
 | Situation | N | Effort |
 |---|---|---|
-| Default — a Prism-worthy decision one good pass could settle | 1 | m |
+| Bottom rung (anchor — start here) — a Prism-worthy decision one good pass could settle | 1 | m |
 | Subtle correctness/security/data-loss/migration risk, or a heavy adversarial/falsification lens on Codex or Grok Build | 1 | xh |
 | Several viable options or stakeholder tradeoffs where breadth matters more than depth | 2 | m |
 | Hard-to-reverse choice where both breadth and subtle reasoning matter | 2 | xh |
@@ -105,7 +117,7 @@ Reach for `xh` only when the tunable tiers (Codex, Grok Build) carry deep advers
 
 **gpt-pro (default G=0 — usually skip):** gpt-pro tops the reasoning ranking and pairs it with web research, but it spends real ChatGPT Pro quota and runs 5–20 min/lens, so the six-model lineup is the default and gpt-pro is the rare exception — never the reflex for an ordinary Prism-worthy call. Auto-add **one** lens (`+1 gp`) only when the decision is genuinely high-stakes or hard-to-reverse **and** its binding constraint is either the heaviest reasoning or live external research the standard tiers can't match; give gpt-pro that heaviest-reasoning or research-tilted lens (see GPT-Pro tier). Use **`+2 gp`** (one hard-reasoning + one research-grounded) only for an exceptional, multi-faceted high-stakes call; never auto-add more than 2. You fire it yourself without waiting for a separate yes — but because it burns real quota and is slow, the pre-launch announcement MUST flag it so the user can abort first.
 
-Announce the resolved shape (`N=<n>, effort=<m|xh>[, +<G> gpt-pro — real Pro quota, ~5–20 min] — <total> agents + self`) before launching so the user can redirect a costly run.
+Announce the resolved shape and its source (`<auto-sized|explicit> · N=<n>, effort=<m|xh>[, +<G> gpt-pro — real Pro quota, ~5–20 min] — <total> agents + self`) before launching so the user can redirect a costly run. The `auto-sized|explicit` tag is also a parse check: if you typed `prism m <q>` and the announcement says `auto-sized`, the gate mis-routed — it should read `explicit`.
 
 ### Parallax (cross-model agents)
 
@@ -588,4 +600,4 @@ Use Prism when a task benefits from diverse, redundant judgment and the shared c
 
 Skip Prism for trivial lookups, deterministic transforms, single-correct-answer tasks, or tasks requiring parallel mutations of shared state.
 
-Once you've decided to use it, pick `N`, effort, and any gpt-pro lenses per **Choosing N, effort, and gpt-pro** (under Invocation Shorthand) — default `N=1`/`m`/no gpt-pro, scale only when decision risk justifies the cost.
+Once you've decided to use it, resolve config via the **Config-presence gate**: with any explicit config token, honor the parsed shape verbatim (omitted dimensions fall to `N=1`/`m`/no-gpt-pro); with none, autonomously pick `N`, effort, and any gpt-pro lenses per **Choosing N, effort, and gpt-pro** (anchored at `N=1`/`m`, scaling only when decision risk justifies the cost).
