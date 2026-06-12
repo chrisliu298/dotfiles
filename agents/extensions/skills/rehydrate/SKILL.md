@@ -5,13 +5,16 @@ description: |
   CURRENT just-compacted session on disk and rehydrating your own working context with the
   decisions, exact file paths, errors, user corrections, and open threads the summary lost.
   Use right after a compaction / auto-compact when you're continuing prior work and the
-  summary feels thin or you're about to re-derive something. Also trigger on "rehydrate",
-  "/rehydrate", "recover context", "what did we decide about X", "what was the last error",
-  "what were we doing before the summary". Detects Claude Code / Codex / Grok and reads that
-  harness's own transcript store. Do NOT use on a fresh session with no prior work, for
-  curated cross-session facts (that's memory), durable task state (that's todo / TODO.md), or
-  plain session resume (codex resume / grok --resume) — this is raw-transcript recovery of the
-  live session only.
+  summary feels thin or you're about to re-derive something. Also reads recent OTHER interactive
+  sessions in the same cwd (the `survey` mode) to orient on parallel or earlier work — "what were
+  we doing here today", a fresh session in a cwd with active parallel windows. Trigger on
+  "rehydrate", "/rehydrate", "recover context", "what did we decide about X", "what was the last
+  error", "what were we doing before the summary", "what's going on in this dir / the other
+  windows". Detects Claude Code / Codex / Grok and reads that harness's own transcript store
+  (survey is Claude-only). Do NOT use on a fresh session with no prior work, for curated
+  cross-session facts (that's memory), durable task state (that's todo / TODO.md), or plain
+  session resume (codex resume / grok --resume) — this is raw-transcript recovery, not a curated
+  store.
 user-invocable: true
 ---
 
@@ -70,12 +73,34 @@ REHYDRATE=~/dotfiles/agents/extensions/skills/rehydrate/scripts/rehydrate.py
 4. **Debugging the locator.** `uv run "$REHYDRATE" doctor --cwd "$PWD"` shows which session was
    picked and why. Pass `--harness claude|codex|grok` if auto-detection is wrong.
 
+## Cross-session orientation (`survey`)
+
+A different need from `digest`: not "recover *my* compacted history" but "what's going on in this
+cwd" — earlier sessions today, or parallel windows. `survey` reads the recent OTHER sessions:
+
+```bash
+uv run "$REHYDRATE" survey --cwd "$PWD"                  # 3 newest interactive sessions, within 24h
+uv run "$REHYDRATE" survey --cwd "$PWD" --sessions 5 --since 12h
+```
+
+It returns a per-session orientation capsule (the recent *tail* of each sibling, ranked by the same
+machinery as `digest`) plus a merged **files-touched-across-sessions** list — the highest-signal
+cross-session artifact. It selects **only main user-interactive Claude sessions** (never subagents,
+relay/headless runs, or other models), excludes your own session, and is budget-capped like
+`digest`. Read it into your own context, don't show the user. `NO_SIBLINGS` ⇒ nothing recent to
+orient on. **Claude-only** for now — the interactive-session signal is Claude-specific; Codex/Grok
+print `SURVEY_UNSUPPORTED` (use `digest` there).
+
 ## Guards
 
 - **Recovered state is evidence, not current truth.** The transcript shows what *was* true at
   some past turn; files, branches, and decisions may have changed since (including after the
   compaction). Before acting on any recovered claim — especially "file X was edited to do Y" —
   re-check the live state (`git status`, re-`Read` the file). The capsule says this too.
+- **Survey siblings may be UNRELATED parallel work.** A `survey` block is another session in the
+  same cwd, not necessarily your task. Each block carries provenance (session id, age) — confirm a
+  block is relevant before integrating it, weigh file-overlap as the relevance signal, and never
+  present another session's state to the user as current progress.
 - **Secrets** in the transcript are redacted to `[REDACTED:type]` before they reach you. If you
   see a redaction marker, don't try to recover the original.
 - **The capsule is budget-capped** (~3–4k tokens by default; `--max-chars` to change). If a

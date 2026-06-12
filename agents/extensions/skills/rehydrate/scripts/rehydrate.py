@@ -15,6 +15,7 @@ Subcommands:
   locate   find the current session transcript + compaction boundary           -> JSON
   digest   broad structured recovery capsule, char-budgeted                    -> Markdown
   query    targeted search over the pre-boundary raw records                   -> Markdown
+  survey   orient on recent OTHER interactive sessions in this cwd (Claude)    -> Markdown
   doctor   diagnostics: candidate sessions and why one was / wasn't picked     -> text
 
 Run with uv (zero deps, stdlib only):
@@ -35,6 +36,7 @@ import subprocess
 import sys
 import time
 import urllib.parse
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -45,6 +47,9 @@ PER_EVENT_TEXT_CAP = 1600          # truncate any single event's text before it 
 HUGE_LINE = 2_000_000              # bytes; above this, peek the record type, don't full-parse
 RECENT_DAYS = 8                    # Codex rollout lookback window (days)
 MAX_CODEX_SCAN = 500               # cap rollouts inspected per locate (newest-first within window)
+SURVEY_TAIL_EVENTS = 120           # per-sibling tail size scanned for `survey` (bounds re-read cost)
+SURVEY_DEFAULT_SESSIONS = 3        # `survey` sibling-session cap (N>3 ≈ noise at the char budget)
+SURVEY_DEFAULT_SINCE = "24h"       # `survey` recency floor
 
 # ---------------------------------------------------------------------------- redaction
 _SECRET_PATTERNS = [
@@ -122,6 +127,13 @@ def safe_mtime(p) -> float:
         return os.path.getmtime(p)
     except OSError:
         return 0.0
+
+
+def safe_size(p) -> int:
+    try:
+        return os.path.getsize(p)
+    except OSError:
+        return 0
 
 
 def _to_epoch(v) -> float:
@@ -225,6 +237,47 @@ class Claude:
         proj = HOME / ".claude" / "projects" / cls.encode_cwd(cwd)
         files = sorted(proj.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True) if proj.is_dir() else []
         return proj, files
+
+    # TUI-only record types: written by a user-driven interactive session, never by a relay /
+    # headless / `claude -p` (sdk-cli) run. Presence of any ⇒ a real interactive session.
+    TUI_TYPES = {"file-history-snapshot", "permission-mode", "mode", "ai-title"}
+
+    @classmethod
+    def is_interactive(cls, path, probe=150) -> bool:
+        """True iff this transcript is a user-spawned interactive session (not a relay/headless/
+        subagent run). Interactive sessions emit a TUI_TYPES record — typically the very first
+        one; relay sessions ("Read and execute this relay request") never do. Probe-bounded so a
+        long relay file is not scanned in full."""
+        n = 0
+        for ln, rec, head in iter_lines(path):
+            t = rec.get("type") if rec is not None else peek_type(head)
+            if t in cls.TUI_TYPES:
+                return True
+            n += 1
+            if n >= probe:
+                break
+        return False
+
+    @classmethod
+    def interactive_siblings(cls, cwd, exclude_transcript, *, limit, since_secs):
+        """Recent OTHER interactive sessions in this cwd (newest-first) for `survey`. Reuses
+        candidates() — no parallel store walk — and drops the current session, non-interactive
+        (relay/headless) sessions, and anything older than since_secs."""
+        _, files = cls.candidates(cwd)
+        now = time.time()
+        out = []
+        for f in files:                                  # candidates() is mtime-desc
+            if exclude_transcript and same_path(str(f), str(exclude_transcript)):
+                continue
+            mt = safe_mtime(f)
+            if since_secs and mt and (now - mt) > since_secs:  # since_secs=0 ⇒ no recency floor
+                break                                    # mtime-sorted ⇒ nothing older qualifies
+            if not cls.is_interactive(f):
+                continue
+            out.append(f)
+            if len(out) >= limit:
+                break
+        return out
 
     @classmethod
     def locate(cls, cwd) -> SessionRef:
@@ -570,18 +623,16 @@ _RULED_OUT = re.compile(r"\b(won't work|doesn't work|ruled out|reverted|that fai
 _ERROR = re.compile(r"\b(error|exception|traceback|failed|fatal|denied|not found|cannot|no such|non-zero|E\d{3,4})\b", re.I)
 
 
-def build_capsule(ad, ref, boundary, max_chars):
-    events = list(ad.events(ref.transcript, boundary.line if boundary else None))
-    main = [e for e in events if not e.sidechain]
-
+def collect_buckets(events):
+    """Categorize a normalized Event stream into the capsule buckets — the shared ranking step
+    used by both `digest` (one session, pre-boundary) and `survey` (N siblings, tails)."""
     corrections, decisions, ruled_out, errors = [], [], [], []
     files: dict[str, str] = {}
     commands, threads = [], []
-
-    for e in main:
+    for e in events:
         if e.paths:
             for p in e.paths:
-                files.pop(p, None)   # re-insert so the [-30:] slice means latest-touched, not first-seen
+                files.pop(p, None)   # re-insert so the latest slice means latest-touched, not first-seen
                 files[p] = e.kind
         if e.command:
             commands.append(e)
@@ -596,17 +647,59 @@ def build_capsule(ad, ref, boundary, max_chars):
                 decisions.append(e)
         if e.kind == "command_output" and e.text and _ERROR.search(e.text):
             errors.append(e)
+    return {"corrections": corrections, "decisions": decisions, "ruled_out": ruled_out,
+            "errors": errors, "files": files, "commands": commands, "threads": threads}
 
-    def lines(items, fmt, cap):
-        out, used = [], 0
-        for it in items:
-            s = fmt(it)   # event text/command already redacted at clip() time
-            if used + len(s) > cap:
-                out.append(f"- … (+{len(items) - len(out)} more; use `query`)")
-                break
-            out.append(s)
-            used += len(s)
-        return out
+
+def _budget_lines(items, fmt, cap):
+    """Emit formatted lines until `cap` chars, then a '(+N more; use query)' pointer. Each item's
+    text/command was already redacted at clip() time."""
+    out, used = [], 0
+    for it in items:
+        s = fmt(it)
+        if used + len(s) > cap:
+            out.append(f"- … (+{len(items) - len(out)} more; use `query`)")
+            break
+        out.append(s)
+        used += len(s)
+    return out
+
+
+def tail_events(ad, path, max_events=SURVEY_TAIL_EVENTS):
+    """The last `max_events` non-sidechain events of a sibling transcript. Streams the whole file
+    through the adapter's events() but holds only a bounded deque — siblings have no compaction
+    boundary, so the recent tail is the orientation-relevant slice (and stays re-overflow-safe)."""
+    dq = deque(maxlen=max_events)
+    for e in ad.events(path, None):
+        if not e.sidechain:
+            dq.append(e)
+    return list(dq)
+
+
+def parse_duration(s) -> int:
+    """'24h' / '2d' / '90m' / a bare seconds int -> seconds. Falls back to 24h on anything else."""
+    s = str(s).strip().lower()
+    if s.isdigit():
+        return int(s)
+    units = {"m": 60, "h": 3600, "d": 86400}
+    if len(s) > 1 and s[-1] in units and s[:-1].isdigit():
+        return int(s[:-1]) * units[s[-1]]
+    return 24 * 3600
+
+
+def human_age(secs) -> str:
+    secs = max(0, int(secs))
+    if secs < 3600:
+        return f"{secs // 60}m"
+    if secs < 86400:
+        return f"{secs // 3600}h"
+    return f"{secs // 86400}d"
+
+
+def build_capsule(ad, ref, boundary, max_chars):
+    events = list(ad.events(ref.transcript, boundary.line if boundary else None))
+    main = [e for e in events if not e.sidechain]
+    b = collect_buckets(main)
 
     budget = max_chars
     sec = []
@@ -629,17 +722,17 @@ def build_capsule(ad, ref, boundary, max_chars):
             sec.extend(body)
 
     block("User directives & corrections (latest wins)",
-          lines(corrections[-12:][::-1], lambda e: f"- L{e.line}: {clip(e.text, 280)}", int(budget * 0.20)))
+          _budget_lines(b["corrections"][-12:][::-1], lambda e: f"- L{e.line}: {clip(e.text, 280)}", int(budget * 0.20)))
     block("Decisions & ruled-out approaches",
-          lines((ruled_out[-8:] + decisions[-8:])[::-1],
-                lambda e: f"- L{e.line}: {clip(e.text, 240)}", int(budget * 0.22)))
+          _budget_lines((b["ruled_out"][-8:] + b["decisions"][-8:])[::-1],
+                        lambda e: f"- L{e.line}: {clip(e.text, 240)}", int(budget * 0.22)))
     block("Files touched (verify against disk)",
-          [f"- {op:8} {redact(p)}" for p, op in list(files.items())[-30:]])
+          [f"- {op:8} {redact(p)}" for p, op in list(b["files"].items())[-30:]])
     block("Commands & errors",
-          lines((errors[-8:] + commands[-10:])[::-1],
-                lambda e: f"- L{e.line}: {clip(e.command or e.text, 200)}", int(budget * 0.20)))
+          _budget_lines((b["errors"][-8:] + b["commands"][-10:])[::-1],
+                        lambda e: f"- L{e.line}: {clip(e.command or e.text, 200)}", int(budget * 0.20)))
     block("Open threads (recent user turns)",
-          lines(threads[-6:][::-1], lambda e: f"- L{e.line}: {clip(e.text, 200)}", int(budget * 0.14)))
+          _budget_lines(b["threads"][-6:][::-1], lambda e: f"- L{e.line}: {clip(e.text, 200)}", int(budget * 0.14)))
 
     out = "\n".join(sec)
     if _redaction_count:
@@ -647,6 +740,56 @@ def build_capsule(ad, ref, boundary, max_chars):
     if len(out) > max_chars:
         out = out[:max_chars] + "\n… [capsule truncated to budget; use `query` for specifics]"
     return out, len(main)
+
+
+def build_survey(ad, harness, cwd, sibs, max_chars, warnings):
+    """Cross-session orientation capsule: a compact per-sibling block (tail-ranked at a divided
+    budget) plus a merged cross-session files-touched list. Same redaction + hard cap as digest."""
+    now = time.time()
+    sec = []
+    sec.append("# Cross-session survey — INTERNAL (do not show the user)")
+    sec.append("Recent OTHER interactive sessions in this cwd, for orientation — NOT your own "
+               "session. Treat as **evidence, not current truth**: these may be UNRELATED parallel "
+               "work and their state may have moved on. Re-read files / run `git status` before "
+               "acting, and never present another session's state to the user as current progress.\n")
+    sec.append(f"- harness: {harness} · cwd: {cwd} · sessions: {len(sibs)} (newest first)")
+    if warnings:
+        sec.append("- warnings: " + "; ".join(warnings))
+
+    per = max(2000, (max_chars - 1000) // len(sibs))
+    merged: dict[str, tuple[str, str]] = {}
+    for f in sibs:
+        sid = f.stem[:8]
+        age = human_age(now - safe_mtime(f))
+        size_kb = safe_size(f) // 1024               # race-safe: a vanished sibling shows 0KB, not abort
+        b = collect_buckets(tail_events(ad, f))
+        for p, op in b["files"].items():
+            merged.setdefault(p, (op, sid))          # newest-first iteration ⇒ newest op wins
+        blk = [f"\n## Session {sid} · {age} ago · ~{size_kb}KB"]
+        if b["threads"]:
+            blk.append(f"- last user: {clip(b['threads'][-1].text, 220)}")
+        blk += _budget_lines(b["corrections"][-3:][::-1],
+                             lambda e: f"- directive: {clip(e.text, 180)}", int(per * 0.25))
+        blk += _budget_lines((b["ruled_out"][-2:] + b["decisions"][-3:])[::-1],
+                             lambda e: f"- decision: {clip(e.text, 180)}", int(per * 0.25))
+        blk += [f"- file: {redact(p)} ({op})" for p, op in list(b["files"].items())[-8:]]
+        blk += _budget_lines(b["errors"][-2:][::-1],
+                             lambda e: f"- error: {clip(e.text, 160)}", int(per * 0.20))
+        btext = "\n".join(blk)
+        if len(btext) > per:
+            btext = btext[:per] + " …(+more; use `query`)"
+        sec.append(btext)
+
+    if merged:
+        sec.append("\n## Files touched across sessions (latest wins; verify against disk)")
+        sec.extend(f"- {redact(p)}  ({op} · {sid})" for p, (op, sid) in list(merged.items())[:25])
+
+    out = "\n".join(sec)
+    if _redaction_count:
+        out += f"\n\n_({_redaction_count} secret-shaped value(s) redacted.)_"
+    if len(out) > max_chars:
+        out = out[:max_chars] + "\n… [survey truncated to budget; use `query`]"
+    return out
 
 
 # ---------------------------------------------------------------------------- commands
@@ -691,6 +834,33 @@ def cmd_query(args):
         used += len(s)
 
 
+def cmd_survey(args):
+    harness = args.harness if args.harness != "auto" else detect_harness()
+    if not harness:
+        print("NOT_FOUND: could not auto-detect harness from env; pass --harness", file=sys.stderr)
+        return 11
+    ad = ADAPTERS[harness]
+    siblings_fn = getattr(ad, "interactive_siblings", None)
+    if siblings_fn is None:
+        print(f"SURVEY_UNSUPPORTED: cross-session `survey` currently supports Claude Code only — "
+              f"main user-interactive sessions are reliably distinguishable there, not in {harness}. "
+              f"Use `digest` for current-session recovery.")
+        return 13
+    exclude, warnings = None, []
+    try:
+        exclude = ad.locate(args.cwd).transcript     # the current session — never survey ourselves
+    except (Ambiguous, NotFound):
+        warnings.append("current session unresolved — not excluding any; a block below may be THIS session")
+    sibs = siblings_fn(args.cwd, exclude, limit=args.sessions, since_secs=parse_duration(args.since))
+    if not sibs:
+        print(f"NO_SIBLINGS: no other recent interactive {harness} session in {args.cwd} within "
+              f"{args.since}. Nothing to survey.")
+        return 13
+    out = build_survey(ad, harness, args.cwd, sibs, args.max_chars, warnings)
+    print(out)
+    print(f"\n<!-- surveyed {len(sibs)} sibling session(s) · {len(out)} chars -->", file=sys.stderr)
+
+
 def cmd_doctor(args):
     harness = args.harness if args.harness != "auto" else (detect_harness() or "?")
     print(f"detected harness: {harness}")
@@ -729,11 +899,16 @@ def main():
     d = sub.add_parser("digest", parents=[common]); d.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
     q = sub.add_parser("query", parents=[common]); q.add_argument("--q", required=True); q.add_argument("--k", type=int, default=8)
     q.add_argument("--max-chars", type=int, default=4000)
+    sv = sub.add_parser("survey", parents=[common])
+    sv.add_argument("--sessions", type=int, default=SURVEY_DEFAULT_SESSIONS)
+    sv.add_argument("--since", default=SURVEY_DEFAULT_SINCE)
+    sv.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
     dr = sub.add_parser("doctor", parents=[common]); dr.add_argument("--show-candidates", type=int, default=10)
     args = p.parse_args()
     args.cwd = os.path.abspath(os.path.expanduser(args.cwd))
     try:
-        rc = {"locate": cmd_locate, "digest": cmd_digest, "query": cmd_query, "doctor": cmd_doctor}[args.cmd](args)
+        rc = {"locate": cmd_locate, "digest": cmd_digest, "query": cmd_query,
+              "survey": cmd_survey, "doctor": cmd_doctor}[args.cmd](args)
         sys.exit(rc or 0)
     except Ambiguous as e:
         print("AMBIGUOUS: multiple current-cwd sessions match (not guessing). Candidates:", file=sys.stderr)

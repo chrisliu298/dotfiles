@@ -65,3 +65,21 @@ Seen `type` values: `user`, `assistant`, `attachment`, `system`, `permission-mod
   (`{type:"text"}`, `{type:"tool_use", name, input}`, `{type:"tool_result", content}`). File
   paths live in `tool_use.input.{file_path,path,notebook_path}`; Bash commands in
   `tool_use.input.command` when `name=="Bash"`.
+
+## Interactive vs. relay/headless sessions (for `survey`)
+
+`survey` must select only **user-spawned interactive** sessions — not relay/headless (`claude -p`,
+sdk-cli) runs or subagents. The clean structural discriminator (verified 2026-06-12, 2.1.175): a
+real interactive session emits **TUI-only record types** — `mode`, `permission-mode`,
+`file-history-snapshot`, `ai-title` (`mode` is typically record #1). Relay/headless transcripts
+("Read and execute this relay request: …", first record `type:"queue-operation"`) carry none of
+them — only `{user, assistant, last-prompt, attachment, queue-operation}`. `Claude.is_interactive()`
+returns True on the first TUI-type record within a bounded probe; presence of any ⇒ interactive.
+
+Two cross-checks that informed the predicate but are **not** used at runtime (PID files vanish when
+the process exits, so they can't classify ended siblings): the live PID map
+`~/.claude/sessions/<pid>.json` carries `kind` (`interactive`) and `entrypoint` (`cli` for a real
+terminal session vs `sdk-cli` for relay/SDK). In 2.1.175, subagents (Agent/Task tool) do **not**
+write into the project dir at all (`isSidechain` is 0% across session files) — their transcripts
+live under the session-scoped temp dir — so the projects-dir candidate list is already
+subagent-free; the TUI-type predicate is what additionally excludes relay/headless runs.

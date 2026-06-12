@@ -43,6 +43,27 @@ sidechain branches.
 - **Budget in characters**, not tokens (the script can't know the harness model's tokenizer).
   Default ~14000 chars ≈ 3–4k tokens; hard-truncate with a "use query" pointer at the cap.
 
+## Cross-session survey (`survey`)
+
+`digest` recovers the current session *below its compaction boundary*; `survey` orients on recent
+**other** sessions in the same cwd. Same machinery, inverted relationship to multiplicity (it's the
+input, not an `AMBIGUOUS` error) and to scope (boundary-less recent **tail**, not pre-boundary body):
+
+- **Selection** reuses the adapter enumerator (Claude `candidates()`), newest-first, dropping the
+  current session, anything older than `--since` (default 24h), and **non-interactive** sessions —
+  see `claude.md` for the interactive predicate. `survey` is **Claude-only**: the
+  "user-spawned interactive vs relay/headless/subagent" signal is Claude-specific; other adapters
+  have no `interactive_siblings()` and `cmd_survey` returns `SURVEY_UNSUPPORTED`.
+- **Re-overflow** is contained by reading only a bounded **tail** per sibling (`tail_events()` keeps
+  a `deque(maxlen=SURVEY_TAIL_EVENTS)` while streaming `events(path, None)`), then ranking it with
+  the shared `collect_buckets()` at a **per-session sub-budget** (`max_chars // N`, floor 2000). The
+  model still never reads raw JSONL; the aggregate stays inside the same `--max-chars` cap.
+- **Capsule** is per-session sections (provenance + relative age on each — no merged timeline, which
+  would manufacture false causality between unrelated windows) plus a cross-session **files-touched**
+  rollup (latest op wins). Guards add: siblings may be unrelated parallel work; don't present a
+  sibling's state as current truth. `collect_buckets()` / `_budget_lines()` are shared with
+  `build_capsule()` so the ranking never forks.
+
 ## Redaction
 
 Applied to every emitted snippet before output: OpenAI/xAI/GitHub/AWS keys, `Bearer` tokens,
