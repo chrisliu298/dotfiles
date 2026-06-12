@@ -359,11 +359,11 @@ Lenses are grouped into **axis families**. Two lenses in the *same* family are n
 | **Mechanism** | cause and effect | Causal |
 | **Challenge** *(opt-in)* | attack, downside, disproof | Adversarial · Falsification · Disconfirming · Risk |
 | **Human / Value** | affected parties and reception | Stakeholder · Audience · Clarity |
-| **Delivery** | ship-ability and minimalism | Pragmatist · Simplicity |
+| **Delivery** | ship-ability, structural fit, and minimalism | Pragmatist · Simplicity · Structural |
 | **Time** | lifecycle, sequencing, reversibility | Temporal |
 | **Self** | holistic synthesis (orchestrator only) | Integrator |
 
-Lenses added to close coverage gaps: **`Empirical`** (the measurement / base-rate axis — for "did X actually improve it?", perf, and A/B claims; no other lens demands a baseline + metric), **`Stakeholder`** (affected parties and second-order effects — distinct from `Audience`, which is only *reception*), **`Temporal`** (promoted from the old `Evolutionary`, now covering lifecycle *and* sequencing/reversibility), **`Lateral-Generative`** (deliberate novelty, distinct from breadth), and **`Reframe`** (merges the former `Alternative-Framing` + `Disconfirming-via-different-frame`). Retired as near-duplicates: `Expansionist` (→ `Lateral-Generative` / `Breadth-Weighted`) and `Feasibility` + `Executor` (→ `Pragmatist`; `Executor` was a role, not a posture). The menu stays **open** — mint a task-specific lens when you can name its axis in one sentence and slot it into (or beside) a family.
+Lenses added to close coverage gaps: **`Empirical`** (the measurement / base-rate axis — for "did X actually improve it?", perf, and A/B claims; no other lens demands a baseline + metric), **`Stakeholder`** (affected parties and second-order effects — distinct from `Audience`, which is only *reception*), **`Temporal`** (promoted from the old `Evolutionary`, now covering lifecycle *and* sequencing/reversibility), **`Lateral-Generative`** (deliberate novelty / "out-of-the-box" pattern-breaks, distinct from breadth), **`Reframe`** (merges the former `Alternative-Framing` + `Disconfirming-via-different-frame`), and **`Structural`** (the build-quality pole of Delivery: weighs the structurally-correct fix at the needed scope, rejecting *both* the expedient hack and scope-padding — distinct from `Simplicity`, which counts moving parts and can bless a hack, and the direct complement of `Pragmatist`, which optimizes for shipping under constraints). Retired as near-duplicates: `Expansionist` (→ `Lateral-Generative` / `Breadth-Weighted`) and `Feasibility` + `Executor` (→ `Pragmatist`; `Executor` was a role, not a posture). The menu stays **open** — mint a task-specific lens when you can name its axis in one sentence and slot it into (or beside) a family.
 
 **`Disconfirming` vs `Reframe`:** these are not interchangeable. `Disconfirming` is adversarial (Challenge family) — it directly attacks a specific claim and is subject to the opt-in gate in the Lens quality test. `Reframe` is exploratory (Reframe family) — its value is an alternate prior or framing, not stress-testing — so it counts as an orthogonal default, not the adversarial slot. Do not relabel an attack posture as a frame to evade the opt-in gate.
 
@@ -379,6 +379,8 @@ Starting points — every lens still answers the full question. The symmetric de
 - **Writing / communication**: Clarity + Audience + *Adversarial* + Simplicity + Outsider + Empirical
 - **Research / exploration**: First-Principles + Breadth-Weighted + Depth-Weighted + Outsider + Empirical + Lateral-Generative
 - **Decision / strategy**: First-Principles + Empirical + Stakeholder + Temporal + Pragmatist + *Disconfirming*
+
+Reach for **`Structural`** (Delivery) on architecture/implementation questions that hinge on the *durable structural fix vs. expedient hack* tradeoff (the "code is cheap" call) — swap it in for `Simplicity` when build quality is the binding constraint, or field it alongside `Pragmatist` to stage that tradeoff explicitly. It's one Delivery pole, so don't field it with `Simplicity`/`Pragmatist` as if independent.
 
 ## Execution
 

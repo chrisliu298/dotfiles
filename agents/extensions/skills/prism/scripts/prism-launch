@@ -625,7 +625,7 @@ lens_desc_for() {
     First-Principles)    echo "weigh how this looks rebuilt from the goal up, ignoring the current shape" ;;
     Outsider)            echo "weigh how a newcomer from another field would approach it" ;;
     Reframe)             echo "weigh an alternate prior or problem framing that recasts the question (exploratory, not an attack)" ;;
-    Lateral-Generative)  echo "weigh deliberately non-obvious options via analogy, inversion, or constraint removal — novelty over coverage" ;;
+    Lateral-Generative)  echo "weigh deliberately non-obvious, out-of-the-box options via analogy, inversion, or constraint removal — novelty over coverage" ;;
     # Evidence axis
     Empirical)           echo "weigh the claim by what is measurable: baseline, metric, magnitude, base rate — distrust unmeasured assertions" ;;
     Correctness)         echo "weigh correctness guarantees and edge cases" ;;
@@ -643,6 +643,7 @@ lens_desc_for() {
     # Delivery axis
     Pragmatist)          echo "weigh the workable path that ships under real constraints — resources, sequencing, what it takes to execute" ;;
     Simplicity)          echo "weigh the approach with the fewest moving parts" ;;
+    Structural)          echo "weigh the structurally correct fix at the needed scope — reject the expedient hack and scope-padding alike (durable means correct, not bigger)" ;;
     # Time axis
     Temporal)            echo "weigh how the answer changes over time: lifecycle, sequencing, reversibility (one-way vs two-way doors), path dependence" ;;
     *)                   echo "weigh the $1 axis — refine this description" ;;
