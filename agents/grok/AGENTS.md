@@ -44,8 +44,6 @@ Behavioral guidelines to reduce common LLM failure modes—sprawl, premature opt
 - **Self-review**: For non-trivial changes, run independent subagent reviews. Use 2 reviewers for risky/broad changes. Skip for trivial edits.
 - **Redundancy vs. division**: Use redundant reviewers for diverse judgment on one question. Use parallel subtasks for naturally partitioned work. Don't conflate them.
 
-<!-- SYNC: keep this Response Contract body identical across claude/CLAUDE.md + codex/grok AGENTS.md (Claude adds the <important> wrapper). -->
-
 ## Response Contract
 
 For substantial final responses and non-trivial task completions, treat the final message as a **skim-first review surface, not a complete report**: optimize for the reader to re-sync in seconds, with detail pulled on demand. The aim is *progressive disclosure*, not raw brevity—a digest that hides needed detail fails as badly as a wall of text. Skip for trivial replies and direct questions.

@@ -2,9 +2,15 @@
 name: prism
 description: >-
   Dispatch multiple independent agents to answer the SAME complete question
-  from different analytical lenses, then synthesize their perspectives.
-  Use for non-trivial decisions, ambiguous tradeoffs, or high-stakes changes
-  where a single perspective might miss something.
+  from different analytical lenses, then synthesize. Reach for this by default,
+  without waiting to be asked, when redundant cross-model judgment could change
+  the decision: ambiguous architecture/design tradeoffs, high-stakes or
+  hard-to-reverse changes, competing root-cause hypotheses, or
+  failure-mode-sensitive reviews — and whenever you would otherwise spawn 2+
+  independent reviewers for one question. Skip for trivial lookups, deterministic
+  transforms, routine small edits, mechanical syncs, and single-correct-answer
+  tasks. When you invoke it, choose N and m/xh yourself; default N=1/m and scale
+  only when decision risk justifies the 6N-agent cost.
 user-invocable: true
 allowed-tools:
   - Agent
@@ -81,6 +87,21 @@ Examples:
 - **Asymmetric example** (the old `prism 2 2x 0 0 2 2` migration): "2 of each at xh, but no Grok Build or Grok Composer, and 2 DeepSeek" → Claude 2, Codex 2 (xhigh), Grok ×0, DeepSeek 2, MiMo 2.
 
 `N` and `m`/`xh` set the symmetric baseline; named modifications override specific tiers on top of it (an explicit exclusion overrides the "all six always included" default; on conflicting clauses the more specific or later one wins). Resolve to a final per-tier table, then dispatch exactly that — every tier with resolved count > 0 MUST be dispatched at that count (do not skip, substitute, or defer; exception: `relay` unavailable → substitute a same-model subagent carrying that tier's lens and warn). You — the orchestrator — own resolving the shorthand and NL into the dispatch records; `prepare` then validates the *authored* dispatch file and emits the authoritative manifest counts, but it cannot know your intended `N`, so confirm the resolved shape matches your intent before running it (Pre-Launch Check #5).
+
+### Choosing N and effort (decide autonomously — don't ask)
+
+When the user gives only a question (no `N`, no `m`/`xh`), pick both yourself — do not ask. Use the smallest run whose extra perspectives could change the action, confidence, or rollback plan. **Default down:** each `+1` to `N` adds a full six-model slate and slower synthesis; never raise `N` or effort just to "be thorough."
+
+| Situation | N | Effort |
+|---|---|---|
+| Default — a Prism-worthy decision one good pass could settle | 1 | m |
+| Subtle correctness/security/data-loss/migration risk, or a heavy adversarial/falsification lens on Codex or Grok Build | 1 | xh |
+| Several viable options or stakeholder tradeoffs where breadth matters more than depth | 2 | m |
+| Hard-to-reverse choice where both breadth and subtle reasoning matter | 2 | xh |
+| Exceptional blast radius, or a decision still underdetermined after framing | 3 | m or xh |
+| Beyond N=3 | only on explicit user request or documented exceptional complexity — state the cost first |
+
+Reach for `xh` only when the tunable tiers (Codex, Grok Build) carry deep adversarial/falsification/security/migration reasoning — this is the same call as **Effort selection for Parallax** below; keep them consistent. Announce the resolved shape (`N=<n>, effort=<m|xh> — <total> agents + self`) before launching so the user can redirect a costly run.
 
 ### Parallax (cross-model agents)
 
@@ -562,3 +583,5 @@ The core principle (redundancy, not division of labor), the launcher-template st
 Use Prism when a task benefits from diverse, redundant judgment and the shared context fits cleanly across all agents.
 
 Skip Prism for trivial lookups, deterministic transforms, single-correct-answer tasks, or tasks requiring parallel mutations of shared state.
+
+Once you've decided to use it, pick `N` and effort per **Choosing N and effort** (under Invocation Shorthand) — default `N=1`/`m`, scale only when decision risk justifies the cost.

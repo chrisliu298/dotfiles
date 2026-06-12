@@ -45,12 +45,11 @@ Behavioral guidelines to reduce common LLM failure modes—sprawl, premature opt
 - **Orchestrator role**: When coordinating agents, write bounded tasks with clear ownership and expected output. The lead agent remains responsible for synthesis, reviewing agent results, resolving conflicts, and deciding the final change.
 - **Self-review**: For non-trivial changes, run independent subagent reviews. Use 2 reviewers for risky/broad changes. Skip for trivial edits.
 - **Redundancy vs. division**: Use redundant reviewers for diverse judgment on one question. Use parallel subtasks for naturally partitioned work. Don't conflate them.
+- **Prism (cross-model redundant judgment)**: When redundant judgment on one question could change the decision—non-trivial decisions, ambiguous tradeoffs, high-stakes/hard-to-reverse changes—reach for the `prism` skill on your own, without being asked; prefer it over ad-hoc same-model reviewers when cross-model diversity matters. Default to **N=1/medium**, announce the dispatch shape before launching, and scale N/effort per the skill body. Skip it for trivial lookups, deterministic transforms, and single-answer tasks. Claude Code only.
 
 </important>
 
 <important if="you are writing a substantial final response, or finishing a non-trivial task">
-
-<!-- SYNC: keep this Response Contract body identical across claude/CLAUDE.md + codex/grok AGENTS.md (Claude adds the <important> wrapper). -->
 
 ## Response Contract
 
