@@ -25,8 +25,8 @@ the work so transport drops (or parent death) don't kill it — reconnect with
 The happy path, in execution order — the sections below are the authoritative
 detail; this is the shape:
 
-1. **Cost gate** — Pro Extended runs cost real quota and take 5–20 min. If the
-   user didn't name gpt-pro, confirm first; if they did, just go.
+1. **Time gate** — Pro Extended runs take 5–20 min. If the user didn't name
+   gpt-pro, confirm first; if they did, just go.
 2. **Compose a self-contained prompt in a file** — GPT-Pro can't see anything
    local to you (codebase, shell, this conversation), so paste in every file,
    excerpt, and prior decision it needs. It *can* search the public web, so when
@@ -92,7 +92,7 @@ public docs it can fetch itself; tell it what to look up (see "Grounding externa
 rule: private-local context is pasted in; public-external facts are searched for.
 
 Err toward more context, not less — the 1 MB submission cap is generous, and a run that
-fails for missing context still burns 5–20 min of Pro quota. Compose the prompt in a file.
+fails for missing context still burns 5–20 min. Compose the prompt in a file.
 Prefer the **Write tool** — it's in this skill's `allowed-tools` (bare `mktemp`/`cat`/heredocs
 may not be), and it sidesteps `$`/backtick/heredoc mangling entirely. In a plain shell you
 can instead build it inline:
@@ -175,15 +175,15 @@ verification, not a calibrated probability.
 ```
 
 **On return**, treat it as the action plan: run the `Best next check` and verify the listed
-claims before relying on the answer. Because a re-query costs another 5–20 min and real quota, a
+claims before relying on the answer. Because a re-query costs another 5–20 min, a
 targeted check is almost always cheaper than re-running. Discount any answer that self-asserts
 confidence in place of naming its assumptions.
 
-## Cost gate
+## Time gate
 
-Pro Extended runs cost real Pro quota and take 5–20 minutes per prompt. Confirm with the user before invoking *unless* they explicitly named gpt-pro:
+Pro Extended runs take 5–20 minutes per prompt. Confirm with the user before invoking *unless* they explicitly named gpt-pro:
 
-> "Send this to gpt-pro? It'll take ~5–20 min and use your Pro quota."
+> "Send this to gpt-pro? It'll take ~5–20 min."
 
 If they invoked the skill directly or named gpt-pro in their request, they've consented — just go.
 
