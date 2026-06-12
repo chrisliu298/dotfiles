@@ -73,6 +73,8 @@ Present the leading interpretation, the unresolved choices, and your recommended
 
 When there are 2–4 plausible options, ask a **forced-choice** question — present them as a labelled, numbered list where each option carries its consequence, so the user must pick, rank, or edit (never a bare yes/no, no "or something else" escape). If your runtime has a structured question tool (Claude Code's `AskUserQuestion`), use it to render the choice; otherwise write the numbered options inline in your reply and have the user answer with a number/letter or an edit. Use free-text questions when the answer space is open. The force-a-decision property is what matters, not the widget.
 
+When a forced-choice batch carries a recommended default on each question, give the user a single-token accept path: tell them they can reply `defaults` to take every recommendation, or override compactly like `1b 2a` — one reply resolves the whole batch. This cuts interview drag without weakening the force-a-decision property; offer it only when the defaults are non-blocking assumptions (not for a P0 fork the user must actually decide).
+
 ### Phase 4 — Contract (1 turn)
 
 Show the draft artifact in compressed form: objective, scope in/out, constraints, acceptance (at least one Gherkin, or per-item/per-phase acceptance for checklist/phased), `done_when` (each item mapped to evidence), risks, rollback. Ask the user to **approve, edit, or mark blocked** — not yes/no.
@@ -96,6 +98,17 @@ completion/stop markers, pasted *before* goal-drive; on Codex it's a one-line ob
 per-shape "ready" test, the 4000-char/enable caveats). Emitting the text is **not** execution —
 goal-elicit never runs `/goal` or any hook. Skip it for Clear one-shot goals and `blocked`/`draft`
 artifacts; on Grok just run goal-drive.
+
+**Optional lint check (advisory text — goal-elicit never runs it).** For an *executable, ready*
+artifact, also hand the user the one-line mechanical check goal-drive ships, so they (or CI, or
+goal-drive's load-time preflight) can validate the artifact before driving:
+
+    python3 <goal-drive skill dir>/scripts/lint_goal_artifact.py <artifact-path>
+
+It checks required fields, every `done_when`/acceptance mapped to evidence, no leftover
+placeholders, and no dangerous-vague phrases — the mechanical backstop for the Stop-criteria audit.
+Emitting the line is not execution (goal-elicit never runs code); skip it for `blocked`/`draft`
+artifacts.
 
 ## Question batching
 
