@@ -88,9 +88,9 @@ Examples:
 
 `N` and `m`/`xh` set the symmetric baseline; named modifications override specific tiers on top of it (an explicit exclusion overrides the "all six always included" default; on conflicting clauses the more specific or later one wins). Resolve to a final per-tier table, then dispatch exactly that — every tier with resolved count > 0 MUST be dispatched at that count (do not skip, substitute, or defer; exception: `relay` unavailable → substitute a same-model subagent carrying that tier's lens and warn). You — the orchestrator — own resolving the shorthand and NL into the dispatch records; `prepare` then validates the *authored* dispatch file and emits the authoritative manifest counts, but it cannot know your intended `N`, so confirm the resolved shape matches your intent before running it (Pre-Launch Check #5).
 
-### Choosing N and effort (decide autonomously — don't ask)
+### Choosing N, effort, and gpt-pro (decide autonomously — don't ask)
 
-When the user gives only a question (no `N`, no `m`/`xh`), pick both yourself — do not ask. Use the smallest run whose extra perspectives could change the action, confidence, or rollback plan. **Default down:** each `+1` to `N` adds a full six-model slate and slower synthesis; never raise `N` or effort just to "be thorough."
+When the user gives only a question (no `N`, no `m`/`xh`, no `+G gp`), pick them all yourself — do not ask. Use the smallest run whose extra perspectives could change the action, confidence, or rollback plan. **Default down:** each `+1` to `N` adds a full six-model slate and slower synthesis; never raise `N` or effort just to "be thorough."
 
 | Situation | N | Effort |
 |---|---|---|
@@ -101,7 +101,11 @@ When the user gives only a question (no `N`, no `m`/`xh`), pick both yourself �
 | Exceptional blast radius, or a decision still underdetermined after framing | 3 | m or xh |
 | Beyond N=3 | only on explicit user request or documented exceptional complexity — state the cost first |
 
-Reach for `xh` only when the tunable tiers (Codex, Grok Build) carry deep adversarial/falsification/security/migration reasoning — this is the same call as **Effort selection for Parallax** below; keep them consistent. Announce the resolved shape (`N=<n>, effort=<m|xh> — <total> agents + self`) before launching so the user can redirect a costly run.
+Reach for `xh` only when the tunable tiers (Codex, Grok Build) carry deep adversarial/falsification/security/migration reasoning — this is the same call as **Effort selection for Parallax** below; keep them consistent.
+
+**gpt-pro (default G=0 — usually skip):** gpt-pro tops the reasoning ranking and pairs it with web research, but it spends real ChatGPT Pro quota and runs 5–20 min/lens, so the six-model lineup is the default and gpt-pro is the rare exception — never the reflex for an ordinary Prism-worthy call. Auto-add **one** lens (`+1 gp`) only when the decision is genuinely high-stakes or hard-to-reverse **and** its binding constraint is either the heaviest reasoning or live external research the standard tiers can't match; give gpt-pro that heaviest-reasoning or research-tilted lens (see GPT-Pro tier). Use **`+2 gp`** (one hard-reasoning + one research-grounded) only for an exceptional, multi-faceted high-stakes call; never auto-add more than 2. You fire it yourself without waiting for a separate yes — but because it burns real quota and is slow, the pre-launch announcement MUST flag it so the user can abort first.
+
+Announce the resolved shape (`N=<n>, effort=<m|xh>[, +<G> gpt-pro — real Pro quota, ~5–20 min] — <total> agents + self`) before launching so the user can redirect a costly run.
 
 ### Parallax (cross-model agents)
 
@@ -584,4 +588,4 @@ Use Prism when a task benefits from diverse, redundant judgment and the shared c
 
 Skip Prism for trivial lookups, deterministic transforms, single-correct-answer tasks, or tasks requiring parallel mutations of shared state.
 
-Once you've decided to use it, pick `N` and effort per **Choosing N and effort** (under Invocation Shorthand) — default `N=1`/`m`, scale only when decision risk justifies the cost.
+Once you've decided to use it, pick `N`, effort, and any gpt-pro lenses per **Choosing N, effort, and gpt-pro** (under Invocation Shorthand) — default `N=1`/`m`/no gpt-pro, scale only when decision risk justifies the cost.
