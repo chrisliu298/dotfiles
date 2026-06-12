@@ -15,7 +15,7 @@ Subcommands:
   locate   find the current session transcript + compaction boundary           -> JSON
   digest   broad structured recovery capsule, char-budgeted                    -> Markdown
   query    targeted search over the pre-boundary raw records                   -> Markdown
-  survey   orient on recent OTHER interactive sessions in this cwd (Claude)    -> Markdown
+  survey   orient on recent OTHER interactive sessions in this cwd (Claude/Codex) -> Markdown
   doctor   diagnostics: candidate sessions and why one was / wasn't picked     -> text
 
 Run with uv (zero deps, stdlib only):
@@ -279,6 +279,10 @@ class Claude:
                 break
         return out
 
+    @staticmethod
+    def survey_label(path) -> str:
+        return path.stem[:8]  # session uuid prefix
+
     @classmethod
     def locate(cls, cwd) -> SessionRef:
         proj, files = cls.candidates(cwd)
@@ -400,12 +404,54 @@ class Codex:
         return sorted(recent, key=safe_mtime, reverse=True)
 
     @classmethod
-    def meta_cwd(cls, path) -> str | None:
+    def meta_info(cls, path):
+        """(cwd, source) from the line-1 session_meta — one read, shared by locate and survey.
+        source is "cli"/"vscode" (interactive), "exec" (headless `codex exec` — relay/prism), or a
+        {'subagent': ...} dict (subagent thread). See references/codex.md."""
         for ln, rec, head in iter_lines(Path(path)):
             if rec and rec.get("type") == "session_meta":
-                return (rec.get("payload") or {}).get("cwd")
-            return None  # session_meta is line 1; stop after first record
-        return None
+                pl = rec.get("payload") or {}
+                return pl.get("cwd"), pl.get("source")
+            return None, None  # session_meta is line 1; stop after first record
+        return None, None
+
+    @classmethod
+    def meta_cwd(cls, path) -> str | None:
+        return cls.meta_info(path)[0]
+
+    @staticmethod
+    def survey_label(path) -> str:
+        # rollout-<ISO>-<uuid>.jsonl → the session uuid prefix (f.stem[:8] would be "rollout-").
+        m = re.search(r"rollout-[0-9T\-]+-([0-9a-f\-]+)\.jsonl$", path.name)
+        return (m.group(1) if m else path.stem)[:8]
+
+    @classmethod
+    def interactive_siblings(cls, cwd, exclude_transcript, *, limit, since_secs):
+        """Recent OTHER interactive sessions in this cwd (newest-first) for `survey`. Reuses
+        rollouts() (mtime-desc, within RECENT_DAYS) and keeps only main user-interactive sessions:
+        session_meta.payload.source in {"cli","vscode"}. Headless `codex exec` ("exec") and
+        subagents (a dict source) are excluded by the str+allowlist test — an unknown/missing/
+        renamed source fails closed (skipped), never surfaced as the user's parallel work.
+        Note: rollouts() caps the window at RECENT_DAYS, so a --since beyond that is silently
+        clamped to RECENT_DAYS (the 24h default is well within it)."""
+        now = time.time()
+        out = []
+        for p in cls.rollouts()[:MAX_CODEX_SCAN]:            # mtime-desc within RECENT_DAYS
+            path = Path(p)
+            if exclude_transcript and same_path(str(path), str(exclude_transcript)):
+                continue
+            mt = safe_mtime(path)
+            if since_secs and mt and (now - mt) > since_secs:  # since_secs=0 ⇒ no floor
+                break                                        # mtime-sorted ⇒ nothing older qualifies
+            mcwd, source = cls.meta_info(path)
+            if not mcwd or not same_path(mcwd, cwd):
+                continue
+            if not (isinstance(source, str) and source in ("cli", "vscode")):
+                continue
+            out.append(path)
+            if len(out) >= limit:
+                break
+        return out
 
     @classmethod
     def locate(cls, cwd) -> SessionRef:
@@ -759,7 +805,7 @@ def build_survey(ad, harness, cwd, sibs, max_chars, warnings):
     per = max(2000, (max_chars - 1000) // len(sibs))
     merged: dict[str, tuple[str, str]] = {}
     for f in sibs:
-        sid = f.stem[:8]
+        sid = ad.survey_label(f)
         age = human_age(now - safe_mtime(f))
         size_kb = safe_size(f) // 1024               # race-safe: a vanished sibling shows 0KB, not abort
         b = collect_buckets(tail_events(ad, f))
@@ -842,7 +888,7 @@ def cmd_survey(args):
     ad = ADAPTERS[harness]
     siblings_fn = getattr(ad, "interactive_siblings", None)
     if siblings_fn is None:
-        print(f"SURVEY_UNSUPPORTED: cross-session `survey` currently supports Claude Code only — "
+        print(f"SURVEY_UNSUPPORTED: cross-session `survey` supports Claude Code and Codex — "
               f"main user-interactive sessions are reliably distinguishable there, not in {harness}. "
               f"Use `digest` for current-session recovery.")
         return 13
@@ -875,7 +921,8 @@ def cmd_doctor(args):
             print(f"  {f.name}  mtime={int(f.stat().st_mtime)}  boundary={Claude.find_boundary(f)}")
     elif harness == "codex":
         for p in Codex.rollouts()[:args.show_candidates]:
-            print(f"  {os.path.basename(p)}  cwd={Codex.meta_cwd(p)}  mtime={int(os.path.getmtime(p))}")
+            mcwd, source = Codex.meta_info(p)
+            print(f"  {os.path.basename(p)}  cwd={mcwd}  source={source!r}  mtime={int(os.path.getmtime(p))}")
     elif harness == "grok":
         g = Grok.group_dir(cwd)
         print(f"group dir: {g} (exists={g.is_dir()})")

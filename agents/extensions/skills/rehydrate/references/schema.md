@@ -49,11 +49,13 @@ sidechain branches.
 **other** sessions in the same cwd. Same machinery, inverted relationship to multiplicity (it's the
 input, not an `AMBIGUOUS` error) and to scope (boundary-less recent **tail**, not pre-boundary body):
 
-- **Selection** reuses the adapter enumerator (Claude `candidates()`), newest-first, dropping the
-  current session, anything older than `--since` (default 24h), and **non-interactive** sessions —
-  see `claude.md` for the interactive predicate. `survey` is **Claude-only**: the
-  "user-spawned interactive vs relay/headless/subagent" signal is Claude-specific; other adapters
-  have no `interactive_siblings()` and `cmd_survey` returns `SURVEY_UNSUPPORTED`.
+- **Selection** reuses the adapter enumerator (Claude `candidates()`, Codex `rollouts()`),
+  newest-first, dropping the current session, anything older than `--since` (default 24h), and
+  **non-interactive** sessions — see `claude.md` / `codex.md` for each interactive predicate.
+  `survey` is supported on **Claude and Codex**: each has a structural "user-spawned interactive vs
+  relay/headless/subagent" signal (Claude TUI record types; Codex `session_meta.source`). **Grok**
+  has no `interactive_siblings()` and `cmd_survey` returns `SURVEY_UNSUPPORTED` — it's a relay/prism
+  target with effectively no interactive sessions.
 - **Re-overflow** is contained by reading only a bounded **tail** per sibling (`tail_events()` keeps
   a `deque(maxlen=SURVEY_TAIL_EVENTS)` while streaming `events(path, None)`), then ranking it with
   the shared `collect_buckets()` at a **per-session sub-budget** (`max_chars // N`, floor 2000). The

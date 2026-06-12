@@ -52,3 +52,26 @@ oversized lines instead of full-parsing them — don't load `replacement_history
   (drop — verbose, low recovery value), `function_call` (name + JSON `arguments`; paths and
   `command` are inside the arguments string), `function_call_output`, `token_count` (drop).
 - Extract file paths/commands by regex over the `function_call.arguments` string.
+
+## Interactive vs. relay/headless sessions (for `survey`)
+
+`survey` must select only **user-spawned interactive** main sessions — not headless `codex exec`
+(relay/prism dispatch) runs or subagent threads. The discriminator is a single line-1 field:
+`session_meta.payload.source` (verified 2026-06-12 against this machine's rollouts; `originator`
+corroborates). Observed values:
+
+- `source == "cli"` (str), `originator: codex-tui` → interactive terminal TUI session. **interactive**
+- `source == "vscode"` (str) → VS Code extension session (user at a keyboard). **interactive**
+- `source == "exec"` (str), `originator: codex_exec` → headless `codex exec` (relay/prism). exclude
+- `source` is a **dict** `{'subagent': {'thread_spawn': {...}}}` → subagent thread. exclude
+
+Predicate (`Codex.interactive_siblings`): `isinstance(source, str) and source in {"cli", "vscode"}`.
+It is an **allowlist, not `source != "exec"`** — an unknown/missing/renamed source fails *closed*
+(the session is skipped), so schema drift hides real siblings rather than surfacing relay noise as
+the user's parallel work. The `isinstance` guard drops the dict subagent case without a try/except.
+
+`meta_info(path)` returns `(cwd, source)` from the single line-1 read that `meta_cwd`/`locate`
+already do — no extra I/O; survey's cost class equals `locate`'s. Enumeration reuses `rollouts()`
+(mtime-desc, capped at `RECENT_DAYS`), so a `--since` beyond that window is silently clamped to
+`RECENT_DAYS` (the 24h default is well within it). `format_ok` guards record-*shape* drift, not the
+`source` value — re-verify the table above if interactive sessions stop appearing in `survey`.

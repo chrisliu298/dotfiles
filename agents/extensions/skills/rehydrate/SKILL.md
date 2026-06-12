@@ -6,7 +6,7 @@ description: |
   file paths, errors, user corrections, and open threads the summary lost. Use right after a
   compaction / auto-compact when continuing prior work and the summary feels thin or you're about
   to re-derive something. Also reads recent OTHER interactive sessions in the same cwd (`survey`
-  mode, Claude-only) to orient on parallel or earlier work. Trigger on "rehydrate", "/rehydrate",
+  mode, Claude/Codex) to orient on parallel or earlier work. Trigger on "rehydrate", "/rehydrate",
   "recover context", "what did we decide about X", "what was the last error", "what were we doing
   before the summary", "what's going on in this dir / the other windows". Detects Claude Code /
   Codex / Grok and reads that harness's own transcript store. Do NOT use on a fresh session with no
@@ -82,11 +82,12 @@ uv run "$REHYDRATE" survey --cwd "$PWD" --sessions 5 --since 12h
 
 It returns a per-session orientation capsule (the recent *tail* of each sibling, ranked by the same
 machinery as `digest`) plus a merged **files-touched-across-sessions** list — the highest-signal
-cross-session artifact. It selects **only main user-interactive Claude sessions** (never subagents,
-relay/headless runs, or other models), excludes your own session, and is budget-capped like
-`digest`. Read it into your own context, don't show the user. `NO_SIBLINGS` ⇒ nothing recent to
-orient on. **Claude-only** for now — the interactive-session signal is Claude-specific; Codex/Grok
-print `SURVEY_UNSUPPORTED` (use `digest` there).
+cross-session artifact. It selects **only main user-interactive sessions** (never subagents, relay/headless runs, or other
+models), excludes your own session, and is budget-capped like `digest`. Read it into your own
+context, don't show the user. `NO_SIBLINGS` ⇒ nothing recent to orient on. Supported on **Claude
+and Codex** — the interactive-session signal is per-harness (Claude TUI record types, Codex
+`session_meta.source` ∈ {cli, vscode}). **Grok** prints `SURVEY_UNSUPPORTED` (use `digest` there):
+it's a relay/prism target with effectively no interactive sessions to survey.
 
 ## Guards
 
