@@ -159,6 +159,8 @@ The response includes `data.article` with:
 - `plain_text` — full article body (this is what `read` is missing)
 - `cover_media`, `media_entities` — embedded image media keys; resolve via `?expansions=attachments.media_keys&media.fields=url`
 
+> **Not gated — don't mistake the thin response for a permissions block.** The `status: 500` on the t.co link and the title-only `xurl read` output look like the article is gated/blocked, but they are not. The body is simply absent from the default tweet fields; requesting `tweet.fields=article` returns `plain_text` in full with the same auth (no extra scope, no paid tier). If `xurl read` gives you only a title for an `x.com/i/article/...` link, always retry with the raw `?tweet.fields=article` call before concluding it can't be read.
+
 ### Users, Timeline, Mentions
 
 ```bash
