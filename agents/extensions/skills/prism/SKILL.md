@@ -92,7 +92,7 @@ Parallax is dispatched via `relay` to **different models** (Codex, Grok Build, G
 - **DeepSeek** — an independent open-weight lineage (V4-Pro); always runs at `max` (DeepThink).
 - **MiMo** — a third independent open-weight lineage (Xiaomi MiMo-V2.5-Pro); no effort knob.
 
-**Tier strength and lens fit (heuristic for lens assignment, not a routing rule):** rough reasoning-capability ranking — **gpt-pro (when opted in) ≳ Claude ≈ Codex > {Grok Build (provisional, unbenchmarked — verify before the heaviest-reasoning lens), MiMo ≳ DeepSeek} > Grok Composer**. gpt-pro sits at the top for hard reasoning and is the **only** tier that can do live web research (relay peers reason over the provided Context — see below), so it is the preferred home for the heaviest-reasoning and research-tilted lenses when present — but it is opt-in, so never drop DeepSeek or MiMo to make room for it, and discount gpt-pro+Codex *agreement* somewhat (both OpenAI-family, correlated blind spots) even though gpt-pro is its own tally lineage. Weaker tiers lose no value: each independent lineage catches blind spots the others share. This informs lens *placement*, not inclusion:
+**Tier strength and lens fit (heuristic for lens assignment, not a routing rule):** rough reasoning-capability ranking — **gpt-pro (when opted in) ≳ Claude ≈ Codex > {Grok Build (provisional, unbenchmarked — verify before the heaviest-reasoning lens), MiMo ≳ DeepSeek} > Grok Composer**. gpt-pro sits at the top for hard reasoning and pairs that with browsing (every tier can reach the web — see below — but gpt-pro's reasoning-plus-research is the deepest), so it is the preferred home for the heaviest-reasoning and research-tilted lenses when present — but it is opt-in, so never drop DeepSeek or MiMo to make room for it, and discount gpt-pro+Codex *agreement* somewhat (both OpenAI-family, correlated blind spots) even though gpt-pro is its own tally lineage. Weaker tiers lose no value: each independent lineage catches blind spots the others share. This informs lens *placement*, not inclusion:
 
 - **Subtle hard-reasoning lenses on risk-bearing questions** (Adversarial / Falsification / Disconfirming on a technical proposal where finding the non-obvious attack is the deliverable): prefer Claude subagent or Codex at `--effort xhigh`. If exactly one lens carries the heaviest reasoning load and it lands on a parallax tier, you've under-resourced the most decision-relevant role; when it must land on one anyway, prefer MiMo over DeepSeek.
 - **Lenses where the value is a different prior** (Outsider, First-Principles, Reframe, Breadth-Weighted, Lateral-Generative, Stakeholder): give these to DeepSeek and MiMo. Their independent lineages are the asset; raw reasoning depth is not the bottleneck.
@@ -105,7 +105,7 @@ Assign each tier a lens that maximizes diversity. **Default to orthogonal explor
 
 Don't tailor the prompt body per peer — Prism sends the **same shared prompt** to every model (the launcher templates handle the only per-peer difference: Codex `<goal>` style vs CO-STAR XML), so you may skip the [[relay]] skill's per-peer prompting guides here. What matters is shared-prompt **quality** — an outcome-first shared packet (Full Question + Context) and sharp, distinct lens descriptions; optimize that, not per-model fit.
 
-**Web access is not a dispatch concern — don't verify it.** Every peer can reach the web (WebFetch + WebSearch both work, save two minor gaps — DeepSeek's WebFetch and MiMo's WebSearch — neither load-bearing here; see [[relay]]). More to the point, Prism front-loads all evidence in the shared packet (that's what Reference Materials is for), so agents reason over the provided Context rather than browsing. Do **not** spend a dispatch-time step checking what the relay transport supports — it's settled and irrelevant to a well-built run.
+**Web access is not a dispatch concern — don't verify it.** Every peer can reach the web (WebFetch + WebSearch both work, save two minor gaps — DeepSeek's WebFetch and MiMo's WebSearch — neither load-bearing here; see [[relay]]). By default Prism front-loads all evidence in the shared packet (that's what Reference Materials is for), so agents reason over the provided Context rather than browsing — **but when the task requires live online research, each agent researches independently instead** (see the **Independent research for live-research tasks** rule under Shared Context). Either way, do **not** spend a dispatch-time step checking what the relay transport supports — it's settled and irrelevant to a well-built run.
 
 **Relay call syntax (exact)** — the command shapes Prism must emit:
 
@@ -180,7 +180,7 @@ Lens: <LENS_NAME> — you <LENS_DESC>. Answer the full question end-to-end; lens
 ...
 
 ## Grounding external facts
-<paste gpt-pro-relay's grounding directive verbatim — gpt-pro MAY browse, unlike relay peers>
+<paste gpt-pro-relay's grounding directive verbatim — gpt-pro MAY browse>
 
 ## Calibration
 <paste gpt-pro-relay's reasons-based calibration block verbatim>
@@ -188,7 +188,7 @@ Lens: <LENS_NAME> — you <LENS_DESC>. Answer the full question end-to-end; lens
 
 The instruction-inversion guard (line 1) and the inlined *contents* (not paths) are the two things unique to gpt-pro — every other tier reads files in place. If a Reference Material is a directory, replace it with explicit files first; if the inlined prompt would exceed gpt-pro's ~1 MB cap, shrink the shared packet for *all* agents rather than giving gpt-pro a weaker context.
 
-**Lenses:** gpt-pro tops the reasoning ranking and is the sole web-research tier (see Tier strength and lens fit). Give it the heaviest-reasoning and/or research-tilted postures, each lens still answering the full question. Default pair for `+2 gp`: one hard-reasoning (`Depth-Weighted`, or `Falsification`/`Adversarial` on a risk-bearing question) + one `Research-Grounded` (web-tilted) — distinct axis families. For `+1 gp` pick the single best-fitting; for `G≥3` add distinct postures (`First-Principles`, `Temporal`, `Empirical`), never copies. Names must stay distinct across the whole run.
+**Lenses:** gpt-pro tops the reasoning ranking and is the strongest tier for research-heavy lenses (every tier can browse, but gpt-pro pairs research with the strongest reasoning — see Tier strength and lens fit). Give it the heaviest-reasoning and/or research-tilted postures, each lens still answering the full question. Default pair for `+2 gp`: one hard-reasoning (`Depth-Weighted`, or `Falsification`/`Adversarial` on a risk-bearing question) + one `Research-Grounded` (web-tilted) — distinct axis families. For `+1 gp` pick the single best-fitting; for `G≥3` add distinct postures (`First-Principles`, `Temporal`, `Empirical`), never copies. Names must stay distinct across the whole run.
 
 **Launch** one backgrounded Bash call per lens, concurrently with the parallax fan and the Agent calls:
 
@@ -207,6 +207,8 @@ Dispatched agents are **read-only** — no edits, commits, deploys, or external 
 Build one shared evidence packet (Full Question + Context; `prepare` injects the canonical Constraints and How-to-answer) before composing prompts. Prefer compact digests over full file dumps. Write it to a temporary file once; every agent receives a short launcher prompt referencing this file plus its unique lens. If the packet cannot be duplicated cleanly across all agents, the task is too large for Prism.
 
 **Reference materials (REQUIRED):** Before building the shared packet, identify all reference materials relevant to the question — CLAUDE.md files, READMEs, config files, documentation, skill definitions, style guides, or any file an agent would need to reason about the task. Include the **absolute paths** of these files in the Context section of the shared packet so every agent can read them. Agents cannot discover references on their own; if a path is not listed, the agent will not consult it.
+
+**Independent research for live-research tasks:** When the task requires *online* research — current facts, fresh docs, version-specific behavior, anything not already settled in the repo or the packet — do **not** have the orchestrator research it once and front-load the findings. A single front-loaded evidence set makes every agent reason over identical sources, collapsing the cross-lens / cross-model diversity that is Prism's whole point into a shared-evidence monoculture. Instead, state the research need in the shared packet — the **exact** live question(s) to answer, plus any **common evidence floor** (the few authoritative sources/search targets every agent must consult and may *extend*, never replace) — and direct **each agent to research the live question independently, research to sufficiency rather than exhaustion** (a few authoritative sources suffice; the synthesizer weighs reasoning, not citation count), **and cite *and list* the sources it used** (every peer can browse — only DeepSeek's WebFetch and MiMo's WebSearch are missing, each keeping the other tool; see Parallax). This stays **redundancy, not division of labor** — every agent still answers the *whole* question end-to-end; only evidence-gathering is parallelized. The common floor keeps divergence comparable — it then means an agent found *more*, not that agents read disjoint facts — so divergence in *what* they find becomes signal, not just divergence in how they reason over fixed facts, and the listed sources let synthesis distinguish an information asymmetry from a genuine reasoning split and spot-check any fact a dissent rests on (Step 4 / Step 5). Still front-load **stable** context — repo files, CLAUDE.md, configs, the question itself — via Reference Materials; the carve-out is for *live* evidence only and is never an excuse to skip the shared packet. If a research-tilted lens lands on a tier that can't reach a needed source (e.g. a WebFetch-only page on DeepSeek), route that lens to a full-web tier or front-load that one source **for all agents** (label it a provided source, not independently-discovered evidence, so the packet stays identical) — never front-load it for the gapped tier alone, which would re-create the very asymmetry this rule manages.
 
 ### Shared Packet Template
 
@@ -228,6 +230,10 @@ Write this to `/tmp/prism-<unique-id>.md` using the Write tool (one call, before
 - /path/to/relevant/file1
 - /path/to/relevant/file2
 - ...
+
+### Live research (omit unless the task needs live online facts)
+
+{If the answer depends on facts outside the repo/packet, name the EXACT question(s) each agent must research independently, plus any common-floor sources to start from. Do NOT front-load the findings. Each agent researches independently and cites + lists its sources. See the Independent research for live-research tasks rule.}
 ```
 
 `prepare` appends the canonical `## Constraints` (from `templates/shared-constraints.md`) and `## How to answer` (from `templates/shared-how-to-answer.md`) if you omitted them — idempotent, so a re-run won't double either. (If you want a bespoke version of either, include that `##` section yourself and prepare leaves it untouched; Constraints additionally fails closed if a bespoke block drops the anti-recursion guard, How-to-answer carries no such safety load.) The packet is **frozen** once `prepare` runs — do not modify it after, since dispatched agents read it live. `Write` already confirms success, so no read-back is needed.
@@ -347,6 +353,8 @@ A lens is a **weighing posture**, not a task variant. Do not put the task noun i
 
 Choose lenses on **orthogonal tradeoff axes**. Before adding one, write one sentence explaining how it differs from every existing lens. If you cannot name a distinct axis, do not add it. The symmetric default dispatches six agents (one per model), so aim for **six distinct postures**; if the task can't support that many, exclude a tier via natural language rather than giving two agents the same lens. At `N ≥ 2` (multiple agents per model), give each copy a distinct lens where the task supports it; deliberate same-*posture* redundancy to reduce variance on a pivotal question is allowed, but each agent still needs a **distinct lens name** (e.g. `Adversarial-A` / `Adversarial-B`) — `prism-launch` rejects duplicate names. Note that `N=1` gives only one Claude subagent slot: when a risk-bearing question wants its adversarial lens on Claude or Codex (Check #4), either accept it on Codex at `xh`, bump `N`, or exclude a Parallax tier via NL to free a Claude slot.
 
+On a **live-research task**, also weigh tier web-reach when placing research-tilted lenses: route them to full-web tiers, and avoid DeepSeek (no WebFetch) or MiMo (no WebSearch) when the needed source requires the missing tool — see the **Independent research for live-research tasks** rule (Shared Context).
+
 ### Lens Axes
 
 Lenses are grouped into **axis families**. Two lenses in the *same* family are near-substitutes — fielding both wastes a slot and silently fails the redundancy test. **Pick at most one lens per family per run;** field two (or more) from one family only when each earns its slot by a distinct on-task emphasis (the redundancy test must still pass). Two task types legitimately do this: **research/exploration**, where probing the option/framing space *is* the deliverable, so several Reframe/Search lenses (`First-Principles` rebuild-from-goal vs `Outsider` another-field's-eyes vs `Lateral-Generative` pattern-break) are the point; and **writing**, where `Clarity` (is it clear) and `Audience` (fit to the reader) are distinct Human/Value emphases. Everywhere else, aim for six different families. This is the unit of selection — **choose by axis, not by scanning names.**
@@ -380,6 +388,8 @@ Starting points — every lens still answers the full question. The symmetric de
 - **Research / exploration**: First-Principles + Breadth-Weighted + Depth-Weighted + Outsider + Empirical + Lateral-Generative
 - **Decision / strategy**: First-Principles + Empirical + Stakeholder + Temporal + Pragmatist + *Disconfirming*
 
+**Live-research note:** a preset picks *lenses*, not the research *mode* — a *Research / exploration* (or any) task whose answer depends on current external facts also triggers the **Independent research for live-research tasks** rule (Shared Context), so add the independent-research directive to the packet yourself.
+
 Reach for **`Structural`** (Delivery) on architecture/implementation questions that hinge on the *durable structural fix vs. expedient hack* tradeoff (the "code is cheap" call) — swap it in for `Simplicity` when build quality is the binding constraint, or field it alongside `Pragmatist` to stage that tradeoff explicitly. It's one Delivery pole, so don't field it with `Simplicity`/`Pragmatist` as if independent.
 
 ## Execution
@@ -388,7 +398,7 @@ Reach for **`Structural`** (Delivery) on architecture/implementation questions t
 
 Invoke `prism-launch` by its absolute path `~/.claude/skills/prism/scripts/prism-launch` (abbreviated `PL` below; see the absolute-path rule above).
 
-1. **Write the packet** `/tmp/prism-<id>.md` — just `## Full Question` + `## Context` (with Reference Materials). No Constraints or How-to-answer; `prepare` injects them.
+1. **Write the packet** `/tmp/prism-<id>.md` — just `## Full Question` + `## Context` (with Reference Materials). No Constraints or How-to-answer; `prepare` injects them. If the answer depends on **live online facts** (not just repo/packet evidence), add a `### Live research` block naming what each agent must look up independently — don't front-load the findings (see the **Independent research for live-research tasks** rule).
 2. **Scaffold the dispatch:** `PL scaffold --preset <task-type> --packet /tmp/prism-<id>.md` (or `--n 1 --effort m|xh` for blank slots). Edit the lenses, Write to `/tmp/prism-<id>.dispatch`.
 3. **Prepare:** `PL prepare --dispatch /tmp/prism-<id>.dispatch` — prints the parallax command, the expected notification count, and each subagent launcher's contents.
 4. **Launch concurrently:** one backgrounded `PL parallax <manifest>` Bash call + one Agent call per subagent (paste the inline launcher contents). Then wait for every notification.
@@ -398,7 +408,7 @@ The numbered steps below are the authoritative detail; the Quick Start is the sh
 
 ### Step 1: Freeze context, compose, verify, launch
 
-1. Build one canonical shared packet (Full Question + Context — `prepare` injects the Constraints and How-to-answer). Write it to `/tmp/prism-<unique-id>.md` with the Write tool.
+1. Build one canonical shared packet (Full Question + Context — `prepare` injects the Constraints and How-to-answer). Write it to `/tmp/prism-<unique-id>.md` with the Write tool. Decide whether the task needs **live online research**; if so, don't front-load the findings — add a `### Live research` block per the **Independent research for live-research tasks** rule (Shared Context).
 2. Assign lenses (run the redundancy and lens-quality checks — these are yours to judge), then write the line-oriented dispatch file (`/tmp/prism-<id>.dispatch`) with the Write tool — `Shared-Packet:` plus one record per parallax peer and per subagent. See "Dispatch via prism-launch". (The `--config` JSON form is still accepted as an escape hatch.)
 3. **`~/.claude/skills/prism/scripts/prism-launch prepare --dispatch /tmp/prism-<id>.dispatch`** (foreground). This compiles the dispatch file into the canonical config, validates the packet and records its path (it does not copy or hash it — do not mutate the packet after this point), renders all launchers, runs checks 1/2/5/6, and writes `<id>-manifest.json`. If it exits non-zero, fix the dispatch file and re-run — nothing has been dispatched.
 4. Launch all dispatched agents concurrently (`run_in_background: true`). **Dispatch checklist:**
@@ -493,7 +503,7 @@ Write a skim-first, verdict-led synthesis, not a lens-by-lens report — the rea
 | **Cross-model break** — subagents converge, a parallax or gpt-pro lineage dissents | **mandatory** | **leads the body**, above Why | cap confidence at Moderate |
 | **Deliverable** | per the run | per the run | artifact right after the verdict line; Why = design rationale; Do now = integration/review |
 
-- On a **cross-model break**, two or more cross-model peers (Codex, DeepSeek, MiMo, Grok, **gpt-pro**) dissenting in the *same direction* is an especially strong signal — say so. The Moderate cap fires when any **external non-Claude lineage** dissents — a parallax lineage **or gpt-pro**. One caveat unique to gpt-pro: because it is the only tier allowed to browse, a gpt-pro dissent that turns on a *cited external fact the other tiers never had* is an **information asymmetry, not a shared-blind-spot signal** — spot-check the cited URL, propagate the fact, and re-judge rather than reflexively capping; cap only when the dissent is a genuine reasoning disagreement over the same evidence.
+- On a **cross-model break**, two or more cross-model peers (Codex, DeepSeek, MiMo, Grok, **gpt-pro**) dissenting in the *same direction* is an especially strong signal — say so. The Moderate cap fires when any **external non-Claude lineage** dissents — a parallax lineage **or gpt-pro**. One caveat about browsing: when a dissent turns on a *cited external fact the other agents never had* — gpt-pro in a default front-loaded run (the only tier browsing there), or any tier on a live-research run where each researched independently and surfaced different sources — that is an **information asymmetry, not a shared-blind-spot signal** — spot-check the cited source, propagate the fact, and re-judge rather than reflexively capping; cap only when the dissent is a genuine reasoning disagreement over the same evidence.
 - **All-subagent run** (no parallax dispatched — e.g. every cross-model tier excluded via natural language): a cross-model break is impossible, so within-Claude splits are **Material disagreement** however clean the split looks — no tally, no Moderate cap. Flag the missing cross-model diversity, since the `⚠`-absence all-clear cannot mean cross-model corroboration here.
 - **`Tradeoff:`** (material disagreement) is an option comparison — render it as a small table, not prose:
 
@@ -528,6 +538,7 @@ Re-read the user's original question. Verify:
 - On a cross-model break, the tally line and a dedicated Dissent line are present and sit above Why; on a material disagreement a `Tradeoff:` line carries the split (no tally); on full convergence all three are omitted.
 - No per-lens summary appears in the main path — the model-tier tally is by lineage, not lens; lens-by-lens notes live only in an optional appendix.
 - Every retained dissent, caveat, or trigger changes a decision, confidence level, or next action.
+- **Live-research runs:** before treating divergence as a reasoning split, compare the agents' listed sources — a dissent resting on a fact the others never had is an *information asymmetry* (propagate the fact and re-judge), not a shared-blind-spot signal; spot-check decision-changing sources and confirm each material external claim is cited.
 
 Optionally delete all Prism temp files with `~/.claude/skills/prism/scripts/prism-launch clean <id>` (or `rm -f /tmp/prism-<unique-id>*`) — both clear the whole `/tmp/prism-<unique-id>` prefix: shared context (`.md`), dispatch file (`.dispatch`), normalized/config JSON, manifest, rendered launchers, parallax out logs, and result sentinel.
 
