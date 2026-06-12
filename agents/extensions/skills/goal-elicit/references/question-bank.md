@@ -80,7 +80,8 @@ The structure for every good elicitation question:
 - "What would make you reject the result even if everything else worked?"
 - "If we ran this 100 times, what fraction has to succeed?"
 - "What's the minimum amount of evidence I should report when I claim success?"
-- When the user gives taste/aesthetic direction ("make it premium / professional / 高级") and can't name a measurable fact, **translate, don't ban**: "I'll treat 'premium' as design *direction* and verify it via desktop+mobile screenshots, a consistent spacing/type scale, and design-token conformance, capped at ~3 focused visual rounds — which of those is the real bar, and what would make you reject it?" Record the word under Guidance, the checks under the verification plan, the cap under iteration. Never let the vague word itself become a `done_when` (see `anti-patterns.md`: Vague-direction rejection / Visual rabbit-hole).
+- When a criterion leans on an external oracle or reference dataset — "Oracle provenance: what produces your ground truth, and what could make it wrong? (cached/stale values; a different locale/env than the system under test; the same tool that's being judged.)" Skip when no external oracle is involved.
+- When the user gives taste/aesthetic direction ("make it premium / professional") and can't name a measurable fact, **translate, don't ban**: "I'll treat 'premium' as design *direction* and verify it via desktop+mobile screenshots, a consistent spacing/type scale, and design-token conformance, capped at ~3 focused visual rounds — which of those is the real bar, and what would make you reject it?" Record the word under Guidance, the checks under the verification plan, the cap under iteration. Never let the vague word itself become a `done_when` (see `anti-patterns.md`: Vague-direction rejection / Visual rabbit-hole).
 
 ## 10. Definition of done
 

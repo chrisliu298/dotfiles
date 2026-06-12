@@ -36,12 +36,6 @@ DANGEROUS_VAGUE = [
     r"looks good",
     r"works well",
     r"feels right",
-    r"随便改",
-    r"随意修改",
-    r"一直尝试",
-    r"直到满意",
-    r"看起来不错就行",
-    r"感觉可以",
 ]
 
 # High-confidence leftover-template markers. Square brackets are deliberately NOT
@@ -51,16 +45,13 @@ PLACEHOLDER = [
     r"\bTBD\b",
     r"\bFIXME\b",
     r"\bXXX\b",
-    r"待定",
-    r"待补充",
     r"<[a-z][^>\n]{0,80}>",  # template fills like <id>, <criterion 1>, <evidence>
 ]
 
-# Concrete-evidence vocabulary a verification string should name (EN + ZH).
+# Concrete-evidence vocabulary a verification string should name.
 EVIDENCE_VERBS = re.compile(
     r"(?:run|start|open|test|build|lint|typecheck|verif|inspect|capture|screenshot|"
-    r"log|artifact|file|url|api|simulator|browser|local|exit|metric|diff|pass|"
-    r"运行|启动|打开|测试|构建|检查|验证|读取|截图|日志|产物|文件|链接|接口|模拟器|浏览器|本地|证据|指标)",
+    r"log|artifact|file|url|api|simulator|browser|local|exit|metric|diff|pass)",
     re.IGNORECASE,
 )
 

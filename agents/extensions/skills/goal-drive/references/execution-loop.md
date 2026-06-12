@@ -34,9 +34,12 @@ exception**, not by per-step approval. Read this before driving the first unit; 
              excerpt of its result / exit code (≤~20 lines), not just a pass/fail claim. The
              status-line summary is a claim; the raw output is the evidence (see Terminal markers).
                pass → LEDGER it (step 7)
-               fail → repair, up to `repair_budget` attempts (default 3), recording each failed
-                      attempt in the unit's evidence/note. Still failing → mark the unit
-                      `blocked` with the reason, write it to the artifact, and STOP. Do not advance.
+               fail → before repairing, if the failure has a systematic shape (same category across
+                      many units, or a count far beyond the change's scope) rule out a bad signal
+                      first (Stop conditions § Suspect signal). Otherwise repair, up to `repair_budget`
+                      attempts (default 3), recording each failed attempt in the unit's evidence/note.
+                      Still failing → mark the unit `blocked` with the reason, write it to the
+                      artifact, and STOP. Do not advance.
 7. LEDGER    flip the unit to `done` and record evidence (command + result summary, file path,
              metric, or observed behavior). PATCH the artifact in place. THEN, iff
              commit_policy == per_unit, make one local commit for this verified unit. Emit the
@@ -86,6 +89,14 @@ goal-drive is autonomous between these. It stops and hands back only for:
    Reversible two-way-door actions (working-tree edits, tests, generated files, local commits,
    revertible refactors) proceed without asking.
 5. **Explicit user interjection.**
+6. **Suspect signal** — a verification step reports failures with a systematic shape (the same
+   category across many units, or a count far exceeding the change's scope). Treat it as a
+   signal-integrity exception, not a work queue: validate the oracle/harness (env, locale, truth
+   provenance) before treating the failures as work, and when acceptance rests on a *claimed*
+   behavioral fact about an external system, re-run the oracle for the receipt rather than
+   accepting the reasoning. Resume the loop once the signal is confirmed sound; stop and hand back
+   only if the oracle is actually broken and repairing it is outside `authority`/scope. (Debugging
+   the signal comes before chasing it — a bad oracle sends work in the wrong direction.)
 
 On any of these, print the `GOAL-DRIVE STOPPED: <id> — <reason>: <one line>` marker (canonical form
 and reason tags in § Terminal markers) as the first line of the hand-back, before describing what
@@ -198,7 +209,7 @@ invisible to it, but these markers are not. goal-elicit's condition matches them
   hand-back:
 
   ```
-  GOAL-DRIVE STOPPED: <id> — <blocked_unit|scope_drift|unclear_authority|one_way_door|user_interjection>: <one line>
+  GOAL-DRIVE STOPPED: <id> — <blocked_unit|scope_drift|unclear_authority|one_way_door|user_interjection|suspect_signal>: <one line>
   ```
 
   A goal-completion-predicate failure at FINISH (all units done but the `done_when` predicate

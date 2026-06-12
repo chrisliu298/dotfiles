@@ -140,7 +140,7 @@ Mark `status: ready` only when **all** of the following are true. If any are fal
 3. **Hard gate:** every `done_when` item names a command, file artifact, metric, or user-observable behavior. Reject `done when "looks good"` style criteria.
 4. Zero P0 open questions. Non-blocking assumptions are written with defaults and rationale.
 5. The user has explicitly assented or supplied edits that you incorporated. Silence is not assent.
-6. Contract audit: each acceptance criterion has a matching verification method; each constraint has a way to notice violation; no success criterion depends only on executor self-report.
+6. Contract audit: each acceptance criterion has a matching verification method; each constraint has a way to notice violation; no success criterion depends only on executor self-report. Any criterion that leans on an external oracle or reference dataset must also name (a) what produces that ground truth and (b) one guard against a wrong oracle — stale/cached source, a different locale/env than the system under test, or the same tool that's being judged.
 
 ## Hard upper bound: 8 user rounds
 

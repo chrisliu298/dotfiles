@@ -79,8 +79,9 @@ autonomously. It **stops and asks only** when:
 
 1. a unit is **blocked** or its acceptance can't be verified within the repair budget,
 2. it discovers work **outside the artifact's scope** (append it to an `## Emergent` section, default "Won't this time"; stop only if it blocks progress),
-3. **authority is unclear** (an action outside `allow_paths`/`allow_commands`), or
-4. the next action is a **one-way door** — irreversible or costly-to-reverse (deploy, db migration, destructive op, protected-branch push, secrets, sending external messages).
+3. **authority is unclear** (an action outside `allow_paths`/`allow_commands`),
+4. the next action is a **one-way door** — irreversible or costly-to-reverse (deploy, db migration, destructive op, protected-branch push, secrets, sending external messages), or
+5. a verification step returns a **systematic wave of failures** (a signal-integrity exception, not a work queue) — validate the oracle/harness (env, locale, provenance) before chasing them, and re-run the oracle for a claimed behavioral fact instead of trusting the reasoning (`execution-loop.md` § Suspect signal).
 
 It does **not** ask "continue?" at every batch or phase boundary. That per-step prompting is
 exactly the plan-mode heaviness to avoid; the state file and `git log` are the progress
