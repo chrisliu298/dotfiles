@@ -62,6 +62,7 @@ The structure for every good elicitation question:
 - "What's the time/budget envelope — minutes, an afternoon, multi-day?"
 - "Any compatibility constraints — public API, schema versions, on-disk file formats, downstream consumers?"
 - "Security / privacy / compliance constraints?"
+- "If success is judged in a deployed/runtime sense (build or deploy time, latency, load, a real device): where must verification run, and how does that differ from production — preview flags, disabled build paths, fixture vs real data, missing services? Name the environment the executor must use."
 
 ## 8. Prior attempts and current state
 
