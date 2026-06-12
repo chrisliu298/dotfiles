@@ -49,7 +49,8 @@ management-by-exception.)
 Legacy `.claude/goals/` artifacts are still read and driven in place (new ones use `.goals/`). A
 hand-written or script-generated file works too, as long as it meets the bring-your-own conformance
 in `references/artifact-formats.md`. goal-drive owns the loop and the state — it never *generates*
-the work list.
+the work list. It lints such a file on load (`scripts/lint_goal_artifact.py`) and stops on a shape
+error rather than driving a malformed artifact.
 
 ## Checkpoints are by exception, not by schedule
 
@@ -88,6 +89,7 @@ ask). One-way-door and external-dispatch actions still require explicit assent, 
 | `SKILL.md` | the authoritative spec |
 | `references/artifact-formats.md` | the 3 artifact shapes, bring-your-own conformance, and the authority model |
 | `references/execution-loop.md` | the loop in full: stop conditions, ledger/idempotency/resumption, commit cadence, terminal markers |
+| `scripts/lint_goal_artifact.py` | mechanical conformance check for the three shapes — run on load for bring-your-own artifacts (exit 0 pass / 1 fail) |
 
 ## Invocation
 

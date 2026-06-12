@@ -142,5 +142,6 @@ stop and report it. Full per-shape rules: `references/execution-loop.md`.
 - `SKILL.md` — this file.
 - `references/artifact-formats.md` — the 3 artifact shapes goal-drive consumes (the shared contract with goal-elicit) + bring-your-own conformance.
 - `references/execution-loop.md` — the loop in full: stop conditions, authority/least-privilege, state-ledger + idempotency + resumption, commit cadence, status format.
+- `scripts/lint_goal_artifact.py` — stdlib-only mechanical conformance check for all three artifact shapes (required fields, evidence-mapped acceptance, no leftover placeholders, no dangerous-vague phrases); run on LOAD for bring-your-own artifacts (exit 0 pass / 1 fail). The executable backstop for goal-elicit's prose audit checklist.
 
 Read the references when you need them, not all up front.

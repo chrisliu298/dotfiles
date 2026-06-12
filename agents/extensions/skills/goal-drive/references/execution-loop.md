@@ -12,6 +12,12 @@ exception**, not by per-step approval. Read this before driving the first unit; 
 1. LOAD      read the artifact. Determine work_shape, commit_policy, repair_budget (default 3),
              authority (fall back to Default authority in artifact-formats.md, and announce it).
              For a markdown artifact, set frontmatter status: running.
+             PREFLIGHT a bring-your-own / hand-edited / script-generated artifact with
+             `python3 scripts/lint_goal_artifact.py <artifact>` — the mechanical conformance check
+             (required fields, every done_when/acceptance evidence-mapped, no leftover placeholders,
+             no dangerous-vague phrases). On a non-zero exit, surface the errors and STOP rather than
+             driving a malformed artifact; skip the preflight only for an artifact goal-elicit just
+             produced this session (it already passed the interview gates).
 2. RECONCILE compare claimed state against repo reality (see "Resumption"). Surface drift; never
              trust a stale `done`.
 3. SELECT    pick the next unit:
