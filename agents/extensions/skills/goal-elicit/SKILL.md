@@ -17,7 +17,7 @@ Interview the user and write a verifiable goal artifact. The deliverable is a si
 
 This skill never plans, edits other files, runs code, or invokes other skills. It writes one artifact and stops.
 
-**Runtime portability.** One source of truth for Claude Code, Codex, and Grok — the skill never detects its runtime. Defaults are agent-neutral. An optional `/goal` handoff (Phase 5) exists on **both Claude Code and Codex** — Claude's `/goal` is a Stop-hook guardrail over goal-drive, Codex's is a native executor (see `references/goal-guardrail.md`); Grok has neither. A Claude-only tool is used when present and degrades to plain text otherwise (e.g. `AskUserQuestion` → numbered plain-text options; see Phase 3).
+**Runtime portability.** One source of truth for Claude Code, Codex, and Grok — the skill never detects its runtime. Defaults are agent-neutral. **One** `/goal` execution message (Phase 5) is **always** emitted for an executable, ready artifact and serves **both Claude Code and Codex** unchanged — the transcript-anchored form launches goal-drive *and* guards completion on Claude (its evaluator judges only the transcript, never files) and is a valid native objective on Codex (see `references/goal-guardrail.md`); on Grok, paste the same body without the `/goal` prefix. A Claude-only tool is used when present and degrades to plain text otherwise (e.g. `AskUserQuestion` → numbered plain-text options; see Phase 3).
 
 ## What this skill produces
 
@@ -89,15 +89,30 @@ If the contract's `execution.commit_policy` is `per_unit`, call it out explicitl
 
 Once the file is written, tell the user where it is (path) and stop. The user takes it from there.
 
-**Optional `/goal` guardrail.** If the artifact is *executable and ready* (a contract with an
-`execution:` block, a checklist with non-empty `items`, or a phased doc with a `## Phases` section),
-also emit a ready-to-paste `/goal` block — `/goal` exists on **both Claude Code and Codex** (Grok
-has none). On Claude Code it's a condition that watches the transcript for goal-drive's
-completion/stop markers, pasted *before* goal-drive; on Codex it's a one-line objective that
-**points at the artifact file** and drives it natively (the file path is the handoff). Build the right form(s) from `references/goal-guardrail.md` (templates,
-per-shape "ready" test, the 4000-char/enable caveats). Emitting the text is **not** execution —
-goal-elicit never runs `/goal` or any hook. Skip it for Clear one-shot goals and `blocked`/`draft`
-artifacts; on Grok just run goal-drive.
+**Always emit the execution message (`/goal`).** For every *executable, ready* artifact (a contract
+with an `execution:` block, a checklist with non-empty `items`, or a phased doc with a `## Phases`
+section), end the handoff with **exactly one** ready-to-paste **`/goal` message** — the *same line* for
+Claude Code and Codex, including Clear-domain one-shots. **One message, never per-runtime variants** —
+two versions only add mental burden at copy-paste time.
+
+Use the **transcript-anchored** form: *drive the artifact with goal-drive; done when a `GOAL-DRIVE
+COMPLETE` marker + the real verification output appears; by-exception stop; TIMEOUT after N turns.*
+The same string runs on both:
+
+- On **Claude Code**, `/goal <it>` makes the condition the directive — the paste *launches* goal-drive
+  and *guards* completion. Its evaluator (a small fast model, defaults to Haiku) judges **only the
+  transcript — it never reads files or runs tools** ([official docs](https://code.claude.com/docs/en/goal.md)),
+  which is exactly why done-when keys on goal-drive's **printed** marker + output, never "the file says done."
+- On **Codex**, the same `/goal <it>` is a valid objective — Codex's native executor drives the artifact
+  and stops on the same marker (goal-drive prints it identically on both).
+
+The transcript-anchored form is the **portable superset** — *required* by Claude's blind evaluator and
+*valid* for Codex; the Codex-minimal "verify the file's checks yourself" wording is **not** portable
+(Claude's evaluator can't open the file), so never emit it as the shared message. Build the one message
+from `references/goal-guardrail.md`. Emitting the text is **not** execution — goal-elicit never runs
+`/goal`. *(On Grok, no `/goal`: the user pastes the **same body without the `/goal` prefix** — same text,
+not a second version.)* The only carve-out: a `blocked`/`draft` artifact has nothing to execute yet —
+emit no execution message and instead state what's missing (`blocking_unknowns`/blank fields).
 
 **Optional lint check (advisory text — goal-elicit never runs it).** For an *executable, ready*
 artifact, also hand the user the one-line mechanical check goal-drive ships, so they (or CI, or
@@ -195,6 +210,6 @@ If a goal artifact already exists in the working directory — `GOAL.md`, or `<i
 - `references/cynefin-triage.md` — Phase 0 decision tree with worked examples.
 - `references/question-bank.md` — worked questions per taxonomy category.
 - `references/anti-patterns.md` — failure-mode table with the prompt move that engineers each one out.
-- `references/goal-guardrail.md` — the optional Phase 5 `/goal` guardrail (Claude Code + Codex): emit templates for both, per-shape derivation, and caveats.
+- `references/goal-guardrail.md` — the Phase 5 `/goal` execution message (Claude Code + Codex): emit templates for both, per-shape derivation, and caveats.
 
 Read the references when you need them — not all up front. Long-form material is there so the model loads it only when relevant.

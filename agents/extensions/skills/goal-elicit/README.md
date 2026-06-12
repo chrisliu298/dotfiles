@@ -58,18 +58,20 @@ Terminal states (frontmatter): **`ready`** (every `done_when` mapped to evidence
 - **Hard cap: 8 rounds** — then a complete contract *or* an honest `blocked` brief. Never fakes done.
 - **Writes one artifact and stops** — no planning, no code, no invoking other skills.
 
-## Handoff & the optional `/goal` guardrail
+## Handoff — the one `/goal` execution message
 
-The artifact is the handoff. For an executable, ready artifact, goal-elicit also emits a
-ready-to-paste **`/goal`** block (advisory text — it never runs `/goal` itself):
+The artifact is the handoff, and **every executable-ready run ends with one ready-to-paste `/goal`
+message** — the *same line* for Claude Code and Codex, copied to run the artifact to done (advisory
+text — goal-elicit never runs `/goal` itself):
 
-- **Claude Code** — a `/goal` condition that watches the transcript for goal-drive's completion
-  marker, pasted *before* goal-drive; a Stop hook keeps the session working until it appears.
-- **Codex** — a one-line objective that **points at the artifact file**; Codex's own native `/goal`
-  drives it to done (may need `codex features enable goals`).
-- **Grok** — no `/goal`; just run goal-drive.
+    /goal "Drive <artifact> with goal-drive; done when a GOAL-DRIVE COMPLETE marker + real verification output appears; stop by exception; TIMEOUT after N turns."
 
-Mechanism, templates, and caveats: `references/goal-guardrail.md`.
+It's **transcript-anchored** on purpose: Claude Code's `/goal` evaluator reads only the conversation
+(never files), so completion keys on goal-drive's printed marker + output — and that same message is
+a valid objective for Codex's native executor. One message, no per-runtime variants. *(On Grok, no
+`/goal`: paste the same text without the prefix.)*
+
+Mechanism, template, and caveats: `references/goal-guardrail.md`.
 
 ## Files
 
@@ -82,7 +84,7 @@ Mechanism, templates, and caveats: `references/goal-guardrail.md`.
 | `references/checklist-template.md` | the JSON checklist artifact |
 | `references/phased-doc-template.md` | the phased design-doc artifact |
 | `references/anti-patterns.md` | failure-mode table + the prompt move that prevents each |
-| `references/goal-guardrail.md` | the optional `/goal` guardrail (Claude Code + Codex) |
+| `references/goal-guardrail.md` | the `/goal` execution message (Claude Code + Codex) |
 
 ## Invocation
 

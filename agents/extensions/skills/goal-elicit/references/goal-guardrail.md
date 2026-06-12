@@ -1,18 +1,22 @@
-# Optional `/goal` guardrail (Claude Code + Codex)
+# The `/goal` execution message (Claude Code + Codex)
 
-A session-scoped backstop the **user** pastes to keep the session working until the goal is verified
-done. `/goal` exists on **both Claude Code and Codex** (it originated in Codex; Claude Code added a
-compatible command) — but they are **different mechanisms**, so this file documents each, with emit
-templates, per-shape derivation, and caveats. **Grok has no `/goal`** (its closest analog is plan
-mode) — there, just run goal-drive. goal-elicit emits the block as advisory text in Phase 5; it
-never runs `/goal` itself.
+The single copy-paste message the **user** pastes to run the artifact to verified done. `/goal`
+exists on **both Claude Code and Codex** (it originated in Codex; Claude Code added a compatible
+command) — they are **different mechanisms**, but **one transcript-anchored message is portable to
+both**, so this file documents each mechanism, the single shared template, per-shape derivation, and
+caveats. **Grok has no `/goal`** (its closest analog is plan mode) — there, the user pastes the *same
+message without the `/goal` prefix*. goal-elicit emits the one message as advisory text in Phase 5;
+it never runs `/goal` itself.
 
-- **Claude Code `/goal`** = a *guardrail over goal-drive*: a Stop hook that watches the transcript
-  for goal-drive's completion/stop markers and keeps the session alive until one appears.
+- **Claude Code `/goal`** = *launch + guard in one paste*: setting the goal **starts a turn
+  immediately with the condition as the directive** (so a condition that says "drive <ARTIFACT> with
+  goal-drive" launches goal-drive itself — you do **not** run it separately), and a Stop hook then
+  watches the transcript for goal-drive's completion/stop markers, keeping the session alive until
+  one appears. One paste both starts and guards.
 - **Codex `/goal`** = a *native autonomous executor*: you give it an objective that points at the
   artifact file and Codex drives it to done itself (goal-drive optional, as verification discipline).
 
-## Claude Code `/goal` — a Stop-hook guardrail (the constraints that shape the condition)
+## Claude Code `/goal` — launch + guard in one paste (the constraints that shape the condition)
 
 `/goal <condition>` wraps a session-scoped, prompt-based **Stop hook**. After each turn, the
 condition + the conversation transcript are sent to a small fast model (a fast model such as Haiku
@@ -26,13 +30,13 @@ auto-clears once the condition holds. Hard facts that dictate the design:
   copy-paste block, it does not invoke `/goal`.
 - Condition ≤ **4000 chars**. One goal per session (a new one replaces the old). Resume
   (`--resume`/`--continue`) resets the turn count.
-- Requires Claude Code **v2.1.139+**. Silently unavailable under `disableAllHooks`,
-  `allowManagedHooksOnly`, or an untrusted workspace. (Codex has its **own** `/goal` — a different
-  mechanism, see below; Grok has none.)
+- Requires Claude Code **v2.1.139+**. Unavailable under `disableAllHooks`, `allowManagedHooksOnly`,
+  or an untrusted workspace — per the docs the command **tells you why** rather than silently
+  no-op'ing. (Codex has its **own** `/goal` — a different mechanism, see below; Grok has none.)
 
 ## When to emit it
 
-Emit only for an **executable, ready** artifact — by shape (`authority` is **optional** for every
+**Always** emit for an **executable, ready** artifact — by shape (`authority` is **optional** for every
 shape; Default authority applies when it's omitted, so its absence does NOT make an artifact
 non-executable):
 
@@ -43,10 +47,11 @@ non-executable):
   condition would false-positive instantly.
 - **Phased doc** — a `## Phases` section with `[state:]` markers and `status: ready`.
 
-Never emit for a `draft` or `blocked` artifact. **Recommend** it (bold the block) when
-`commit_policy: per_unit` or the work is many-unit / high-autonomy — where premature "done" or
-runaway looping costs most. **Skip** it for a Clear-domain one-shot (friction exceeds benefit); on
-**Codex** emit the Codex form instead (below), and on **Grok** just run goal-drive.
+Emit it **every time** an artifact is executable-ready, including Clear-domain one-shots. **Never**
+emit for a `draft` or `blocked` artifact — nothing to execute yet; say what's missing instead.
+**Bold/recommend** it when `commit_policy: per_unit` or the work is many-unit / high-autonomy —
+where premature "done" or runaway looping costs most. Emit the **one shared message** for both Claude
+Code and Codex; on **Grok** (no `/goal`) paste it without the `/goal` prefix.
 
 ## The condition template
 
@@ -104,13 +109,17 @@ evaluator is a language model and can judge a described signal.
 /goal "Drive GOAL.md id 20260503-2200-rename-foo with goal-drive. SATISFIED when the transcript contains a line beginning with 'GOAL-DRIVE COMPLETE: 20260503-2200-rename-foo', with the real verification output appearing earlier (command + exit/result, not a claim) for: rg '\bfoo\b' src/ returns no matches, and pytest tests/test_auth.py exits 0. ALSO SATISFIED by a line beginning with 'GOAL-DRIVE STOPPED: 20260503-2200-rename-foo —' — stop and surface it. Do not accept a 'done' narration without that output. TIMEOUT: if neither marker appears after 20 turns, stop and report the guardrail expired — do not claim done."
 ```
 
-## Codex `/goal` — a native executor (point it at the file)
+## Codex `/goal` — a native executor (the one shared message drives it too)
 
 Codex's `/goal` (Codex CLI 0.128.0+) is **not** a transcript guardrail — it is the autonomous loop
 itself: `/goal <objective>` makes Codex plan → act → test → review → iterate until a verifiable end
-state. So the Codex form does **not** reference goal-drive's terminal markers; it states the outcome
-and points at the artifact file. This is what makes the Claude→Codex handoff clean: goal-elicit
-writes the artifact to an agent-neutral path, and Codex's `/goal` points right at it.
+state. Crucially, the **single transcript-anchored message** from "The condition template" above is a
+valid Codex objective: it tells Codex to drive the artifact with goal-drive and stop on the
+`GOAL-DRIVE COMPLETE` marker + real output, which goal-drive prints identically on Codex. So **emit
+that one message for both runtimes — never author a separate Codex string.** Standardize on the
+transcript-anchored form because it is the portable superset (required by Claude's blind evaluator,
+valid for Codex); a Codex-minimal "verify the file's checks yourself" objective is shorter but is
+**not** portable to Claude.
 
 - **Enable / auth.** If `/goal` isn't in the slash menu, enable it — `codex features enable goals`
   (or `features.goals = true` in `config.toml`). Availability can also depend on your Codex version
@@ -123,34 +132,26 @@ writes the artifact to an agent-neutral path, and Codex's `/goal` points right a
   theater) layered on top.
 - **Lifecycle:** `/goal` to view · `/goal pause` · `/goal resume` · `/goal clear` (mirrors Claude's controls).
 
-Codex emit template — fill `<PATH>`/`<ID>` from frontmatter and `<TOP-LEVEL CHECK(S)>` by shape (same
-derivation as the Claude section):
-
-```
-/goal Drive the goal defined in <PATH> (id <ID>) to done. Implement it, then verify <TOP-LEVEL CHECK(S)> with the listed command/evidence — never weaken a check. Stop when every "done when" item passes, or pause and ask me if you hit a blocker that needs my input.
-```
+**No separate Codex template** — emit the one transcript-anchored message above. (Codex *can* verify the
+file's checks itself, but the shared message already drives goal-drive and stops on its verified-complete
+marker, so a Codex-only string would only fragment the handoff and break portability to Claude.)
 
 ## Emit format (Phase 5)
 
-Append to the "artifact written at `<path>`" handoff — emit the form(s) for where the user will run it:
+Append **one** ready-to-paste message to the "artifact written at `<path>`" handoff — the same line
+for Claude Code and Codex, never per-runtime variants:
 
 ```markdown
-**Optional `/goal` guardrail.**
+**Run it — paste into Claude Code or Codex:**
 
-- **Claude Code (v2.1.139+)** — paste BEFORE running goal-drive, to keep the session working until
-  the goal is verified done:
-
-      /goal "...filled marker-keyed condition..."
-
-- **Codex (`features.goals` enabled, ChatGPT auth)** — paste to drive the artifact natively:
-
-      /goal Drive the goal in <path> (id <id>) to done; verify <top-level check(s)>, never weaken a check, stop when all pass or on a blocker.
-
-On Grok (no `/goal`) just run goal-drive — its by-exception stops are enough.
+    /goal "...filled transcript-anchored condition (drive <artifact> with goal-drive; done on GOAL-DRIVE COMPLETE: <id> + the real verification output; stop on GOAL-DRIVE STOPPED; TIMEOUT after N turns)..."
 ```
 
+*(On Grok, no `/goal`: paste the same text without the `/goal` prefix — same message, not a second
+version.)*
+
 Also state the **staleness and availability caveats** (below) in that handoff, so the user knows
-when to refresh the condition and when the guardrail is silently inert.
+when to refresh the condition and when the command is unavailable.
 
 ## Caveats (state these to the user)
 
@@ -165,9 +166,9 @@ when to refresh the condition and when the guardrail is silently inert.
   narrow them, but a tool-less evaluator can still be fooled by fabricated-looking text.
   goal-drive's own no-verification-theater rule is the real backstop — `/goal` is a seatbelt, not
   the brakes.
-- **Availability (Claude Code).** Silently inert under `disableAllHooks` / `allowManagedHooksOnly` /
-  untrusted workspace, or below v2.1.139. The pipeline runs fine without it; the guardrail is purely
-  additive.
+- **Availability (Claude Code).** Unavailable under `disableAllHooks` / `allowManagedHooksOnly` /
+  untrusted workspace (the command tells you why), or absent below v2.1.139. The pipeline runs fine
+  without it — fall back to running goal-drive directly.
 - **Availability (Codex).** `/goal` may need enabling (`codex features enable goals` /
   `features.goals`) and can depend on your Codex version and account/auth — if it's absent, check
   Codex's docs. The 4000-char cap applies to the objective — point at the artifact file rather than
