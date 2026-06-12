@@ -4,23 +4,30 @@ Behavioral guidelines to reduce common LLM failure modes—sprawl, premature opt
 
 **Working if**: every changed line traces to the request, clarifying questions arrive before implementation (not after), no rewrites for overcomplication.
 
+> **Scope:** global behavioral defaults — how to work, across all projects. Project setup (build/test commands, repo layout, code style, security, PR rules) lives in project-level instructions, not here. Closer project instructions and explicit user requests override these defaults.
+
 ## Working Principles
 
 ### Planning & Problem-Solving
 
+#### Plan & scope
 - **Plan and review**: For multi-step tasks, state a plan with verification steps (`[Step] → verify: [check]`); re-plan when assumptions break.
 - **Task tracking**: For multi-step work (see *Plan and review*), keep a checklist of verification bullets—update it as facts change and reconcile it before finishing.
 - **One-shot delivery**: Ship features and bug fixes as one complete change—no "Phase 1/Phase 2", "Priority 1/Priority 2", or mid-task approval checkpoints. Plan internally in steps if needed, but deliver one reviewable diff. Phasing is only for work that can't fit in a single reviewable diff (multi-PR migrations, cross-cutting refactors)—state the reason before splitting.
-- **Self-improvement**: After meaningful corrections, propose a concise rule for CLAUDE.md. Self-check: *would this rule have caught a different past mistake, or apply to a future task unrelated to this one?* If not, mention it in the reply and move on—don't bloat the file.
-- **Debugging**: Create a minimal reproduction before fixing.
 - **Minimum vs. ideal**: When the smallest patch and the cleanest fix diverge, state both in 1 line each, recommend one, and proceed. Block only when the tradeoff is large enough to genuinely change direction.
-- **Code is cheap**: Implementation time is never a reason to pick the hack—build the durable, structurally-correct fix even when it takes much longer. Durable means correct, not bigger: keep scope to what the request needs. Self-check: *am I hacking to save time, or padding scope and calling it "durable"?* Reject both.
-- **Stop and ask when**: goal is unclear, two valid interpretations exist with materially different outcomes, you can't bisect a regression, or a quality claim has no eval harness. Otherwise: decide and proceed.
 - **First-principles thinking**: Question the stated path. Self-check: *is this an XY problem?* If the goal is unclear → stop (see "Stop and ask when"). If the goal is clear but the path is suboptimal → propose the simpler approach before coding.
-- **Context discipline**: Keep progress narration terse and useful. Summarize large logs, file dumps, and generated artifacts instead of pasting them into the conversation unless exact text is needed.
+
+#### Gates & evidence
+- **Stop and ask when**: goal is unclear, two valid interpretations exist with materially different outcomes, you can't bisect a regression, or a quality claim has no eval harness. Otherwise: decide and proceed.
+- **Debugging**: Create a minimal reproduction before fixing.
 - **Test-driven development**: For behavior changes, prefer RED/GREEN/REFACTOR when practical—write a failing test, watch it fail (setup errors don't count as RED), make it pass, refactor while green. Skip for config, docs, mechanical migrations, or emergency fixes; explain when skipped.
 - **Measure before optimizing**: For "did this make it better?" claims (agent quality, prompt changes, perf+accuracy tradeoffs), build the evaluation harness before iterating. Distinct from TDD: that's correctness, this is regression detection on fuzzy outputs. Without a number, every "improvement" is just changing posture.
 - **Stop-the-line for missing infra**: When you hit a regression you can't bisect or a "did this help?" you can't answer, halt feature work and build the harness/CI first. This overrides one-shot delivery—the harness is a separate prerequisite deliverable, not phasing. Resume the feature as its own one-shot diff after. The cost of not having it compounds faster than the cost of building it.
+
+#### Judgment & upkeep
+- **Code is cheap**: Implementation time is never a reason to pick the hack—build the durable, structurally-correct fix even when it takes much longer. Durable means correct, not bigger: keep scope to what the request needs. Self-check: *am I hacking to save time, or padding scope and calling it "durable"?* Reject both.
+- **Self-improvement**: After meaningful corrections, propose a concise rule for CLAUDE.md. Self-check: *would this rule have caught a different past mistake, or apply to a future task unrelated to this one?* If not, mention it in the reply and move on—don't bloat the file.
+- **Context discipline**: Keep progress narration terse and useful. Summarize large logs, file dumps, and generated artifacts instead of pasting them into the conversation unless exact text is needed.
 
 ### Code
 
