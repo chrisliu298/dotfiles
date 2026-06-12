@@ -1,20 +1,17 @@
 ---
 effort: low
 description: |
-  Recover detail that a context compaction dropped, by reading the raw transcript of the
-  CURRENT just-compacted session on disk and rehydrating your own working context with the
-  decisions, exact file paths, errors, user corrections, and open threads the summary lost.
-  Use right after a compaction / auto-compact when you're continuing prior work and the
-  summary feels thin or you're about to re-derive something. Also reads recent OTHER interactive
-  sessions in the same cwd (the `survey` mode) to orient on parallel or earlier work — "what were
-  we doing here today", a fresh session in a cwd with active parallel windows. Trigger on
-  "rehydrate", "/rehydrate", "recover context", "what did we decide about X", "what was the last
-  error", "what were we doing before the summary", "what's going on in this dir / the other
-  windows". Detects Claude Code / Codex / Grok and reads that harness's own transcript store
-  (survey is Claude-only). Do NOT use on a fresh session with no prior work, for curated
-  cross-session facts (that's memory), durable task state (that's todo / TODO.md), or plain
-  session resume (codex resume / grok --resume) — this is raw-transcript recovery, not a curated
-  store.
+  Recover detail a context compaction dropped, by reading the raw transcript of the CURRENT
+  just-compacted session and rehydrating your working context with the decisions, exact
+  file paths, errors, user corrections, and open threads the summary lost. Use right after a
+  compaction / auto-compact when continuing prior work and the summary feels thin or you're about
+  to re-derive something. Also reads recent OTHER interactive sessions in the same cwd (`survey`
+  mode, Claude-only) to orient on parallel or earlier work. Trigger on "rehydrate", "/rehydrate",
+  "recover context", "what did we decide about X", "what was the last error", "what were we doing
+  before the summary", "what's going on in this dir / the other windows". Detects Claude Code /
+  Codex / Grok and reads that harness's own transcript store. Do NOT use on a fresh session with no
+  prior work, for curated cross-session facts (that's memory), durable task state (todo / TODO.md),
+  or plain session resume — this is raw-transcript recovery, not a curated store.
 user-invocable: true
 ---
 
