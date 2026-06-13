@@ -60,7 +60,6 @@ MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: clau
 # name|marketplace — Claude plugins installed + enabled at user scope (claude-only)
 PLUGINS=(
     "code-simplifier|claude-plugins-official"
-    "frontend-design|claude-plugins-official"
 )
 
 SKILL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/skills-src"
