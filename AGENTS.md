@@ -24,6 +24,7 @@ Before modifying a skill, read `agents/extensions/README.md` to determine its so
 
 - **Own skills** (listed under `agents/extensions/skills/`): Edit in this repo — this is the single source of truth.
 - **Third-party skills** (cloned from GitHub): Edit in the source repo or fork
+- **Universal (C/X/G) skills**: Read `agents/extensions/references/universal-skill-authoring.md` before editing a skill shared across all three agents — keep the body harness-agnostic (no `$ARGUMENTS`, no bare `AskUserQuestion`/`Skill()`, capability-not-runtime degradation). `./dotfiles.sh` warns on the mechanical violations; `./dotfiles.sh lint` runs the check on demand.
 
 Run `./dotfiles.sh` after changes to re-sync symlinks.
 
