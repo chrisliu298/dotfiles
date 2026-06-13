@@ -418,6 +418,35 @@ cmd_skills() {
     printf '\n'
 }
 
+# ── Skill portability lint ───────────────────────────────────────
+# Warn (non-fatal) when a universal (non-claude-only) OWN skill BODY embeds
+# harness-specific syntax that silently breaks on Codex/Grok. Frontmatter is
+# exempt (allowed-tools etc. are additive and ignored off-Claude). Conservative
+# by design — flags only the two unambiguous hazards; tool-name degradation
+# (AskUserQuestion/Skill) needs human review. See
+# agents/extensions/references/universal-skill-authoring.md.
+lint_skills() {
+    local claude_only=$'\n' entry ename _src agents
+    for entry in "${SKILLS[@]}"; do
+        IFS='|' read -r ename _src agents <<< "$entry"
+        [[ "$ename" != "*" && "$agents" == "claude" ]] && claude_only+="$ename"$'\n'
+    done
+    local d dname m hits=0
+    for d in "$ROOT"/agents/extensions/skills/*/; do
+        d="${d%/}"; dname="${d##*/}"
+        [[ -f "$d/SKILL.md" ]] || continue
+        [[ "$claude_only" == *$'\n'"$dname"$'\n'* ]] && continue
+        m=$(awk 'NR==1&&/^---$/{f=1;next} f&&/^---$/{f=0;next} !f{print FNR": "$0}' "$d/SKILL.md" \
+            | grep -E '\$ARGUMENTS|~/\.(claude|codex|grok)/skills/' || true)
+        [[ -n "$m" ]] || continue
+        warn "non-portable syntax in universal skill '$dname' (body):"
+        printf '%s\n' "$m" | sed 's/^/        /'
+        hits=1
+    done
+    (( hits )) && warn "fix per agents/extensions/references/universal-skill-authoring.md, or scope the skill claude-only"
+    return 0
+}
+
 # ── Main ─────────────────────────────────────────────────────────
 
 main() {
@@ -426,6 +455,7 @@ main() {
         enable)  cmd_enable "${2:-}"; exit ;;
         disable) cmd_disable "${2:-}"; exit ;;
         skills)  cmd_skills; exit ;;
+        lint)    lint_skills; exit ;;
     esac
 
     local fp; fp=$(compute_fingerprint)
@@ -460,7 +490,7 @@ main() {
     section "Links";  install_links
 
     wait "$_fetch_pid" 2>/dev/null || true
-    section "Skills"; install_skills
+    section "Skills"; install_skills; lint_skills
 
     section "MCP"
     wait "$_mcp_pid" 2>/dev/null || true

@@ -25,18 +25,23 @@ interview bookmarks            # Review saved favorite/tricky questions
 
 ## Session Workflow
 
+> **User interaction.** Wherever this skill gathers a choice, if your harness provides a
+> structured-question tool (Claude Code's `AskUserQuestion`), use it to render the options;
+> otherwise present them as a numbered list inline and accept a number/letter (or edit) reply.
+> The forced choice is what matters, not the widget — never detect the runtime by name.
+
 ### 1. Session Check
 
 When invoked:
 - If `session-name` provided and exists in `~/.local/share/interviewer/history/`:
-  - Use AskUserQuestion to offer: "Resume existing session" or "Start fresh with same name"
+  - Offer (see *User interaction* above): "Resume existing session" or "Start fresh with same name"
 - If no name provided:
   - List existing sessions if any exist
   - Ask for a new session name
 
 ### 2. Setup Phase
 
-Use AskUserQuestion to gather preferences. Ask these in sequence:
+Gather preferences (see *User interaction* above). Ask these in sequence:
 
 **Source Materials:**
 - Ask: "What should I base questions on?"
@@ -278,15 +283,15 @@ Claude: [Lists existing sessions if any]
 
 User: ml-fundamentals
 
-Claude: [AskUserQuestion: Source materials?]
+Claude: [asks: Source materials?]
 
 User: Topic keywords
 
-Claude: [AskUserQuestion: Which topics?]
+Claude: [asks: Which topics?]
 
 User: backpropagation, gradient descent, neural networks
 
-Claude: [AskUserQuestion: Question format?]
+Claude: [asks: Question format?]
 ... [continues through setup]
 
 Claude: Great! Let's start with a warm-up question.

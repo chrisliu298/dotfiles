@@ -80,8 +80,8 @@ gpt-pro --run-id <id> [--max-wait <sec>]             # reattach / recover
 Want a durable copy? Keep the streams **separate**: `gpt-pro < prompt.md > answer.md 2> gpt-pro.log` — never `2>&1` (it contaminates the answer and buries the `run_id`). Optional: the backgrounded task output already captures both streams, so a redirect is only for a persistent on-disk artifact.
 
 If `gpt-pro: command not found` (a sandboxed or reset-env shell that didn't inherit the
-`.zshenv` PATH), run the identical command by absolute path:
-`~/.claude/skills/gpt-pro-relay/scripts/gpt-pro < prompt.md`.
+`.zshenv` PATH), run the identical command from this skill's own `scripts/` directory —
+the `gpt-pro` script sits beside this `SKILL.md` (`<this-skill-dir>/scripts/gpt-pro < prompt.md`).
 
 ## Prompts must be self-contained
 
