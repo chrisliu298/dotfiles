@@ -5,11 +5,12 @@ description: |
   review (prism on Claude). A thin, modeless, stepped loop: each invocation advances ONE phase —
   elicit → review the spec (skip with --no-spec-review) → drive → review → you decide which fixes apply →
   drive the fixes → re-review — with state on disk so it resumes after interruption or compaction. It
-  auto-handles the ~83% of findings that are out-of-scope or unmapped (you never see them) and
-  surfaces only the small actionable batch for you to confirm — it does NOT blind-apply review
-  findings (measured to be unsafe). Use for "loop this to done with review", "elicit, implement,
-  review, iterate", "close the review-fix loop", "goal-loop". Review needs Claude (prism), degrades
-  off-Claude. Does NOT interview (that's goal-elicit). Skip for one-off edits and lone reviews.
+  auto-handles the ~83% of findings that are out-of-scope/unmapped (you never see them) and surfaces
+  only the small actionable batch for you to confirm — it does NOT blind-apply findings (unsafe). Use
+  for "loop this to done with review", "elicit, implement, review, iterate", "close the review-fix
+  loop", "goal-loop". Review needs Claude (prism), degrades off-Claude. **Interactive-only** — human
+  gates block on user input, so do NOT use for autonomous/headless runs (cron, `-p`, background); use
+  goal-drive instead. Does NOT interview (that's goal-elicit). Skip for one-off edits and lone reviews.
 user-invocable: true
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Skill, AskUserQuestion
 ---
@@ -22,6 +23,11 @@ A thin, **modeless** orchestrator that closes the loop the three existing skills
 fix → re-review` and owns the **one thing none of the three can**: the **loop edge** — turning review
 findings into the *next* drivable unit, gated by you. It composes the three skills; it never modifies,
 re-implements, or absorbs them.
+
+> **Interactive sessions only.** Both human gates (spec sign-off, fix classification) call
+> `AskUserQuestion` and *cannot* proceed without a live operator. **If the task is meant to run
+> autonomously — headless, unattended, cron, `claude -p`, a background agent — do not use this skill.**
+> Use [[goal-drive]] (modeless, runs to done without stopping) for autonomous execution.
 
 ## Two non-negotiables (the design hinges on these)
 
