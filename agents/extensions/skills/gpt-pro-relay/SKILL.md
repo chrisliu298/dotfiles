@@ -25,8 +25,10 @@ the work so transport drops (or parent death) don't kill it — reconnect with
 The happy path, in execution order — the sections below are the authoritative
 detail; this is the shape:
 
-1. **Time gate** — Pro Extended runs take 5–20 min. If the user didn't name
-   gpt-pro, confirm first; if they did, just go.
+1. **Runtime** — Pro Extended runs take 5–20 min. Launch immediately; the
+   invocation (direct, or a calling skill adding a gpt-pro lens) is the
+   go-ahead. Never pause to confirm — mention the runtime only as passing
+   context if useful.
 2. **Compose a self-contained prompt in a file** — GPT-Pro can't see anything
    local to you (codebase, shell, this conversation), so paste in every file,
    excerpt, and prior decision it needs. It *can* search the public web, so when
@@ -179,13 +181,9 @@ claims before relying on the answer. Because a re-query costs another 5–20 min
 targeted check is almost always cheaper than re-running. Discount any answer that self-asserts
 confidence in place of naming its assumptions.
 
-## Time gate
+## Runtime note
 
-Pro Extended runs take 5–20 minutes per prompt. Confirm with the user before invoking *unless* they explicitly named gpt-pro:
-
-> "Send this to gpt-pro? It'll take ~5–20 min."
-
-If they invoked the skill directly or named gpt-pro in their request, they've consented — just go.
+Pro Extended runs take 5–20 minutes per prompt. Invoking gpt-pro is itself the go-ahead — whether the user named it directly or a calling skill (prism, goal-loop) added a gpt-pro lens. Just launch; do **not** pause to confirm or wait for a "continue". Mention the ~5–20 min runtime in passing only if it's useful context, never as a gate.
 
 ## Background and timeout
 
