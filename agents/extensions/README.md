@@ -24,7 +24,7 @@ Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via
 
 Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
-> DeepSeek and MiMo are reached **through** Claude Code via the `ds`/`mm`/… aliases (see `shell/.functions`), so they inherit the Claude column directly (no separate skill dir). **Grok** is a relay/prism dispatch target (no interactive alias) with its own `~/.grok/skills/` mirror of the Codex set — so its column equals Code**x**. The Claude-only orchestration skills (relay, prism, keep-warm, skill-creator) stay off Grok; relay and prism are additionally guarded so a dispatched peer can't trigger them.
+> DeepSeek and MiMo are reached **through** Claude Code via the `ds`/`mm`/… aliases (see `shell/.functions`), so they inherit the Claude column directly (no separate skill dir). **Grok** is a relay/prism dispatch target (no interactive alias) with its own `~/.grok/skills/` mirror of the Codex set — so its column equals Code**x**. The Claude-only orchestration skills (relay, prism, goal-loop, keep-warm, skill-creator) stay off Codex/Grok; relay and prism are additionally guarded so a dispatched peer can't trigger them.
 
 | Skill | C | X | G | Default | Source · Description |
 |-------|:-:|:-:|:-:|:-------:|----------------------|
@@ -35,6 +35,7 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | digest                  | ✓ | ✓ | ✓ | on     | local — Re-layer a dense reply into a skim-first review surface |
 | goal-drive              | ✓ | ✓ | ✓ | on     | local — Drive a goal artifact (GOAL.md / checklist / phased doc) to verified done |
 | goal-elicit             | ✓ | ✓ | ✓ | on     | local — Multi-round interview → verifiable Goal Contract |
+| goal-loop               | ✓ | — | — | on     | local — Stepped elicit→review→fix loop (composes goal-elicit/goal-drive/prism; default review is prism, Claude-only) |
 | gpt-pro-relay           | ✓ | ✓ | ✓ | on     | local — SSH to ChatGPT Pro Extended on macmini |
 | humanizer               | ✓ | ✓ | ✓ | on     | [blader/humanizer][c-hu] — Remove AI signatures from text |
 | interviewer             | ✱ | ✱ | ✱ | manual | local — Mock AI/ML technical interviews |

@@ -39,6 +39,9 @@ SKILLS=(
     "keep-warm|./agents/extensions/skills/keep-warm|claude"
     # prism: claude-only caller (dispatches parallax to Codex + DeepSeek + MiMo + Grok via relay)
     "prism|./agents/extensions/skills/prism|claude"
+    # goal-loop: default review backend is prism (claude-only); built on the Skill/AskUserQuestion
+    # tooling. Off-Claude it only degrades to external/local/none, so keep it claude-only.
+    "goal-loop|./agents/extensions/skills/goal-loop|claude"
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex,grok"
     "humanizer|blader/humanizer|claude,codex,grok"
     "pdf|anthropics/skills/skills/pdf|claude"
