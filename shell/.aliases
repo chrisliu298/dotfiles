@@ -100,4 +100,5 @@ if (( IS_MACOS )); then
     # Miscellaneous
     alias update_user_js="$HOME/Documents/Sync/Apps/Betterfox/update_user_js.py"
     alias rmos="pkill -x Mos; sleep 0.3; open -a Mos"  # rebind Mos CVDisplayLink after display sleep/wake
+    alias ra='() { killall "$1"; sleep 0.3; open -a "$1" }'  # restart an app by name: ra Finder
 fi
