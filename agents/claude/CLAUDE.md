@@ -53,14 +53,16 @@ Behavioral guidelines to reduce common LLM failure modes—sprawl, premature opt
 
 ## Response Contract
 
-For substantial final responses and non-trivial task completions, treat the final message as a **skim-first review surface, not a complete report**: optimize for the reader to re-sync in seconds, with detail pulled on demand. The aim is *progressive disclosure*, not raw brevity—a digest that hides needed detail fails as badly as a wall of text. Skip for trivial replies and direct questions.
+Use this for substantial final responses and non-trivial task completions; skip it for trivial replies and direct questions.
 
-- **Verdict first**: one line (outcome / answer / decision), never buried at the end. Then a skim layer the reader can act on without scrolling—for changes, a review-map table (`file · what changed · why · risk · how to check`); for research/answers, key findings as tight bullets, most-important first.
-- **Surface uncertainty**: close the skim layer with *Not done / not checked* (skipped checks, assumptions, least-verified claim), plus a *context dividend* when relevant—the few things you learned that the reader didn't see ("observed X → changed Y"). This closes the context gap, not just length.
-- **Cap shape, not reasoning**: bound the *visible* layer (verdict ≤1 line; skim ≤~7 bullets, or a table with one row per file/unit); never word-cap the answer or compress the thinking itself. The first screen must be complete enough to act on, not a teaser.
-- **Pull, don't push**: keep logs, alternatives, and long rationale below the skim layer, and expand only what's asked. If the long form would exceed ~one screen, write it to `~/.ai/reports/<timestamp>-<task-slug>.md` and show only the index + path.
-- **Finalizer**: if a draft comes out dense, or on "tl;dr / wall of text / too long", re-layer it with the `digest` skill (then `humanizer` for AI cadence, `deslop` for code slop) instead of appending another long reply.
-- **Terminal rendering**: layer via section order + scrollback, not `<details>` folding (it does not collapse in a plain terminal); reserve `<details>`/HTML for browser- or GitHub-rendered output.
+1. **Plain and self-contained.** Write in plain language. The message must stand alone—the reader has not seen your reasoning, the conversation, or any plan, so put everything they need to act in the message itself.
+2. **Answer first.** Open with one line: the outcome, answer, or decision. Never bury it at the end.
+3. **Then a short version that's enough to act on** (not a teaser). For code changes, a table with one row per file: `file · what changed · why · risk · how to check`. For research or answers, the key findings as tight bullets, most-important first.
+4. **Flag blockers, not doubt.** State verified results plainly. Add a caveat only when it changes the reader's next move—a failed check, an assumption that could flip the answer, or an irreversible action you already took (push, overwrite, delete, peer-sync). One line, in the answer or short version. If none qualifies, say nothing.
+5. **Cap the visible shape, not the thinking.** Answer ≤1 line; short version ≤~7 bullets or one row per unit. Never word-cap the real answer or flatten the reasoning to fit.
+6. **Pull, don't push.** Keep logs, alternatives, and long rationale below the short version; expand only what's asked. If that detail runs past ~one screen, write it to `~/.ai/reports/<timestamp>-<task-slug>.md` and show only an index + path.
+7. **Repair, don't append.** If a draft comes out dense, or the user says "tl;dr / too long / wall of text," re-layer it in place—lead with the answer, cut to a short version, push detail down—instead of adding another long reply.
+8. **Terminal-safe layout.** Layer with section order + scrollback, not `<details>` folding—it doesn't collapse in a plain terminal. Reserve `<details>`/HTML for browser- or GitHub-rendered output.
 
 </important>
 

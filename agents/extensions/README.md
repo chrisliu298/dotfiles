@@ -32,7 +32,7 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | autoresearch            | ✱ | ✱ | ✱ | manual | local — Karpathy-faithful experiment loop |
 | defuddle                | ✓ | ✓ | ✓ | on     | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
 | deslop                  | ✓ | ✓ | ✓ | on     | local — Strip AI-slop from code changes |
-| digest                  | ✓ | ✓ | ✓ | on     | local — Re-layer a dense reply into a skim-first review surface |
+| digest                  | ✓ | ✓ | ✓ | on     | local — Re-layer a dense reply into a fast-to-skim form |
 | goal-drive              | ✓ | ✓ | ✓ | on     | local — Drive a goal artifact (GOAL.md / checklist / phased doc) to verified done |
 | goal-elicit             | ✓ | ✓ | ✓ | on     | local — Multi-round interview → verifiable Goal Contract |
 | goal-loop               | ✓ | — | — | on     | local — Stepped elicit→review→fix loop (composes goal-elicit/goal-drive/prism; default review is prism, Claude-only) |
