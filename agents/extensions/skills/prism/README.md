@@ -82,15 +82,17 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
 ## Invocation
 
 ```
-   prism  [N]  [m|xh]  <question>
-          │     │
+   prism  [N]  [m|h]  [<G>gp]  <question>
+          │     │       │
+          │     │       └─ G gpt-pro lenses (count-first: gp = 1, 2gp = 2; default 0)
           │     └─ shared effort for the two tunable tiers (default m):
           │          m  → Codex medium · Grok-Build medium
-          │          xh → Codex xhigh  · Grok-Build high
+          │          h  → Codex xhigh  · Grok-Build high
           └─ how many of EACH of the six models (default 1 → 6 agents + self)
 
-   prism Why does X happen?              → 1 of each, medium  (the default)
-   prism 2 xh Which architecture?        → 2 of each, high tier
+   prism Why does X happen?              → auto-sized (anchor: 1 of each, medium)
+   prism 2 h Which architecture?        → 2 of each, high tier
+   prism 2 h 2gp Bet-the-company call?  → 2 of each, high, + 2 gpt-pro lenses
    prism no deepseek, why X?             → natural-language deviations (exclude/count/effort)
 ```
 
@@ -151,7 +153,7 @@ backgrounded process. The Integrator stays in the loop for the judgment.
 ## `prism-launch` subcommands
 
 ```
-  scaffold  [--n N] [--effort m|xh] [--preset TYPE] [--packet PATH]
+  scaffold  [--n N] [--effort m|h] [--preset TYPE] [--packet PATH]
               └ print a fill-in dispatch skeleton (correct order + effort tokens).
                 --preset review|design|diagnosis|compare|research|decision|writing
                 pre-fills six lenses by task type (N=1).

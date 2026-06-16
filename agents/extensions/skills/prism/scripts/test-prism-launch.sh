@@ -314,9 +314,9 @@ SC=$("$LAUNCH" scaffold --n 1 --effort m --packet /tmp/prism-sc.md)
 [ "$(printf '%s\n' "$SC" | grep -c '^Type:')" = "6" ] && ok "scaffold --n 1 emits 6 records" || bad "scaffold n=1 record count"
 printf '%s\n' "$SC" | grep -q '^Shared-Packet: /tmp/prism-sc.md' && ok "scaffold honors --packet" || bad "scaffold --packet"
 printf '%s\n' "$SC" | grep -q '^To: codex'    && printf '%s\n' "$SC" | grep -q '^To: mimo' && ok "scaffold lists all five parallax tiers" || bad "scaffold tiers"
-SCX=$("$LAUNCH" scaffold --n 2 --effort xh)
+SCX=$("$LAUNCH" scaffold --n 2 --effort h)
 [ "$(printf '%s\n' "$SCX" | grep -c '^Type:')" = "12" ] && ok "scaffold --n 2 emits 12 records" || bad "scaffold n=2 record count"
-[ "$(printf '%s\n' "$SCX" | grep -c '^Effort: x')" = "2" ] && [ "$(printf '%s\n' "$SCX" | grep -c '^Effort: h')" = "2" ] && ok "scaffold --effort xh -> codex x, grok-build h" || bad "scaffold xh effort mapping"
+[ "$(printf '%s\n' "$SCX" | grep -c '^Effort: x')" = "2" ] && [ "$(printf '%s\n' "$SCX" | grep -c '^Effort: h')" = "2" ] && ok "scaffold --effort h -> codex x, grok-build h" || bad "scaffold h effort mapping"
 expect_err "scaffold rejects a bad --effort" "$LAUNCH" scaffold --effort high2
 # a filled scaffold round-trips through prepare
 make_packet /tmp/prism-scrt.md

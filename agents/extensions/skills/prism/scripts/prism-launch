@@ -686,9 +686,9 @@ cmd_scaffold() {
   [ "$n" -ge 1 ] || die "scaffold: --n must be >= 1"
   local cdx gbe ef
   case "$effort" in
-    m|medium)        cdx="m"; gbe="m"; ef="m"  ;;
-    xh|x|xhigh|high) cdx="x"; gbe="h"; ef="xh" ;;
-    *) die "scaffold: --effort must be m or xh" ;;
+    m|medium) cdx="m"; gbe="m"; ef="m" ;;
+    h|high)   cdx="x"; gbe="h"; ef="h" ;;
+    *) die "scaffold: --effort must be m or h" ;;
   esac
   [ -n "$packet" ] || packet="/tmp/prism-<id>.md"
 
@@ -884,7 +884,7 @@ cmd_help() {
 prism-launch — Prism dispatch launcher (parallax fan-out + dispatch prep)
 
 Usage:
-  prism-launch scaffold [--n <N>] [--effort m|xh] [--preset <type>] [--packet <path>]  # fill-in dispatch skeleton
+  prism-launch scaffold [--n <N>] [--effort m|h] [--preset <type>] [--packet <path>]  # fill-in dispatch skeleton
   prism-launch prepare  --dispatch <dispatch-file>   # default: line-oriented control file
   prism-launch prepare  --config   <config.json>     # escape hatch: raw JSON (one of the two)
   prism-launch parallax <manifest.json> [--dry-run]
