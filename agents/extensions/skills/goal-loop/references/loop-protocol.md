@@ -326,7 +326,8 @@ record round_start_ref FIRST → goal-drive (Skill, inline) → review (backend)
 if AUTO-FIX is non-empty: write fix-rN (AUTO-FIX items only) → record round_start_ref → goal-drive the
    fixes → re-review (round+1)
 else (no oracle-RED auto-fixable finding this round): CONVERGE
-repeat until converge OR round > max_rounds OR a STOP-HALT condition
+repeat until CONVERGE (→ AUTO-COMPLETE if the decision queue is empty, else AUTO-HANDOFF)
+   OR round > max_rounds (→ AUTO-HALTED: max_rounds) OR a STOP-HALT condition (→ AUTO-HALTED: <reason>)
 ```
 
 needs_user/deferred findings **never** trigger another round by themselves — only oracle-RED work does — so
@@ -340,13 +341,16 @@ full deferred queue.
 
 - `GOAL-LOOP AUTO-COMPLETE: <id>` — drive verified-done, all frozen mechanical oracles GREEN, every
   auto-accepted RED-oracle finding fixed + re-reviewed, **and the decision queue is empty** (only
-  `could`/`out_of_scope` deferred). `current_phase=done`.
+  `could`/`out_of_scope` deferred). Ledger: `current_phase=done`, `stop_reason=null`, `auto_terminal=complete`.
 - `GOAL-LOOP AUTO-HANDOFF: <id>` — all authorized automated work converged, but a **non-empty decision
-  queue** remains for human classification. **The common case.** `current_phase=done`, `stop_reason=auto_handoff`.
-- `GOAL-LOOP AUTO-HALTED: <id> — <reason>` — a safety/liveness fault: `needs_user` (blocker), `one_way_door`,
-  `oscillation`, `normalization_failed`, `stale_baseline`, `lock_conflict`, `unauthorized_path`,
-  `review_backend_unavailable` (when review was required), `max_rounds`, `spec_contradiction`,
-  `findings_escalating`. `current_phase=stopped`.
+  queue** remains for human classification. **The common case.** A clean `done` (not a halt), distinguished
+  from COMPLETE only by the non-empty queue, so it carries **no** `stop_reason`. Ledger: `current_phase=done`,
+  `stop_reason=null`, `auto_terminal=handoff`.
+- `GOAL-LOOP AUTO-HALTED: <id> — <reason>` — a safety/liveness fault; `reason` ∈ {`needs_user` (blocker),
+  `one_way_door`, `oscillation`, `normalization_failed`, `stale_baseline`, `lock_conflict`,
+  `unauthorized_path`, `review_backend_unavailable` (when review was required), `max_rounds`,
+  `spec_contradiction`} — each produced by a rule in the policy table or hardening section below. Ledger:
+  `current_phase=stopped`, `stop_reason=<reason>`, `auto_terminal=halted`.
 
 Print the evidence block *before* the marker, into both the transcript and the report:
 
@@ -407,8 +411,9 @@ Same defenses as interactive mode, but with no human to catch a slip, `--auto` *
 - **Normalization loss** — schema-validate every record, **fail closed**; mandatory `source_review` anchor;
   print `review points N → findings M`; **escalate to STOP-HALT when `N ≫ M`** (drop > ~20%) rather than the
   interactive print-and-continue — no one is watching the print.
-- **Concurrent worktree / stale baseline** — `.goals/<id>.lock` (O_EXCL, live-pid check); atomic temp+rename
-  writes; STOP-HALT on `git rev-parse HEAD` ≠ recorded ref or dirty unowned paths; **never revert
+- **Concurrent worktree / stale baseline** — `.goals/<id>.lock` (O_EXCL, live-pid check → STOP-HALT
+  `lock_conflict`); atomic temp+rename writes; STOP-HALT `stale_baseline` on `git rev-parse HEAD` ≠ recorded
+  ref or dirty unowned paths; a fix whose paths ⊄ authority → STOP-HALT `unauthorized_path`; **never revert
   unknown/concurrent uncommitted work**. Commit per auto-fix (`commit_policy: per_unit`) for independent
   revert.
 
@@ -416,12 +421,16 @@ Same defenses as interactive mode, but with no human to catch a slip, `--auto` *
 
 `--auto` is resolved by **capability, not runtime**. If the review backend is unavailable (off-Claude prism
 refuses, or `--review local` single-model with no cross-model independence): **no auto-fix at all** — drive +
-verification only, record `review_unavailable`, write the report, and STOP-HALT (`review_backend_unavailable`)
-or, with `--review none`, emit `GOAL-LOOP COMPLETE (no-review)` after the drive marker. `--auto` never fakes
-cross-model review and never auto-accepts on single-model output.
+verification only, note `review_unavailable` in the round status, write the report, and STOP-HALT with
+`stop_reason: review_backend_unavailable` (the round-status note and the stop_reason are two fields for the
+one condition) — or, with `--review none`, emit `GOAL-LOOP COMPLETE (no-review)` after the drive marker.
+`--auto` never fakes cross-model review and never auto-accepts on single-model output.
 
 ### Ledger additions for `--auto`
 
 The `.loop.json` ledger gains `"auto": true`, an `"auto_report": ".goals/<id>.auto-report.md"` pointer, and
-the `--auto` `stop_reason` values above; `current_phase` reaches `done` (COMPLETE/HANDOFF) or `stopped`
-(HALTED). Everything else (index-only, files-win, atomic writes) is unchanged.
+an `"auto_terminal"` field ∈ {`complete`, `handoff`, `halted`} set at termination. **COMPLETE and HANDOFF
+are both clean `current_phase=done` with `stop_reason=null`** (distinguished by `auto_terminal` + the
+decision-queue count), preserving the schema invariant that `stop_reason` is set **only** on
+`current_phase=stopped` — which is AUTO-HALTED, carrying the `--auto` `stop_reason` values above. Everything
+else (index-only, files-win, atomic writes) is unchanged.
