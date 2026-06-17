@@ -53,11 +53,30 @@ Useful options:
 /goal-loop --prism "2 m" -- harden the auth module      # how thorough each review is
 /goal-loop --no-spec-review -- <request>                # skip the default spec review (trivial goals)
 /goal-loop --max-rounds 3 -- <request>                  # cap the review→fix rounds
+/goal-loop --auto --prism "2 m" -- <request>            # run unattended (overnight) — no questions
 /goal-loop continue                                     # resume an interrupted loop
 ```
 
 You don't have to choose the review depth up front — if you omit `--prism`, goal-loop asks you *after*
 the build, when you can see how thorough the review needs to be.
+
+---
+
+## Run it overnight (`--auto`)
+
+By default goal-loop asks you two things: sign off the spec, and pick which findings to fix. `--auto`
+removes both so it can run **unattended** — pair it with Claude Code's native `/goal` and go to sleep:
+
+```
+/goal "Drive .goals/<id>.goal.md id <id> through goal-loop --auto; resume with `goal-loop continue <id>`. SATISFIED on a line beginning 'GOAL-LOOP AUTO-COMPLETE: <id>', 'GOAL-LOOP AUTO-HANDOFF: <id>', or 'GOAL-LOOP AUTO-HALTED: <id> —' with a 'GOAL-LOOP AUTO EVIDENCE-END' line + real verification output earlier. TIMEOUT after <N> turns."
+```
+
+What you wake up to: the implementation built and reviewed, the **safe** fixes already applied, and a
+tight, pre-sorted **decision queue** in `.goals/<id>.auto-report.md` for the calls that genuinely need
+your judgment. What `--auto` will **not** do is make those scope calls for you — it only auto-applies a
+fix when a *frozen, pre-signed test for an existing acceptance criterion was failing and the fix makes it
+pass*. With no such tests it auto-fixes nothing and just hands you the queue — that's the safe default,
+not a bug. (Power-user mechanism: [`references/loop-protocol.md`](references/loop-protocol.md) § Autonomous mode.)
 
 ---
 
