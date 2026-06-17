@@ -89,15 +89,23 @@ def _run(cmd, cwd, timeout):
         return None, True
 
 
-def evaluate(manifest, cwd=".", timeout=DEFAULT_TIMEOUT):
-    """Return a list of {ac_id, oracle_id, state} where state in RED|GREEN|manual|TIMEOUT."""
+def evaluate(manifest, cwd=".", timeout=DEFAULT_TIMEOUT, validate_first=True):
+    """Return a list of {ac_id, oracle_id, state} where state in RED|GREEN|manual|TIMEOUT.
+
+    Fails closed: by default validates first and raises ValueError on a malformed manifest, so a
+    caller (e.g. --auto) treats an invalid manifest as 'no usable oracles' instead of crashing mid-run.
+    """
+    if validate_first:
+        errs, _ = validate(manifest)
+        if errs:
+            raise ValueError("invalid manifest: " + "; ".join(errs))
     rows = []
     for o in manifest.get("oracles", []):
         ac, oid, kind = o.get("ac_id"), o.get("oracle_id"), o.get("kind")
         if kind == "manual":
             state = "manual"
         else:
-            code, to = _run(o["command"], cwd, timeout)
+            code, to = _run(o.get("command") or "false", cwd, timeout)
             state = "TIMEOUT" if to else ("GREEN" if code == 0 else "RED")
         rows.append({"ac_id": ac, "oracle_id": oid, "state": state})
     return rows
@@ -159,6 +167,21 @@ def selftest():
     finally:
         os.unlink(tmp)
 
+    # TIMEOUT path: a command that outlasts the deadline reports TIMEOUT, not GREEN/RED
+    slow = {"schema_version": SCHEMA, "id": "t", "source_artifact": "a.md",
+            "oracles": [{"ac_id": "A", "oracle_id": "O", "kind": "mechanical",
+                         "command": "sleep 5", "allowed_paths": [], "preservation": []}]}
+    tstates = {r["oracle_id"]: r["state"] for r in evaluate(slow, timeout=1)}
+    check(tstates == {"O": "TIMEOUT"}, f"evaluate reports TIMEOUT past the deadline ({tstates})")
+
+    # fail-closed: evaluate refuses a malformed manifest (raises, never crashes mid-run)
+    try:
+        evaluate({"schema_version": SCHEMA, "id": "t", "source_artifact": "a.md",
+                  "oracles": [{"ac_id": "A", "oracle_id": "O", "kind": "mechanical", "command": ""}]})
+        check(False, "evaluate refuses an invalid manifest")
+    except ValueError:
+        check(True, "evaluate refuses an invalid manifest (fails closed)")
+
     print("oracle_manifest selftest:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 
@@ -186,10 +209,21 @@ def main(argv):
         print("VALID" if not errs else "INVALID")
         return 0 if not errs else 1
     if cmd == "evaluate":
+        if len(argv) < 2:
+            print("usage: oracle_manifest.py evaluate <manifest.json> [--cwd DIR]", file=sys.stderr)
+            return 1
         cwd = "."
         if "--cwd" in argv:
-            cwd = argv[argv.index("--cwd") + 1]
-        rows = evaluate(load(argv[1]), cwd=cwd)
+            i = argv.index("--cwd")
+            if i + 1 >= len(argv):
+                print("error: --cwd needs a directory argument", file=sys.stderr)
+                return 1
+            cwd = argv[i + 1]
+        try:
+            rows = evaluate(load(argv[1]), cwd=cwd)
+        except ValueError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
         for r in rows:
             print(f"{r['ac_id']:10} {r['oracle_id']:8} {r['state']}")
         red = [r["ac_id"] for r in rows if r["state"] == "RED"]

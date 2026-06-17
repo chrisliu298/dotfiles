@@ -352,7 +352,10 @@ are excluded from the fix `allow_paths`).**
   the manifest has a `mechanical` oracle for `AC-k` that `oracle_manifest.py evaluate` reports **RED**. The
   fix is then applied **iff** that oracle flips RED→GREEN, every `preservation` command stays GREEN, the
   patch paths ⊆ the oracle's `allowed_paths`, the patch edits no test/spec/oracle, and the behavioral delta
-  is authorized by the flipped oracle (the `oracle_gate.py` gate, now run live).
+  is authorized by the flipped oracle (the `oracle_gate.py` gate, now run live). (The oracle's per-oracle
+  `allowed_paths` and the fix round's `allow_paths` are **distinct path-sets, both enforced** — a patch must
+  fall within the oracle's allowed paths *and* the fix authority, which additionally excludes every
+  test/spec/oracle path.)
 - **No manifest, or no RED oracle ⇒ AUTO-FIX is empty** — `--auto` auto-fixes nothing and defers the whole
   batch. This is the expected default until the operator invests in oracles at sign-off (the honest caveat
   above). Coverage accrues run-over-run as the operator authors more oracles.
