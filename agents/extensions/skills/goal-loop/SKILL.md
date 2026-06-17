@@ -242,7 +242,8 @@ fix-checklist template: `references/loop-protocol.md`.
 - **GOAL-LOOP STOPPED** — with `stop_reason` ∈ {`goal_drive_stopped`, `review_backend_unavailable`,
   `needs_user`, `spec_rejected`, `review_rejected`, scope/authority-exceeded, one-way-door, `max_rounds`,
   `oscillation` (same finding recurs), `normalization_failed` (extraction incomplete/invalid),
-  `findings_escalating`} — under `--auto` the AUTO-HALTED set adds `stale_baseline`, `lock_conflict`,
+  `findings_escalating` (each round surfaces more/higher-severity findings than the last — the work is
+  regressing)} — under `--auto` the AUTO-HALTED set adds `stale_baseline`, `lock_conflict`,
   `unauthorized_path`, `spec_contradiction` (see `references/loop-protocol.md` § Termination). Print the
   marker first, then hand back.
 - **Resume** — read `current_phase`, reconcile against verified artifacts + repo (files over the

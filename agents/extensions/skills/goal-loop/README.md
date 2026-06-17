@@ -92,9 +92,11 @@ not a bug. (Power-user mechanism: [`references/loop-protocol.md`](references/loo
 - **A better spec means fewer interruptions.** The up-front spec review is **on by default**
   (`--no-spec-review` to skip; auto-skipped for trivial goals) — it makes your acceptance criteria more
   complete, so more later findings are clearly actionable.
-- **It's portable.** Works in Claude Code, Codex, and Grok. The multi-model review step needs Claude
-  (prism); on Codex/Grok it degrades — it writes out a review request for you to run from Claude, or you
-  can use a single-model review.
+- **Built for Claude Code.** goal-loop is installed for Claude Code — its review backend is prism and
+  `--auto` rides the native `/goal` command, both Claude-only. The skill body is written runtime-neutrally
+  and the artifacts it produces are portable, but if you run the loop off-Claude the multi-model review
+  degrades: it writes out a review request for you to run from Claude, or falls back to single-model review
+  (and `--auto` does no auto-fix without cross-model review).
 - **It won't run away.** At most 2 review→fix rounds by default (`--max-rounds`), and it stops early if
   the same issue keeps coming back.
 
