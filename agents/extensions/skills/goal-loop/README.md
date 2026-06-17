@@ -53,7 +53,7 @@ Useful options:
 /goal-loop --prism "2 m" -- harden the auth module      # how thorough each review is
 /goal-loop --no-spec-review -- <request>                # skip the default spec review (trivial goals)
 /goal-loop --max-rounds 3 -- <request>                  # cap the review→fix rounds
-/goal-loop --auto --prism "2 m" -- <request>            # run unattended (overnight) — no questions
+/goal-loop --auto --prism "2 m" --artifact .goals/<id>.goal.md   # run unattended — needs a ready spec
 /goal-loop continue                                     # resume an interrupted loop
 ```
 
@@ -65,7 +65,9 @@ the build, when you can see how thorough the review needs to be.
 ## Run it overnight (`--auto`)
 
 By default goal-loop asks you two things: sign off the spec, and pick which findings to fix. `--auto`
-removes both so it can run **unattended** — pair it with Claude Code's native `/goal` and go to sleep:
+removes both so it can run **unattended** — pair it with Claude Code's native `/goal` and go to sleep.
+First write the spec (`--auto` never interviews — run `/goal-elicit` to produce `.goals/<id>.goal.md`),
+then point `/goal` at it:
 
 ```
 /goal "Drive .goals/<id>.goal.md id <id> through goal-loop --auto; resume with `goal-loop continue <id>`. SATISFIED on a line beginning 'GOAL-LOOP AUTO-COMPLETE: <id>', 'GOAL-LOOP AUTO-HANDOFF: <id>', or 'GOAL-LOOP AUTO-HALTED: <id> —' with a 'GOAL-LOOP AUTO EVIDENCE-END' line + real verification output earlier. TIMEOUT after <N> turns."

@@ -33,7 +33,7 @@ to resume. It **must not** duplicate per-unit execution state (goal-drive owns t
   "max_rounds": 2,
   "review_backend": "prism",            // prism|external|local|none
   "prism_config": "2 m",                // forwarded verbatim; "" => prism auto-sizes
-  "spec_approved": true,                // set at spec-review sign-off; the artifact is frozen after
+  "spec_approved": true,                // true | "auto" (interactive sign-off | --auto freeze); frozen after
   "round_start_ref": "a1b2c3d",         // git rev captured on entering drive/fix this round (diff baseline)
   "rounds": [
     { "round": 1, "round_start_ref": "0f9e8d7", "drive_marker": "GOAL-DRIVE COMPLETE: <id> — …",
@@ -237,7 +237,7 @@ acceptance criterion, and how to verify it.
 
 For `--review prism`, forward `prism_config` verbatim ahead of the packet (`Skill(prism, "2 m <packet>")`).
 
-## The path beyond report-only — oracle-gating (the future opt-in)
+## The path beyond report-only — oracle-gating (realized by `--auto`)
 
 goal-loop ships with the human classifying the actionable batch (above). The **only fundamentally-safe
 way to remove that step** is not a better router or a judge — it's verification against pre-signed
@@ -273,6 +273,15 @@ replaces **both** human gates with **fail-closed autonomous policies** and termi
 the evaluator can see. It changes only goal-loop's *gate behavior, termination, and handoff* — goal-drive,
 prism, goal-elicit, the router, the ledger, and crash-safety are unchanged. Design synthesis (prism `2 h 2gp`,
 15 perspectives, no cross-model dissent): `~/.ai/reports/20260616-2243-goalloop-auto-design.md`.
+
+**Precondition — `--auto` requires a ready artifact; it never interviews.** The deadlock is not limited to
+the two gates: the **elicit** phase interviews via `AskUserQuestion` too, so `--auto -- "<vague request>"`
+with no spec would deadlock the `/goal` turn. Therefore `--auto` requires a `status: ready` artifact —
+`--artifact <path>`, or a pre-existing `.goals/<id>.goal.md` (resolved by `continue`). If none exists, or
+elicit would need to interview to reach `ready`, `--auto` emits **`GOAL-LOOP AUTO-HALTED: <id> —
+needs_artifact`** *before* any `AskUserQuestion` — run `goal-elicit` interactively first, then launch
+`--auto` on the resulting artifact. (The README's overnight recipe pastes `/goal` at an existing
+`.goals/<id>.goal.md` for exactly this reason.)
 
 **The honest value, stated up front.** `--auto` delivers *drive → multi-model review → auto-fix only the
 frozen-oracle-RED subset → a tight pre-classified morning decision queue.* It does **not** make the
@@ -347,15 +356,27 @@ are excluded from the fix `allow_paths`).**
 ```
 
 - Every `ac_id` must exist in the frozen artifact; `oracle_id`s are unique; `mechanical` oracles carry a
-  `command`, `manual` ones carry `command: null` and are **never** auto-fixable.
+  `command` (+ `allowed_paths`/`preservation` as non-empty-string lists), `manual` ones carry `command: null`
+  and are **never** auto-fixable. The manifest also carries `spec_sha256` — the hash of the frozen spec block
+  (objective + acceptance/done_when + scope + constraints + authority) at sign-off.
+- **`--auto` validates the manifest strictly before trusting it (fail-closed against a stale registry):**
+  `oracle_manifest.py validate <manifest> <artifact> --strict` — a missing/malformed `spec_sha256`, or any
+  `ac_id` not present in the artifact, is a **hard error → STOP-HALT `stale_oracle_manifest`** (not a
+  warning). At entry `--auto` also re-derives the frozen spec block's hash and compares it to
+  `spec_sha256`; a mismatch means the spec changed since sign-off → **STOP-HALT `stale_oracle_manifest`**
+  rather than gate an auto-fix against a stale oracle. (This precondition runs once, before any drive
+  mutates state.)
 - **Consumption by AUTO-FIX:** a finding is AUTO-FIX-eligible iff it is `in_scope-mapped` to `AC-k` **and**
-  the manifest has a `mechanical` oracle for `AC-k` that `oracle_manifest.py evaluate` reports **RED**. The
-  fix is then applied **iff** that oracle flips RED→GREEN, every `preservation` command stays GREEN, the
-  patch paths ⊆ the oracle's `allowed_paths`, the patch edits no test/spec/oracle, and the behavioral delta
-  is authorized by the flipped oracle (the `oracle_gate.py` gate, now run live). (The oracle's per-oracle
-  `allowed_paths` and the fix round's `allow_paths` are **distinct path-sets, both enforced** — a patch must
-  fall within the oracle's allowed paths *and* the fix authority, which additionally excludes every
-  test/spec/oracle path.)
+  the manifest has a `mechanical` oracle for `AC-k` that `oracle_manifest.py evaluate` reports **RED** (a
+  TIMEOUT/unknown oracle is **not** RED and is **not** GREEN — see Termination). The fix is then applied
+  **iff** that oracle flips RED→GREEN, every `preservation` command stays GREEN, the patch paths ⊆ the
+  oracle's `allowed_paths`, the patch edits no test/spec/oracle, and the behavioral delta is authorized by
+  the flipped oracle. **`oracle_manifest.py` supplies only the RED/GREEN state; the rest of this gate
+  (preservation, path-containment, no-test/spec/oracle-edit, behavioral-delta, anti-overfit) is enforced by
+  this `--auto` protocol, not by any script** — `oracle_gate.py` is the offline *proof* the gate is safe
+  (false-auto=0), never a live enforcer. (The oracle's per-oracle `allowed_paths` and the fix round's
+  `allow_paths` are **distinct path-sets, both enforced** — a patch must fall within the oracle's allowed
+  paths *and* the fix authority, which additionally excludes every test/spec/oracle path.)
 - **No manifest, or no RED oracle ⇒ AUTO-FIX is empty** — `--auto` auto-fixes nothing and defers the whole
   batch. This is the expected default until the operator invests in oracles at sign-off (the honest caveat
   above). Coverage accrues run-over-run as the operator authors more oracles.
@@ -383,18 +404,23 @@ full deferred queue.
 `--auto` ends in exactly one terminal state, each a **literal marker line** (not prose) the tool-less
 `/goal` evaluator keys on, **preceded** by an evidence block in the transcript:
 
-- `GOAL-LOOP AUTO-COMPLETE: <id>` — drive verified-done, all frozen mechanical oracles GREEN, every
-  auto-accepted RED-oracle finding fixed + re-reviewed, **and the decision queue is empty** (only
-  `could`/`out_of_scope` deferred). Ledger: `current_phase=done`, `stop_reason=null`, `auto_terminal=complete`.
+- `GOAL-LOOP AUTO-COMPLETE: <id>` — drive verified-done; **every frozen mechanical oracle GREEN** (a
+  TIMEOUT/unknown oracle is NOT GREEN and **blocks** COMPLETE → AUTO-HANDOFF or, if it can't be resolved,
+  AUTO-HALTED `oracle_timeout`); every auto-accepted RED-oracle finding fixed + re-reviewed; **and the human
+  decision queue is empty.** The *decision queue* = `in_scope-unmapped` + `in_scope-mapped`-no-oracle +
+  `needs_user` (the items only a human can dispose); `could`/`out_of_scope` are **audit-only** deferrals that
+  do NOT block COMPLETE. Ledger: `current_phase=done`, `stop_reason=null`, `auto_terminal=complete`.
 - `GOAL-LOOP AUTO-HANDOFF: <id>` — all authorized automated work converged, but a **non-empty decision
   queue** remains for human classification. **The common case.** A clean `done` (not a halt), distinguished
   from COMPLETE only by the non-empty queue, so it carries **no** `stop_reason`. Ledger: `current_phase=done`,
   `stop_reason=null`, `auto_terminal=handoff`.
-- `GOAL-LOOP AUTO-HALTED: <id> — <reason>` — a safety/liveness fault; `reason` ∈ {`needs_user` (blocker),
-  `one_way_door`, `oscillation`, `normalization_failed`, `stale_baseline`, `lock_conflict`,
-  `unauthorized_path`, `review_backend_unavailable` (when review was required), `max_rounds`,
-  `spec_contradiction`} — each produced by a rule in the policy table or hardening section below. Ledger:
-  `current_phase=stopped`, `stop_reason=<reason>`, `auto_terminal=halted`.
+- `GOAL-LOOP AUTO-HALTED: <id> — <reason>` — a safety/liveness fault; `reason` ∈ {`needs_artifact` (no
+  ready spec to drive — see Precondition), `needs_user` (blocker), `one_way_door`, `oscillation`,
+  `normalization_failed`, `stale_baseline`, `lock_conflict`, `unauthorized_path`, `stale_oracle_manifest`,
+  `oracle_timeout` (a mechanical oracle never resolves GREEN/RED), `review_backend_unavailable` (when review
+  was required), `max_rounds`, `spec_contradiction`} — each produced by a rule in the policy table,
+  Precondition, or hardening section. Ledger: `current_phase=stopped`, `stop_reason=<reason>`,
+  `auto_terminal=halted`.
 
 Print the evidence block *before* the marker, into both the transcript and the report:
 
@@ -402,7 +428,7 @@ Print the evidence block *before* the marker, into both the transcript and the r
 GOAL-LOOP AUTO EVIDENCE-BEGIN
 drive_marker=GOAL-DRIVE COMPLETE: <id> — …
 review_backend=<prism|local|none>  review_points=N  findings=M  normalization=ok
-oracles: total=T red_before=R red_after=0 green=G manual=Mo
+oracles: total=T red_before=R red_after=Ra green=G timeout=Ti manual=Mo   # AUTO-COMPLETE requires red_after=0 AND timeout=0 (every mechanical oracle GREEN)
 verification: <command> exit=0
 full_suite: <command> exit=0
 protected_files_edited=false  allowed_paths_only=true
@@ -412,8 +438,10 @@ GOAL-LOOP AUTO EVIDENCE-END
 
 The marker is a **liveness** mitigation, **not a security boundary** — a tool-less evaluator can be fooled by
 fabricated text; the real safety is the deterministic gate above + goal-drive's no-verification-theater rule
-(`/goal` is the seatbelt, the gate is the brakes). **Never emit AUTO-COMPLETE on a round whose only action was
-DEFER.**
+(`/goal` is the seatbelt, the gate is the brakes). **AUTO-COMPLETE requires an empty human *decision queue*
+(`in_scope-unmapped` + `in_scope-mapped`-no-oracle + `needs_user`); `could`/`out_of_scope` are audit-only
+deferrals that don't block it. A round that only deferred decision-queue items is an AUTO-HANDOFF, never
+AUTO-COMPLETE.**
 
 **Ready-to-paste `/goal` condition** (≤4000 chars; all three markers are SATISFIED states, so the hook never
 fights a legitimate halt):
@@ -448,8 +476,11 @@ Same defenses as interactive mode, but with no human to catch a slip, `--auto` *
 - **Reward-hacking / oracle-gaming** — oracles frozen at sign-off, author/fixer separated; the fix round's
   `allow_paths` excludes test/spec/oracle paths; AUTO-FIX requires RED→GREEN **and** full-suite GREEN **and**
   behavioral-delta containment; **never** synthesize an AC-anchored test after seeing a finding.
-- **Oscillation** — the recurrence rule (above) → STOP-HALT; additionally STOP if the *same oracle* goes RED
-  again after a prior GREEN (a regressing fix would loop forever).
+- **Oscillation / regression** — the recurrence rule (above) → STOP-HALT; additionally STOP if the *same
+  oracle* goes RED again after a prior GREEN (a regressing fix would loop forever). The interactive
+  `findings_escalating` stop_reason is **folded into these guards under `--auto`** (a round whose oracle-RED
+  set grew after a fix is the regression signal) — it is not a separate `--auto` AUTO-HALTED reason;
+  non-oracle escalating findings simply accrue in the morning queue.
 - **False-positive `/goal` completion** — evidence block must precede the marker; AUTO-COMPLETE forbidden on a
   DEFER-only round; TIMEOUT bounds a stuck run with a TIMEOUT *report*, not "done".
 - **Normalization loss** — schema-validate every record, **fail closed**; mandatory `source_review` anchor;
@@ -485,7 +516,10 @@ Two stronger guarantees the operator can opt into for a high-stakes overnight ru
 refuses, or `--review local` single-model with no cross-model independence): **no auto-fix at all** — drive +
 verification only, note `review_unavailable` in the round status, write the report, and STOP-HALT with
 `stop_reason: review_backend_unavailable` (the round-status note and the stop_reason are two fields for the
-one condition) — or, with `--review none`, emit `GOAL-LOOP COMPLETE (no-review)` after the drive marker.
+one condition) — or, with `--review none`, emit **`GOAL-LOOP AUTO-COMPLETE: <id>`** after the drive marker
+(a deliberate drive-only run; no review ⇒ the decision queue is empty by construction; `auto_terminal=complete`).
+**Under `--auto` every terminal is one of the three `AUTO-*` markers — never the interactive
+`GOAL-LOOP COMPLETE (no-review)`, which the `/goal` condition does not match (it would hang until TIMEOUT).**
 `--auto` never fakes cross-model review and never auto-accepts on single-model output.
 
 ### Ledger additions for `--auto`

@@ -107,8 +107,10 @@ markers, morning report, hardening): `references/loop-protocol.md` § Autonomous
 - **Gate A** → spec-review runs **report-only**; the elicited spec is **frozen as-is** (never auto-edited);
   proposed new ACs/gaps go to the morning report. `--no-spec-review` skips the pass.
 - **Gate B** → deterministic auto-disposition: **AUTO-FIX only** the `in_scope-mapped` finding whose **frozen
-  oracle is currently RED** (the exact `oracle_gate.py` gate: RED→GREEN + suite GREEN + paths ⊆ authority +
-  no test/spec/oracle edit + behavioral-delta contained). **Everything else DEFERS** to a morning queue
+  oracle is currently RED**, applied under the oracle-gate clauses (RED→GREEN + suite GREEN + paths ⊆
+  authority + no test/spec/oracle edit + behavioral-delta contained). `oracle_manifest.py` supplies the
+  RED/GREEN state; this protocol enforces the rest (`oracle_gate.py` is the offline *proof*, not a live
+  enforcer). **Everything else DEFERS** to a morning queue
   (`in_scope-unmapped`, mapped-no-oracle, `could`, out-of-scope, `needs_user`); one-way-door / oscillation /
   normalization-failure **STOP-HALT**. **Cross-model consensus may prioritize the queue, never authorize a
   fix.** No new acceptance line is ever auto-authored (that's scope mutation, invariant #2).
@@ -148,8 +150,10 @@ markers, morning report, hardening): `references/loop-protocol.md` § Autonomous
 
 - `--auto` — **unattended mode** (see § Autonomous mode): both human gates become fail-closed policies, no
   `AskUserQuestion`, terminates on the `AUTO-*` markers. Intended to run under the native `/goal` command.
-  Because it cannot ask, `--auto` **requires** `--prism` (or inherits the ledger's `prism_config`); if both
-  are absent it defaults the review depth to `2 m` rather than blocking.
+  **Requires a `status: ready` artifact** (`--artifact <path>` or a pre-existing `.goals/<id>.goal.md`) — it
+  never interviews; with no ready spec it emits `GOAL-LOOP AUTO-HALTED: <id> — needs_artifact` before any
+  `AskUserQuestion`. Since it cannot ask for the review depth, it uses `--prism` if given, else the ledger's
+  `prism_config`, else defaults to `2 m`.
 - `--prism "<config>"` — forwarded **verbatim** to prism (`2 m`, `2 m +2 gp`, …). Omitted (interactive) →
   goal-loop asks at the review gate; omitted under `--auto` → defaults to `2 m` (above).
 - `--max-rounds N` — review/fix cycles (default **2**; loops oscillate). `continue --max-rounds <N>` extends.
@@ -183,7 +187,7 @@ drive     **record round_start_ref FIRST** (on entering drive — the diff basel
           (Skill, inline). On GOAL-DRIVE COMPLETE + verification → current_phase=review. On STOPPED →
           stopped. STOP.                                                                   ← ends invocation
 review    if round > max_rounds → stopped (max_rounds), do not dispatch. Else if `prism_config` is empty,
-          ask the user for it now; freeze the review packet {artifact · diff since round_start_ref ·
+          ask the user for it now (under `--auto`: do not ask — default to `2 m`); freeze the review packet {artifact · diff since round_start_ref ·
           COMPLETE marker · verification}; run the backend; persist .review-rN.md, normalize →
           .findings.json, set current_phase=classify LAST. STOP.                            ← ends invocation
 classify  the router mechanically **disposes the non-actionable bulk** (you never see it):
@@ -250,9 +254,11 @@ fix-checklist template: `references/loop-protocol.md`.
   `needs_user`, `spec_rejected`, `review_rejected`, scope/authority-exceeded, one-way-door, `max_rounds`,
   `oscillation` (same finding recurs), `normalization_failed` (extraction incomplete/invalid),
   `findings_escalating` (each round surfaces more/higher-severity findings than the last — the work is
-  regressing)} — under `--auto` the AUTO-HALTED set adds `stale_baseline`, `lock_conflict`,
-  `unauthorized_path`, `spec_contradiction` (see `references/loop-protocol.md` § Termination). Print the
-  marker first, then hand back.
+  regressing)} — under `--auto` the AUTO-HALTED set instead adds `needs_artifact`, `stale_baseline`,
+  `lock_conflict`, `unauthorized_path`, `stale_oracle_manifest`, `oracle_timeout`, `spec_contradiction`, and
+  drops the interactive-only `spec_rejected` (`--auto` freezes the spec, never rejects) and
+  `findings_escalating` (folded into the oscillation/regression guard); full list:
+  `references/loop-protocol.md` § Termination. Print the marker first, then hand back.
 - **Resume** — read `current_phase`, reconcile against verified artifacts + repo (files over the
   pointer; if `review-rN.findings.json` exists, skip re-review → classify). Crash-safety write order:
   `references/loop-protocol.md` § Crash safety.
