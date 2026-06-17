@@ -152,7 +152,8 @@ classify  the router mechanically **disposes the non-actionable bulk** (you neve
           AskUserQuestion (accept/defer/reject per item; for an in_scope-unmapped accept, author the new
           acceptance line first). Capture the reply, write .fix-rN.checklist.json from accepted findings,
           THEN set current_phase=fix. `reject` → discard the round → review gate. STOP.    [human gate]
-fix       goal-drive (Skill, inline) on .fix-rN.checklist.json. On COMPLETE → current_phase=review,
+fix       **record round_start_ref FIRST** (on entering fix — the pre-patch baseline for the re-review),
+          then goal-drive (Skill, inline) on .fix-rN.checklist.json. On COMPLETE → current_phase=review,
           round+1. STOP.                                                                   ← ends invocation
 ```
 
@@ -179,10 +180,13 @@ user-invocable only.
 
 After review, the router **mechanically** disposes the bulk so you don't have to: `out_of_scope` and
 `could` → **DEFER** (recorded in the ledger, a suggested `## Emergent` line printed, source untouched);
-`needs_user` / one-way-door / recurrence → **STOP**. It surfaces only the remaining **actionable batch**
+`needs_user` / one-way-door / recurrence → **STOP**. It then prints a one-line **deferred/stop audit**
+(counts by scope+severity + the titles of any deferred `blocker`/`should`, with `expand <id>` to read
+one) so the bulk is auditable, not invisible, and surfaces only the remaining **actionable batch**
 as a numbered list — each `{severity, claim, proposed fix, proposed acceptance, proposed verification,
 nominated AC}` — and you reply `defaults`, `1a 2c …`, `reassign <id>→<AC>` (correct a wrong nomination),
-`reject`, or `approve`. **Nothing is written to a fix checklist until you `approve`.** Buckets, the finding schema, the normalization procedure, and the
+`reject`, or `approve`. The router's `maps_to` is a **nominee, not an authority** — its lexical mapping
+errs in both directions, so confirm or `reassign` it. **Nothing is written to a fix checklist until you `approve`.** Buckets, the finding schema, the normalization procedure, and the
 fix-checklist template: `references/loop-protocol.md`.
 
 ## Stop / convergence / resumption
@@ -194,7 +198,8 @@ fix-checklist template: `references/loop-protocol.md`.
 - **GOAL-LOOP COMPLETE (no-review)** — with `--review none`, after the drive marker (no loop).
 - **GOAL-LOOP STOPPED** — with `stop_reason` ∈ {`goal_drive_stopped`, `review_backend_unavailable`,
   `needs_user`, `spec_rejected`, `review_rejected`, scope/authority-exceeded, one-way-door, `max_rounds`,
-  `oscillation` (same finding recurs), `findings_escalating`}. Print the marker first, then hand back.
+  `oscillation` (same finding recurs), `normalization_failed` (extraction incomplete/invalid),
+  `findings_escalating`}. Print the marker first, then hand back.
 - **Resume** — read `current_phase`, reconcile against verified artifacts + repo (files over the
   pointer; if `review-rN.findings.json` exists, skip re-review → classify). Crash-safety write order:
   `references/loop-protocol.md` § Crash safety.

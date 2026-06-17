@@ -60,10 +60,20 @@ leaves a recoverable state and resumption keys on *file existence*, not the poin
 |---|---|---|
 | elicit → drive/spec-review | source artifact; then ledger phase | artifact ready, phase still `elicit` → set next; draft/blocked → `stopped` |
 | spec-review → drive | `spec-review.md` + applied edits; then `spec_approved` + freeze + phase | findings present but not approved → re-present; `spec_approved` set → drive |
-| drive → review | goal-drive patches + marker; then `round_start_ref` + phase | marker present, phase `drive` → set `review` (goal-drive reconciles its units) |
+| drive → review | `round_start_ref` FIRST (on entering drive, **before** goal-drive — the pre-patch diff baseline); then goal-drive patches + marker; then phase | marker present, phase `drive` → set `review` (goal-drive reconciles its units); `round_start_ref` absent → re-capture before driving |
 | review → classify | `review-rN.md`; then `findings.json`; then phase | **findings file exists → skip to classify** (never re-dispatch review) |
 | classify → fix | full `disposition` + `fix-rN.checklist.json`; then phase | partial/empty disposition → re-present the actionable batch; write nothing until `approve` |
-| fix → review | goal-drive drives child checklist + marker; then phase + `round+1` | mid-fix crash → goal-drive's reconcile-from-artifact resumes |
+| fix → review | `round_start_ref` FIRST (on entering fix, **before** goal-drive — the pre-patch baseline for the re-review); then goal-drive drives child checklist + marker; then phase + `round+1` | mid-fix crash → goal-drive's reconcile-from-artifact resumes |
+
+**Write durability & concurrency.** Every ledger/JSON write is **atomic** — write a temp file in `.goals/`
+and `rename` it over the target (atomic on one filesystem), so a crash mid-write never leaves a torn
+`loop.json`/`findings.json`. A single `.goals/<id>.lock` (created `O_EXCL` on entry, removed on
+STOP/COMPLETE) guards against a **second concurrent goal-loop on the same id** clobbering the ledger — if
+the lock exists and its pid is live, stop and say so; if stale (dead pid), reclaim it. On resume, before
+trusting `round_start_ref`, **detect a stale worktree**: if `git rev-parse HEAD` no longer matches the
+ledger's recorded ref (history rewritten or branch switched), STOP and reconcile against the repo rather
+than diffing a baseline that no longer exists. The working tree may hold a *concurrent session's*
+uncommitted work — never revert it (inherit goal-drive's authority rail).
 
 ## Spec review (mod #1)
 
@@ -99,27 +109,41 @@ actionable batch. It is a deterministic procedure (model self-classification was
 
 ```
 for each finding (claim/proposed_fix), set scope mechanically:
-   key-term overlap (nouns/verbs, stopwords removed) of claim vs each acceptance/done_when/constraint:
-     exactly one ≥ threshold → in_scope-mapped, maps_to = that AC id
-     zero                    → in_scope-unmapped
-     two+ (ambiguous)        → needs_user            # fail closed — never guess
+   distinctive-term overlap of (claim + proposed_fix) vs each acceptance/done_when/constraint — a term
+   counts only if it is identifier-shaped (snake_case, dotted, `method-…`, or a known code symbol),
+   appears in ≤2 ACs, and is neither a stopword nor a generic domain word. The frozen STOP / GEN / KNOWN
+   term sets and the exact procedure are canonical in `scripts/empirical_gate.py::route` — keep this doc
+   and that script in sync rather than re-specifying a bare threshold here that can drift:
+     shares a distinctive term with exactly one AC → in_scope-mapped, maps_to = that AC id
+     zero                                          → in_scope-unmapped
+     two+ ACs, no common distinctive term (ambiguous) → needs_user    # fail closed — never guess
    severity == could                                → out_of_scope
    recurrence (same maps_to OR ≥50% claim-overlap with an accepted+fixed prior finding) → needs_user
    proposed_fix ∉ authority.allow_paths             → needs_user
    one-way-door keywords (delete|drop|migrate|deploy|publish) → needs_user
 
-auto-dispose (you never see these):
+auto-dispose (kept off your decision path, but summarized — not invisible):
    out_of_scope → DEFER (ledger; print a suggested `## Emergent` line; source untouched)
    needs_user   → STOP (surface the reason; the loop halts for you)
+print a one-line DEFERRED/STOP audit before the batch: counts by scope+severity, the titles of any
+   DEFERRed `blocker`/`should` (a deferred high-severity finding is the case most worth a glance), and
+   `expand <id>` to read any deferred item in full — the bulk stays off the decision path, not hidden.
 surface the ACTIONABLE batch (in_scope-mapped + in_scope-unmapped) for your decision:
    you bucket each → accepted (a fix item) | deferred | rejected;
    in_scope-unmapped accepted ⇒ you author the new acceptance line first.
 nothing is written to fix-rN.checklist.json until you `approve` the batch.
 ```
 
-Severity does **not** decide actionability: the roadmap's loud NO-SHIP finding had no AC → STOP, not
-fix; the consensus refactor of correct code → out-of-scope → DEFER. The router fails the way the human
-did. It **nominates** `maps_to`; it is never the apply authority (see *The path beyond report-only*).
+Severity does **not** decide actionability: the roadmap's loud NO-SHIP finding had no AC → surfaced as
+`in_scope-unmapped` (you out-scope it), not auto-fixed; the consensus refactor of correct code →
+out-of-scope → DEFER. **The router is a fail-closed triage, not a replica of human judgment** — it
+reaches the same *action* (don't auto-fix) by a different *mechanism* (no covering AC), and its lexical
+mapping is unreliable in **both** directions: it false-maps on a shared identifier that names a
+*different* concern (F1/F16) and false-STOPs genuinely-mapped findings (F2/F3) — both reproduced by
+`scripts/empirical_gate.py`. So its load-bearing, trustworthy work is the cheap bulk **DEFER** of
+`could`/refactor/one-way-door findings plus **fail-closed surfacing** of everything else; treat its
+`maps_to` as a *nominee* you confirm or `reassign`, never the apply authority (see *The path beyond
+report-only*).
 
 ## The finding schema — `.goals/<id>.review-rN.findings.json`
 
@@ -137,10 +161,16 @@ When `review_backend == local` (single-model, no cross-model independence), flag
 ### Normalization procedure (prism synthesis → findings.json)
 
 prism returns verdict-led prose. Producing the findings file is a **one-time LLM extraction step** (the
-router and classify gate are mechanical only *afterward*): read `review-rN.md`; extract distinct
-actionable findings, **dedupe by claim**; assign ids `R{N}-F{nn}`; fill severity / claim / proposed_fix
-/ proposed_acceptance / proposed_verification; leave scope/maps_to/status for the router + you; write
-`findings.json`; advance `current_phase=classify`.
+router and classify gate are mechanical only *afterward*) — and the one place a model error silently
+reshapes the batch, so it **fails closed**: read `review-rN.md`; extract distinct actionable findings,
+**dedupe by claim**; assign ids `R{N}-F{nn}`; fill severity / claim / proposed_fix / proposed_acceptance
+/ proposed_verification, and a `source_review` anchor (`review-rN.md#finding-k`) for each; leave
+scope/maps_to/status for the router + you. **Validate every record against the finding schema before
+writing** — a record missing a required field, carrying an unknown severity, or lacking a `source_review`
+anchor is a failed extraction → do **not** write a partial `findings.json`; STOP
+(`stop_reason: normalization_failed`) and re-extract. Then write `findings.json`, print one reconciliation
+line — `prism raised <N> distinct points → extracted <M> findings` (spot-check when N≫M: a dropped
+finding is the silent failure here) — and advance `current_phase=classify`.
 
 ### Oscillation rule
 
