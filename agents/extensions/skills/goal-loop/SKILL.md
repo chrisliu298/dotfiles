@@ -8,9 +8,10 @@ description: |
   auto-handles the ~83% of findings that are out-of-scope/unmapped (you never see them) and surfaces
   only the small actionable batch for you to confirm — it does NOT blind-apply findings (unsafe). Use
   for "loop this to done with review", "elicit, implement, review, iterate", "close the review-fix
-  loop", "goal-loop". Review needs Claude (prism), degrades off-Claude. **Interactive-only** — human
-  gates block on user input, so do NOT use for autonomous/headless runs (cron, `-p`, background); use
-  goal-drive instead. Does NOT interview (that's goal-elicit). Skip for one-off edits and lone reviews.
+  loop", "goal-loop". Review needs Claude (prism), degrades off-Claude. **Interactive by default**
+  (human gates block on user input); **`--auto`** runs it unattended/headless under Claude Code's native
+  `/goal` — both gates become fail-closed policies (oracle-gated safe-subset auto-fix + a deferred morning
+  decision queue), never blind-apply. Does NOT interview (that's goal-elicit). Skip for one-off edits and lone reviews.
 user-invocable: true
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Skill, AskUserQuestion
 ---
@@ -24,10 +25,12 @@ fix → re-review` and owns the **one thing none of the three can**: the **loop 
 findings into the *next* drivable unit, gated by you. It composes the three skills; it never modifies,
 re-implements, or absorbs them.
 
-> **Interactive sessions only.** Both human gates (spec sign-off, fix classification) call
-> `AskUserQuestion` and *cannot* proceed without a live operator. **If the task is meant to run
-> autonomously — headless, unattended, cron, `claude -p`, a background agent — do not use this skill.**
-> Use [[goal-drive]] (modeless, runs to done without stopping) for autonomous execution.
+> **Two modes.** *Interactive (default):* both human gates (spec sign-off, fix classification) call
+> `AskUserQuestion` and need a live operator. *Autonomous (`--auto`):* for headless/unattended runs under
+> the native `/goal` command, where a blocking `AskUserQuestion` would deadlock the turn (the `/goal`
+> evaluator fires only **after** a turn finishes). `--auto` replaces both gates with fail-closed policies,
+> auto-fixes only the frozen-oracle-RED subset, and defers everything needing scope judgment to a morning
+> report — see **§ Autonomous mode (`--auto`)** and `references/loop-protocol.md` § Autonomous mode.
 
 ## Two non-negotiables (the design hinges on these)
 
@@ -92,6 +95,33 @@ no review tax on trivial goals). Override the depth with `--spec-review "<config
 sign-off → `GOAL-LOOP STOPPED` (`spec_rejected`); re-run goal-elicit. Details:
 `references/loop-protocol.md` § Spec review.
 
+## Autonomous mode (`--auto`)
+
+`--auto` runs the loop **unattended** under Claude Code's native `/goal`. The `/goal` evaluator fires only
+**after a turn finishes** and is **tool-less**, so a blocking `AskUserQuestion` deadlocks the turn — `--auto`
+therefore replaces **both** human gates with **fail-closed autonomous policies** and terminates on **printed
+markers**. It changes only gate behavior, termination, and handoff; it composes the same three skills. **It
+is strictly more conservative than interactive mode, never less.** Authoritative mechanism (policy table,
+markers, morning report, hardening): `references/loop-protocol.md` § Autonomous mode — read it before an
+`--auto` run.
+
+- **Gate A** → spec-review runs **report-only**; the elicited spec is **frozen as-is** (never auto-edited);
+  proposed new ACs/gaps go to the morning report. `--no-spec-review` skips the pass.
+- **Gate B** → deterministic auto-disposition: **AUTO-FIX only** the `in_scope-mapped` finding whose **frozen
+  oracle is currently RED** (the exact `oracle_gate.py` gate: RED→GREEN + suite GREEN + paths ⊆ authority +
+  no test/spec/oracle edit + behavioral-delta contained). **Everything else DEFERS** to a morning queue
+  (`in_scope-unmapped`, mapped-no-oracle, `could`, out-of-scope, `needs_user`); one-way-door / oscillation /
+  normalization-failure **STOP-HALT**. **Cross-model consensus may prioritize the queue, never authorize a
+  fix.** No new acceptance line is ever auto-authored (that's scope mutation, invariant #2).
+- **Honest value:** *drive → review → safe-subset auto-fix → a tight pre-classified morning decision queue* —
+  **not** the operator's scope judgment. Oracle coverage is ~empty by default, so a first run typically
+  **auto-fixes nothing** and just produces the queue. That is correct, not a failure — the report says so.
+- **Terminate** with one of `GOAL-LOOP AUTO-COMPLETE: <id>` (nothing left for you), `GOAL-LOOP AUTO-HANDOFF:
+  <id>` (converged, queue awaits — the common case), or `GOAL-LOOP AUTO-HALTED: <id> — <reason>`, each
+  preceded by an evidence block. The morning report is `.goals/<id>.auto-report.md`.
+- **Portability:** off-Claude / no review backend ⇒ **no auto-fix** (drive + verify only, defer all); never
+  fakes cross-model review, never auto-accepts single-model output.
+
 ## What it produces
 
 - `.goals/<id>.loop.json` — an **index-only** ledger (round, phase, prism config, artifact paths,
@@ -104,13 +134,17 @@ sign-off → `GOAL-LOOP STOPPED` (`spec_rejected`); re-run goal-elicit. Details:
 ## Invocation
 
 ```
-/goal-loop [--prism "<config>"] [--no-spec-review | --spec-review "<config>"]
+/goal-loop [--auto] [--prism "<config>"] [--no-spec-review | --spec-review "<config>"]
            [--review prism|external|local|none] [--max-rounds N] [--artifact <path>] -- <request>
 /goal-loop continue [<id>]
 ```
 
-- `--prism "<config>"` — forwarded **verbatim** to prism (`2 m`, `2 m +2 gp`, …). Omitted → goal-loop
-  asks at the review gate (you know the right depth only after seeing the implementation).
+- `--auto` — **unattended mode** (see § Autonomous mode): both human gates become fail-closed policies, no
+  `AskUserQuestion`, terminates on the `AUTO-*` markers. Intended to run under the native `/goal` command.
+  Because it cannot ask, `--auto` **requires** `--prism` (or inherits the ledger's `prism_config`); if both
+  are absent it defaults the review depth to `2 m` rather than blocking.
+- `--prism "<config>"` — forwarded **verbatim** to prism (`2 m`, `2 m +2 gp`, …). Omitted (interactive) →
+  goal-loop asks at the review gate; omitted under `--auto` → defaults to `2 m` (above).
 - `--max-rounds N` — review/fix cycles (default **2**; loops oscillate). `continue --max-rounds <N>` extends.
 - `--no-spec-review` / `--spec-review "<config>"` — skip the (default-on) spec review, or override its
   depth. (Auto-skipped for a Clear-domain one-shot artifact.)
@@ -162,6 +196,11 @@ artifact** and **review→fix** (classify); the per-phase STOPs keep any one inv
 survive compaction. The router shrinks the classify gate from "every finding" to "the small actionable
 batch" — that's the ergonomic win over a raw per-finding gate, kept honest by leaving you the decision.
 
+**Under `--auto`,** the same phase sequence runs, but `spec-rev` and `classify` execute the **autonomous
+policies** instead of `AskUserQuestion` — spec-review is report-only (freeze elicited spec), and classify
+auto-fixes only the oracle-RED subset while deferring/halting the rest — and the loop ends on an `AUTO-*`
+marker. See **§ Autonomous mode** and `references/loop-protocol.md` § Autonomous mode.
+
 ## Composition wiring
 
 | Phase | Skill | Dispatcher | Rail |
@@ -196,6 +235,10 @@ fix-checklist template: `references/loop-protocol.md`.
   `approve` a round with zero accepted but some *deferred*, ask whether to mark it clean → COMPLETE or
   return to review — don't assume done.)
 - **GOAL-LOOP COMPLETE (no-review)** — with `--review none`, after the drive marker (no loop).
+- **`--auto` markers** — under `--auto` the loop ends instead on `GOAL-LOOP AUTO-COMPLETE: <id>` (drive done,
+  oracles GREEN, decision queue empty), `GOAL-LOOP AUTO-HANDOFF: <id>` (converged, a deferred queue awaits —
+  the common case), or `GOAL-LOOP AUTO-HALTED: <id> — <reason>`, each preceded by an evidence block and
+  paired with `.goals/<id>.auto-report.md`. Details + the `/goal` condition: `references/loop-protocol.md` § Autonomous mode.
 - **GOAL-LOOP STOPPED** — with `stop_reason` ∈ {`goal_drive_stopped`, `review_backend_unavailable`,
   `needs_user`, `spec_rejected`, `review_rejected`, scope/authority-exceeded, one-way-door, `max_rounds`,
   `oscillation` (same finding recurs), `normalization_failed` (extraction incomplete/invalid),
@@ -206,14 +249,16 @@ fix-checklist template: `references/loop-protocol.md`.
 
 ## Report-only today — and the one upgrade path
 
-goal-loop ships **report-only** (route, auto-handle the ~83% DEFER/STOP, confirm only the small
+**Interactive mode ships report-only** (route, auto-handle the ~83% DEFER/STOP, confirm only the small
 actionable batch). The **only** fundamentally-safe way to remove that confirm is **oracle-gating, not a
 smarter router** — verify each change against a *pre-signed, frozen executable oracle* (auto-actionable
 only when its acceptance oracle is RED; apply only on RED→GREEN + no regression + anti-overfit; F1/F16
-STOP by construction). It's a **future opt-in**: `oracle_gate.py` PASSES (false-auto=0) but shows the
-covered subset is ~empty until you author stronger oracles at sign-off. Full mechanism + the
-15-perspective verdict: `references/loop-protocol.md` § The path beyond report-only and
-`~/.ai/reports/20260612-2230-goal-loop-fundamental-verdict.md`.
+STOP by construction). **`--auto` is the opt-in that enables exactly this gate** (and nothing more):
+unattended, it AUTO-FIXes only the oracle-RED subset and defers the rest to a morning queue. `oracle_gate.py`
+PASSES (false-auto=0) but shows the covered subset is ~empty until you author stronger oracles at sign-off —
+so `--auto` with no oracles auto-fixes nothing and is review-plus-queue, by design. Full mechanism + the
+15-perspective verdicts: `references/loop-protocol.md` § Autonomous mode and § The path beyond report-only,
+`~/.ai/reports/20260616-2243-goalloop-auto-design.md`, and `~/.ai/reports/20260612-2230-goal-loop-fundamental-verdict.md`.
 
 ## Single biggest risk
 
@@ -227,6 +272,10 @@ touches the source), plus the round cap and oscillation guard.
 
 - Do not blind-apply review findings; route mechanically, surface the actionable batch, write nothing
   until the user `approve`s.
+- **Under `--auto`:** never call `AskUserQuestion` (it deadlocks the `/goal` turn); never auto-edit or
+  auto-strengthen the frozen spec, and never auto-author a new acceptance line (that is scope mutation);
+  AUTO-FIX **only** the oracle-RED subset (DEFER/HALT everything else); cross-model consensus may reorder
+  the morning queue but never authorize a fix; fail toward HALT, not toward applying.
 - Do not let findings patch the **source** artifact (including out-of-scope `## Emergent`); record those
   in the ledger. Fixes land in child `fix-rN` artifacts.
 - Do not chain phases; advance one phase per invocation, persist, stop. Do not re-elicit mid-loop or
