@@ -307,7 +307,7 @@ reward-hacking, the F8 loud-NO-SHIP scope-vs-truth case). The auto-action per fi
 | `in_scope-mapped`, ambiguous `maps_to` or path ∉ authority | **DEFER** (or STOP-HALT if `blocker`) — the nominee is unreliable; fail closed |
 | `in_scope-unmapped` (real defect, no AC) | **DEFER** to the morning queue, top of stack — accepting requires authoring a new acceptance line = **scope authorship**, forbidden to an unattended reviewer (invariant #2) |
 | `could` / `out_of_scope` | **DEFER** to the ledger (counted + titled in the audit; never patches the source) |
-| `needs_user` (scope call) | **DEFER** to the queue; the loop **continues** — deferring a scope call ≠ making it |
+| `needs_user` (scope call) | **DEFER** to the queue and **continue** the loop (deferring a scope call ≠ making it) — *unless* it blocks the drive from making progress, then **STOP-HALT** (`needs_user`) |
 | one-way-door (`delete\|drop\|migrate\|deploy\|publish`) | **STOP-HALT** (`one_way_door`) |
 | recurrence / oscillation | **STOP-HALT** (`oscillation`) |
 | normalization failure (missing anchor / unknown severity / `N ≫ M`) | **STOP-HALT** (`normalization_failed`); never write a partial `findings.json` |
