@@ -850,6 +850,8 @@ cmd_digest() {
         # optional trailing :/. decoration), stops at the next H1/H2 heading so a
         # deeper `###` line inside the digest doesn't truncate it. BSD-awk-safe
         # (no interval `{1,2}` or gawk `\>` — uses `#[#]?`).
+        # CONTRACT: the `## Digest` heading is shared with templates/shared-how-to-answer.md.
+        # Renaming it there silently zeroes extraction here — update both together.
         block=$(awk '
           /^```/                                                 { infence = !infence; next }
           infence                                                { next }
@@ -872,9 +874,10 @@ cmd_digest() {
   # orchestrator reads the summary and falls back to the full .res.md. But when
   # nothing extracted, name the likely cause so the empty digest isn't a mystery.
   [ "$extracted" -gt 0 ] || [ "$n" -eq 0 ] || \
-    echo "prism-launch: note — 0 digests extracted; peers may predate the ## Digest requirement (re-run prepare on a fresh packet) or fenced their digest. Read the full .res.md files." >&2
+    echo "prism-launch: note — 0 digests extracted; peers may predate the ## Digest requirement (re-run prepare on a fresh packet), fenced their digest, or the ## Digest heading in templates/shared-how-to-answer.md was renamed without updating this extractor. Read the full .res.md files." >&2
   echo "prism-launch: wrote digest for '$id' → $out"
   echo "summary: $extracted/$n peer digest(s) extracted, $warns warning(s)"
+  echo "prism-launch: reminder — the digest compacts inputs, it never decides; deep-read a dissenter's full .res.md before capping confidence on it." >&2
 }
 
 # ── main ─────────────────────────────────────────────────────────────────────

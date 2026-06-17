@@ -142,8 +142,9 @@ backgrounded process. The Integrator stays in the loop for the judgment.
 
  7  synthesize ─────────────►  verdict · conf · n/total agree [ · ⚠ dissent ]
                                (read each .res.md; weigh; write the brief)
-       └─ large runs (≥~12): digest <manifest> first, then deep-read only
-          the dissenting / weak / tie-break .res.md
+       └─ large/high-volume runs (≥~12, or outputs crowd context): digest
+          <manifest> first, then deep-read only the dissenting / weak /
+          novel-rationale / tie-break .res.md
 
  8  clean ─────────────────►  prism-launch clean <id>     rm -f /tmp/prism-<id>*
 ```
@@ -170,8 +171,9 @@ backgrounded process. The Integrator stays in the loop for the judgment.
                                     exit if any failed.
 
   digest    <manifest> [--out P]  └ extract each peer's ## Digest block into one small
-                                    lineage-tagged file (large-run synthesis; subagent
-                                    + self digests are already in the conversation).
+                                    lineage-tagged file (large- or high-volume-run
+                                    synthesis; subagent + self digests are already in
+                                    the conversation).
 
   clean     <id | packet-path>    └ rm -f /tmp/prism-<id>*  (guarded against globs).
 ```

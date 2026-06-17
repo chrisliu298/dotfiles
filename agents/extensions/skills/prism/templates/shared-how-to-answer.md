@@ -6,7 +6,7 @@ End your answer with a digest: a compact, self-contained summary the synthesizer
 
 - **Position:** your one-sentence answer / recommendation
 - **Key reasons:** 1-3 sub-points, each a reason plus its basis
-- **Dissent/caveat:** your strongest objection to the likely majority view, or "none"
+- **Dissent/caveat:** your strongest objection to the likely majority view — or, if you expect to agree on the outcome, the single load-bearing assumption your agreement most depends on (the one that, if false, flips you); "none" only when neither applies
 - **Changes if:** the observable evidence or trigger that would flip your position, or "none"
 
 Do NOT include a self-assigned confidence score (numeric or High/Med/Low) — the synthesizer computes confidence itself and ignores self-scores.
