@@ -91,6 +91,19 @@ ask). One-way-door and external-dispatch actions still require explicit assent, 
 | `references/execution-loop.md` | the loop in full: stop conditions, ledger/idempotency/resumption, commit cadence, terminal markers |
 | `scripts/lint_goal_artifact.py` | mechanical conformance check for the three shapes — run on load for bring-your-own artifacts (exit 0 pass / 1 fail) |
 
+## Related — `/goal` vs `/goal-elicit` vs `/goal-drive` vs `/goal-loop`
+
+Four similar names, four jobs. **native `/goal` is the *engine* that keeps your agent working; the three
+`goal-*` skills are the *work*.**
+
+- **native `/goal "<cond>"`** — a built-in coding-agent command (Claude Code's `/goal`; Codex has its own), *not* a skill: keeps taking turns until your condition shows up in the transcript — what makes a run go *unattended*.
+- **`/goal-elicit`** — interview + write a verifiable **spec**, then stop. No building.
+- **`/goal-drive`** (this skill) — **build** a spec to verified-done, by-exception stops. No review.
+- **`/goal-loop`** — **build + multi-model review + iterate** (`--auto` runs it unattended; Claude Code).
+
+Pipeline: `/goal-elicit` (write the spec) → `/goal-drive` (build it) **or** `/goal-loop` (build + review +
+iterate). Full comparison table: goal-loop's `README.md`.
+
 ## Invocation
 
 `/goal-drive` on Claude Code (optionally under a `/goal` guardrail); invoke the **goal-drive** skill

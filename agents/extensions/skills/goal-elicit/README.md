@@ -86,6 +86,19 @@ Mechanism, template, and caveats: `references/goal-guardrail.md`.
 | `references/anti-patterns.md` | failure-mode table + the prompt move that prevents each |
 | `references/goal-guardrail.md` | the `/goal` execution message (Claude Code + Codex) |
 
+## Related — `/goal` vs `/goal-elicit` vs `/goal-drive` vs `/goal-loop`
+
+Four similar names, four jobs. **native `/goal` is the *engine* that keeps your agent working; the three
+`goal-*` skills are the *work*.**
+
+- **native `/goal "<cond>"`** — a built-in coding-agent command (Claude Code's `/goal`; Codex has its own), *not* a skill: keeps taking turns until your condition shows up in the transcript — what makes a run go *unattended*.
+- **`/goal-elicit`** (this skill) — interview + write a verifiable **spec**, then stop. No building.
+- **`/goal-drive`** — **build** a spec to verified-done (no review).
+- **`/goal-loop`** — **build + multi-model review + iterate** (`--auto` runs it unattended; Claude Code).
+
+Pipeline: `/goal-elicit` (write the spec) → `/goal-drive` (build it) **or** `/goal-loop` (build + review +
+iterate). Full comparison table: goal-loop's `README.md`.
+
 ## Invocation
 
 `/goal-elicit <vague ask>` on Claude Code; invoke the **goal-elicit** skill by name on Codex/Grok.

@@ -102,12 +102,28 @@ not a bug. (Power-user mechanism: [`references/loop-protocol.md`](references/loo
 
 ---
 
-## Related
+## Related — `/goal` vs `/goal-elicit` vs `/goal-drive` vs `/goal-loop`
 
-- **goal-elicit** — just write the spec and stop (no building).
-- **goal-drive** — just build an existing spec to done (no review loop).
-- **prism** — just get a one-off multi-model review (no loop).
-- **goal-loop** — all three, in a loop, with you deciding which findings matter.
+Four similar names, four different jobs. The short version: **native `/goal` is the *engine* that keeps your
+agent working; the three `goal-*` skills are the *work*.**
+
+| | What it is | What it does |
+|---|---|---|
+| **native `/goal "<cond>"`** | a built-in Claude Code command (not a skill) | keeps the session taking turns until your condition shows up in the transcript — the thing that makes any run go *unattended* |
+| **`/goal-elicit`** | skill | interviews you and writes a clear, verifiable **spec**, then stops — no building |
+| **`/goal-drive`** | skill | **builds** an existing spec to verified-done, no questions, stops only on real exceptions — no review |
+| **`/goal-loop`** | skill | **builds + gets it reviewed by several models + iterates** (elicit→drive→review→fix); `--auto` runs it unattended |
+
+How they fit together:
+
+- **Pipeline:** `/goal-elicit` writes the spec → then `/goal-drive` (just build it) **or** `/goal-loop`
+  (build *and* review-iterate). goal-loop is the only one that adds the multi-model review loop; it reuses
+  goal-elicit and goal-drive rather than reimplementing them.
+- **Wrap any of them in native `/goal`** to run across turns without re-prompting — e.g.
+  `/goal "drive <artifact> with goal-drive until it prints GOAL-DRIVE COMPLETE…"`, or the `--auto` form above
+  for an unattended *reviewed* loop. (`/goal` judges only what's printed to the transcript, never your files.)
+- **Mnemonic:** elicit = *what* · drive = *do it* · loop = *do it well* (with review) · native `/goal` = *keep
+  going* until done. (`prism` — the multi-model review goal-loop calls — is also usable on its own for a one-off review.)
 
 Power-user details: [`SKILL.md`](SKILL.md) and [`references/loop-protocol.md`](references/loop-protocol.md).
 The `scripts/` harnesses (`empirical_gate.py`, `oracle_gate.py`) are the evidence for *why* the human
