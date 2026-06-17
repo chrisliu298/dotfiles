@@ -109,6 +109,26 @@ evaluator is a language model and can judge a described signal.
 /goal "Drive GOAL.md id 20260503-2200-rename-foo with goal-drive. SATISFIED when the transcript contains a line beginning with 'GOAL-DRIVE COMPLETE: 20260503-2200-rename-foo', with the real verification output appearing earlier (command + exit/result, not a claim) for: rg '\bfoo\b' src/ returns no matches, and pytest tests/test_auth.py exits 0. ALSO SATISFIED by a line beginning with 'GOAL-DRIVE STOPPED: 20260503-2200-rename-foo —' — stop and surface it. Do not accept a 'done' narration without that output. TIMEOUT: if neither marker appears after 20 turns, stop and report the guardrail expired — do not claim done."
 ```
 
+## Autonomous review-loop variant (Claude Code + goal-loop `--auto`)
+
+The default message above drives the artifact with **goal-drive** — build-to-done, no review loop. If the
+operator wants the **full elicit→drive→review→fix loop run unattended with multi-model review** (e.g.
+overnight), and the **goal-loop** skill is available (Claude Code only — it needs prism + the native
+`/goal`), emit *this* variant instead. It is a strict superset of the goal-drive handoff: it adds
+multi-model review, oracle-gated safe-subset auto-fix, and a pre-classified morning decision queue, and it
+keys on goal-loop's `AUTO-*` markers rather than goal-drive's `COMPLETE`/`STOPPED`:
+
+```
+/goal "Drive <ARTIFACT> id <ID> through goal-loop --auto; resume each turn with `goal-loop continue <ID>`. SATISFIED when the transcript contains a line beginning 'GOAL-LOOP AUTO-COMPLETE: <ID>', 'GOAL-LOOP AUTO-HANDOFF: <ID>', or 'GOAL-LOOP AUTO-HALTED: <ID> —', with a 'GOAL-LOOP AUTO EVIDENCE-END' line and the real verification output (commands + exit codes, any RED→GREEN oracle ids) appearing earlier in the transcript — not a bare 'done' claim. Do not accept a narrated summary without that evidence block. TIMEOUT: if no such marker appears after <N> turns, stop and report the guardrail expired without a terminal marker — do not claim done."
+```
+
+Caveats to state with it: this needs the **goal-loop** skill (Claude Code; degrades off-Claude — see its
+`references/loop-protocol.md` § Autonomous mode); it auto-fixes **only** findings whose pre-signed acceptance
+oracle is currently RED, so with no oracles authored at sign-off it auto-fixes nothing and just hands back a
+decision queue (`.goals/<ID>.auto-report.md`). Use the **plain goal-drive** message (above) when you only
+want the artifact built, not reviewed-and-iterated. On **Codex/Grok** there is no goal-loop — emit the
+goal-drive message; the autonomous variant is Claude-Code-only.
+
 ## Codex `/goal` — a native executor (the one shared message drives it too)
 
 Codex's `/goal` (Codex CLI 0.128.0+) is **not** a transcript guardrail — it is the autonomous loop
