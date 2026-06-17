@@ -121,6 +121,10 @@ markers, morning report, hardening): `references/loop-protocol.md` § Autonomous
   preceded by an evidence block. The morning report is `.goals/<id>.auto-report.md`.
 - **Portability:** off-Claude / no review backend ⇒ **no auto-fix** (drive + verify only, defer all); never
   fakes cross-model review, never auto-accepts single-model output.
+- **Oracles + hardening:** the auto-fixable RED oracles come from a frozen `.goals/<id>.oracles.json` manifest
+  the operator authors **at sign-off** (validate/run via `scripts/oracle_manifest.py`); no manifest ⇒ nothing
+  auto-fixes (review + queue only). Optional opt-in for high-stakes runs: `--worktree` isolation and a
+  deterministic completion Stop-hook — `references/loop-protocol.md` § Optional hardening.
 
 ## What it produces
 
@@ -128,6 +132,10 @@ markers, morning report, hardening): `references/loop-protocol.md` § Autonomous
   review/findings paths, dispositions, `round_start_ref`, stop reason). Schema: `references/loop-protocol.md`.
 - `.goals/<id>.spec-review.md` — the spec-review synthesis (unless `--no-spec-review` / Clear-domain).
 - `.goals/<id>.review-rN.md` / `.review-rN.findings.json` — the review synthesis + normalized findings.
+- `.goals/<id>.oracles.json` — (optional) the **frozen-oracle manifest** authored at sign-off; what `--auto`
+  consults to find auto-fixable RED oracles. Schema + use: `references/loop-protocol.md` § The frozen-oracle manifest.
+- `.goals/<id>.auto-report.md` — (under `--auto`) the morning report: outcome, auto-applied fixes, and the
+  pre-classified decision queue. Written before the terminal marker.
 - `.goals/<id>.fix-rN.checklist.json` — a child fix artifact per round, built from the findings **you
   accepted**. The source artifact stays immutable; findings never patch it.
 
@@ -300,3 +308,6 @@ touches the source), plus the round cap and oscillation guard.
 - `scripts/oracle_gate.py` — replays it through oracle-gating; **PASSES** (false-auto=0) — the evidence
   that the safe auto-apply path is verification against pre-signed oracles, and that it covers ~nothing
   without strong oracles.
+- `scripts/oracle_manifest.py` — the **live** frozen-oracle manifest validator + RED/GREEN evaluator that
+  `--auto` consults (oracle_gate.py is the offline safety proof; this runs the operator's real oracles).
+  `validate` / `evaluate` / `selftest`.

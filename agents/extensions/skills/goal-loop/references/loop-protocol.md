@@ -102,6 +102,15 @@ finalized, not yet binding) and it is **not re-elicitation** (no interview; goal
 re-invoked). On sign-off, record `spec_approved` + a content hash; the artifact is **frozen** —
 implementation review never patches it (invariant #2). Backend portability is the same as review.
 
+**Author oracles here (optional, the `--auto` lever).** Sign-off is the one safe moment to write the
+**frozen-oracle manifest** (`.goals/<id>.oracles.json`, schema in § The frozen-oracle manifest): executable
+acceptance oracles for the mechanically-checkable criteria, frozen with the spec's `spec_sha256`. They do
+nothing for interactive runs, but they are exactly what lets a later **`--auto`** run safely auto-fix
+(a finding whose AC-oracle is RED → apply on RED→GREEN). Author them now, author/fixer-separated and before
+any implementation review — never synthesize one after seeing a finding (reward-hacking). Validate with
+`scripts/oracle_manifest.py validate <manifest> <artifact>`. Skipping them is fine — `--auto` then defers
+everything instead of auto-fixing.
+
 ## The router — nominator, not apply-authority
 
 After review, the router **mechanically** disposes the bulk so you don't read it, and surfaces only the
@@ -316,6 +325,38 @@ reward-hacking, the F8 loud-NO-SHIP scope-vs-truth case). The auto-action per fi
 artifact's `authority.allow_paths` **excludes** all test/spec/oracle paths, so the fixer *cannot* edit an
 oracle (reward-hacking guard, enforced not requested).
 
+### The frozen-oracle manifest — `.goals/<id>.oracles.json` (what makes AUTO-FIX possible)
+
+AUTO-FIX consults a **frozen-oracle manifest**: the operator's executable acceptance oracles, authored **at
+sign-off** (interactive spec-review, or alongside goal-elicit) and frozen with the spec. It is the concrete
+form of the oracle-gating upgrade path (§ The path beyond report-only); `scripts/oracle_manifest.py`
+validates it and computes each oracle's live RED/GREEN, and `scripts/oracle_gate.py` is the offline proof
+that gating on it is safe (false-auto=0). **Author/fixer separation is structural: the manifest is written
+before any implementation review, frozen with a `spec_sha256`, and a fix round can never edit it (its paths
+are excluded from the fix `allow_paths`).**
+
+```json
+{ "schema_version": "goal-oracles/v1", "id": "<goal id>",
+  "source_artifact": ".goals/<id>.goal.md", "spec_sha256": "<hash of the frozen spec at sign-off>",
+  "oracles": [
+    { "ac_id": "AC-3", "oracle_id": "O1", "kind": "mechanical",
+      "command": "pytest tests/test_set_same.py -q",   // exit 0 = GREEN (satisfied); non-zero = RED (failing)
+      "allowed_paths": ["src/method.py"],               // a fix for this AC may touch only these
+      "preservation": ["pytest -q"] },                  // command(s) that must STAY green (regression guard)
+    { "ac_id": "AC-5", "oracle_id": "O2", "kind": "manual", "command": null } ] }
+```
+
+- Every `ac_id` must exist in the frozen artifact; `oracle_id`s are unique; `mechanical` oracles carry a
+  `command`, `manual` ones carry `command: null` and are **never** auto-fixable.
+- **Consumption by AUTO-FIX:** a finding is AUTO-FIX-eligible iff it is `in_scope-mapped` to `AC-k` **and**
+  the manifest has a `mechanical` oracle for `AC-k` that `oracle_manifest.py evaluate` reports **RED**. The
+  fix is then applied **iff** that oracle flips RED→GREEN, every `preservation` command stays GREEN, the
+  patch paths ⊆ the oracle's `allowed_paths`, the patch edits no test/spec/oracle, and the behavioral delta
+  is authorized by the flipped oracle (the `oracle_gate.py` gate, now run live).
+- **No manifest, or no RED oracle ⇒ AUTO-FIX is empty** — `--auto` auto-fixes nothing and defers the whole
+  batch. This is the expected default until the operator invests in oracles at sign-off (the honest caveat
+  above). Coverage accrues run-over-run as the operator authors more oracles.
+
 ### The `--auto` loop dynamic
 
 Rounds are driven **only** by the oracle-RED auto-fix subset:
@@ -416,6 +457,24 @@ Same defenses as interactive mode, but with no human to catch a slip, `--auto` *
   ref or dirty unowned paths; a fix whose paths ⊄ authority → STOP-HALT `unauthorized_path`; **never revert
   unknown/concurrent uncommitted work**. Commit per auto-fix (`commit_policy: per_unit`) for independent
   revert.
+
+### Optional hardening (operator opt-in)
+
+Two stronger guarantees the operator can opt into for a high-stakes overnight run — neither is required
+(the defaults above are already safe), so they are options, not part of the minimum mode:
+
+- **Worktree isolation (`--worktree`).** Run the `--auto` loop in a fresh `git worktree` dedicated to this
+  run, so a concurrent session sharing the main checkout can neither be clobbered by nor clobber the run.
+  goal-drive/goal-loop operate inside the isolated worktree; on COMPLETE/HANDOFF the operator merges it back.
+  This upgrades the concurrent-worktree defense from *detect-and-HALT* (the default) to *cannot-collide*.
+  Cost: a worktree per run (disk + setup), so it is opt-in, not default.
+- **Deterministic completion Stop-hook.** The `/goal` marker is a *liveness* signal a tool-less evaluator
+  reads from the transcript — fakeable in principle. For a stronger stop surface, the operator can register a
+  **command** Stop-hook that greps the transcript/ledger for a real `auto_terminal` + verifies the evidence
+  deterministically (e.g. re-runs the top-level verification command), instead of relying on the Haiku
+  evaluator. This makes completion a *checked* fact, not a *judged* one. It lives in the operator's
+  `settings.json` (a harness config, outside this skill); goal-loop just emits the marker + evidence the hook
+  consumes. Recommended for unattended runs that apply fixes; unnecessary for review-and-defer-only runs.
 
 ### Portability under `--auto`
 
