@@ -1,17 +1,16 @@
 ---
 name: goal-loop
 description: |
-  Drive a goal through review→fix iteration by composing goal-elicit, goal-drive, and a multi-model
-  review (prism on Claude). A thin, modeless, stepped loop: each invocation advances ONE phase —
-  elicit → review the spec (skip with --no-spec-review) → drive → review → you decide which fixes apply →
-  drive the fixes → re-review — with state on disk so it resumes after interruption or compaction. It
-  auto-handles the ~83% of findings that are out-of-scope/unmapped (you never see them) and surfaces
-  only the small actionable batch for you to confirm — it does NOT blind-apply findings (unsafe). Use
-  for "loop this to done with review", "elicit, implement, review, iterate", "close the review-fix
-  loop", "goal-loop". Review needs Claude (prism), degrades off-Claude. **Interactive by default**
-  (human gates block on user input); **`--auto`** runs it unattended/headless under Claude Code's native
-  `/goal` — both gates become fail-closed policies (oracle-gated safe-subset auto-fix + a deferred morning
-  decision queue), never blind-apply. Does NOT interview (that's goal-elicit). Skip for one-off edits and lone reviews.
+  Drive a goal through review→fix iteration by composing goal-elicit, goal-drive, and multi-model
+  review (prism, Claude-only). A thin, modeless, stepped loop — one phase per invocation
+  (elicit → spec-review → drive → review → you pick which fixes apply → fix → re-review) — with state on
+  disk so it resumes after interruption or compaction. It auto-handles the ~83% of out-of-scope/unmapped
+  findings (you never see them) and surfaces only the small actionable batch to confirm — never
+  blind-applies (unsafe). Use for "loop this to done with review", "close the review-fix loop",
+  "goal-loop". Review needs Claude (prism), degrades off-Claude. Interactive by default; **`--auto`** runs
+  it unattended/headless under Claude Code's native `/goal` — both gates become fail-closed policies
+  (oracle-gated safe-subset auto-fix + a deferred morning queue), never blind-apply. Does NOT interview
+  (that's goal-elicit). Skip for one-off edits and lone reviews.
 user-invocable: true
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Skill, AskUserQuestion
 ---
