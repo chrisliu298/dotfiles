@@ -32,7 +32,7 @@ to resume. It **must not** duplicate per-unit execution state (goal-drive owns t
   "round": 2,
   "max_rounds": 2,
   "review_backend": "prism",            // prism|external|local|none
-  "prism_config": "2 m",                // forwarded verbatim; "" => prism auto-sizes
+  "prism_config": "2m",                 // forwarded verbatim; "" => prism auto-sizes
   "spec_approved": true,                // true | "auto" (interactive sign-off | --auto freeze); frozen after
   "round_start_ref": "a1b2c3d",         // git rev captured on entering drive/fix this round (diff baseline)
   "rounds": [
@@ -235,7 +235,7 @@ acceptance criterion, and how to verify it.
 <the GOAL-DRIVE COMPLETE marker line + the real verification output it printed>
 ```
 
-For `--review prism`, forward `prism_config` verbatim ahead of the packet (`Skill(prism, "2 m <packet>")`).
+For `--review prism`, forward `prism_config` verbatim ahead of the packet (`Skill(prism, "2m <packet>")`).
 
 ## The path beyond report-only — oracle-gating (realized by `--auto`)
 
@@ -271,7 +271,7 @@ queue* instead of blocking on you live.
 so the interactive gates' `AskUserQuestion` calls would **deadlock the turn forever**. `--auto` therefore
 replaces **both** human gates with **fail-closed autonomous policies** and terminates on **printed markers**
 the evaluator can see. It changes only goal-loop's *gate behavior, termination, and handoff* — goal-drive,
-prism, goal-elicit, the router, the ledger, and crash-safety are unchanged. Design synthesis (prism `2 h 2gp`,
+prism, goal-elicit, the router, the ledger, and crash-safety are unchanged. Design synthesis (prism `2h 2pro`,
 15 perspectives, no cross-model dissent): `~/.ai/reports/20260616-2243-goalloop-auto-design.md`.
 
 **Precondition — `--auto` requires a ready artifact; it never interviews.** The deadlock is not limited to

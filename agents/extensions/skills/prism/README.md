@@ -82,18 +82,18 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
 ## Invocation
 
 ```
-   prism  [N]  [m|h]  [<G>gp]  <question>
-          │     │       │
-          │     │       └─ G gpt-pro lenses (count-first: gp = 1, 2gp = 2; default 0)
-          │     └─ shared effort for the two tunable tiers (default m):
-          │          m  → Codex medium · Grok-Build medium
-          │          h  → Codex xhigh  · Grok-Build high
+   prism  [N][m|h]  [<G>pro]  <question>
+          │  │      │
+          │  │      └─ G gpt-pro lenses (count-first: pro = 1, 2pro = 2; default 0)
+          │  └─ effort, glued onto N — write 2h, not 2 h (default m):
+          │        m  → Codex medium · Grok-Build medium
+          │        h  → Codex xhigh  · Grok-Build high
           └─ how many of EACH of the six models (default 1 → 6 agents + self)
 
-   prism Why does X happen?              → auto-sized (anchor: 1 of each, medium)
-   prism 2 h Which architecture?        → 2 of each, high tier
-   prism 2 h 2gp Bet-the-company call?  → 2 of each, high, + 2 gpt-pro lenses
-   prism no deepseek, why X?             → natural-language deviations (exclude/count/effort)
+   prism Why does X happen?             → auto-sized (anchor: 1 of each, medium)
+   prism 2h Which architecture?         → 2 of each, high tier
+   prism 2h 2pro Bet-the-company call?  → 2 of each, high, + 2 gpt-pro lenses
+   prism no deepseek, why X?            → natural-language deviations (exclude/count/effort)
 ```
 
 ---

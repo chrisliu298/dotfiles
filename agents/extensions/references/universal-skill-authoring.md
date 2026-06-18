@@ -26,7 +26,7 @@ What each harness actually does (verified 2026-06):
 Why `$ARGUMENTS` is the sharp trap: it's substituted by the harness *before the model sees the
 body*. On a harness that doesn't interpolate, the literal string `$ARGUMENTS` reaches the model
 as dead text and the parameter is silently lost. `prism` is the model to copy — it parses
-`prism 2 xh gp` from the natural-language tail, not from a placeholder.
+`prism 2h pro` from the natural-language tail, not from a placeholder.
 
 ## Five rules
 
