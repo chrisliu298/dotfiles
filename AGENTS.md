@@ -51,6 +51,7 @@ Never edit in `~/.claude/skills/`, `~/.codex/skills/`, or `~/.grok/skills/` — 
 - **Own skills** (`agents/extensions/skills/`): edit in this repo — the single source of truth.
 - **Third-party skills** (cloned from GitHub): edit in the source repo or fork.
 - **Best practices**: read `agents/extensions/references/skill-best-practices.md` before creating or improving skills.
+- **Description length**: every skill's `description` frontmatter must stay under 1024 characters — trim it before committing.
 - **Universal (C/X/G — Claude/Codex/Grok) skills**: read `agents/extensions/references/universal-skill-authoring.md` before editing a skill shared across all three agents — keep the body harness-agnostic (no `$ARGUMENTS`, no bare `AskUserQuestion`/`Skill()`, capability-not-runtime degradation). `./dotfiles.sh` warns on the mechanical violations; `./dotfiles.sh lint` runs the check on demand.
 - **Verify vendor guidance**: before updating skills with vendor/model guidance, check against official current docs — don't preserve stale model names or deprecated API parameters.
 - **Validate referenced paths**: when skill docs reference installed or symlinked paths, verify they exist after `./dotfiles.sh`.
