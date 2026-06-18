@@ -1,18 +1,17 @@
 ---
 name: exec-status
 description: >-
-  Maintain one plain-English STATUS.md at the working-directory root — a living "executive
-  briefing" a non-technical stakeholder can open at any moment and understand in ~30 seconds:
-  what the run is trying to do, how it's going, what it has actually found, and whether to worry
-  (no jargon, no logs). Use this for work the user kicks off and walks away from, or that spans
-  many steps or sessions without them watching: autonomous research/experiment runs, training or
-  hyperparameter sweeps, long migrations, overnight or multi-day jobs, "go run this and keep me
-  posted on progress" — and on resume in a directory that already holds a STATUS.md for an active
-  run. Also trigger on explicit asks about a long or active run: "status report", "executive
-  summary", "CEO update", "I keep losing track of progress", or "exec-status" by name. Do NOT use for in-session work you're actively
-  watching, single edits or bug fixes, quick Q&A, or work with no durable working directory.
-  Continuously maintained and zero-context-readable — it complements todo (operator checklist),
-  autoresearch (experiment state), and digest (one-shot reply reformat); it does not replace them.
+  Maintain one plain-English STATUS.md at the working-directory root — a living executive briefing
+  a non-technical stakeholder grasps in ~30 seconds: what the run is trying to do, how it's going,
+  what it's found, and whether to worry (no jargon, no logs). Use for work the user kicks off and
+  walks away from, or that spans many steps or sessions unwatched: autonomous research/experiment
+  runs, hyperparameter sweeps, long migrations, overnight or multi-day jobs, "go run this and keep
+  me posted" — and on resume in a directory that already holds a STATUS.md for an active run. Also
+  trigger on explicit asks: "status report", "executive summary", "CEO update", "I keep losing
+  track of progress", or "exec-status" by name. Do NOT use for in-session work you're watching,
+  single edits or bug fixes, quick Q&A, or work with no durable working directory.
+  Zero-context-readable — complements todo (operator checklist), autoresearch (experiment state),
+  and digest (reply reformat); does not replace them.
 user-invocable: true
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
