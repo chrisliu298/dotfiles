@@ -121,11 +121,12 @@ keep the file list and section headers there rather than rewriting them on every
 
 ## Grounding external facts
 
-Local context is pasted in (above); **public, external facts are searched for.** When the
-answer turns on information not in the pasted context, GPT-Pro must search the web and ground
-its answer in cited sources. The directive below is **conditional** — a no-op on pure-reasoning
-tasks — so include it in `prompt.md` whenever the task could depend on external facts. Paste it
-verbatim:
+Web research is one of gpt-pro's **two first-class modes** (alongside deep reasoning), not an
+afterthought — but it stays **conditional**. Local context is pasted in (above); **public,
+external facts are searched for.** When the answer turns on information not in the pasted
+context, GPT-Pro must search the web and ground its answer in cited sources. The directive below
+is **conditional** — a no-op on pure-reasoning tasks — so include it in `prompt.md` whenever the
+task could depend on external facts. Paste it verbatim:
 
 ```text
 ## Grounding external facts
