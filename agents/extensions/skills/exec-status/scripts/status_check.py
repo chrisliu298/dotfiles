@@ -89,6 +89,15 @@ def cmd_check(path: Path, max_age_min: int | None, max_lines: int) -> int:
             val = m.group(1).strip().upper()
             if val not in VALID_HEALTH:
                 problems.append(f"invalid Health value {val!r} — use one of {sorted(VALID_HEALTH)}")
+        # Trust-tethering (nonfatal): a filled findings section should give each claim a checkable
+        # handle and a confidence label. Per-finding parsing isn't reliable, so warn only when the
+        # section carries neither marker at all — the skill, not the script, owns prose, so this
+        # never fails the gate.
+        if "## What we've found so far" in text:
+            if "Checked against:" not in text:
+                warnings.append("findings have no 'Checked against:' handle — tether each claim to verifiable evidence")
+            if "Confidence:" not in text:
+                warnings.append("findings have no 'Confidence:' label — mark each early/moderate/strong")
         if max_age_min is not None:
             fm = FRESH_RE.search(text)
             if not fm:

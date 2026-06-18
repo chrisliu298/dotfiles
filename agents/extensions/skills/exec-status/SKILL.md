@@ -24,6 +24,25 @@ What has it actually found? What's next? Should I be worried?* The reader doesn'
 this conversation — the report is their only window, so its job is not to summarize your work but to
 **translate the state of the run into plain outcomes a smart outsider can trust.**
 
+Core job: close the gap between agent-speed work and human-speed oversight. The run produces detail faster than
+any human will ever read, so `STATUS.md` is the single bridge across that gap — a deliberately **lossy-but-faithful
+roll-up**: keep what changes the stakeholder's decision, risk, confidence, or next expectation; drop detail that
+only proves you were busy; never drop uncertainty that would change the answer. Write at the reader's **decision
+altitude**, not the agent's execution altitude — every line should help them answer *what should I now believe,
+decide, watch, or stop worrying about?*
+
+## Governing philosophy — BLUF Pyramid, driven by CCIR, managed by exception
+
+The shape isn't ad hoc; it's the briefing canon — naming it gives you a tie-breaker for what to cut:
+
+- **BLUF / Pyramid** — answer first, then a few reasons, then evidence: `Health` + `Bottom line` carry the
+  decision, `What we've found so far` gives the few supporting reasons, `Checked against` / `Confidence` is the
+  evidence layer. (This is why ~3 findings, not a log.)
+- **CCIR** — surface or update information *only* when it changes what the reader would believe, decide, watch, or
+  worry about. It's an information filter, not a maintenance reminder.
+- **Managed by exception** — routine progress stays compressed; you escalate through `Should you be worried?` and
+  `Needs a human?` only when the run leaves safe bounds or needs a decision.
+
 ## Bootstrap — do this before substantial work
 
 On the **start or resume** of any qualifying run (see the description), before you dig in:
@@ -63,11 +82,14 @@ Scaffold a new `STATUS.md` with the helper script below (or copy the template fr
 ## Keeping it current
 
 There's no background timer — a skill is instructions that run while you work. So tie updates to **events you
-can't miss because they're already part of the work**, not to a clock. Refresh `STATUS.md` when the **stakeholder
-answer would change**: a finding lands / is reproduced /
+can't miss because they're already part of the work**, not to a clock. Refresh `STATUS.md` when the **stakeholder's decision surface
+would change** — what to believe, whether to worry, whether to continue or change course, whether a human is
+needed, confidence in a finding, or what result you're waiting on: a finding lands / is reproduced /
 is overturned; a phase or experiment completes; a blocker appears or clears; the Health verdict would change;
 **before** a long-running command (say what's running and what result will update the report) and **after** it
-finishes. Skip routine commands that change no stakeholder answer — narrating busywork is the failure, not the goal.
+finishes. If none of those would change, **do nothing** — most work events warrant no update, and narrating
+busywork is the failure, not the goal. The human owns no maintenance burden: your job is to earn their silence, so
+they never have to ask "what's the status?" and only ever read the file or answer a specific `Needs a human?` ask.
 
 - **The freshness trio travels together.** Whenever you update content, also update `Fresh as of`,
   `Last checked against`, and `Out of date if`. Never bump the timestamp without re-checking the evidence
@@ -76,8 +98,9 @@ finishes. Skip routine commands that change no stakeholder answer — narrating 
   upkeep cheap on a long run. Reserve a full rewrite for a reconcile.
 - **Full reconcile** (re-derive every line from durable state): on start/resume, at a phase boundary
   (setup → baseline → main loop, or a task handoff), and — since you have no persistent timer — whenever control
-  returns from a long unattended command, plus a soft periodic check after a stretch of active work, so drift gets
-  caught even in an unbounded loop.
+  returns from a long unattended command, plus at natural handoff points after a batch of meaningful steps — ask
+  whether the bottom line, worry level, findings, next step, or human-needed answer changed, and if not, leave it —
+  so drift gets caught even in an unbounded loop without busywork edits.
 - **Keep the `For the AI` section current.** When the evidence boundary shifts (new result files, new commands,
   new checkpoints), update its reconciliation checklist — it's the map the next model uses to recover after a reset.
 
@@ -94,10 +117,15 @@ finishes. Skip routine commands that change no stakeholder answer — narrating 
   supports it; `UNKNOWN` when the goal, baseline, or evaluation isn't established yet; `WATCH` when evidence is
   mixed or thin; `BLOCKED` when stuck; `DONE` when the stated goal is met and verified against a named evidence
   boundary. In open-ended research there is often no "track" yet — say so.
-- **Prefer `UNKNOWN` to optimistic filler.** Silence filled with hope is the exact failure the reader is exposed to.
+- **Default toward `WATCH`/`UNKNOWN`; make `ON TRACK` and `DONE` the claims that must be earned.** Silence filled
+  with hope is the exact failure the reader is exposed to, and an LLM's bias runs optimistic — a run that always
+  reads green is a warning sign, not a success. Promote to `ON TRACK` only when current evidence meets the success
+  criterion; until then, say `UNKNOWN`.
 - **Translate, don't duplicate.** If `autoresearch.md` / `TODO.md` already hold the technical state, lift the
   *meaning* into plain outcomes — don't paste experiment rows or checklist items, and don't keep two copies of a
   fact that will drift. Point at the other file instead.
+- **The busy test.** If a sentence only proves you *were busy* rather than what it means for the reader's next
+  decision, cut it — outcomes and their decision implications only, never activity for its own sake.
 - **One screen, and a snapshot — not a log.** It's a fixed-size briefing you overwrite, never a growing record: when a
   new finding outranks an old one, *replace* it (keep findings to ~3); there's no history section by design — history
   lives in your commits and results files. Before calling an update done, strip every `<placeholder>` and instruction
@@ -119,8 +147,10 @@ let each file keep its own job.
 - `check [path] [--max-age-min N]` — verify the required sections (including `For the AI`) and freshness fields are
   present, the `Health` value is valid, no `<placeholders>` remain, and the report hasn't bloated (warns past ~one
   screen, fails past ~2×). With `--max-age-min` it also warns if `Fresh as of` is older than N minutes (off by
-  default, since this skill is event-driven). Exits non-zero on a structural problem, so you can run it at a checkpoint
-  as a self-gate: `python <this-skill-dir>/scripts/status_check.py check ./STATUS.md`.
+  default, since this skill is event-driven); it also warns (nonfatally) if a filled findings section names no
+  `Checked against:` handle or `Confidence:` label. Exits non-zero on a structural problem, so run it as a handoff
+  gate — before you leave the run unattended or after a full reconcile, not as routine ceremony:
+  `python <this-skill-dir>/scripts/status_check.py check ./STATUS.md`.
 
 The skill works without the script — it's a convenience, not a dependency. Write the `Fresh as of` time yourself
 (e.g. from `date`); there's deliberately no auto-stamp, because a timestamp must only move when you've re-checked
