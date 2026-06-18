@@ -94,38 +94,26 @@ no review tax on trivial goals). Override the depth with `--spec-review "<config
 sign-off → `GOAL-LOOP STOPPED` (`spec_rejected`); re-run goal-elicit. Details:
 `references/loop-protocol.md` § Spec review.
 
-## Autonomous mode (`--auto`)
+## Autonomous mode (`--auto`) — summary; mechanism in the reference
 
-`--auto` runs the loop **unattended** under Claude Code's native `/goal`. The `/goal` evaluator fires only
-**after a turn finishes** and is **tool-less**, so a blocking `AskUserQuestion` deadlocks the turn — `--auto`
-therefore replaces **both** human gates with **fail-closed autonomous policies** and terminates on **printed
-markers**. It changes only gate behavior, termination, and handoff; it composes the same three skills. **It
-is strictly more conservative than interactive mode, never less.** Authoritative mechanism (policy table,
-markers, morning report, hardening): `references/loop-protocol.md` § Autonomous mode — read it before an
-`--auto` run.
+`--auto` runs the loop **unattended** under Claude Code's native `/goal`. Because the `/goal` evaluator
+fires only **after a turn finishes** and is **tool-less**, a blocking `AskUserQuestion` would deadlock — so
+`--auto` replaces **both** human gates with **fail-closed policies** and terminates on **printed markers**.
+It changes only gate behavior, termination, and handoff, composes the same three skills, and is **strictly
+more conservative than interactive mode, never less**. The load-bearing invariants: spec-review runs
+**report-only** (elicited spec **frozen as-is**, never auto-edited); classify **AUTO-FIXes only** the
+`in_scope-mapped` finding whose **frozen oracle is RED** and **DEFERs/HALTs everything else** (cross-model
+consensus may reorder the queue, never authorize a fix; no new acceptance line is ever auto-authored —
+scope mutation, invariant #2). Oracle coverage is **~empty by default**, so a first run typically
+**auto-fixes nothing** and just produces the morning queue — correct, not a failure. Off-Claude / no review
+backend ⇒ **no auto-fix** (defer all); never fakes cross-model review. The run ends on
+`GOAL-LOOP AUTO-COMPLETE` / `AUTO-HANDOFF` / `AUTO-HALTED: <id> — <reason>`, each with an evidence block +
+the `.goals/<id>.auto-report.md` report.
 
-- **Gate A** → spec-review runs **report-only**; the elicited spec is **frozen as-is** (never auto-edited);
-  proposed new ACs/gaps go to the morning report. `--no-spec-review` skips the pass.
-- **Gate B** → deterministic auto-disposition: **AUTO-FIX only** the `in_scope-mapped` finding whose **frozen
-  oracle is currently RED**, applied under the oracle-gate clauses (RED→GREEN + suite GREEN + paths ⊆
-  authority + no test/spec/oracle edit + behavioral-delta contained). `oracle_manifest.py` supplies the
-  RED/GREEN state; this protocol enforces the rest (`oracle_gate.py` is the offline *proof*, not a live
-  enforcer). **Everything else DEFERS** to a morning queue
-  (`in_scope-unmapped`, mapped-no-oracle, `could`, out-of-scope, `needs_user`); one-way-door / oscillation /
-  normalization-failure **STOP-HALT**. **Cross-model consensus may prioritize the queue, never authorize a
-  fix.** No new acceptance line is ever auto-authored (that's scope mutation, invariant #2).
-- **Honest value:** *drive → review → safe-subset auto-fix → a tight pre-classified morning decision queue* —
-  **not** the operator's scope judgment. Oracle coverage is ~empty by default, so a first run typically
-  **auto-fixes nothing** and just produces the queue. That is correct, not a failure — the report says so.
-- **Terminate** with one of `GOAL-LOOP AUTO-COMPLETE: <id>` (nothing left for you), `GOAL-LOOP AUTO-HANDOFF:
-  <id>` (converged, queue awaits — the common case), or `GOAL-LOOP AUTO-HALTED: <id> — <reason>`, each
-  preceded by an evidence block. The morning report is `.goals/<id>.auto-report.md`.
-- **Portability:** off-Claude / no review backend ⇒ **no auto-fix** (drive + verify only, defer all); never
-  fakes cross-model review, never auto-accepts single-model output.
-- **Oracles + hardening:** the auto-fixable RED oracles come from a frozen `.goals/<id>.oracles.json` manifest
-  the operator authors **at sign-off** (validate/run via `scripts/oracle_manifest.py`); no manifest ⇒ nothing
-  auto-fixes (review + queue only). Optional opt-in for high-stakes runs: `--worktree` isolation and a
-  deterministic completion Stop-hook — `references/loop-protocol.md` § Optional hardening.
+**Read `references/loop-protocol.md` § Autonomous mode before any `--auto` run** — it is authoritative for
+the Gate A / Gate B policy clauses, the frozen-oracle manifest (`.goals/<id>.oracles.json`, authored at
+sign-off and validated via `scripts/oracle_manifest.py`), the termination set, the morning report, and the
+optional `--worktree` / Stop-hook hardening.
 
 ## What it produces
 
@@ -254,10 +242,10 @@ fix-checklist template: `references/loop-protocol.md`.
   `needs_user`, `spec_rejected`, `review_rejected`, scope/authority-exceeded, one-way-door, `max_rounds`,
   `oscillation` (same finding recurs), `normalization_failed` (extraction incomplete/invalid),
   `findings_escalating` (each round surfaces more/higher-severity findings than the last — the work is
-  regressing)} — under `--auto` the AUTO-HALTED set instead adds `needs_artifact`, `stale_baseline`,
-  `lock_conflict`, `unauthorized_path`, `stale_oracle_manifest`, `oracle_timeout`, `spec_contradiction`, and
-  drops the interactive-only `spec_rejected` (`--auto` freezes the spec, never rejects) and
-  `findings_escalating` (folded into the oscillation/regression guard); full list:
+  regressing)} — under `--auto` the AUTO-HALTED set adds several `--auto`-specific reasons (artifact,
+  baseline, lock, path, oracle-manifest, oracle-timeout, spec-contradiction), drops the interactive-only
+  `spec_rejected` (`--auto` freezes the spec, never rejects), and folds `findings_escalating` into the
+  `--auto` regression/oscillation guard; full list:
   `references/loop-protocol.md` § Termination. Print the marker first, then hand back.
 - **Resume** — read `current_phase`, reconcile against verified artifacts + repo (files over the
   pointer; if `review-rN.findings.json` exists, skip re-review → classify). Crash-safety write order:
