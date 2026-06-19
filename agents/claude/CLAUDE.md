@@ -42,7 +42,7 @@ Behavioral guidelines to reduce common LLM failure modes—sprawl, premature opt
 - **Orchestrator role**: When coordinating agents, write bounded tasks with clear ownership and expected output. The lead agent remains responsible for synthesis, reviewing agent results, resolving conflicts, and deciding the final change.
 - **Self-review**: For non-trivial changes, run independent subagent reviews. Use 2 reviewers for risky/broad changes. Skip for trivial edits.
 - **Redundancy vs. division**: Use redundant reviewers for diverse judgment on one question. Use parallel subtasks for naturally partitioned work. Don't conflate them.
-- **Prism (cross-model redundant judgment)**: When redundant cross-model judgment could change a decision—ambiguous tradeoffs, high-stakes or hard-to-reverse changes—reach for the `prism` skill on your own, without being asked, rather than ad-hoc same-model reviewers. See the skill for when to use it and how to size N/effort. Claude Code only.
+- **Prism (cross-model redundant judgment)**: When redundant cross-model judgment could change a decision—ambiguous tradeoffs, high-stakes or hard-to-reverse changes—reach for the `prism` skill on your own, without being asked, rather than ad-hoc same-model reviewers. See the skill for when to use it and how to size N (and gpt-pro). Claude Code only.
 
 </important>
 

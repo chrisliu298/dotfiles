@@ -810,29 +810,24 @@ preset_lenses() {
 }
 
 # Emit a ready-to-fill dispatch skeleton for the symmetric default (N of every
-# model, one shared effort). With --preset <task-type>, pre-fill seven lenses (N=1).
+# model; Codex xhigh + Grok Build high are fixed). With --preset <task-type>, pre-fill seven lenses (N=1).
 # Otherwise replace each "FILL" Lens / Lens-Desc, then Write it as the dispatch
 # file. Removes the mechanical Type/To/Effort/order boilerplate.
 cmd_scaffold() {
-  local n=1 effort="m" packet="" preset=""
+  local n=1 packet="" preset=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --n)      [ $# -ge 2 ] || die "scaffold: --n requires a value";      n="$2";      shift 2 ;;
-      --effort) [ $# -ge 2 ] || die "scaffold: --effort requires a value"; effort="$2"; shift 2 ;;
       --packet) [ $# -ge 2 ] || die "scaffold: --packet requires a value"; packet="$2"; shift 2 ;;
       --preset) [ $# -ge 2 ] || die "scaffold: --preset requires a value"; preset="$2"; shift 2 ;;
-      -*) die "scaffold: unknown flag: $1" ;;
+      -*) die "scaffold: unknown flag: $1 (effort is fixed — Codex xhigh, Grok Build high — there is no --effort)" ;;
       *)  die "scaffold: unexpected argument: $1" ;;
     esac
   done
   case "$n" in ''|*[!0-9]*) die "scaffold: --n must be a positive integer" ;; esac
   [ "$n" -ge 1 ] || die "scaffold: --n must be >= 1"
-  local cdx gbe ef
-  case "$effort" in
-    m|medium) cdx="m"; gbe="m"; ef="m" ;;
-    h|high)   cdx="x"; gbe="h"; ef="h" ;;
-    *) die "scaffold: --effort must be m or h" ;;
-  esac
+  # Effort is fixed at the top tier — no selection. Codex xhigh (x), Grok Build high (h).
+  local cdx="x" gbe="h"
   [ -n "$packet" ] || packet="/tmp/prism-<id>.md"
 
   if [ -n "$preset" ]; then
@@ -841,7 +836,7 @@ cmd_scaffold() {
       || die "scaffold: unknown --preset '$preset' (try: review design diagnosis compare research decision writing)"
     set -- $names
     printf 'Shared-Packet: %s\n\n' "$packet"
-    printf '# Preset "%s" (effort=%s): seven lenses pre-filled in canonical tier order.\n' "$preset" "$ef"
+    printf '# Preset "%s": seven lenses pre-filled in canonical tier order (Codex xhigh, Grok Build high — fixed).\n' "$preset"
     printf '# Edit any Lens / Lens-Desc to taste; write the Shared-Packet file before prepare.\n\n'
     printf 'Type: subagent\nLens: %s\nLens-Desc: %s\n\n' "$1" "$(lens_desc_for "$1")"
     printf 'Type: parallax\nTo: codex\nEffort: %s\nLens: %s\nLens-Desc: %s\n\n' "$cdx" "$2" "$(lens_desc_for "$2")"
@@ -854,7 +849,7 @@ cmd_scaffold() {
   fi
 
   printf 'Shared-Packet: %s\n\n' "$packet"
-  printf '# Symmetric scaffold: N=%s of each of the seven models, effort=%s.\n' "$n" "$ef"
+  printf '# Symmetric scaffold: N=%s of each of the seven models (Codex xhigh, Grok Build high — fixed).\n' "$n"
   printf '# Replace every "FILL" Lens / Lens-Desc (prepare rejects any leftover FILL).\n'
   printf '# Order is the canonical tier order — put your heaviest-reasoning (e.g. Adversarial)\n'
   printf '# lens on a subagent or codex. Write the Shared-Packet file before running prepare.\n'
@@ -1143,7 +1138,7 @@ cmd_help() {
 prism-launch — Prism dispatch launcher (parallax fan-out + dispatch prep)
 
 Usage:
-  prism-launch scaffold [--n <N>] [--effort m|h] [--preset <type>] [--packet <path>]  # fill-in dispatch skeleton
+  prism-launch scaffold [--n <N>] [--preset <type>] [--packet <path>]  # fill-in dispatch skeleton
   prism-launch prepare  --dispatch <dispatch-file>   # default: line-oriented control file
   prism-launch prepare  --config   <config.json>     # escape hatch: raw JSON (one of the two)
   prism-launch parallax <manifest.json> [--dry-run]
@@ -1154,7 +1149,7 @@ Usage:
   prism-launch --help | --version  ·  prism-launch <subcommand> --help
 
 scaffold:  emit a ready-to-fill dispatch skeleton for the symmetric default (N of each of the
-           seven models, one shared effort). Replace each "FILL" Lens/Lens-Desc, then Write it.
+           seven models; Codex xhigh + Grok Build high fixed). Replace each "FILL" Lens/Lens-Desc, then Write it.
            --preset <review|design|diagnosis|compare|research|decision|writing> pre-fills seven
            lenses by task type (N=1). gpt-pro lenses are opt-in — add them by hand (below).
 prepare:   validate the dispatch/config, render all launchers from templates, write a manifest;

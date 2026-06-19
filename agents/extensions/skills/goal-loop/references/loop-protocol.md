@@ -32,7 +32,7 @@ to resume. It **must not** duplicate per-unit execution state (goal-drive owns t
   "round": 2,
   "max_rounds": 2,
   "review_backend": "prism",            // prism|external|local|none
-  "prism_config": "2m",                 // forwarded verbatim; "" => prism auto-sizes
+  "prism_config": "2",                  // forwarded verbatim (prism N [M]); "" => prism auto-sizes
   "spec_approved": true,                // true | "auto" (interactive sign-off | --auto freeze); frozen after
   "round_start_ref": "a1b2c3d",         // git rev captured on entering drive/fix this round (diff baseline)
   "rounds": [
@@ -77,7 +77,7 @@ uncommitted work — never revert it (inherit goal-drive's authority rail).
 
 ## Spec review (mod #1)
 
-**On by default**, between `elicit` and `drive` (config `1 m`); **skipped by `--no-spec-review` or for a
+**On by default**, between `elicit` and `drive` (config `1`); **skipped by `--no-spec-review` or for a
 Clear-domain one-shot artifact** (goal-elicit's triage = Clear); override depth with `--spec-review
 "<config>"`. It reviews the **goal artifact as a contract**, before any code, to strengthen the
 acceptance criteria — and it is the one point the artifact may still change. It uses its own review
@@ -235,7 +235,7 @@ acceptance criterion, and how to verify it.
 <the GOAL-DRIVE COMPLETE marker line + the real verification output it printed>
 ```
 
-For `--review prism`, forward `prism_config` verbatim ahead of the packet (`Skill(prism, "2m <packet>")`).
+For `--review prism`, forward `prism_config` verbatim ahead of the packet (`Skill(prism, "2 <packet>")`).
 
 ## The path beyond report-only — oracle-gating (realized by `--auto`)
 
@@ -271,7 +271,7 @@ queue* instead of blocking on you live.
 so the interactive gates' `AskUserQuestion` calls would **deadlock the turn forever**. `--auto` therefore
 replaces **both** human gates with **fail-closed autonomous policies** and terminates on **printed markers**
 the evaluator can see. It changes only goal-loop's *gate behavior, termination, and handoff* — goal-drive,
-prism, goal-elicit, the router, the ledger, and crash-safety are unchanged. Design synthesis (prism `2h 2pro`,
+prism, goal-elicit, the router, the ledger, and crash-safety are unchanged. Design synthesis (prism `2 2`,
 15 perspectives, no cross-model dissent): `~/.ai/reports/20260616-2243-goalloop-auto-design.md`.
 
 **Precondition — `--auto` requires a ready artifact; it never interviews.** The deadlock is not limited to

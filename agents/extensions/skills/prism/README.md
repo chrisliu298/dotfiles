@@ -82,18 +82,17 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
 ## Invocation
 
 ```
-   prism  [N][m|h]  [<G>pro]  <question>
-          │  │      │
-          │  │      └─ G gpt-pro lenses (count-first: pro = 1, 2pro = 2; default 0)
-          │  └─ effort, glued onto N — write 2h, not 2 h (default m):
-          │        m  → Codex medium · Grok-Build medium
-          │        h  → Codex xhigh  · Grok-Build high
+   prism  [N]  [M]  <question>
+          │    │
+          │    └─ M gpt-pro lenses (optional second number; default 0)
           └─ how many of EACH of the seven models (default 1 → 7 agents + self)
 
-   prism Why does X happen?             → auto-sized (anchor: 1 of each, medium)
-   prism 2h Which architecture?         → 2 of each, high tier
-   prism 2h 2pro Bet-the-company call?  → 2 of each, high, + 2 gpt-pro lenses
-   prism no deepseek, why X?            → natural-language deviations (exclude/count/effort)
+   No reasoning-effort knob — Codex always xhigh, Grok-Build always high.
+
+   prism Why does X happen?             → auto-sized (anchor: 1 of each)
+   prism 2 Which architecture?          → 2 of each, no gpt-pro
+   prism 2 3 Bet-the-company call?      → 2 of each + 3 gpt-pro lenses
+   prism no deepseek, why X?            → natural-language deviations (exclude/count)
 ```
 
 ---
@@ -114,7 +113,7 @@ backgrounded process. The Integrator stays in the loop for the judgment.
                                       (verbatim, safe)      the script — not you)
 
  2  scaffold ──► fill ─────►  /tmp/prism-<id>.dispatch     one record per lens
-    (--preset pre-fills 6 lenses)        Type/To/Effort/Lens
+    (--preset pre-fills 7 lenses)        Type/To/Effort/Lens
 
  3  prepare ───────────────►  ┌────────────────────────────────────────────┐
                               │ validate · render launchers · write        │
@@ -155,8 +154,8 @@ backgrounded process. The Integrator stays in the loop for the judgment.
 ## `prism-launch` subcommands
 
 ```
-  scaffold  [--n N] [--effort m|h] [--preset TYPE] [--packet PATH]
-              └ print a fill-in dispatch skeleton (correct order + effort tokens).
+  scaffold  [--n N] [--preset TYPE] [--packet PATH]
+              └ print a fill-in dispatch skeleton (correct order + fixed Codex x / Grok-Build h effort).
                 --preset review|design|diagnosis|compare|research|decision|writing
                 pre-fills seven lenses by task type (N=1).
 
@@ -225,7 +224,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
   ├── README.md                   ◄── you are here (the picture)
   ├── scripts/
   │   ├── prism-launch            dispatch engine (the subcommands above)
-  │   └── test-prism-launch.sh    148-test suite (no network — fake-relay for dispatch)
+  │   └── test-prism-launch.sh    188-test suite (no network — fake-relay for dispatch)
   └── templates/
       ├── launcher-subagent.tmpl       Claude subagent prompt (plain markdown)
       ├── launcher-relay-codex.tmpl    Codex / GPT  — <goal> style
@@ -252,7 +251,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
   │                             the anti-recursion block is injected verbatim + the
   │                             RELAY_PEER guard refuses a nested launch.
   ├─ Read-only leaf agents ──── peers/subagents produce analysis only (one .res.md write).
-  └─ Effort vocabulary ──────── Codex medium|xhigh · Grok-Build medium|high, registry-enforced.
+  └─ Effort (fixed) ─────────── prism always uses Codex xhigh · Grok-Build high (top tier; no selection).
 ```
 
 ---

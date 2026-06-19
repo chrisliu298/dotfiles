@@ -50,10 +50,10 @@ Each step is one turn, and progress lives on disk — if your session ends or ge
 Useful options:
 
 ```
-/goal-loop --prism "2m" -- harden the auth module       # how thorough each review is
+/goal-loop --prism "2" -- harden the auth module        # how thorough each review is (prism N [M])
 /goal-loop --no-spec-review -- <request>                # skip the default spec review (trivial goals)
 /goal-loop --max-rounds 3 -- <request>                  # cap the review→fix rounds
-/goal-loop --auto --prism "2m" --artifact .goals/<id>.goal.md    # run unattended — needs a ready spec
+/goal-loop --auto --prism "2" --artifact .goals/<id>.goal.md     # run unattended — needs a ready spec
 /goal-loop continue                                     # resume an interrupted loop
 ```
 

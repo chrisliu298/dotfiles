@@ -310,22 +310,23 @@ expect_ok "accepts a subagents-only dispatch (empty parallax accumulator)" "$LAU
 [ "$(jq -r '.counts.parallax_total' "$TMP/prism-runz-manifest.json" 2>/dev/null)" = "0" ] && ok "dispatch: empty parallax accumulator -> parallax_total 0" || bad "dispatch: empty parallax -> 0"
 
 echo "== scaffold: symmetric dispatch skeleton =="
-SC=$("$LAUNCH" scaffold --n 1 --effort m --packet /tmp/prism-sc.md)
+SC=$("$LAUNCH" scaffold --n 1 --packet /tmp/prism-sc.md)
 [ "$(printf '%s\n' "$SC" | grep -c '^Type:')" = "7" ] && ok "scaffold --n 1 emits 7 records" || bad "scaffold n=1 record count"
 printf '%s\n' "$SC" | grep -q '^Shared-Packet: /tmp/prism-sc.md' && ok "scaffold honors --packet" || bad "scaffold --packet"
 printf '%s\n' "$SC" | grep -q '^To: codex' && printf '%s\n' "$SC" | grep -q '^To: mimo' && printf '%s\n' "$SC" | grep -q '^To: glm' && ok "scaffold lists all six parallax tiers" || bad "scaffold tiers"
-SCX=$("$LAUNCH" scaffold --n 2 --effort h)
+SCX=$("$LAUNCH" scaffold --n 2)
 [ "$(printf '%s\n' "$SCX" | grep -c '^Type:')" = "14" ] && ok "scaffold --n 2 emits 14 records" || bad "scaffold n=2 record count"
-[ "$(printf '%s\n' "$SCX" | grep -c '^Effort: x')" = "2" ] && [ "$(printf '%s\n' "$SCX" | grep -c '^Effort: h')" = "2" ] && ok "scaffold --effort h -> codex x, grok-build h" || bad "scaffold h effort mapping"
-expect_err "scaffold rejects a bad --effort" "$LAUNCH" scaffold --effort high2
+# effort is fixed — scaffold always emits Codex x (xhigh) + Grok Build h (high), N of each
+[ "$(printf '%s\n' "$SCX" | grep -c '^Effort: x')" = "2" ] && [ "$(printf '%s\n' "$SCX" | grep -c '^Effort: h')" = "2" ] && ok "scaffold emits fixed codex x + grok-build h" || bad "scaffold fixed effort"
+expect_err "scaffold rejects --effort (no longer an option)" "$LAUNCH" scaffold --effort h
 # a filled scaffold round-trips through prepare
 make_packet /tmp/prism-scrt.md
-"$LAUNCH" scaffold --n 1 --effort m --packet /tmp/prism-scrt.md \
+"$LAUNCH" scaffold --n 1 --packet /tmp/prism-scrt.md \
   | sed 's/^Lens: FILL-1$/Lens: L1/;s/^Lens: FILL-2$/Lens: L2/;s/^Lens: FILL-3$/Lens: L3/;s/^Lens: FILL-4$/Lens: L4/;s/^Lens: FILL-5$/Lens: L5/;s/^Lens: FILL-6$/Lens: L6/;s/^Lens: FILL-7$/Lens: L7/;s/^Lens-Desc: FILL$/Lens-Desc: weigh it/' > /tmp/prism-scrt.dispatch
 expect_ok "a filled scaffold round-trips through prepare" "$LAUNCH" prepare --dispatch /tmp/prism-scrt.dispatch
 # a half-filled scaffold (leftover FILL-<n> lens) must be rejected, not dispatched
 make_packet /tmp/prism-schalf.md
-"$LAUNCH" scaffold --n 1 --effort m --packet /tmp/prism-schalf.md \
+"$LAUNCH" scaffold --n 1 --packet /tmp/prism-schalf.md \
   | sed 's/^Lens-Desc: FILL$/Lens-Desc: weigh it/' > /tmp/prism-schalf.dispatch   # descs filled, lens names left as FILL-<n>
 expect_err "prepare rejects a half-filled scaffold (leftover FILL placeholder)" "$LAUNCH" prepare --dispatch /tmp/prism-schalf.dispatch
 rm -f /tmp/prism-sc* /tmp/prism-scrt* /tmp/prism-schalf*

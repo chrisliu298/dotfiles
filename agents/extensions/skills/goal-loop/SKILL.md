@@ -84,7 +84,7 @@ Portable; **never detects its runtime**. Only the *review backend* is Claude-spe
 
 ## Spec-review (mod #1 — on by default)
 
-**Runs by default** (config `1 m`): before driving, review the **goal spec itself** — acceptance
+**Runs by default** (config `1`): before driving, review the **goal spec itself** — acceptance
 criteria testable/complete? gaps, contradictions, untestable `done_when`, likely findings that won't map
 later? You approve/edit the strengthened spec (the one pre-lock edit point), which then **freezes as the
 binding authority**. Spec quality is the single biggest lever — it raises the actionable fraction *and*
@@ -141,9 +141,9 @@ optional `--worktree` / Stop-hook hardening.
   **Requires a `status: ready` artifact** (`--artifact <path>` or a pre-existing `.goals/<id>.goal.md`) — it
   never interviews; with no ready spec it emits `GOAL-LOOP AUTO-HALTED: <id> — needs_artifact` before any
   `AskUserQuestion`. Since it cannot ask for the review depth, it uses `--prism` if given, else the ledger's
-  `prism_config`, else defaults to `2m`.
-- `--prism "<config>"` — forwarded **verbatim** to prism (`2m`, `2m 2pro`, …). Omitted (interactive) →
-  goal-loop asks at the review gate; omitted under `--auto` → defaults to `2m` (above).
+  `prism_config`, else defaults to `2`.
+- `--prism "<config>"` — forwarded **verbatim** to prism (`2`, `2 2`, …; prism syntax is `N [M]` — N parallax, M gpt-pro, no effort token). Omitted (interactive) →
+  goal-loop asks at the review gate; omitted under `--auto` → defaults to `2` (above).
 - `--max-rounds N` — review/fix cycles (default **2**; loops oscillate). `continue --max-rounds <N>` extends.
 - `--no-spec-review` / `--spec-review "<config>"` — skip the (default-on) spec review, or override its
   depth. (Auto-skipped for a Clear-domain one-shot artifact.)
@@ -175,7 +175,7 @@ drive     **record round_start_ref FIRST** (on entering drive — the diff basel
           (Skill, inline). On GOAL-DRIVE COMPLETE + verification → current_phase=review. On STOPPED →
           stopped. STOP.                                                                   ← ends invocation
 review    if round > max_rounds → stopped (max_rounds), do not dispatch. Else if `prism_config` is empty,
-          ask the user for it now (under `--auto`: do not ask — default to `2m`); freeze the review packet {artifact · diff since round_start_ref ·
+          ask the user for it now (under `--auto`: do not ask — default to `2`); freeze the review packet {artifact · diff since round_start_ref ·
           COMPLETE marker · verification}; run the backend; persist .review-rN.md, normalize →
           .findings.json, set current_phase=classify LAST. STOP.                            ← ends invocation
 classify  the router mechanically **disposes the non-actionable bulk** (you never see it):
