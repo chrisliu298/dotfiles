@@ -26,32 +26,39 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 
 > DeepSeek and MiMo are reached **through** Claude Code via the `ds`/`mm`/… aliases (see `shell/.functions`), so they inherit the Claude column directly (no separate skill dir). **Grok** is a relay/prism dispatch target (no interactive alias) with its own `~/.grok/skills/` mirror of the Codex set — so its column equals Code**x**. The Claude-only orchestration skills (relay, prism, goal-loop, keep-warm, skill-creator) stay off Codex/Grok; relay and prism are additionally guarded so a dispatched peer can't trigger them.
 
-| Skill | C | X | G | Default | Source · Description |
-|-------|:-:|:-:|:-:|:-------:|----------------------|
-| arxiv-reader            | ✓ | ✓ | ✓ | on     | local — Read arxiv via TeX / HF markdown / HTML fallback |
-| autoresearch            | ✱ | ✱ | ✱ | manual | local — Karpathy-faithful experiment loop |
-| defuddle                | ✓ | ✓ | ✓ | on     | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
-| deslop                  | ✓ | ✓ | ✓ | on     | local — Strip AI-slop from code changes |
-| digest                  | ✓ | ✓ | ✓ | on     | local — Re-layer a dense reply into a fast-to-skim form |
-| exec-status             | ✓ | ✓ | ✓ | on     | local — Maintain a plain-English STATUS.md executive briefing for long autonomous runs |
-| goal-drive              | ✓ | ✓ | ✓ | on     | local — Drive a goal artifact (GOAL.md / checklist / phased doc) to verified done |
-| goal-elicit             | ✓ | ✓ | ✓ | on     | local — Multi-round interview → verifiable Goal Contract |
-| goal-loop               | ✓ | — | — | on     | local — Stepped elicit→review→fix loop (composes goal-elicit/goal-drive/prism; default review is prism, Claude-only) |
-| gpt-pro-relay           | ✓ | ✓ | ✓ | on     | local — SSH to ChatGPT Pro Extended on macmini |
-| humanizer               | ✓ | ✓ | ✓ | on     | [blader/humanizer][c-hu] — Remove AI signatures from text |
-| interviewer             | ✱ | ✱ | ✱ | manual | local — Mock AI/ML technical interviews |
-| jina                    | ✓ | ✓ | ✓ | on     | local — Fetch web content / search via Jina AI |
-| keep-warm               | ✓ | — | — | on     | local — Cache heartbeat (uses Claude-only scheduling tools) |
-| mental-seal             | ✓ | ✓ | ✓ | on     | local — Hold ONE supreme priority front-of-mind via a visible user-owned SEAL.md vow (hook-free, C/X/G) |
-| pdf                     | ✓ | ✓ | ✓ | on     | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex/Grok) — PDF read/edit |
-| prism                   | ✓ | — | — | on     | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to Codex + DeepSeek + MiMo + GLM + Grok via relay) |
-| prompt-engineer         | ✓ | ✓ | ✓ | on     | local — Prompt writing per-vendor best practices |
-| push                    | ✓ | ✓ | ✓ | on     | local — Push to remote (auto-picks single vs atomic commits) |
-| rehydrate               | ✓ | ✓ | ✓ | on     | local — Recover post-compaction detail from the raw session transcript |
-| relay                   | ✓ | — | — | on     | local — Cross-agent relay from Claude to Codex/DeepSeek/MiMo/GLM/Grok (Claude-only caller) |
-| skill-creator           | ✓ | — | — | on     | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
-| todo                    | ✓ | ✓ | ✓ | on     | local — TODO.md tracking across sessions |
-| xurl                    | ✓ | ✓ | ✓ | on     | local — X/Twitter via the `xurl` CLI |
+**Enabled** (✓ auto-installed):
+
+| Skill | C | X | G | Source · Description |
+|-------|:-:|:-:|:-:|----------------------|
+| arxiv-reader            | ✓ | ✓ | ✓ | local — Read arxiv via TeX / HF markdown / HTML fallback |
+| defuddle                | ✓ | ✓ | ✓ | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
+| deslop                  | ✓ | ✓ | ✓ | local — Strip AI-slop from code changes |
+| digest                  | ✓ | ✓ | ✓ | local — Re-layer a dense reply into a fast-to-skim form |
+| exec-status             | ✓ | ✓ | ✓ | local — Maintain a plain-English STATUS.md executive briefing for long autonomous runs |
+| goal-drive              | ✓ | ✓ | ✓ | local — Drive a goal artifact (GOAL.md / checklist / phased doc) to verified done |
+| goal-elicit             | ✓ | ✓ | ✓ | local — Multi-round interview → verifiable Goal Contract |
+| goal-loop               | ✓ | — | — | local — Stepped elicit→review→fix loop (composes goal-elicit/goal-drive/prism; default review is prism, Claude-only) |
+| gpt-pro-relay           | ✓ | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini |
+| humanizer               | ✓ | ✓ | ✓ | [blader/humanizer][c-hu] — Remove AI signatures from text |
+| jina                    | ✓ | ✓ | ✓ | local — Fetch web content / search via Jina AI |
+| keep-warm               | ✓ | — | — | local — Cache heartbeat (uses Claude-only scheduling tools) |
+| mental-seal             | ✓ | ✓ | ✓ | local — Hold ONE supreme priority front-of-mind via a visible user-owned SEAL.md vow (hook-free, C/X/G) |
+| pdf                     | ✓ | ✓ | ✓ | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex/Grok) — PDF read/edit |
+| prism                   | ✓ | — | — | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to Codex + DeepSeek + MiMo + GLM + Grok via relay) |
+| prompt-engineer         | ✓ | ✓ | ✓ | local — Prompt writing per-vendor best practices |
+| push                    | ✓ | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
+| rehydrate               | ✓ | ✓ | ✓ | local — Recover post-compaction detail from the raw session transcript |
+| relay                   | ✓ | — | — | local — Cross-agent relay from Claude to Codex/DeepSeek/MiMo/GLM/Grok (Claude-only caller) |
+| skill-creator           | ✓ | — | — | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
+| todo                    | ✓ | ✓ | ✓ | local — TODO.md tracking across sessions |
+| xurl                    | ✓ | ✓ | ✓ | local — X/Twitter via the `xurl` CLI |
+
+**Disabled** (✱ manual, opt-in via `./dotfiles.sh enable <name>`):
+
+| Skill | C | X | G | Source · Description |
+|-------|:-:|:-:|:-:|----------------------|
+| autoresearch            | ✱ | ✱ | ✱ | local — Karpathy-faithful experiment loop |
+| interviewer             | ✱ | ✱ | ✱ | local — Mock AI/ML technical interviews |
 
 > Note: SKILL.md supports an optional Claude-only `effort` frontmatter (`medium` / `high` / `max`) to set thinking budget per skill. Currently unset on every skill in this repo — they all inherit the session default.
 
