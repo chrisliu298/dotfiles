@@ -28,7 +28,7 @@ safety. That inversion *is* the guardrail design.
   set (user only)                        the seal lives at <project-root>/SEAL.md
         │                                         status: active
         ▼                                              │
-  ┌──────────────── while active ───────────────┐      ▼
+  ┌──────────────── while active ────────────────┐     ▼
   │ persist   SEAL.md on disk (the Tablet)       │   ## History  ◄── released / superseded
   │ re-surface  anchor → re-read SEAL.md         │       (archived, never deleted)
   │ recall    Do-Confirm: "does this serve it?"  │
