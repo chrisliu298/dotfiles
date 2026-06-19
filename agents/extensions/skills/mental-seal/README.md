@@ -33,9 +33,9 @@ safety. That inversion *is* the guardrail design.
   │ re-surface  anchor → re-read SEAL.md         │       (archived, never deleted)
   │ recall    Do-Confirm: "does this serve it?"  │
   │ conflict  surface, never silently override   │
-  └───────────────────┬──────────────────────────┘
+  └────────────────────┬─────────────────────────┘
             ┌──────────┴───────────┐
-            ▼                       ▼
+            ▼                      ▼
      discharge_when met      user changes priority
      status: released        status: superseded → new active seal
 ```
