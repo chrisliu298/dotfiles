@@ -52,7 +52,9 @@ SKILLS=(
 # Skills not auto-installed. Toggle with: ./dotfiles.sh enable/disable <name>
 MANUAL_SKILLS=(
     autoresearch
+    deslop
     interviewer
+    prompt-engineer
 )
 
 MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: claude,codex or omit for both)

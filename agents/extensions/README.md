@@ -32,7 +32,6 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 |-------|:-:|:-:|:-:|----------------------|
 | arxiv-reader            | ✓ | ✓ | ✓ | local — Read arxiv via TeX / HF markdown / HTML fallback |
 | defuddle                | ✓ | ✓ | ✓ | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
-| deslop                  | ✓ | ✓ | ✓ | local — Strip AI-slop from code changes |
 | digest                  | ✓ | ✓ | ✓ | local — Re-layer a dense reply into a fast-to-skim form |
 | exec-status             | ✓ | ✓ | ✓ | local — Maintain a plain-English STATUS.md executive briefing for long autonomous runs |
 | goal-drive              | ✓ | ✓ | ✓ | local — Drive a goal artifact (GOAL.md / checklist / phased doc) to verified done |
@@ -45,7 +44,6 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | mental-seal             | ✓ | ✓ | ✓ | local — Hold ONE supreme priority front-of-mind via a visible user-owned SEAL.md vow (hook-free, C/X/G) |
 | pdf                     | ✓ | ✓ | ✓ | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex/Grok) — PDF read/edit |
 | prism                   | ✓ | — | — | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to Codex + DeepSeek + MiMo + GLM + Grok via relay) |
-| prompt-engineer         | ✓ | ✓ | ✓ | local — Prompt writing per-vendor best practices |
 | push                    | ✓ | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
 | rehydrate               | ✓ | ✓ | ✓ | local — Recover post-compaction detail from the raw session transcript |
 | relay                   | ✓ | — | — | local — Cross-agent relay from Claude to Codex/DeepSeek/MiMo/GLM/Grok (Claude-only caller) |
@@ -58,7 +56,9 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | Skill | C | X | G | Source · Description |
 |-------|:-:|:-:|:-:|----------------------|
 | autoresearch            | ✱ | ✱ | ✱ | local — Karpathy-faithful experiment loop |
+| deslop                  | ✱ | ✱ | ✱ | local — Strip AI-slop from code changes |
 | interviewer             | ✱ | ✱ | ✱ | local — Mock AI/ML technical interviews |
+| prompt-engineer         | ✱ | ✱ | ✱ | local — Prompt writing per-vendor best practices |
 
 > Note: SKILL.md supports an optional Claude-only `effort` frontmatter (`medium` / `high` / `max`) to set thinking budget per skill. Currently unset on every skill in this repo — they all inherit the session default.
 
