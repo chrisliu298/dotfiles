@@ -120,7 +120,7 @@ dfs() {
 }
 
 # synckeys — propagate this machine's ~/.zshenv.local API/plan keys to dfs peers.
-# ~/.zshenv.local holds secrets (DEEPSEEK/MIMO_API_KEY, …) and is
+# ~/.zshenv.local holds secrets (DEEPSEEK/MIMO/GLM_API_KEY, …) and is
 # intentionally NOT in the dotfiles repo, so `dfs` never carries it — a
 # new `export FOO_API_KEY=...` added here must reach the other machines separately.
 # synckeys upserts the local `export *_API_KEY=` / `*_PLAN_KEY=` lines onto each peer (adds
@@ -296,7 +296,7 @@ xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex ex
 # `[1m]` suffix (that's MiMo-only below; the DeepSeek endpoint has no such
 # variant). Requires DEEPSEEK_API_KEY in env (see ~/.zshenv.local).
 #
-# NOTE: _deepseek/_mimo below duplicate the model id, endpoint, and
+# NOTE: _deepseek/_mimo/_glm below duplicate the model id, endpoint, and
 # extras that also live in agents/extensions/skills/relay/peers.json — the
 # relay/prism source of truth. These interactive launchers are a separate
 # consumer; if you change a model id or endpoint, update peers.json too (and
@@ -364,6 +364,41 @@ mm(){   _mimo --dangerously-skip-permissions "$@"; }
 mmc(){  _mimo --dangerously-skip-permissions --continue "$@"; }
 mmr(){  _mimo --dangerously-skip-permissions --resume "$@"; }
 mmhl(){ (( $# )) || { echo 'Usage: mmhl "<prompt>"'; return 1; }; _mimo -p --dangerously-skip-permissions "${*}"; }
+
+# =============================================================================
+# GLM (via Claude Code, Anthropic-compatible endpoint)
+# =============================================================================
+# Routes Claude Code at Zhipu/z.ai GLM per-invocation, so default `c`/`cc` keep
+# using the Claude subscription. glm-5.2 supports a graded reasoning_effort
+# (max/xhigh/high/medium/low/minimal/none, default max); we pin max here — the
+# same level the relay/prism registry pins (peers.json extra_env). Model id keeps
+# its dot and takes no `[1m]` suffix (that's MiMo-only). Requires GLM_API_KEY in
+# env (see ~/.zshenv.local).
+_glm(){
+    [[ -n "${GLM_API_KEY:-}" ]] || { echo 'GLM_API_KEY not set (see ~/.zshenv.local)' >&2; return 1; }
+    # Drop relay scripts dir from PATH so GLM sessions can't shell out to relay.
+    local _glm_path="${PATH//$HOME\/.claude\/skills\/relay\/scripts:/}"
+    _glm_path="${_glm_path%:$HOME/.claude/skills/relay/scripts}"
+    # glm-5.2 is text-only — deny multimodal Reads so an image/PDF Read errors at
+    # the tool gate instead of being silently dropped. Mirrors the relay script's
+    # claude-env branch.
+    local _glm_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
+    env -u TMUX COLORTERM=truecolor \
+        PATH="$_glm_path" \
+        ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic \
+        ANTHROPIC_AUTH_TOKEN="$GLM_API_KEY" \
+        ANTHROPIC_MODEL=glm-5.2 \
+        ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.2 \
+        ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.2 \
+        ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.2 \
+        ANTHROPIC_SMALL_FAST_MODEL=glm-5.2 \
+        CLAUDE_CODE_SUBAGENT_MODEL=glm-5.2 \
+        "$(command -v claude)" --disallowedTools "$_glm_deny" "$@"
+}
+glm(){   CLAUDE_CODE_EFFORT_LEVEL=max _glm --dangerously-skip-permissions "$@"; }
+glmc(){  CLAUDE_CODE_EFFORT_LEVEL=max _glm --dangerously-skip-permissions --continue "$@"; }
+glmr(){  CLAUDE_CODE_EFFORT_LEVEL=max _glm --dangerously-skip-permissions --resume "$@"; }
+glmhl(){ (( $# )) || { echo 'Usage: glmhl "<prompt>"'; return 1; }; CLAUDE_CODE_EFFORT_LEVEL=max _glm -p --dangerously-skip-permissions "${*}"; }
 
 # Show Claude + Codex account emails on local, macmini, and l40s.
 ae() {

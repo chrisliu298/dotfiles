@@ -33,14 +33,14 @@ See `.aliases` and `.functions` for the full list. Highlights:
 
 Effort suffixes follow one convention — `n`=none, `l`=low, `m`=medium, `h`=high, `x`=xhigh, `mx`=max. Each model exposes only the tiers its endpoint supports; the bare alias is that model's sensible default.
 
-| tier | suffix | Claude `c` | Codex `x` | DeepSeek `ds` | MiMo `mm` |
-|------|:------:|:----------:|:---------:|:-------------:|:---------:|
-| *bare (default)* | — | `c` (xhigh) | `x` (medium) | `ds` (max) | `mm` (default) |
-| none | `n` | — | `xn` | — | — |
-| low | `l` | `cl` | `xl` | → high | — |
-| medium | `m` | `cm` | `xm` | → high | — |
-| high | `h` | `ch` | `xh` | `dsh` | — |
-| xhigh | `x` | `cx` | `xx` | → max | — |
-| max | `mx` | `cmx` | n/a | `ds` (bare) | — |
+| tier | suffix | Claude `c` | Codex `x` | DeepSeek `ds` | MiMo `mm` | GLM `glm` |
+|------|:------:|:----------:|:---------:|:-------------:|:---------:|:---------:|
+| *bare (default)* | — | `c` (xhigh) | `x` (medium) | `ds` (max) | `mm` (default) | `glm` (max) |
+| none | `n` | — | `xn` | — | — | — |
+| low | `l` | `cl` | `xl` | → high | — | — |
+| medium | `m` | `cm` | `xm` | → high | — | — |
+| high | `h` | `ch` | `xh` | `dsh` | — | — |
+| xhigh | `x` | `cx` | `xx` | → max | — | — |
+| max | `mx` | `cmx` | n/a | `ds` (bare) | — | `glm` (bare) |
 
-`→` = the requested value collapses to that tier (DeepSeek maps low/medium → high, xhigh → max); MiMo's Anthropic endpoint surfaces no effort control. Continue/resume/headless suffixes (`*c`/`*r`/`*hl`) are uniform across all four. Bare `c` doesn't pin an effort — it inherits `effortLevel` from `agents/claude/settings.json` (adaptive thinking is disabled there), currently `xhigh`, so `c` ≡ `cx`.
+`→` = the requested value collapses to that tier (DeepSeek maps low/medium → high, xhigh → max); MiMo's Anthropic endpoint surfaces no effort control. GLM-5.2 supports a graded `reasoning_effort` (max/xhigh/high/…/none) but the launcher pins **max** — the same level the relay/prism registry pins — so only bare `glm`=max is exposed. Continue/resume/headless suffixes (`*c`/`*r`/`*hl`) are uniform across all five. Bare `c` doesn't pin an effort — it inherits `effortLevel` from `agents/claude/settings.json` (adaptive thinking is disabled there), currently `xhigh`, so `c` ≡ `cx`.

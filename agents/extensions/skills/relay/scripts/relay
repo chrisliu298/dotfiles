@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Claude-only: refuse when invoked from a non-Claude (DeepSeek/MiMo) session.
+# Claude-only: refuse when invoked from a non-Claude (DeepSeek/MiMo/GLM) session.
 case "${ANTHROPIC_BASE_URL:-}" in
   *deepseek*)    echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at DeepSeek." >&2; exit 2 ;;
   *xiaomimimo*)  echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at MiMo." >&2; exit 2 ;;
@@ -339,7 +339,7 @@ EOF
   # Anthropic-compatible envelope whose endpoint/key/model/extras all come from the
   # registry. The six model vars all take the same model id (harness-required) —
   # incl. ANTHROPIC_SMALL_FAST_MODEL, else background calls fall back to a hardcoded
-  # Haiku id that DeepSeek/MiMo gateways bill as their cheap flash/lite tier.
+  # Haiku id that DeepSeek/MiMo/GLM gateways bill as their cheap flash/lite tier.
   local -a peer_cmd
   local model
   model=$(jq -r '.model' <<<"$peer_json")
@@ -412,8 +412,8 @@ EOF
     #      return a pending "Exit plan mode?" / "Answer questions?" gate).
     #      EnterPlanMode itself runs fine but only leads into that dead end. This is
     #      an execution-mode limit, independent of which model is behind the harness
-    #      — so it is NOT mirrored in the interactive ds/mm launchers, where a human
-    #      is present and plan mode is useful.
+    #      — so it is NOT mirrored in the interactive ds/mm/glm launchers, where a
+    #      human is present and plan mode is useful.
     # --disallowedTools is variadic (<tools...>): a non-flag token right after it is
     # swallowed as another tool name, so keep --dangerously-skip-permissions AFTER
     # it — that dashed token ends the list, leaving the prompt as the lone positional.
