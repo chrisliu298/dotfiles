@@ -42,6 +42,7 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | interviewer             | ✱ | ✱ | ✱ | manual | local — Mock AI/ML technical interviews |
 | jina                    | ✓ | ✓ | ✓ | on     | local — Fetch web content / search via Jina AI |
 | keep-warm               | ✓ | — | — | on     | local — Cache heartbeat (uses Claude-only scheduling tools) |
+| mental-seal             | ✓ | ✓ | ✓ | on     | local — Hold ONE supreme priority front-of-mind via a visible user-owned SEAL.md vow (hook-free, C/X/G) |
 | pdf                     | ✓ | ✓ | ✓ | on     | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex/Grok) — PDF read/edit |
 | prism                   | ✓ | — | — | on     | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to Codex + DeepSeek + MiMo + GLM + Grok via relay) |
 | prompt-engineer         | ✓ | ✓ | ✓ | on     | local — Prompt writing per-vendor best practices |
