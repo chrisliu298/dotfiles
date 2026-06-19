@@ -5,6 +5,7 @@ set -euo pipefail
 case "${ANTHROPIC_BASE_URL:-}" in
   *deepseek*)    echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at DeepSeek." >&2; exit 2 ;;
   *xiaomimimo*)  echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at MiMo." >&2; exit 2 ;;
+  *z.ai*)        echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at z.ai (GLM)." >&2; exit 2 ;;
 esac
 
 # Anti-recursion: every peer relay spawns inherits RELAY_PEER=<peer>. Refuse a
@@ -130,7 +131,7 @@ recover_codex_response() {
 
 # Auto-detect caller and peer from the skill directory this script lives in.
 # Caller is always Claude under the current one-direction protocol; the default
-# peer is Codex. Use --to deepseek, --to mimo, --to grok-build, or --to grok-composer to route elsewhere.
+# peer is Codex. Use --to deepseek, --to mimo, --to glm, --to grok-build, or --to grok-composer to route elsewhere.
 # Returns "from to" (e.g. "claude codex") or empty string if unknown.
 detect_peers() {
   local script_dir
@@ -271,8 +272,8 @@ cmd_call() {
   fi
 
   # Build req. cmd_req surfaces effort in frontmatter for codex; the
-  # claude-env peers (deepseek pinned to max via the registry extra_env, mimo
-  # with no effort knob) ignore it.
+  # claude-env peers (deepseek and glm pinned to max via the registry extra_env,
+  # mimo with no effort knob) ignore it.
   local req_args=(--from "$from" --to "$to" --effort "$effort")
   [ -n "$name" ] || die "call: --name required"
   check_slug "call: --name" "$name"
@@ -401,10 +402,10 @@ EOF
     if [ "${#extra_env[@]}" -gt 0 ]; then peer_cmd+=("${extra_env[@]}"); fi
     # claude-env peers always run headless (claude -p). Deny two unrelated hazard
     # classes up front:
-    #   1. Multimodal Reads — deepseek-v4-pro / mimo-v2.5-pro are text-only (mimo
-    #      image support lives in mimo-v2.5/-omni, not -pro; deepseek V4 input type
-    #      is text/string), so an image/PDF Read errors (DeepSeek) or is silently
-    #      dropped (MiMo). This is a model-capability limit.
+    #   1. Multimodal Reads — deepseek-v4-pro / mimo-v2.5-pro / glm-5.2 are text-only
+    #      (mimo image support lives in mimo-v2.5/-omni, not -pro; deepseek V4 input
+    #      type is text/string; glm-5.2 input modality is text), so an image/PDF Read
+    #      errors (DeepSeek) or is silently dropped (MiMo/GLM). A model-capability limit.
     #   2. Interactive consent gates — ExitPlanMode and AskUserQuestion block
     #      waiting for a human to approve a plan / answer a question; in a headless
     #      run there is none, so they deadlock until the timeout (verified: both
@@ -466,10 +467,10 @@ Subcommands:
 Call options:
   --name <slug>      Call identifier
   --effort <level>   Reasoning effort: codex (medium/xhigh), grok-build (medium/high).
-                     Ignored for deepseek (always max), mimo, and grok-composer (no knob).
+                     Ignored for deepseek (always max), mimo, glm, and grok-composer (no knob).
   --body-only        Strip frontmatter from response output
   --from <peer>      Override caller detection (normally claude)
-  --to <peer>        Override peer detection (codex, deepseek, mimo, grok-build, grok-composer; default codex)
+  --to <peer>        Override peer detection (codex, deepseek, mimo, glm, grok-build, grok-composer; default codex)
 USAGE
 }
 

@@ -33,11 +33,11 @@ SKILLS=(
     # guard + PATH scrub of both script dirs + the GROK_CLAUDE_*_ENABLED=false compat
     # suite set in .zshenv and the relay grok transport).
     "*|./agents/extensions/skills|claude,codex,grok"
-    # Relay: claude-only caller; targets Codex, DeepSeek, MiMo, and Grok via the script
+    # Relay: claude-only caller; targets Codex, DeepSeek, MiMo, GLM, and Grok via the script
     "relay|./agents/extensions/skills/relay|claude"
     # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup)
     "keep-warm|./agents/extensions/skills/keep-warm|claude"
-    # prism: claude-only caller (dispatches parallax to Codex + DeepSeek + MiMo + Grok via relay)
+    # prism: claude-only caller (dispatches parallax to Codex + DeepSeek + MiMo + GLM + Grok via relay)
     "prism|./agents/extensions/skills/prism|claude"
     # goal-loop: default review backend is prism (claude-only); built on the Skill/AskUserQuestion
     # tooling. Off-Claude it only degrades to external/local/none, so keep it claude-only.

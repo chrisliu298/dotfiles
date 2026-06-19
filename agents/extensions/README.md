@@ -43,11 +43,11 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | jina                    | ✓ | ✓ | ✓ | on     | local — Fetch web content / search via Jina AI |
 | keep-warm               | ✓ | — | — | on     | local — Cache heartbeat (uses Claude-only scheduling tools) |
 | pdf                     | ✓ | ✓ | ✓ | on     | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex/Grok) — PDF read/edit |
-| prism                   | ✓ | — | — | on     | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to Codex + DeepSeek + MiMo + Grok via relay) |
+| prism                   | ✓ | — | — | on     | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to Codex + DeepSeek + MiMo + GLM + Grok via relay) |
 | prompt-engineer         | ✓ | ✓ | ✓ | on     | local — Prompt writing per-vendor best practices |
 | push                    | ✓ | ✓ | ✓ | on     | local — Push to remote (auto-picks single vs atomic commits) |
 | rehydrate               | ✓ | ✓ | ✓ | on     | local — Recover post-compaction detail from the raw session transcript |
-| relay                   | ✓ | — | — | on     | local — Cross-agent relay from Claude to Codex/DeepSeek/MiMo/Grok (Claude-only caller) |
+| relay                   | ✓ | — | — | on     | local — Cross-agent relay from Claude to Codex/DeepSeek/MiMo/GLM/Grok (Claude-only caller) |
 | skill-creator           | ✓ | — | — | on     | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
 | todo                    | ✓ | ✓ | ✓ | on     | local — TODO.md tracking across sessions |
 | xurl                    | ✓ | ✓ | ✓ | on     | local — X/Twitter via the `xurl` CLI |
