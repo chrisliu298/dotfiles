@@ -43,10 +43,10 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | keep-warm               | ✓ | — | — | local — Cache heartbeat (uses Claude-only scheduling tools) |
 | mental-seal             | ✓ | ✓ | ✓ | local — Hold ONE supreme priority front-of-mind via a visible user-owned SEAL.md vow (hook-free, C/X/G) |
 | pdf                     | ✓ | ✓ | ✓ | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex/Grok) — PDF read/edit |
-| prism                   | ✓ | — | — | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to Codex + DeepSeek + MiMo + GLM + Grok via relay) |
+| prism                   | ✓ | — | — | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to Codex + Grok + GLM + Kimi + DeepSeek + MiMo via relay) |
 | push                    | ✓ | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
 | rehydrate               | ✓ | ✓ | ✓ | local — Recover post-compaction detail from the raw session transcript |
-| relay                   | ✓ | — | — | local — Cross-agent relay from Claude to Codex/DeepSeek/MiMo/GLM/Grok (Claude-only caller) |
+| relay                   | ✓ | — | — | local — Cross-agent relay from Claude to Codex/Grok/GLM/Kimi/DeepSeek/MiMo (Claude-only caller) |
 | skill-creator           | ✓ | — | — | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
 | todo                    | ✓ | ✓ | ✓ | local — TODO.md tracking across sessions |
 | xurl                    | ✓ | ✓ | ✓ | local — X/Twitter via the `xurl` CLI |

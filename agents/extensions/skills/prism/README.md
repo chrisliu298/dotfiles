@@ -61,20 +61,20 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
 │  │  Claude × N  │                   │   (peers × N)    │                          │
 │  │  (Agent tool)│                   └─────────┬────────┘                          │
 │  └──────────────┘                             │ one backgrounded fan-out          │
-│   same model →          ┌─────┬──────────┬─────────┼────────┬────┐                │
-│   shared blind spots,   ▼     ▼          ▼         ▼        ▼    ▼                │
-│   so convergence here   Codex Grok-Build Grok-Comp DeepSeek MiMo GLM              │
-│   is DISCOUNTED        (GPT5.5) (xAI) (xAI fast) (V4-Pro) (Xiaomi) (z.ai)         │
-│                         └─────┴──────────┴─────────┴────────┴────┘                │
+│   same model →          ┌─────┬──────────┬─────────┼────────┬────┬────┐           │
+│   shared blind spots,   ▼     ▼          ▼         ▼        ▼    ▼    ▼           │
+│   so convergence here   Codex Grok-Build Grok-Comp GLM Kimi DeepSeek MiMo         │
+│   is DISCOUNTED        (GPT5.5) (xAI) (xAI fast) (z.ai) (Moon) (V4-Pro) (Xiaomi)  │
+│                         └─────┴──────────┴─────────┴────────┴────┴────┘           │
 │                              independent lineages → catch the blind spots the     │
 │                              others share → dissent here carries OUTSIZED weight  │
 └───────────────────────────────────────────────────────────────────────────────────┘
-        Integrator + 1 subagent + 6 parallax peers  =  8 perspectives at the default (N=1)
+        Integrator + 1 subagent + 7 parallax peers  =  9 perspectives at the default (N=1)
 ```
 
 * **Subagents** are dispatched with the **Agent tool** (only Claude can).
 * **Parallax** peers are dispatched through **`relay`**, which runs each model in
-  the Claude Code harness (Codex via `codex exec`, Grok via its CLI, DeepSeek/MiMo/GLM
+  the Claude Code harness (Codex via `codex exec`, Grok via its CLI, GLM/Kimi/DeepSeek/MiMo
   via `claude -p` with the weights swapped). A peer is a *full agent*, not an API call.
 
 ---
@@ -85,7 +85,7 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
    prism  [N]  [M]  <question>
           │    │
           │    └─ M gpt-pro lenses (optional second number; default 0)
-          └─ how many of EACH of the seven models (default 1 → 7 agents + self)
+          └─ how many of EACH of the eight models (default 1 → 8 agents + self)
 
    No reasoning-effort knob — Codex always xhigh, Grok-Build always high.
 
@@ -113,7 +113,7 @@ backgrounded process. The Integrator stays in the loop for the judgment.
                                       (verbatim, safe)      the script — not you)
 
  2  scaffold ──► fill ─────►  /tmp/prism-<id>.dispatch     one record per lens
-    (--preset pre-fills 7 lenses)        Type/To/Effort/Lens
+    (--preset pre-fills 8 lenses)        Type/To/Effort/Lens
 
  3  prepare ───────────────►  ┌────────────────────────────────────────────┐
                               │ validate · render launchers · write        │
@@ -128,9 +128,10 @@ backgrounded process. The Integrator stays in the loop for the judgment.
        └─ parallax (bg) ─► ┌── relay ──► codex ───────┐                │
                            ├── relay ──► grok-build   │                │
                            ├── relay ──► grok-composer├─► <id>-result.json
-                           ├── relay ──► deepseek     │   + .relay/…res.md (×peer)
-                           ├── relay ──► mimo         │                │
-                           └── relay ──► glm ─────────┘                │
+                           ├── relay ──► glm          │   + .relay/…res.md (×peer)
+                           ├── relay ──► kimi         │                │
+                           ├── relay ──► deepseek     │                │
+                           └── relay ──► mimo ────────┘                │
                                                                        ▼
  5  WAIT for every notification ░░░░░░░ HARD GATE ░░░░░ (no early synthesis)
        ~K notifications: one per subagent + one for the whole parallax batch
@@ -157,7 +158,7 @@ backgrounded process. The Integrator stays in the loop for the judgment.
   scaffold  [--n N] [--preset TYPE] [--packet PATH]
               └ print a fill-in dispatch skeleton (correct order + fixed Codex x / Grok-Build h effort).
                 --preset review|design|diagnosis|compare|research|decision|writing
-                pre-fills seven lenses by task type (N=1).
+                pre-fills eight lenses by task type (N=1).
 
   prepare   --dispatch <file>     (or --config <json>)
               └ validate, render every launcher from templates, write the manifest,
@@ -228,7 +229,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
   └── templates/
       ├── launcher-subagent.tmpl       Claude subagent prompt (plain markdown)
       ├── launcher-relay-codex.tmpl    Codex / GPT  — <goal> style
-      ├── launcher-relay-costar.tmpl   DeepSeek/MiMo/GLM/Grok — CO-STAR XML
+      ├── launcher-relay-costar.tmpl   Grok/GLM/Kimi/DeepSeek/MiMo — CO-STAR XML
       ├── shared-constraints.md        canonical read-only / anti-recursion block
       │                                (prepare injects this; never hand-copied)
       └── shared-how-to-answer.md      canonical "## How to answer" block

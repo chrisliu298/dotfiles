@@ -120,7 +120,7 @@ dfs() {
 }
 
 # synckeys — propagate this machine's ~/.zshenv.local API/plan keys to dfs peers.
-# ~/.zshenv.local holds secrets (DEEPSEEK/MIMO/GLM_API_KEY, …) and is
+# ~/.zshenv.local holds secrets (DEEPSEEK/GLM_API_KEY, MIMO/KIMI_PLAN_KEY, …) and is
 # intentionally NOT in the dotfiles repo, so `dfs` never carries it — a
 # new `export FOO_API_KEY=...` added here must reach the other machines separately.
 # synckeys upserts the local `export *_API_KEY=` / `*_PLAN_KEY=` lines onto each peer (adds
@@ -296,7 +296,7 @@ xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex ex
 # `[1m]` suffix (that's MiMo-only below; the DeepSeek endpoint has no such
 # variant). Requires DEEPSEEK_API_KEY in env (see ~/.zshenv.local).
 #
-# NOTE: _deepseek/_mimo/_glm below duplicate the model id, endpoint, and
+# NOTE: _deepseek/_mimo/_glm/_kimi below duplicate the model id, endpoint, and
 # extras that also live in agents/extensions/skills/relay/peers.json — the
 # relay/prism source of truth. These interactive launchers are a separate
 # consumer; if you change a model id or endpoint, update peers.json too (and
@@ -311,7 +311,7 @@ _deepseek(){
     # errors at the tool gate instead of failing the request. Mirrors the relay
     # script's claude-env branch.
     local _ds_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
-    env -u TMUX COLORTERM=truecolor \
+    env -u TMUX -u ANTHROPIC_API_KEY COLORTERM=truecolor \
         PATH="$_ds_path" \
         ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic \
         ANTHROPIC_AUTH_TOKEN="$DEEPSEEK_API_KEY" \
@@ -332,15 +332,18 @@ dshl(){ (( $# )) || { echo 'Usage: dshl "<prompt>"'; return 1; }; CLAUDE_CODE_EF
 # =============================================================================
 # MiMo (via Claude Code, Anthropic-compatible endpoint)
 # =============================================================================
-# Routes Claude Code at Xiaomi MiMo per-invocation, so default `c`/`cc` keep
-# using the Claude subscription. mimo-v2.5-pro exposes no effort tiers on this
-# Anthropic/Claude Code endpoint (the model's OpenAI-style low/medium/high
-# reasoning_effort isn't surfaced here), so CLAUDE_CODE_EFFORT_LEVEL is a no-op
-# — unlike DeepSeek's high/max. The `[1m]` suffix enables the 1M-token context
-# window. Model IDs keep their dots (the endpoint rejects `mimo-v2-5-pro`).
-# Requires MIMO_API_KEY in env (see ~/.zshenv.local).
+# Routes Claude Code at Xiaomi MiMo per-invocation via the MiMo *subscription
+# plan* endpoint (token-plan-sgp.xiaomimimo.com/anthropic — bills the plan, not
+# pay-per-token), so default `c`/`cc` keep using the Claude subscription.
+# mimo-v2.5-pro exposes no effort tiers on this Anthropic/Claude Code endpoint
+# (the model's OpenAI-style low/medium/high reasoning_effort isn't surfaced here),
+# so CLAUDE_CODE_EFFORT_LEVEL is a no-op — unlike DeepSeek's high/max. The `[1m]`
+# suffix enables the 1M-token context window. Model IDs keep their dots (the
+# endpoint rejects `mimo-v2-5-pro`). The plan endpoint authenticates with Bearer
+# ANTHROPIC_AUTH_TOKEN (unlike Kimi's coding plan, which uses ANTHROPIC_API_KEY).
+# Requires MIMO_PLAN_KEY (the MiMo plan key) in env (see ~/.zshenv.local).
 _mimo(){
-    [[ -n "${MIMO_API_KEY:-}" ]] || { echo 'MIMO_API_KEY not set (see ~/.zshenv.local)' >&2; return 1; }
+    [[ -n "${MIMO_PLAN_KEY:-}" ]] || { echo 'MIMO_PLAN_KEY not set (see ~/.zshenv.local)' >&2; return 1; }
     # Drop relay scripts dir from PATH so MiMo sessions can't shell out to relay.
     local _mm_path="${PATH//$HOME\/.claude\/skills\/relay\/scripts:/}"
     _mm_path="${_mm_path%:$HOME/.claude/skills/relay/scripts}"
@@ -348,10 +351,10 @@ _mimo(){
     # multimodal Reads so image data isn't silently dropped. Mirrors the relay
     # script's claude-env branch.
     local _mm_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
-    env -u TMUX COLORTERM=truecolor \
+    env -u TMUX -u ANTHROPIC_API_KEY COLORTERM=truecolor \
         PATH="$_mm_path" \
-        ANTHROPIC_BASE_URL=https://api.xiaomimimo.com/anthropic \
-        ANTHROPIC_AUTH_TOKEN="$MIMO_API_KEY" \
+        ANTHROPIC_BASE_URL=https://token-plan-sgp.xiaomimimo.com/anthropic \
+        ANTHROPIC_AUTH_TOKEN="$MIMO_PLAN_KEY" \
         ANTHROPIC_MODEL='mimo-v2.5-pro[1m]' \
         ANTHROPIC_DEFAULT_OPUS_MODEL='mimo-v2.5-pro[1m]' \
         ANTHROPIC_DEFAULT_SONNET_MODEL='mimo-v2.5-pro[1m]' \
@@ -383,7 +386,7 @@ _glm(){
     # the tool gate instead of being silently dropped. Mirrors the relay script's
     # claude-env branch.
     local _glm_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
-    env -u TMUX COLORTERM=truecolor \
+    env -u TMUX -u ANTHROPIC_API_KEY COLORTERM=truecolor \
         PATH="$_glm_path" \
         ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic \
         ANTHROPIC_AUTH_TOKEN="$GLM_API_KEY" \
@@ -399,6 +402,49 @@ glm(){   CLAUDE_CODE_EFFORT_LEVEL=max _glm --dangerously-skip-permissions "$@"; 
 glmc(){  CLAUDE_CODE_EFFORT_LEVEL=max _glm --dangerously-skip-permissions --continue "$@"; }
 glmr(){  CLAUDE_CODE_EFFORT_LEVEL=max _glm --dangerously-skip-permissions --resume "$@"; }
 glmhl(){ (( $# )) || { echo 'Usage: glmhl "<prompt>"'; return 1; }; CLAUDE_CODE_EFFORT_LEVEL=max _glm -p --dangerously-skip-permissions "${*}"; }
+
+# =============================================================================
+# Kimi (via Claude Code, Kimi-for-Coding subscription plan) — aliases: km/kmc/kmr/kmhl
+# =============================================================================
+# Routes Claude Code at Moonshot's Kimi-for-Coding subscription endpoint
+# (api.kimi.com/coding/) per-invocation, so default `c`/`cc` keep using the Claude
+# subscription. On the coding plan the THINKING TOGGLE picks the model: thinking on
+# -> K2.7-Code (flagship), thinking off -> K2.6. The wrappers below pin
+# CLAUDE_CODE_EFFORT_LEVEL=max to force thinking on -> K2.7-Code. Native WebFetch +
+# WebSearch both work here (the web tools' thinking-off aux calls route to K2.6,
+# which accepts them — no 400, unlike the raw Moonshot K2.7-code endpoint). The
+# coding endpoint authenticates with ANTHROPIC_API_KEY (x-api-key), NOT
+# ANTHROPIC_AUTH_TOKEN, and ignores ANTHROPIC_MODEL (the plan picks the model); we
+# still set it for clarity. Per the Kimi Code guide we set the auto-compact window
+# to the 256K context (262144) and disable tool-search. Requires KIMI_PLAN_KEY (a
+# Kimi Code Console key for the coding plan, distinct from the old Moonshot
+# pay-per-token key; see ~/.zshenv.local).
+_kimi(){
+    [[ -n "${KIMI_PLAN_KEY:-}" ]] || { echo 'KIMI_PLAN_KEY not set (see ~/.zshenv.local)' >&2; return 1; }
+    # Drop relay scripts dir from PATH so Kimi sessions can't shell out to relay.
+    local _kimi_path="${PATH//$HOME\/.claude\/skills\/relay\/scripts:/}"
+    _kimi_path="${_kimi_path%:$HOME/.claude/skills/relay/scripts}"
+    # Treated text-only here (K2.7-Code vision is unverified over the coding endpoint)
+    # — deny multimodal Reads, mirroring ds/mm/glm.
+    local _kimi_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
+    env -u TMUX -u ANTHROPIC_AUTH_TOKEN COLORTERM=truecolor \
+        PATH="$_kimi_path" \
+        ANTHROPIC_BASE_URL=https://api.kimi.com/coding/ \
+        ANTHROPIC_API_KEY="$KIMI_PLAN_KEY" \
+        ANTHROPIC_MODEL=kimi-k2.7-code \
+        ANTHROPIC_DEFAULT_OPUS_MODEL=kimi-k2.7-code \
+        ANTHROPIC_DEFAULT_SONNET_MODEL=kimi-k2.7-code \
+        ANTHROPIC_DEFAULT_HAIKU_MODEL=kimi-k2.7-code \
+        ANTHROPIC_SMALL_FAST_MODEL=kimi-k2.7-code \
+        CLAUDE_CODE_SUBAGENT_MODEL=kimi-k2.7-code \
+        ENABLE_TOOL_SEARCH=false \
+        CLAUDE_CODE_AUTO_COMPACT_WINDOW=262144 \
+        "$(command -v claude)" --disallowedTools "$_kimi_deny" "$@"
+}
+km(){   CLAUDE_CODE_EFFORT_LEVEL=max _kimi --dangerously-skip-permissions "$@"; }
+kmc(){  CLAUDE_CODE_EFFORT_LEVEL=max _kimi --dangerously-skip-permissions --continue "$@"; }
+kmr(){  CLAUDE_CODE_EFFORT_LEVEL=max _kimi --dangerously-skip-permissions --resume "$@"; }
+kmhl(){ (( $# )) || { echo 'Usage: kmhl "<prompt>"'; return 1; }; CLAUDE_CODE_EFFORT_LEVEL=max _kimi -p --dangerously-skip-permissions "${*}"; }
 
 # Show Claude + Codex account emails on local, macmini, and l40s.
 ae() {

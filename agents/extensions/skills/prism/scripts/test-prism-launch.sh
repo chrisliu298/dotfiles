@@ -88,15 +88,15 @@ MAN4="$TMP/prism-run4-manifest.json"
 DRY4=$("$LAUNCH" parallax "$MAN4" --dry-run 2>/dev/null)
 [ "$(echo "$DRY4" | grep -c 'relay call --to')" = "3" ] && ok "three-tier dry-run lists exactly 3 relay calls" || bad "three-tier dry-run lists 3 relay calls"
 
-echo "== prepare: default six-tier shape + canonical display order =="
+echo "== prepare: default seven-tier shape + canonical display order =="
 PKT5="$TMP/prism-run5.md"; make_packet "$PKT5"
 CFG5="$TMP/run5-config.json"
 # tiers deliberately scrambled in the config; the dispatch-shape display must still be canonical
-jq -n --arg p "$PKT5" '{shared_packet:$p,parallax:[{to:"mimo",name:"a",lens:"L1",lens_desc:"d"},{to:"codex",name:"b",effort:"medium",lens:"L2",lens_desc:"d"},{to:"glm",name:"f",lens:"L7",lens_desc:"d"},{to:"deepseek",name:"c",lens:"L3",lens_desc:"d"},{to:"grok-composer",name:"d",lens:"L4",lens_desc:"d"},{to:"grok-build",name:"e",effort:"high",lens:"L5",lens_desc:"d"}],subagents:[{lens:"L6",lens_desc:"d"}]}' > "$CFG5"
+jq -n --arg p "$PKT5" '{shared_packet:$p,parallax:[{to:"mimo",name:"a",lens:"L1",lens_desc:"d"},{to:"codex",name:"b",effort:"medium",lens:"L2",lens_desc:"d"},{to:"kimi",name:"g",lens:"L8",lens_desc:"d"},{to:"glm",name:"f",lens:"L7",lens_desc:"d"},{to:"deepseek",name:"c",lens:"L3",lens_desc:"d"},{to:"grok-composer",name:"d",lens:"L4",lens_desc:"d"},{to:"grok-build",name:"e",effort:"high",lens:"L5",lens_desc:"d"}],subagents:[{lens:"L6",lens_desc:"d"}]}' > "$CFG5"
 OUT5=$("$LAUNCH" prepare --config "$CFG5" 2>/dev/null)
 MAN5="$TMP/prism-run5-manifest.json"
-[ "$(jq -r '.counts.parallax_total' "$MAN5" 2>/dev/null)" = "6" ] && ok "default six-tier counts: parallax_total=6" || bad "six-tier counts"
-echo "$OUT5" | grep -q 'dispatch shape: subagents=1 codex=1 grok-build=1 grok-composer=1 deepseek=1 mimo=1 glm=1' && ok "dispatch shape printed in canonical order (not alphabetical)" || bad "dispatch shape canonical order"
+[ "$(jq -r '.counts.parallax_total' "$MAN5" 2>/dev/null)" = "7" ] && ok "default seven-tier counts: parallax_total=7" || bad "seven-tier counts"
+echo "$OUT5" | grep -q 'dispatch shape: subagents=1 codex=1 grok-build=1 grok-composer=1 glm=1 kimi=1 deepseek=1 mimo=1' && ok "dispatch shape printed in canonical order (not alphabetical)" || bad "dispatch shape canonical order"
 
 echo "== prepare + dry-run: grok parallax tiers (effort vs no-knob) =="
 PKTG="$TMP/prism-grok.md"; make_packet "$PKTG"
@@ -311,18 +311,18 @@ expect_ok "accepts a subagents-only dispatch (empty parallax accumulator)" "$LAU
 
 echo "== scaffold: symmetric dispatch skeleton =="
 SC=$("$LAUNCH" scaffold --n 1 --packet /tmp/prism-sc.md)
-[ "$(printf '%s\n' "$SC" | grep -c '^Type:')" = "7" ] && ok "scaffold --n 1 emits 7 records" || bad "scaffold n=1 record count"
+[ "$(printf '%s\n' "$SC" | grep -c '^Type:')" = "8" ] && ok "scaffold --n 1 emits 8 records" || bad "scaffold n=1 record count"
 printf '%s\n' "$SC" | grep -q '^Shared-Packet: /tmp/prism-sc.md' && ok "scaffold honors --packet" || bad "scaffold --packet"
-printf '%s\n' "$SC" | grep -q '^To: codex' && printf '%s\n' "$SC" | grep -q '^To: mimo' && printf '%s\n' "$SC" | grep -q '^To: glm' && ok "scaffold lists all six parallax tiers" || bad "scaffold tiers"
+printf '%s\n' "$SC" | grep -q '^To: codex' && printf '%s\n' "$SC" | grep -q '^To: mimo' && printf '%s\n' "$SC" | grep -q '^To: glm' && printf '%s\n' "$SC" | grep -q '^To: kimi' && ok "scaffold lists all seven parallax tiers" || bad "scaffold tiers"
 SCX=$("$LAUNCH" scaffold --n 2)
-[ "$(printf '%s\n' "$SCX" | grep -c '^Type:')" = "14" ] && ok "scaffold --n 2 emits 14 records" || bad "scaffold n=2 record count"
+[ "$(printf '%s\n' "$SCX" | grep -c '^Type:')" = "16" ] && ok "scaffold --n 2 emits 16 records" || bad "scaffold n=2 record count"
 # effort is fixed — scaffold always emits Codex x (xhigh) + Grok Build h (high), N of each
 [ "$(printf '%s\n' "$SCX" | grep -c '^Effort: x')" = "2" ] && [ "$(printf '%s\n' "$SCX" | grep -c '^Effort: h')" = "2" ] && ok "scaffold emits fixed codex x + grok-build h" || bad "scaffold fixed effort"
 expect_err "scaffold rejects --effort (no longer an option)" "$LAUNCH" scaffold --effort h
 # a filled scaffold round-trips through prepare
 make_packet /tmp/prism-scrt.md
 "$LAUNCH" scaffold --n 1 --packet /tmp/prism-scrt.md \
-  | sed 's/^Lens: FILL-1$/Lens: L1/;s/^Lens: FILL-2$/Lens: L2/;s/^Lens: FILL-3$/Lens: L3/;s/^Lens: FILL-4$/Lens: L4/;s/^Lens: FILL-5$/Lens: L5/;s/^Lens: FILL-6$/Lens: L6/;s/^Lens: FILL-7$/Lens: L7/;s/^Lens-Desc: FILL$/Lens-Desc: weigh it/' > /tmp/prism-scrt.dispatch
+  | sed 's/^Lens: FILL-1$/Lens: L1/;s/^Lens: FILL-2$/Lens: L2/;s/^Lens: FILL-3$/Lens: L3/;s/^Lens: FILL-4$/Lens: L4/;s/^Lens: FILL-5$/Lens: L5/;s/^Lens: FILL-6$/Lens: L6/;s/^Lens: FILL-7$/Lens: L7/;s/^Lens: FILL-8$/Lens: L8/;s/^Lens-Desc: FILL$/Lens-Desc: weigh it/' > /tmp/prism-scrt.dispatch
 expect_ok "a filled scaffold round-trips through prepare" "$LAUNCH" prepare --dispatch /tmp/prism-scrt.dispatch
 # a half-filled scaffold (leftover FILL-<n> lens) must be rejected, not dispatched
 make_packet /tmp/prism-schalf.md
@@ -355,7 +355,7 @@ touch /tmp/prism-mtest.md /tmp/prism-mtest-manifest.json /tmp/prism-mtest-launch
 echo "== scaffold --preset: pre-filled, dispatchable lenses =="
 SCP=$("$LAUNCH" scaffold --preset review --packet /tmp/prism-pp.md)
 [ "$(printf '%s\n' "$SCP" | grep -c FILL)" = "0" ] && ok "scaffold --preset leaves no FILL placeholder" || bad "preset has FILL"
-[ "$(printf '%s\n' "$SCP" | grep -c '^Type:')" = "7" ] && ok "scaffold --preset emits 7 records (N=1)" || bad "preset record count"
+[ "$(printf '%s\n' "$SCP" | grep -c '^Type:')" = "8" ] && ok "scaffold --preset emits 8 records (N=1)" || bad "preset record count"
 printf '%s\n' "$SCP" | grep -q '^Lens: Adversarial' && ok "preset 'review' puts a heavy lens on slot 1" || bad "preset slot-1 lens"
 expect_err "scaffold rejects an unknown --preset" "$LAUNCH" scaffold --preset nope
 expect_err "scaffold rejects --preset with --n > 1" "$LAUNCH" scaffold --n 2 --preset review
@@ -370,7 +370,7 @@ grep -q 'wait for 2 completion notification' "$TMP/ppnotif.out" && ok "prepare p
 echo "== parallax --only: single-peer retry targeting (dry-run) =="
 MPP=/tmp/prism-pp-manifest.json
 "$LAUNCH" parallax "$MPP" --only codex --dry-run 2>/dev/null | grep -q 'relay call --to codex --name prism-correctness' && ok "--only matches a peer by model" || bad "--only by model"
-"$LAUNCH" parallax "$MPP" --only outsider --dry-run 2>/dev/null | grep -q 'relay call --to mimo --name prism-outsider' && ok "--only matches a peer by lens slug" || bad "--only by slug"
+"$LAUNCH" parallax "$MPP" --only outsider --dry-run 2>/dev/null | grep -q 'relay call --to kimi --name prism-outsider' && ok "--only matches a peer by lens slug" || bad "--only by slug"
 "$LAUNCH" parallax "$MPP" --only prism-correctness --dry-run 2>/dev/null | grep -q 'relay call --to codex' && ok "--only matches a peer by relay name" || bad "--only by name"
 expect_err "--only refuses an unknown peer" "$LAUNCH" parallax "$MPP" --only nope --dry-run
 

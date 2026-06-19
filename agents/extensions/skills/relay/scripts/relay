@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Claude-only: refuse when invoked from a non-Claude (DeepSeek/MiMo/GLM) session.
+# Claude-only: refuse when invoked from a non-Claude (DeepSeek/MiMo/GLM/Kimi) session.
 case "${ANTHROPIC_BASE_URL:-}" in
   *deepseek*)    echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at DeepSeek." >&2; exit 2 ;;
   *xiaomimimo*)  echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at MiMo." >&2; exit 2 ;;
   *z.ai*)        echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at z.ai (GLM)." >&2; exit 2 ;;
+  *kimi.com*)    echo "relay: refused — Claude-only skill, but ANTHROPIC_BASE_URL points at Kimi (coding plan)." >&2; exit 2 ;;
 esac
 
 # Anti-recursion: every peer relay spawns inherits RELAY_PEER=<peer>. Refuse a
@@ -131,7 +132,7 @@ recover_codex_response() {
 
 # Auto-detect caller and peer from the skill directory this script lives in.
 # Caller is always Claude under the current one-direction protocol; the default
-# peer is Codex. Use --to deepseek, --to mimo, --to glm, --to grok-build, or --to grok-composer to route elsewhere.
+# peer is Codex. Use --to grok-build, --to grok-composer, --to glm, --to kimi, --to deepseek, or --to mimo to route elsewhere.
 # Returns "from to" (e.g. "claude codex") or empty string if unknown.
 detect_peers() {
   local script_dir
@@ -178,7 +179,7 @@ cmd_req() {
   ensure_relay_dir
 
   # Build effort line (codex consumes it via request frontmatter, grok-build via its
-  # --effort CLI flag; deepseek and mimo have no effort knob and ignore it).
+  # --effort CLI flag; glm/kimi/deepseek/mimo have no effort knob and ignore it).
   # effort is non-empty only for effort-bearing peers (cmd_call blanks it otherwise).
   local effort_line=""
   if [ -n "$effort" ]; then
@@ -272,8 +273,8 @@ cmd_call() {
   fi
 
   # Build req. cmd_req surfaces effort in frontmatter for codex; the
-  # claude-env peers (deepseek and glm pinned to max via the registry extra_env,
-  # mimo with no effort knob) ignore it.
+  # claude-env peers (deepseek, glm, and kimi pinned to max via the registry
+  # extra_env; mimo with no effort knob) ignore it.
   local req_args=(--from "$from" --to "$to" --effort "$effort")
   [ -n "$name" ] || die "call: --name required"
   check_slug "call: --name" "$name"
@@ -339,7 +340,7 @@ EOF
   # Anthropic-compatible envelope whose endpoint/key/model/extras all come from the
   # registry. The six model vars all take the same model id (harness-required) —
   # incl. ANTHROPIC_SMALL_FAST_MODEL, else background calls fall back to a hardcoded
-  # Haiku id that DeepSeek/MiMo/GLM gateways bill as their cheap flash/lite tier.
+  # Haiku id that GLM/Kimi/DeepSeek/MiMo gateways bill as their cheap flash/lite tier.
   local -a peer_cmd
   local model
   model=$(jq -r '.model' <<<"$peer_json")
@@ -373,8 +374,13 @@ EOF
       --no-auto-update --no-subagents)
     [ -n "$effort" ] && peer_cmd+=(--effort "$effort")
   else
-    local base
+    local base auth_style auth_var
     base=$(jq -r '.base' <<<"$peer_json")
+    # Auth header style: most claude-env peers send ANTHROPIC_AUTH_TOKEN (Bearer);
+    # a peer with "auth_style":"api_key" sends ANTHROPIC_API_KEY (x-api-key) instead —
+    # e.g. Kimi's Kimi-for-Coding subscription endpoint, which requires x-api-key.
+    auth_style=$(jq -r '.auth_style // "auth_token"' <<<"$peer_json")
+    if [ "$auth_style" = "api_key" ]; then auth_var="ANTHROPIC_API_KEY"; else auth_var="ANTHROPIC_AUTH_TOKEN"; fi
     # Per-peer extras (e.g. deepseek's max effort) — registry data.
     # Fail closed if a stanza tries to override a safety/identity var: extras are
     # applied last, so an unguarded PATH/RELAY_PEER/auth/model key would win and
@@ -384,15 +390,18 @@ EOF
     while IFS=$'\t' read -r k v; do
       [ -n "$k" ] || continue
       case "$k" in
-        PATH|RELAY_PEER|ANTHROPIC_BASE_URL|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_MODEL|ANTHROPIC_DEFAULT_OPUS_MODEL|ANTHROPIC_DEFAULT_SONNET_MODEL|ANTHROPIC_DEFAULT_HAIKU_MODEL|ANTHROPIC_SMALL_FAST_MODEL|CLAUDE_CODE_SUBAGENT_MODEL)
+        PATH|RELAY_PEER|ANTHROPIC_BASE_URL|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_API_KEY|ANTHROPIC_MODEL|ANTHROPIC_DEFAULT_OPUS_MODEL|ANTHROPIC_DEFAULT_SONNET_MODEL|ANTHROPIC_DEFAULT_HAIKU_MODEL|ANTHROPIC_SMALL_FAST_MODEL|CLAUDE_CODE_SUBAGENT_MODEL)
           die "call: peer '$to' extra_env may not override reserved env var '$k' (registry safety guard)" ;;
       esac
       extra_env+=("$k=$v")
     done < <(jq -r '.extra_env // {} | to_entries[] | "\(.key)\t\(.value)"' <<<"$peer_json")
-    peer_cmd=(env -u CLAUDECODE -u TMUX "PATH=$sanitized_path" "RELAY_PEER=$to"
+    # Clear any inherited ANTHROPIC auth so the parent session's token can't leak in;
+    # then set exactly the one this peer's auth_style needs.
+    peer_cmd=(env -u CLAUDECODE -u TMUX -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_API_KEY
+      "PATH=$sanitized_path" "RELAY_PEER=$to"
       COLORTERM=truecolor
       "ANTHROPIC_BASE_URL=$base"
-      "ANTHROPIC_AUTH_TOKEN=$auth_token"
+      "$auth_var=$auth_token"
       "ANTHROPIC_MODEL=$model"
       "ANTHROPIC_DEFAULT_OPUS_MODEL=$model"
       "ANTHROPIC_DEFAULT_SONNET_MODEL=$model"
@@ -402,18 +411,20 @@ EOF
     if [ "${#extra_env[@]}" -gt 0 ]; then peer_cmd+=("${extra_env[@]}"); fi
     # claude-env peers always run headless (claude -p). Deny two unrelated hazard
     # classes up front:
-    #   1. Multimodal Reads — deepseek-v4-pro / mimo-v2.5-pro / glm-5.2 are text-only
-    #      (mimo image support lives in mimo-v2.5/-omni, not -pro; deepseek V4 input
-    #      type is text/string; glm-5.2 input modality is text), so an image/PDF Read
-    #      errors (DeepSeek) or is silently dropped (MiMo/GLM). A model-capability limit.
+    #   1. Multimodal Reads — deepseek-v4-pro / mimo-v2.5-pro / glm-5.2 / kimi-k2.7-code are
+    #      treated text-only (mimo image support lives in mimo-v2.5/-omni, not -pro;
+    #      deepseek V4 input type is text/string; glm-5.2 input modality is text; kimi
+    #      vision is unverified over the coding endpoint), so an
+    #      image/PDF Read errors (DeepSeek) or is silently dropped (GLM/Kimi/MiMo). The
+    #      deny below is one shared string applied to every claude-env peer.
     #   2. Interactive consent gates — ExitPlanMode and AskUserQuestion block
     #      waiting for a human to approve a plan / answer a question; in a headless
     #      run there is none, so they deadlock until the timeout (verified: both
     #      return a pending "Exit plan mode?" / "Answer questions?" gate).
     #      EnterPlanMode itself runs fine but only leads into that dead end. This is
     #      an execution-mode limit, independent of which model is behind the harness
-    #      — so it is NOT mirrored in the interactive ds/mm/glm launchers, where a
-    #      human is present and plan mode is useful.
+    #      — so it is NOT mirrored in the interactive ds/mm/glm/km launchers, where
+    #      a human is present and plan mode is useful.
     # --disallowedTools is variadic (<tools...>): a non-flag token right after it is
     # swallowed as another tool name, so keep --dangerously-skip-permissions AFTER
     # it — that dashed token ends the list, leaving the prompt as the lone positional.
@@ -467,10 +478,10 @@ Subcommands:
 Call options:
   --name <slug>      Call identifier
   --effort <level>   Reasoning effort: codex (medium/xhigh), grok-build (medium/high).
-                     Ignored for deepseek (always max), mimo, glm, and grok-composer (no knob).
+                     Ignored for grok-composer, glm, kimi, deepseek (always max), and mimo (no knob).
   --body-only        Strip frontmatter from response output
   --from <peer>      Override caller detection (normally claude)
-  --to <peer>        Override peer detection (codex, deepseek, mimo, glm, grok-build, grok-composer; default codex)
+  --to <peer>        Override peer detection (codex, grok-build, grok-composer, glm, kimi, deepseek, mimo; default codex)
 USAGE
 }
 

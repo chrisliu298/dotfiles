@@ -6,29 +6,6 @@
     "default_effort": "medium",
     "template": "codex"
   },
-  "deepseek": {
-    "transport": "claude-env",
-    "base": "https://api.deepseek.com/anthropic",
-    "key_env": "DEEPSEEK_API_KEY",
-    "model": "deepseek-v4-pro",
-    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max" },
-    "template": "costar"
-  },
-  "mimo": {
-    "transport": "claude-env",
-    "base": "https://api.xiaomimimo.com/anthropic",
-    "key_env": "MIMO_API_KEY",
-    "model": "mimo-v2.5-pro[1m]",
-    "template": "costar"
-  },
-  "glm": {
-    "transport": "claude-env",
-    "base": "https://api.z.ai/api/anthropic",
-    "key_env": "GLM_API_KEY",
-    "model": "glm-5.2",
-    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max" },
-    "template": "costar"
-  },
   "grok-build": {
     "transport": "grok",
     "model": "grok-build",
@@ -39,6 +16,38 @@
   "grok-composer": {
     "transport": "grok",
     "model": "grok-composer-2.5-fast",
+    "template": "costar"
+  },
+  "glm": {
+    "transport": "claude-env",
+    "base": "https://api.z.ai/api/anthropic",
+    "key_env": "GLM_API_KEY",
+    "model": "glm-5.2",
+    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max" },
+    "template": "costar"
+  },
+  "kimi": {
+    "transport": "claude-env",
+    "base": "https://api.kimi.com/coding/",
+    "key_env": "KIMI_PLAN_KEY",
+    "auth_style": "api_key",
+    "model": "kimi-k2.7-code",
+    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "262144" },
+    "template": "costar"
+  },
+  "deepseek": {
+    "transport": "claude-env",
+    "base": "https://api.deepseek.com/anthropic",
+    "key_env": "DEEPSEEK_API_KEY",
+    "model": "deepseek-v4-pro",
+    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max" },
+    "template": "costar"
+  },
+  "mimo": {
+    "transport": "claude-env",
+    "base": "https://token-plan-sgp.xiaomimimo.com/anthropic",
+    "key_env": "MIMO_PLAN_KEY",
+    "model": "mimo-v2.5-pro[1m]",
     "template": "costar"
   }
 }
