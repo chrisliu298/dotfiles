@@ -42,7 +42,8 @@ fi
 # Claude Code
 # =============================================================================
 export ENABLE_PROMPT_CACHING_1H=1
-export DISABLE_TELEMETRY=1
+# Disabled to allow GrowthBook feature-flag fetch for /rc (remote-control). Re-enable to opt back out of telemetry.
+# export DISABLE_TELEMETRY=1
 
 # Unset CLAUDECODE inside tmux so claude can start fresh
 [[ -n "$TMUX" ]] && unset CLAUDECODE
