@@ -19,6 +19,7 @@ LINKS=(
     "agents/claude/CLAUDE.md:.claude/CLAUDE.md"
     "agents/claude/keybindings.json:.claude/keybindings.json"
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
+    "agents/claude/hooks/auto-allow-bash.sh:.claude/hooks/auto-allow-bash.sh"
     "agents/codex/AGENTS.md:.codex/AGENTS.md"
     "agents/grok/AGENTS.md:.grok/AGENTS.md"
 )
