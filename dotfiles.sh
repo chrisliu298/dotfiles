@@ -49,13 +49,20 @@ SKILLS=(
     "pdf|openai/skills/skills/.curated/pdf|codex,grok"
 )
 
-# Skills not auto-installed. Toggle with: ./dotfiles.sh enable/disable <name>
+# Skills not auto-installed (opt-in). Toggle with: ./dotfiles.sh enable/disable <name>.
 MANUAL_SKILLS=(
     autoresearch
     deslop
     interviewer
     prompt-engineer
 )
+
+# Which manual skills are currently enabled — a committed declarative set, one
+# name per line ('#' comments / blank lines ignored; empty = all off). Every
+# ./dotfiles.sh run enforces it (symlink the listed, prune the rest), and
+# enable/disable rewrite it. Since dfs runs `git pull && ./dotfiles.sh` on each
+# peer, a commit + dfs propagates the set to every machine — no per-host toggling.
+MANUAL_ENABLED_FILE="$ROOT/agents/extensions/manual-skills.enabled"
 
 MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: claude,codex or omit for both)
     "chrome-devtools|npx|chrome-devtools-mcp@latest --autoConnect --channel stable --no-usage-statistics|codex"
@@ -146,6 +153,27 @@ _is_manual() {
     return 1
 }
 
+# Is manual skill $1 enabled in the committed set?
+_manual_enabled() {
+    [[ -f "$MANUAL_ENABLED_FILE" ]] && grep -qxF "$1" "$MANUAL_ENABLED_FILE"
+}
+
+# Record manual skill $1 as on|off in the committed set (sorted, de-duped, header
+# preserved). Caller commits + runs dfs to propagate the change to every machine.
+_manual_set_state() {
+    local name="$1" state="$2" data
+    mkdir -p "$(dirname "$MANUAL_ENABLED_FILE")"
+    [[ -f "$MANUAL_ENABLED_FILE" ]] || : > "$MANUAL_ENABLED_FILE"
+    data=$(grep -vE '^[[:space:]]*(#|$)' "$MANUAL_ENABLED_FILE" 2>/dev/null | grep -vxF "$name" || true)
+    [[ "$state" == on ]] && data=$(printf '%s\n%s' "$data" "$name")
+    data=$(printf '%s\n' "$data" | grep -vE '^[[:space:]]*$' | LC_ALL=C sort -u || true)
+    {
+        printf '# Enabled manual skills, one per line (committed; dfs propagates). Empty = all off.\n'
+        printf '# Toggle with ./dotfiles.sh enable/disable <name>; enforced on every ./dotfiles.sh run.\n'
+        [[ -n "$data" ]] && printf '%s\n' "$data"
+    } > "$MANUAL_ENABLED_FILE"
+}
+
 _resolve_source() {
     local source="$1"
     if [[ "$source" == ./* ]]; then
@@ -227,7 +255,7 @@ install_skills() {
         IFS='|' read -r name source agents <<< "$entry"
         local base_dir; base_dir=$(_resolve_source "$source")
         [[ -d "$base_dir" ]] || { warn "skip $name (source not found: $source)"; continue; }
-        [[ "$name" != "*" ]] && _is_manual "$name" && continue
+        [[ "$name" != "*" ]] && _is_manual "$name" && ! _manual_enabled "$name" && continue
 
         local -a skill_entries=()
         if [[ "$name" == "*" ]]; then
@@ -240,7 +268,8 @@ install_skills() {
                     d="${d%/}"; local dname="${d##*/}"
                     # Explicit entries override wildcard's agents setting
                     [[ "$explicit_names" == *$'\n'"$dname"$'\n'* ]] && continue
-                    _is_manual "$dname" && continue
+                    # Manual skills install only when enabled in the committed set
+                    _is_manual "$dname" && ! _manual_enabled "$dname" && continue
                     skill_entries+=("$dname:$d")
                 done
             fi
@@ -272,8 +301,9 @@ install_skills() {
             [[ -L "$entry" ]] || continue
             local bname="${entry##*/}"
             [[ "$bname" == .* ]] && continue
+            # Enabled manual skills are in "$expected" (kept above); a manual skill
+            # absent from the committed set falls through here and is pruned.
             [[ $'\n'"$expected" == *$'\n'"$bname"$'\n'* ]] && continue
-            _is_manual "$bname" && continue
             rm "$entry"; log "clean ${entry/#$HOME/~}"
         done
     done
@@ -397,6 +427,8 @@ cmd_enable() {
         done
     fi
     $found || { warn "skill '$name' not found"; return 1; }
+    _manual_set_state "$name" on
+    log "enabled '$name' in the committed set — commit + run dfs to propagate"
 }
 
 cmd_disable() {
@@ -406,6 +438,10 @@ cmd_disable() {
     for dir in "$HOME/.claude/skills/$name" "$HOME/.codex/skills/$name" "$HOME/.grok/skills/$name"; do
         [[ -L "$dir" ]] && { rm "$dir"; log "removed ${dir/#$HOME/~}"; removed=true; }
     done
+    if _is_manual "$name"; then
+        _manual_set_state "$name" off
+        log "disabled '$name' in the committed set — commit + run dfs to propagate"
+    fi
     $removed || log "$name is not currently enabled"
 }
 

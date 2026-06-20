@@ -30,7 +30,7 @@ dotfiles/
 - `./dotfiles.sh` — initialize submodules, sync skill repos, symlink files, install skills, and register MCP servers + plugins.
 - `./dotfiles.sh lint` — run skill portability checks (universal C/X/G skill mechanical violations); also runs automatically at the end of a full `./dotfiles.sh`.
 - `./dotfiles.sh skills` — list manual skills and whether each is enabled.
-- `./dotfiles.sh enable <name>` / `./dotfiles.sh disable <name>` — toggle a manual skill.
+- `./dotfiles.sh enable <name>` / `./dotfiles.sh disable <name>` — toggle a manual skill; rewrites the committed `agents/extensions/manual-skills.enabled` set, so commit + `dfs` to propagate the change to every machine.
 - `git status --short` — confirm only intended files changed before committing.
 - `rg --files` — inspect tracked structure when adding/updating files or skills.
 - `uv venv && source .venv/bin/activate` — initialize a local Python environment for script-based skills.
@@ -71,7 +71,7 @@ Managed by the `SKILLS` table in `dotfiles.sh` (local path or GitHub clone + sym
 - **Local**: add `<name>/SKILL.md` under `agents/extensions/skills/`, run `./dotfiles.sh`.
 - **Upstream**: add a `name|owner/repo/subpath|agents` entry to the `SKILLS` table.
 - **Agent-specific**: separate table entries per agent (e.g., `pdf` has different sources for claude vs codex/grok).
-- **Manual skills**: add the name to the `MANUAL_SKILLS` array — skipped during auto-install, toggled with `./dotfiles.sh enable/disable <name>`.
+- **Manual skills**: add the name to the `MANUAL_SKILLS` array — skipped during auto-install, toggled with `./dotfiles.sh enable/disable <name>`. Enabled state is a committed declarative set in `agents/extensions/manual-skills.enabled` (one name per line; empty = all off), enforced on every run (symlink the listed, prune the rest) and propagated by `dfs` — not per-machine local.
 - **Project-local skills**: place in `.claude/skills/<name>/` — available only in this repo, not globally.
 - **Install/update all**: `./dotfiles.sh`.
 
