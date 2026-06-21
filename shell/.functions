@@ -292,9 +292,8 @@ xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex ex
 # =============================================================================
 # Routes Claude Code at DeepSeek per-invocation, so default `c`/`cc` keep using
 # the Claude subscription. DeepSeek V4 Pro has two distinct effort levels: high
-# and max. The 1M-token context window is native/default — do NOT append a
-# `[1m]` suffix (that's MiMo-only below; the DeepSeek endpoint has no such
-# variant). Requires DEEPSEEK_API_KEY in env (see ~/.zshenv.local).
+# and max. The 1M-token context window is native/default — no special suffix is
+# needed. Requires DEEPSEEK_API_KEY in env (see ~/.zshenv.local).
 #
 # NOTE: _deepseek/_mimo/_glm/_kimi below duplicate the model id, endpoint, and
 # extras that also live in agents/extensions/skills/relay/peers.json — the
@@ -333,12 +332,13 @@ dshl(){ (( $# )) || { echo 'Usage: dshl "<prompt>"'; return 1; }; CLAUDE_CODE_EF
 # MiMo (via Claude Code, Anthropic-compatible endpoint)
 # =============================================================================
 # Routes Claude Code at Xiaomi MiMo per-invocation via the MiMo *subscription
-# plan* endpoint (token-plan-sgp.xiaomimimo.com/anthropic — bills the plan, not
+# plan* endpoint (token-plan-cn.xiaomimimo.com/anthropic — bills the plan, not
 # pay-per-token), so default `c`/`cc` keep using the Claude subscription.
 # mimo-v2.5-pro exposes no effort tiers on this Anthropic/Claude Code endpoint
 # (the model's OpenAI-style low/medium/high reasoning_effort isn't surfaced here),
-# so CLAUDE_CODE_EFFORT_LEVEL is a no-op — unlike DeepSeek's high/max. The `[1m]`
-# suffix enables the 1M-token context window. Model IDs keep their dots (the
+# so CLAUDE_CODE_EFFORT_LEVEL is a no-op — unlike DeepSeek's high/max. mimo-v2.5-pro
+# is 1M-context-native, so no suffix is needed — the CN plan endpoint rejects the
+# old `[1m]` suffix (that was the SGP plan's opt-in). Model IDs keep their dots (the
 # endpoint rejects `mimo-v2-5-pro`). The plan endpoint authenticates with Bearer
 # ANTHROPIC_AUTH_TOKEN (unlike Kimi's coding plan, which uses ANTHROPIC_API_KEY).
 # Requires MIMO_PLAN_KEY (the MiMo plan key) in env (see ~/.zshenv.local).
@@ -353,14 +353,14 @@ _mimo(){
     local _mm_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
     env -u TMUX -u ANTHROPIC_API_KEY COLORTERM=truecolor \
         PATH="$_mm_path" \
-        ANTHROPIC_BASE_URL=https://token-plan-sgp.xiaomimimo.com/anthropic \
+        ANTHROPIC_BASE_URL=https://token-plan-cn.xiaomimimo.com/anthropic \
         ANTHROPIC_AUTH_TOKEN="$MIMO_PLAN_KEY" \
-        ANTHROPIC_MODEL='mimo-v2.5-pro[1m]' \
-        ANTHROPIC_DEFAULT_OPUS_MODEL='mimo-v2.5-pro[1m]' \
-        ANTHROPIC_DEFAULT_SONNET_MODEL='mimo-v2.5-pro[1m]' \
-        ANTHROPIC_DEFAULT_HAIKU_MODEL='mimo-v2.5-pro[1m]' \
-        ANTHROPIC_SMALL_FAST_MODEL='mimo-v2.5-pro[1m]' \
-        CLAUDE_CODE_SUBAGENT_MODEL='mimo-v2.5-pro[1m]' \
+        ANTHROPIC_MODEL=mimo-v2.5-pro \
+        ANTHROPIC_DEFAULT_OPUS_MODEL=mimo-v2.5-pro \
+        ANTHROPIC_DEFAULT_SONNET_MODEL=mimo-v2.5-pro \
+        ANTHROPIC_DEFAULT_HAIKU_MODEL=mimo-v2.5-pro \
+        ANTHROPIC_SMALL_FAST_MODEL=mimo-v2.5-pro \
+        CLAUDE_CODE_SUBAGENT_MODEL=mimo-v2.5-pro \
         "$(command -v claude)" --disallowedTools "$_mm_deny" "$@"
 }
 mm(){   _mimo --dangerously-skip-permissions "$@"; }
