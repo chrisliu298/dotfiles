@@ -577,7 +577,9 @@ EOF
     echo
   fi
   if [ "$ngp" -gt 0 ]; then
-    echo "GPT-Pro — fire each lens YOURSELF as a backgrounded Bash call"
+    echo "GPT-Pro — $ngp gpt-pro lens(es) → $ngp separate backgrounded Bash calls. This is by"
+    echo "design, NOT one batched command: each lens streams back and recovers independently."
+    echo "Fire each YOURSELF as a backgrounded Bash call"
     echo "(run_in_background: true, timeout: 7260000; each is its own completion notification):"
     echo "$manifest_json" | jq -r '.gptpro[] | "  gpt-pro < \(.launcher) > \(.res) 2> \(.log)"'
     echo "On a non-zero exit, follow gpt-pro-relay's recovery table (124/255 reattach with the"
