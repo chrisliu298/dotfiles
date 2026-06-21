@@ -85,13 +85,15 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
    prism  [N]  [M]  <question>
           │    │
           │    └─ M gpt-pro lenses (optional second number; default 0)
-          └─ how many of EACH of the eight models (default 1 → 8 agents + self)
+          └─ how many of EACH of the eight models (default 1 → 8 agents + self;
+             0 = drop all eight, gpt-pro-only — legal only with M ≥ 1)
 
    No reasoning-effort knob — Codex always xhigh, Grok-Build always high.
 
    prism Why does X happen?             → auto-sized (anchor: 1 of each)
    prism 2 Which architecture?          → 2 of each, no gpt-pro
    prism 2 3 Bet-the-company call?      → 2 of each + 3 gpt-pro lenses
+   prism 0 4 Which approach?            → gpt-pro-only: 4 lenses + self (no standard tiers)
    prism no deepseek, why X?            → natural-language deviations (exclude/count)
 ```
 

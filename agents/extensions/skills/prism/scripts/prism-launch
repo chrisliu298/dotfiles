@@ -333,6 +333,9 @@ cmd_prepare() {
     | ($gpn | map(.slug)) as $gpslugs
     | (if ($gpslugs|length) != ($gpslugs|unique|length) then bad("two gptpro lenses slugify to the same launcher filename; make the lens names more distinct") else . end)
 
+    # Fail-closed: a dispatch with no records at all is the N=0/M=0 no-op — not a Prism run.
+    | (if (($pxn|length) + ($san|length) + ($gpn|length)) == 0 then bad("dispatch has zero records (no parallax, subagent, or gptpro) — that is not a Prism run. Add agents, or for gpt-pro-only add gptpro records (prism 0 M needs M >= 1).") else . end)
+
     # Per-peer counts derived from the dispatch, not a hardcoded peer list.
     | ($pxn | group_by(.to) | map({key: .[0].to, value: length}) | from_entries) as $by_peer
     | {
