@@ -69,7 +69,7 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
 │                              independent lineages → catch the blind spots the     │
 │                              others share → dissent here carries OUTSIZED weight  │
 └───────────────────────────────────────────────────────────────────────────────────┘
-        Integrator + 1 subagent + 7 parallax peers  =  9 perspectives at the default (N=1)
+     Default N=1, M=0:  8×1+0 = 8 dispatched + self = 9 perspectives   (general: 8N+M dispatched, 8N+M+1 perspectives)
 ```
 
 * **Subagents** are dispatched with the **Agent tool** (only Claude can).
@@ -85,8 +85,9 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
    prism  [N]  [M]  <question>
           │    │
           │    └─ M gpt-pro lenses (optional second number; default 0)
-          └─ how many of EACH of the eight models (default 1 → 8 agents + self;
-             0 = drop all eight, gpt-pro-only — legal only with M ≥ 1)
+          └─ how many of EACH of the eight standard tiers (default 1; the full 8
+             is the floor — a partial fan needs an explicit exclusion). Dispatched
+             = 8N+M; perspectives = 8N+M+1. 0 = drop all eight (gpt-pro-only), M ≥ 1.
 
    No reasoning-effort knob — Codex always xhigh, Grok-Build always high.
 
@@ -115,7 +116,7 @@ backgrounded process. The Integrator stays in the loop for the judgment.
                                       (verbatim, safe)      the script — not you)
 
  2  scaffold ──► fill ─────►  /tmp/prism-<id>.dispatch     one record per lens
-    (--preset pre-fills 8 lenses)        Type/To/Effort/Lens
+    (--preset pre-fills 8 lenses)        Type/To/Lens
 
  3  prepare ───────────────►  ┌────────────────────────────────────────────┐
                               │ validate · render launchers · write        │
@@ -158,7 +159,7 @@ backgrounded process. The Integrator stays in the loop for the judgment.
 
 ```
   scaffold  [--n N] [--preset TYPE] [--packet PATH]
-              └ print a fill-in dispatch skeleton (correct order + fixed Codex x / Grok-Build h effort).
+              └ print a fill-in dispatch skeleton (correct order; effort is CLI-derived, never authored).
                 --preset review|design|diagnosis|compare|research|decision|writing
                 pre-fills eight lenses by task type (N=1).
 
@@ -227,7 +228,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
   ├── README.md                   ◄── you are here (the picture)
   ├── scripts/
   │   ├── prism-launch            dispatch engine (the subcommands above)
-  │   └── test-prism-launch.sh    188-test suite (no network — fake-relay for dispatch)
+  │   └── test-prism-launch.sh    192-test suite (no network — fake-relay for dispatch)
   └── templates/
       ├── launcher-subagent.tmpl       Claude subagent prompt (plain markdown)
       ├── launcher-relay-codex.tmpl    Codex / GPT  — <goal> style
@@ -239,8 +240,10 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
             ▲ reads templates + the registry
             │
   relay/peers.json   ◄── single source of truth: which peers exist, their effort
-                         knobs, transports, and launcher-template style. `relay`
-                         and `prism-launch` both read it — add a peer in one stanza.
+                         knobs (effort_values, ordered low→high — prism derives the
+                         top/last as the fixed effort), transports, and launcher-template
+                         style. `relay` and `prism-launch` both read it — add a peer in
+                         one stanza.
 ```
 
 ---
@@ -254,7 +257,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
   │                             the anti-recursion block is injected verbatim + the
   │                             RELAY_PEER guard refuses a nested launch.
   ├─ Read-only leaf agents ──── peers/subagents produce analysis only (one .res.md write).
-  └─ Effort (fixed) ─────────── prism always uses Codex xhigh · Grok-Build high (top tier; no selection).
+  └─ Effort (fixed, CLI-derived) ─ Codex xhigh · Grok-Build high, derived from peers.json — never authored.
 ```
 
 ---

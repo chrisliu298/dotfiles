@@ -38,7 +38,7 @@ TEMPLATES_DIR=$(cd "$SCRIPT_DIR/../templates" && pwd 2>/dev/null) \
 # ── --dispatch parser ─────────────────────────────────────────────────────────
 # Compiles the line-oriented dispatch format into the same JSON shape that
 # --config accepts; cmd_prepare's existing validation/render path then runs
-# unchanged. This parser does NO business validation (peers, efforts, duplicates,
+# unchanged. This parser does NO business validation (peers, duplicates,
 # injection) — that stays single-sourced in the jq pass below. Its only job is to
 # assemble JSON safely (via `jq -n --arg`, never string concatenation), so the
 # orchestrator authors a literal, escaping-free file with the Write tool instead
@@ -46,21 +46,9 @@ TEMPLATES_DIR=$(cd "$SCRIPT_DIR/../templates" && pwd 2>/dev/null) \
 
 DISPATCH_CONFIG=""
 DP_packet=""; DP_px=""; DP_sa=""; DP_gp=""; DP_refs=""
-DP_type=""; DP_to=""; DP_name=""; DP_effort=""; DP_lens=""; DP_desc=""; DP_posture=""; DP_in=0; DP_seen=""
+DP_type=""; DP_to=""; DP_name=""; DP_lens=""; DP_desc=""; DP_posture=""; DP_in=0; DP_seen=""
 
 dp_trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; s="${s%"${s##*[![:space:]]}"}"; printf '%s' "$s"; }
-
-dp_norm_effort() {
-  local e; e=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
-  case "$e" in
-    m|medium) printf 'medium' ;;
-    x|xhigh)  printf 'xhigh'  ;;
-    l|low)    printf 'low'    ;;
-    h|high)   printf 'high'   ;;
-    -|'')     printf ''       ;;
-    *)        printf '%s' "$1" ;;   # pass original through; the jq pass validates it against the peer registry
-  esac
-}
 
 # Emit the in-progress record as one JSON object onto the parallax/subagent
 # accumulators. Parallax Name defaults to the slugified Lens when omitted.
@@ -70,24 +58,23 @@ dp_flush() {
   case "$DP_type" in
     parallax)
       [ -z "$DP_posture" ] || die "prepare: --dispatch parallax record must not set Posture (that key is gptpro-only)"
-      obj=$(jq -n --arg to "$DP_to" --arg name "$DP_name" --arg effort "$DP_effort" \
+      obj=$(jq -n --arg to "$DP_to" --arg name "$DP_name" \
                   --arg lens "$DP_lens" --arg desc "$DP_desc" '
         ($lens | ascii_downcase | gsub("[^a-z0-9]+"; "-") | gsub("(^-|-$)"; "")) as $auto
-        | {to:$to, lens:$lens, lens_desc:$desc, name:(if $name != "" then $name else $auto end)}
-        + (if $effort != "" then {effort:$effort} else {} end)')
+        | {to:$to, lens:$lens, lens_desc:$desc, name:(if $name != "" then $name else $auto end)}')
       DP_px="$DP_px$obj"$'\n' ;;
     subagent)
-      [ -z "$DP_to$DP_name$DP_effort$DP_posture" ] || die "prepare: --dispatch subagent record must not set To/Name/Effort/Posture (those are parallax/gptpro-only; did you mean a different Type?)"
+      [ -z "$DP_to$DP_name$DP_posture" ] || die "prepare: --dispatch subagent record must not set To/Name/Posture (those are parallax/gptpro-only; did you mean a different Type?)"
       obj=$(jq -n --arg lens "$DP_lens" --arg desc "$DP_desc" '{lens:$lens, lens_desc:$desc}')
       DP_sa="$DP_sa$obj"$'\n' ;;
     gptpro)
-      [ -z "$DP_to$DP_name$DP_effort" ] || die "prepare: --dispatch gptpro record must not set To/Name/Effort (gpt-pro is orchestrator-direct with no peer or effort knob; only Lens, Lens-Desc, and optional Posture)"
+      [ -z "$DP_to$DP_name" ] || die "prepare: --dispatch gptpro record must not set To/Name (gpt-pro is orchestrator-direct with no peer; only Lens, Lens-Desc, and optional Posture)"
       obj=$(jq -n --arg lens "$DP_lens" --arg desc "$DP_desc" --arg posture "$DP_posture" \
         '{lens:$lens, lens_desc:$desc} + (if $posture != "" then {posture:$posture} else {} end)')
       DP_gp="$DP_gp$obj"$'\n' ;;
     *) die "prepare: --dispatch record has invalid or missing Type '$DP_type' (must be 'parallax', 'subagent', or 'gptpro')" ;;
   esac
-  DP_type=""; DP_to=""; DP_name=""; DP_effort=""; DP_lens=""; DP_desc=""; DP_posture=""; DP_in=0
+  DP_type=""; DP_to=""; DP_name=""; DP_lens=""; DP_desc=""; DP_posture=""; DP_in=0
 }
 
 # Parse a --dispatch file into a normalized config JSON file. Sets DISPATCH_CONFIG
@@ -95,7 +82,7 @@ dp_flush() {
 dispatch_to_config() {
   local file="$1" line t key val lineno=0
   DP_packet=""; DP_px=""; DP_sa=""; DP_gp=""; DP_refs=""
-  DP_type=""; DP_to=""; DP_name=""; DP_effort=""; DP_lens=""; DP_desc=""; DP_posture=""; DP_in=0; DP_seen=""
+  DP_type=""; DP_to=""; DP_name=""; DP_lens=""; DP_desc=""; DP_posture=""; DP_in=0; DP_seen=""
 
   while IFS= read -r line || [ -n "$line" ]; do
     lineno=$((lineno + 1))
@@ -116,19 +103,20 @@ dispatch_to_config() {
         DP_refs="$DP_refs$val"$'\n' ;;
       Type)
         dp_flush; DP_in=1; DP_type="$val"; DP_seen="" ;;
-      To|Name|Effort|Lens|Lens-Desc|Posture)
+      Effort)
+        die "prepare: --dispatch line $lineno: 'Effort:' is no longer authored — prism-launch sets effort per peer from the registry (Codex xhigh, Grok Build high). Remove the line." ;;
+      To|Name|Lens|Lens-Desc|Posture)
         [ "$DP_in" -eq 1 ] || die "prepare: --dispatch line $lineno: '$key' appears before any 'Type:' record"
         case " $DP_seen " in *" $key "*) die "prepare: --dispatch line $lineno: duplicate '$key' in one record" ;; esac
         DP_seen="$DP_seen $key"
         case "$key" in
           To)        DP_to="$val" ;;
           Name)      DP_name="$val" ;;
-          Effort)    DP_effort=$(dp_norm_effort "$val") ;;
           Lens)      DP_lens="$val" ;;
           Lens-Desc) DP_desc="$val" ;;
           Posture)   DP_posture="$val" ;;
         esac ;;
-      *) die "prepare: --dispatch line $lineno: unknown key '$key' (valid: Shared-Packet, Reference, Type, To, Name, Effort, Lens, Lens-Desc, Posture)" ;;
+      *) die "prepare: --dispatch line $lineno: unknown key '$key' (valid: Shared-Packet, Reference, Type, To, Name, Lens, Lens-Desc, Posture)" ;;
     esac
   done < "$file"
   dp_flush
@@ -245,7 +233,7 @@ cmd_prepare() {
   rm -f "$manifest" "${run_base}-result.json" "${run_base}-digest.md"
   [ "$config" = "${run_base}-config.normalized.json" ] || rm -f "${run_base}-config.normalized.json"
 
-  # Single jq pass: validate structure/enums/effort/injection/dup-lenses, then
+  # Single jq pass: validate structure/enums/injection/dup-lenses and derive effort, then
   # emit the authoritative manifest (computed names, launcher paths, counts).
   local manifest_json
   manifest_json=$(jq \
@@ -278,13 +266,14 @@ cmd_prepare() {
         | (if ($name|test("^[a-z0-9-]+$")|not) then bad("parallax .name must match [a-z0-9-]+, got: " + $name) else . end)
         | (.lens | chktext("parallax .lens")) as $lens
         | (.lens_desc | chktext("parallax .lens_desc")) as $desc
+        # Effort is fixed at the top tier and DERIVED from the registry — never authored.
+        # effort_values is ordered weakest→strongest, so the last element is the top tier
+        # (Codex → "xhigh", Grok Build → "high"); peers with no knob → no --effort.
+        # Do NOT use jq `max`: it is lexicographic ("high" < "medium"), which would
+        # silently pick the wrong tier. Any authored .effort (only reachable via the
+        # lenient --config path; --dispatch rejects it) is ignored — derivation wins.
         | ($peer.effort_values) as $evals
-        | (if ($evals == null) and ((.effort // null) != null)
-             then bad("effort is only valid for peers with an effort knob; remove it from " + $to + " entry \"" + $name + "\"") else . end)
-        | (if $evals != null
-             then ((.effort // ($peer.default_effort // $evals[0])) as $e
-                   | if (($evals | index($e)) == null) then bad($to + " effort must be one of " + ($evals|join("|")) + ", got: " + $e) else $e end)
-             else null end) as $effort
+        | (if $evals != null then $evals[-1] else null end) as $effort
         | {
             to: $to,
             name: ("prism-" + $name),
@@ -815,7 +804,7 @@ preset_lenses() {
 # Emit a ready-to-fill dispatch skeleton for the symmetric default (N of every
 # model; Codex xhigh + Grok Build high are fixed). With --preset <task-type>, pre-fill eight lenses (N=1).
 # Otherwise replace each "FILL" Lens / Lens-Desc, then Write it as the dispatch
-# file. Removes the mechanical Type/To/Effort/order boilerplate.
+# file. Removes the mechanical Type/To/order boilerplate.
 cmd_scaffold() {
   local n=1 packet="" preset=""
   while [ $# -gt 0 ]; do
@@ -829,8 +818,7 @@ cmd_scaffold() {
   done
   case "$n" in ''|*[!0-9]*) die "scaffold: --n must be a positive integer" ;; esac
   [ "$n" -ge 1 ] || die "scaffold: --n must be >= 1"
-  # Effort is fixed at the top tier — no selection. Codex xhigh (x), Grok Build high (h).
-  local cdx="x" gbe="h"
+  # Effort is fixed and CLI-derived (Codex xhigh, Grok Build high) — never authored in the dispatch.
   [ -n "$packet" ] || packet="/tmp/prism-<id>.md"
 
   if [ -n "$preset" ]; then
@@ -839,11 +827,11 @@ cmd_scaffold() {
       || die "scaffold: unknown --preset '$preset' (try: review design diagnosis compare research decision writing)"
     set -- $names
     printf 'Shared-Packet: %s\n\n' "$packet"
-    printf '# Preset "%s": eight lenses pre-filled in canonical tier order (Codex xhigh, Grok Build high — fixed).\n' "$preset"
+    printf '# Preset "%s": eight lenses pre-filled in canonical tier order (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$preset"
     printf '# Edit any Lens / Lens-Desc to taste; write the Shared-Packet file before prepare.\n\n'
     printf 'Type: subagent\nLens: %s\nLens-Desc: %s\n\n' "$1" "$(lens_desc_for "$1")"
-    printf 'Type: parallax\nTo: codex\nEffort: %s\nLens: %s\nLens-Desc: %s\n\n' "$cdx" "$2" "$(lens_desc_for "$2")"
-    printf 'Type: parallax\nTo: grok-build\nEffort: %s\nLens: %s\nLens-Desc: %s\n\n' "$gbe" "$3" "$(lens_desc_for "$3")"
+    printf 'Type: parallax\nTo: codex\nLens: %s\nLens-Desc: %s\n\n' "$2" "$(lens_desc_for "$2")"
+    printf 'Type: parallax\nTo: grok-build\nLens: %s\nLens-Desc: %s\n\n' "$3" "$(lens_desc_for "$3")"
     printf 'Type: parallax\nTo: grok-composer\nLens: %s\nLens-Desc: %s\n\n' "$4" "$(lens_desc_for "$4")"
     printf 'Type: parallax\nTo: glm\nLens: %s\nLens-Desc: %s\n\n' "$5" "$(lens_desc_for "$5")"
     printf 'Type: parallax\nTo: kimi\nLens: %s\nLens-Desc: %s\n\n' "$6" "$(lens_desc_for "$6")"
@@ -853,7 +841,7 @@ cmd_scaffold() {
   fi
 
   printf 'Shared-Packet: %s\n\n' "$packet"
-  printf '# Symmetric scaffold: N=%s of each of the eight models (Codex xhigh, Grok Build high — fixed).\n' "$n"
+  printf '# Symmetric scaffold: N=%s of each of the eight models (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$n"
   printf '# Replace every "FILL" Lens / Lens-Desc (prepare rejects any leftover FILL).\n'
   printf '# Order is the canonical tier order — put your heaviest-reasoning (e.g. Adversarial)\n'
   printf '# lens on a subagent or codex. Write the Shared-Packet file before running prepare.\n'
@@ -863,10 +851,10 @@ cmd_scaffold() {
     i=$((i+1)); printf 'Type: subagent\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$i"; k=$((k+1))
   done
   k=1; while [ "$k" -le "$n" ]; do
-    i=$((i+1)); printf 'Type: parallax\nTo: codex\nEffort: %s\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$cdx" "$i"; k=$((k+1))
+    i=$((i+1)); printf 'Type: parallax\nTo: codex\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$i"; k=$((k+1))
   done
   k=1; while [ "$k" -le "$n" ]; do
-    i=$((i+1)); printf 'Type: parallax\nTo: grok-build\nEffort: %s\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$gbe" "$i"; k=$((k+1))
+    i=$((i+1)); printf 'Type: parallax\nTo: grok-build\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$i"; k=$((k+1))
   done
   local peer
   for peer in grok-composer glm kimi deepseek mimo; do
@@ -1174,7 +1162,7 @@ clean:     remove every temp artifact for a run (/tmp/prism-<id>*). Refuses to d
 
 Dispatch records (line-oriented; see prism SKILL.md):
   Type: parallax | subagent | gptpro
-  - parallax: To/Lens/Lens-Desc required, Name/Effort optional (relay peer).
+  - parallax: To/Lens/Lens-Desc required, Name optional (relay peer; effort is CLI-derived, never authored).
   - subagent: Lens/Lens-Desc only (Claude, Agent-tool).
   - gptpro:   Lens/Lens-Desc required, optional Posture (deep-reasoning|research-grounded).
               Orchestrator-direct — you fire each `gpt-pro < launcher` call prepare prints.

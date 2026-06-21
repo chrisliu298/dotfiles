@@ -58,7 +58,7 @@ MAN="$TMP/prism-run1-manifest.json"
 [ "$(jq -r '.counts.dispatched_total' "$MAN" 2>/dev/null)" = "5" ] && ok "dispatched_total = 5" || bad "dispatched_total = 5"
 [ "$(jq -r '.parallax[0].name' "$MAN" 2>/dev/null)" = "prism-temporal" ] && ok "relay name prefixed with prism-" || bad "relay name prefixed with prism-"
 [ "$(jq -r '.parallax[1].effort' "$MAN" 2>/dev/null)" = "null" ] && ok "deepseek effort is null" || bad "deepseek effort is null"
-[ "$(jq -r '.parallax[0].effort' "$MAN" 2>/dev/null)" = "medium" ] && ok "codex effort = medium" || bad "codex effort = medium"
+[ "$(jq -r '.parallax[0].effort' "$MAN" 2>/dev/null)" = "xhigh" ] && ok "codex effort derived xhigh (authored 'medium' in --config ignored)" || bad "codex effort derived xhigh"
 [ "$(jq -r '.parallax[0].template' "$MAN" 2>/dev/null)" = "codex" ] && ok "codex uses codex template (registry)" || bad "codex template = codex"
 [ "$(jq -r '.parallax[1].template' "$MAN" 2>/dev/null)" = "costar" ] && ok "deepseek uses shared costar template (registry)" || bad "deepseek template = costar"
 case "$(jq -r '.parallax[0].log' "$MAN" 2>/dev/null)" in *-out-prism-temporal.log) ok "manifest log path matches runtime (prism- prefixed)" ;; *) bad "manifest log path prism- prefixed" ;; esac
@@ -112,15 +112,18 @@ MANG="$TMP/prism-grok-manifest.json"
 [ "$(jq -r '.parallax[1].template' "$MANG" 2>/dev/null)" = "costar" ] && ok "grok-composer uses costar template (registry)" || bad "grok-composer template = costar"
 [ "$(jq -r '.counts.by_peer."grok-composer"' "$MANG" 2>/dev/null)" = "1" ] && ok "grok-composer count = 1" || bad "grok-composer count = 1"
 
-# grok-build effort_values are medium/high only — reject both xhigh (Codex's word) and low (dropped from the registry)
-CGE="$TMP/grok-badeffort.json"; jq -n --arg p "$PKTG" '{shared_packet:$p,parallax:[{to:"grok-build",name:"x",effort:"xhigh",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CGE"
-expect_err "rejects invalid grok-build effort (xhigh)" "$LAUNCH" prepare --config "$CGE"
-CGL="$TMP/grok-loweffort.json"; jq -n --arg p "$PKTG" '{shared_packet:$p,parallax:[{to:"grok-build",name:"x",effort:"low",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CGL"
-expect_err "rejects invalid grok-build effort (low — no longer in registry)" "$LAUNCH" prepare --config "$CGL"
+# Effort is no longer authored. Via the lenient --config path, any leftover .effort is
+# IGNORED and the top tier is derived from the registry (grok-build → high, last of [medium,high]).
+PKTGE="$TMP/prism-grokge.md"; make_packet "$PKTGE"
+CGE="$TMP/grok-badeffort.json"; jq -n --arg p "$PKTGE" '{shared_packet:$p,parallax:[{to:"grok-build",name:"x",effort:"xhigh",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CGE"
+expect_ok "ignores authored effort in --config (grok-build)" "$LAUNCH" prepare --config "$CGE"
+[ "$(jq -r '.parallax[0].effort' "$TMP/prism-grokge-manifest.json" 2>/dev/null)" = "high" ] && ok "grok-build derives high despite authored 'xhigh'" || bad "grok-build derives high"
 
-# grok-composer rejects ANY effort (it has no effort_values)
-CGC="$TMP/grok-composer-effort.json"; jq -n --arg p "$PKTG" '{shared_packet:$p,parallax:[{to:"grok-composer",name:"x",effort:"high",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CGC"
-expect_err "rejects --effort on grok-composer (no knob)" "$LAUNCH" prepare --config "$CGC"
+# a no-knob peer (grok-composer, no effort_values) derives null even with a leftover .effort
+PKTGC="$TMP/prism-grokgc.md"; make_packet "$PKTGC"
+CGC="$TMP/grok-composer-effort.json"; jq -n --arg p "$PKTGC" '{shared_packet:$p,parallax:[{to:"grok-composer",name:"x",effort:"high",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CGC"
+expect_ok "ignores authored effort on a no-knob peer (--config)" "$LAUNCH" prepare --config "$CGC"
+[ "$(jq -r '.parallax[0].effort' "$TMP/prism-grokgc-manifest.json" 2>/dev/null)" = "null" ] && ok "grok-composer effort null despite authored 'high'" || bad "grok-composer effort null"
 
 # dry-run: grok-build carries --effort high; grok-composer carries no --effort.
 # The rejection cases above re-ran prepare on the same packet, which clears prior
@@ -173,13 +176,17 @@ expect_err "rejects template-slot injection ({{) in lens_desc" "$LAUNCH" prepare
 C4c="$TMP/c4c.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"codex",name:"x",lens:"Tradeoff",lens_desc:"weigh risk > reward and p < 0.05 significance"}],subagents:[]}' > "$C4c"
 expect_ok "allows bare < and > (comparison operators) in lens_desc" "$LAUNCH" prepare --config "$C4c"
 
-# effort on deepseek
-C5="$TMP/c5.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"deepseek",name:"x",effort:"xhigh",lens:"L",lens_desc:"d"}],subagents:[]}' > "$C5"
-expect_err "rejects --effort on deepseek" "$LAUNCH" prepare --config "$C5"
+# authored effort in --config is ignored (no-knob peer derives null; the derivation never reads .effort)
+PKTC5="$TMP/prism-c5.md"; make_packet "$PKTC5"
+C5="$TMP/c5.json"; jq -n --arg p "$PKTC5" '{shared_packet:$p,parallax:[{to:"deepseek",name:"x",effort:"xhigh",lens:"L",lens_desc:"d"}],subagents:[]}' > "$C5"
+expect_ok "ignores authored effort on deepseek (--config)" "$LAUNCH" prepare --config "$C5"
+[ "$(jq -r '.parallax[0].effort' "$TMP/prism-c5-manifest.json" 2>/dev/null)" = "null" ] && ok "deepseek effort null despite authored 'xhigh'" || bad "deepseek effort null"
 
-# bad codex effort
-C6="$TMP/c6.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"codex",name:"x",effort:"high",lens:"L",lens_desc:"d"}],subagents:[]}' > "$C6"
-expect_err "rejects invalid codex effort (high)" "$LAUNCH" prepare --config "$C6"
+# authored codex effort in --config is ignored; derivation always wins (xhigh, not the authored 'high')
+PKTC6="$TMP/prism-c6.md"; make_packet "$PKTC6"
+C6="$TMP/c6.json"; jq -n --arg p "$PKTC6" '{shared_packet:$p,parallax:[{to:"codex",name:"x",effort:"high",lens:"L",lens_desc:"d"}],subagents:[]}' > "$C6"
+expect_ok "ignores authored codex effort (--config)" "$LAUNCH" prepare --config "$C6"
+[ "$(jq -r '.parallax[0].effort' "$TMP/prism-c6-manifest.json" 2>/dev/null)" = "xhigh" ] && ok "codex derives xhigh despite authored 'high'" || bad "codex derives xhigh"
 
 # duplicate lens across run
 C7="$TMP/c7.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"codex",name:"a",lens:"Same",lens_desc:"d"}],subagents:[{lens:"Same",lens_desc:"d"}]}' > "$C7"
@@ -209,7 +216,7 @@ echo "== parallax: --dry-run (no network) =="
 DRY=$("$LAUNCH" parallax "$MAN" --dry-run 2>/dev/null)
 echo "$DRY" | grep -q 'DRY RUN' && ok "dry-run announces itself" || bad "dry-run announces itself"
 [ "$(echo "$DRY" | grep -c 'relay call --to')" = "3" ] && ok "dry-run lists exactly 3 relay calls" || bad "dry-run lists 3 relay calls"
-echo "$DRY" | grep -q 'relay call --to codex --name prism-temporal --effort medium' && ok "codex dry-run cmd has --effort medium" || bad "codex dry-run --effort"
+echo "$DRY" | grep -q 'relay call --to codex --name prism-temporal --effort xhigh' && ok "codex dry-run cmd has --effort xhigh (derived)" || bad "codex dry-run --effort"
 echo "$DRY" | grep -q 'relay call --to deepseek --name prism-first-principles <' && ok "deepseek dry-run cmd has no --effort" || bad "deepseek dry-run no --effort"
 [ -f "$TMP/prism-run1-result.json" ] && bad "dry-run must NOT write a result file" || ok "dry-run writes no result file"
 
@@ -223,7 +230,6 @@ Shared-Packet: $PKTD
 Type: parallax
 To: codex
 Name: adversarial
-Effort: x
 Lens: Adversarial
 Lens-Desc: weigh the "strongest" attacks: braces {x} and < > are fine
 
@@ -242,7 +248,7 @@ MAND="$TMP/prism-rund-manifest.json"
 [ -f "$TMP/prism-rund-config.normalized.json" ] && ok "dispatch: normalized config written for audit" || bad "dispatch: normalized config written"
 jq -e '.parallax[0].lens == "Adversarial" and .subagents[0].lens == "Simplicity"' "$TMP/prism-rund-config.normalized.json" >/dev/null 2>&1 && ok "dispatch: normalized config has expected shape" || bad "dispatch: normalized config shape"
 [ "$(jq -r '.counts.dispatched_total' "$MAND" 2>/dev/null)" = "3" ] && ok "dispatch: dispatched_total = 3" || bad "dispatch: dispatched_total = 3"
-[ "$(jq -r '.parallax[0].effort' "$MAND" 2>/dev/null)" = "xhigh" ] && ok "dispatch: Effort 'x' normalized to xhigh" || bad "dispatch: Effort x -> xhigh"
+[ "$(jq -r '.parallax[0].effort' "$MAND" 2>/dev/null)" = "xhigh" ] && ok "dispatch: codex effort derived xhigh (none authored)" || bad "dispatch: codex effort derived xhigh"
 [ "$(jq -r '.parallax[0].name' "$MAND" 2>/dev/null)" = "prism-adversarial" ] && ok "dispatch: explicit Name used" || bad "dispatch: explicit Name used"
 [ "$(jq -r '.parallax[1].name' "$MAND" 2>/dev/null)" = "prism-first-principles" ] && ok "dispatch: Name derived from Lens when omitted" || bad "dispatch: Name derived from Lens"
 [ "$(jq -r '.parallax[1].effort' "$MAND" 2>/dev/null)" = "null" ] && ok "dispatch: deepseek effort null" || bad "dispatch: deepseek effort null"
@@ -261,8 +267,9 @@ expect_err "rejects dispatch unknown key" "$LAUNCH" prepare --dispatch "$DUK"
 DBT="$TMP/dbt.dispatch"; printf 'Shared-Packet: %s\n\nTo: codex\nType: parallax\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DBT"
 expect_err "rejects dispatch key before any Type record" "$LAUNCH" prepare --dispatch "$DBT"
 
-DED="$TMP/ded.dispatch"; printf 'Shared-Packet: %s\n\nType: parallax\nTo: deepseek\nEffort: x\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DED"
-expect_err "rejects dispatch Effort on deepseek (downstream guard)" "$LAUNCH" prepare --dispatch "$DED"
+# Effort is no longer authored: the parser hard-rejects any Effort: line up front.
+DED="$TMP/ded.dispatch"; printf 'Shared-Packet: %s\n\nType: parallax\nTo: codex\nEffort: x\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DED"
+expect_err "rejects an authored Effort: line in a dispatch (parser-level)" "$LAUNCH" prepare --dispatch "$DED"
 
 DRP="$TMP/drp.dispatch"; printf 'Shared-Packet: relative/path.md\n\nType: subagent\nLens: X\nLens-Desc: y\n' > "$DRP"
 expect_err "rejects dispatch relative Shared-Packet" "$LAUNCH" prepare --dispatch "$DRP"
@@ -278,7 +285,7 @@ expect_err "rejects duplicate key within one record" "$LAUNCH" prepare --dispatc
 
 # parallax-only keys on a subagent record (silent wrong-dispatch otherwise)
 DST="$TMP/dst.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nTo: codex\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DST"
-expect_err "rejects To/Name/Effort on a subagent record" "$LAUNCH" prepare --dispatch "$DST"
+expect_err "rejects To/Name on a subagent record" "$LAUNCH" prepare --dispatch "$DST"
 
 # all-whitespace Lens-Desc via dispatch (trim -> empty -> rejected)
 DWS="$TMP/dws.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nLens: X\nLens-Desc:    \n' "$PKTD" > "$DWS"
@@ -296,12 +303,16 @@ expect_err "rejects subagent lens that slugifies to empty" "$LAUNCH" prepare --d
 DIN="$TMP/din.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nLens: X\nLens-Desc: discuss the {{SLOT}} marker\n' "$PKTD" > "$DIN"
 expect_err "injection guard ({{) not bypassable via dispatch" "$LAUNCH" prepare --dispatch "$DIN"
 
-echo "== prepare --dispatch: positive coverage (effort case, empty accumulator) =="
-# uppercase Effort normalizes (case-insensitive)
+echo "== prepare --dispatch: effort is CLI-derived, never authored =="
+# A dispatch with NO Effort line still derives the top tier per peer. This is the core
+# regression guard: it catches both the old default_effort fallback (would give medium)
+# and the lexicographic-max bug (would give grok-build medium, since "high" < "medium").
 PKTE="$TMP/prism-rune.md"; make_packet "$PKTE"
-DEF="$TMP/def.dispatch"; printf 'Shared-Packet: %s\n\nType: parallax\nTo: codex\nEffort: X\nLens: Adversarial\nLens-Desc: d\n' "$PKTE" > "$DEF"
-expect_ok "accepts uppercase Effort (case-insensitive)" "$LAUNCH" prepare --dispatch "$DEF"
-[ "$(jq -r '.parallax[0].effort' "$TMP/prism-rune-manifest.json" 2>/dev/null)" = "xhigh" ] && ok "dispatch: 'Effort: X' normalized to xhigh" || bad "dispatch: Effort X -> xhigh"
+DEF="$TMP/def.dispatch"; printf 'Shared-Packet: %s\n\nType: parallax\nTo: codex\nLens: Adversarial\nLens-Desc: d\n\nType: parallax\nTo: grok-build\nLens: Structural\nLens-Desc: d\n' "$PKTE" > "$DEF"
+expect_ok "prepare --dispatch with no Effort lines" "$LAUNCH" prepare --dispatch "$DEF"
+MANE="$TMP/prism-rune-manifest.json"
+[ "$(jq -r '.parallax[0].effort' "$MANE" 2>/dev/null)" = "xhigh" ] && ok "dispatch: codex derives xhigh from registry (none authored)" || bad "dispatch: codex derives xhigh"
+[ "$(jq -r '.parallax[1].effort' "$MANE" 2>/dev/null)" = "high" ] && ok "dispatch: grok-build derives high (NOT lexicographic medium)" || bad "dispatch: grok-build derives high"
 
 # subagents-only dispatch exercises the empty-parallax accumulator ([], not an error)
 PKTZ="$TMP/prism-runz.md"; make_packet "$PKTZ"
@@ -316,8 +327,8 @@ printf '%s\n' "$SC" | grep -q '^Shared-Packet: /tmp/prism-sc.md' && ok "scaffold
 printf '%s\n' "$SC" | grep -q '^To: codex' && printf '%s\n' "$SC" | grep -q '^To: mimo' && printf '%s\n' "$SC" | grep -q '^To: glm' && printf '%s\n' "$SC" | grep -q '^To: kimi' && ok "scaffold lists all seven parallax tiers" || bad "scaffold tiers"
 SCX=$("$LAUNCH" scaffold --n 2)
 [ "$(printf '%s\n' "$SCX" | grep -c '^Type:')" = "16" ] && ok "scaffold --n 2 emits 16 records" || bad "scaffold n=2 record count"
-# effort is fixed — scaffold always emits Codex x (xhigh) + Grok Build h (high), N of each
-[ "$(printf '%s\n' "$SCX" | grep -c '^Effort: x')" = "2" ] && [ "$(printf '%s\n' "$SCX" | grep -c '^Effort: h')" = "2" ] && ok "scaffold emits fixed codex x + grok-build h" || bad "scaffold fixed effort"
+# effort is CLI-derived, never authored — scaffold must emit ZERO Effort: lines
+[ "$(printf '%s\n' "$SCX" | grep -c '^Effort:')" = "0" ] && ok "scaffold emits no Effort: lines (effort is CLI-derived)" || bad "scaffold no Effort lines"
 expect_err "scaffold rejects --effort (no longer an option)" "$LAUNCH" scaffold --effort h
 # a filled scaffold round-trips through prepare
 make_packet /tmp/prism-scrt.md
@@ -390,7 +401,7 @@ FAKE
 chmod +x "$FT/relay/scripts/relay"
 FL="$FT/prism/scripts/prism-launch"
 FPK="$TMP/prism-fakeonly.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$FPK"
-printf 'Shared-Packet: %s\n\nType: parallax\nTo: codex\nEffort: m\nLens: Alpha\nLens-Desc: weigh a\n\nType: parallax\nTo: deepseek\nLens: Beta\nLens-Desc: weigh b\n' "$FPK" > "$TMP/fakeonly.dispatch"
+printf 'Shared-Packet: %s\n\nType: parallax\nTo: codex\nLens: Alpha\nLens-Desc: weigh a\n\nType: parallax\nTo: deepseek\nLens: Beta\nLens-Desc: weigh b\n' "$FPK" > "$TMP/fakeonly.dispatch"
 "$FL" prepare --dispatch "$TMP/fakeonly.dispatch" >/dev/null 2>&1
 FMAN="$TMP/prism-fakeonly-manifest.json"; FRES="$TMP/prism-fakeonly-result.json"
 "$FL" parallax "$FMAN" >/dev/null 2>&1
@@ -572,7 +583,7 @@ GCB="$TMP/gpbig.json"; jq -n --arg p "$GPKN" --arg b "$BIGREF" '{shared_packet:$
 expect_err "gptpro: an over-1MB Reference -> fail-closed before launch" "$LAUNCH" prepare --config "$GCB"
 # To/Name/Effort on a gptpro dispatch record
 GDE="$TMP/gpe.dispatch"; printf 'Shared-Packet: %s\nReference: none\n\nType: gptpro\nEffort: x\nLens: X\nLens-Desc: y\n' "$GPKB" > "$GDE"
-expect_err "gptpro: rejects Effort on a gptpro record (no effort knob)" "$LAUNCH" prepare --dispatch "$GDE"
+expect_err "gptpro: rejects an authored Effort line (no longer authored)" "$LAUNCH" prepare --dispatch "$GDE"
 # bad posture
 GCP="$TMP/gpp.json"; jq -n --arg p "$GPKB" '{shared_packet:$p,references:[],parallax:[],subagents:[],gptpro:[{lens:"X",lens_desc:"y",posture:"wrong"}]}' > "$GCP"
 expect_err "gptpro: rejects an invalid posture" "$LAUNCH" prepare --config "$GCP"
