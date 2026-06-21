@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Tests for prism-launch: prepare validation/rendering + parallax --dry-run.
 # No network — never invokes a real peer. Run: ./test-prism-launch.sh
+# Unset RELAY_PEER so the suite runs even when invoked from inside a relay peer
+# subprocess (otherwise prism-launch's anti-recursion guard refuses every call and
+# the whole suite fails — a harness artifact, not a regression).
+unset RELAY_PEER
 set -uo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -641,6 +645,81 @@ rm -f /tmp/prism-gpcg*
 
 echo "== subcommand --help =="
 "$LAUNCH" scaffold --help 2>/dev/null | grep -q 'Usage:' && ok "scaffold --help prints usage" || bad "scaffold --help"
+
+echo "== prepare --expect-n / --expect-m: opt-in floor check =="
+FPKT="$TMP/prism-floor.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$FPKT"
+"$LAUNCH" scaffold --preset review --packet "$FPKT" > "$TMP/prism-floor.dispatch"
+expect_ok  "floor: correct symmetric N=1 passes --expect-n 1"   "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n 1
+expect_err "floor: symmetric N=1 fails --expect-n 2"            "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n 2
+expect_err "floor: missing gpt-pro fails --expect-m 1"          "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n 1 --expect-m 1
+expect_err "floor: --expect-m without --expect-n is rejected"   "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-m 1
+expect_err "floor: --expect-n non-integer is rejected"          "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n foo
+expect_ok  "floor: absent flags keep lenient validation"        "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch"
+FERR=$("$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n 2 2>&1 || true)
+printf '%s' "$FERR" | grep -q 'codex: expected 2, got 1' \
+  && ok "floor: failure message names the under-count tier" || bad "floor: failure message detail"
+# asymmetric dispatch (only subagent + codex): fails the floor, but prepares fine without the flag
+ASD="$TMP/prism-asym.dispatch"
+{ printf 'Shared-Packet: %s\n\n' "$FPKT"
+  printf 'Type: subagent\nLens: A\nLens-Desc: d\n\n'
+  printf 'Type: parallax\nTo: codex\nLens: B\nLens-Desc: d\n\n'; } > "$ASD"
+expect_err "floor: asymmetric (missing tiers) fails --expect-n 1" "$LAUNCH" prepare --dispatch "$ASD" --expect-n 1
+expect_ok  "floor: asymmetric prepares fine without the flag"     "$LAUNCH" prepare --dispatch "$ASD"
+# gpt-pro-only: N=0 with M>=1 is a legal shape and must pass --expect-n 0 --expect-m 1
+GPO="$TMP/prism-gp-only.dispatch"
+{ printf 'Shared-Packet: %s\n\n' "$FPKT"
+  printf 'Reference: none\n\n'
+  printf 'Type: gptpro\nLens: Deep-Reasoning\nLens-Desc: d\n\n'; } > "$GPO"
+expect_ok  "floor: gpt-pro-only passes --expect-n 0 --expect-m 1"  "$LAUNCH" prepare --dispatch "$GPO" --expect-n 0 --expect-m 1
+expect_err "floor: gpt-pro-only fails --expect-n 0 --expect-m 0 (M mismatch)" "$LAUNCH" prepare --dispatch "$GPO" --expect-n 0 --expect-m 0
+expect_err "floor: gpt-pro-only fails --expect-n 1 (standard tiers expected)" "$LAUNCH" prepare --dispatch "$GPO" --expect-n 1 --expect-m 1
+# empty / non-canonical integer handling on the flags
+expect_err "floor: --expect-n '' (empty value) is rejected"       "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n ""
+expect_ok  "floor: --expect-n 01 (leading zero) parses as 1"      "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n 01
+
+echo "== lens catalog: single-source integrity =="
+CAT="$HERE/../templates/lens-catalog.json"
+jq -e . "$CAT" >/dev/null 2>&1 && ok "catalog is valid JSON" || bad "catalog invalid JSON"
+jq -e '(.lenses|map(.name)) as $L | [.presets[][]] | all(. as $n | ($L|index($n)) != null)' "$CAT" >/dev/null 2>&1 \
+  && ok "catalog: every preset lens is a defined lens" || bad "catalog: unknown preset lens"
+jq -e '.axes as $A | .lenses | all(.axis as $a | ($A|index($a)) != null)' "$CAT" >/dev/null 2>&1 \
+  && ok "catalog: every lens axis is a declared family" || bad "catalog: undeclared lens axis"
+jq -e '(.lenses|map(.name)) as $N | ($N|length) == ($N|unique|length)' "$CAT" >/dev/null 2>&1 \
+  && ok "catalog: lens names are unique" || bad "catalog: duplicate lens name"
+
+echo "== registry: single-source tier order + lineage =="
+PJ="$HERE/../../relay/peers.json"
+SCO=$("$LAUNCH" scaffold --n 1 --packet /tmp/x.md | awk -F': ' '/^To: /{print $2}' | tr '\n' ' ')
+REGO=$(jq -r 'to_entries|map(select(.value.order!=null))|sort_by(.value.order)|.[].key' "$PJ" | tr '\n' ' ')
+[ "$SCO" = "$REGO" ] && ok "scaffold parallax order == registry .order" || bad "scaffold order != registry ($SCO vs $REGO)"
+[ "$(jq -r '."grok-build".lineage' "$PJ")" = "$(jq -r '."grok-composer".lineage' "$PJ")" ] \
+  && ok "registry: grok-build and grok-composer share one lineage" || bad "registry: grok lineage split"
+jq -e 'to_entries|map(select(.value.order!=null))|(map(.value.order)) as $O | ($O|length)==($O|unique|length)' "$PJ" >/dev/null 2>&1 \
+  && ok "registry: tier .order values are unique" || bad "registry: duplicate .order"
+# every standard tier (.order set) must also carry a non-empty .lineage — digest
+# lineage derives from it; a missing one would silently split a lineage.
+jq -e 'to_entries|map(select(.value.order!=null))|all(.value.lineage|type=="string" and length>0)' "$PJ" >/dev/null 2>&1 \
+  && ok "registry: every ordered tier has a non-empty .lineage" || bad "registry: an ordered tier is missing .lineage"
+# the single-source invariant the scaffold count-guard enforces at runtime: every
+# preset must have exactly (tier count)+1 lenses (one per parallax peer + 1 subagent).
+NTIERS=$(jq -r 'to_entries|map(select(.value.order!=null))|length' "$PJ")
+jq -e --argjson want "$((NTIERS + 1))" '.presets|to_entries|all(.value|length==$want)' "$CAT" >/dev/null 2>&1 \
+  && ok "catalog: every preset has (tier count)+1 lenses" || bad "catalog: a preset's lens count != tiers+1 (scaffold --preset would fail closed)"
+
+echo "== cross-file contracts (drift guards) =="
+# The digest extractor greps '^## Digest' in each agent's .res.md; the canonical answer
+# template must INSTRUCT agents to use exactly that heading, or every digest silently
+# extracts empty. Pin the template's instructed heading so a rename there is caught.
+HTA="$HERE/../templates/shared-how-to-answer.md"
+grep -qF '## Digest' "$HTA" \
+  && ok "contract: shared-how-to-answer.md instructs the '## Digest' heading the extractor greps" \
+  || bad "contract: '## Digest' heading missing/renamed in shared-how-to-answer.md (digest extraction would silently zero)"
+# prism-launch derives the fixed top effort as effort_values[-1]; pin that the array
+# stays ordered weakest->strongest so a future reorder can't silently pick the wrong tier.
+[ "$(jq -r '.codex.effort_values[-1]' "$PJ")" = "xhigh" ] \
+  && ok "contract: codex effort_values[-1] is the top tier (xhigh)" || bad "contract: codex effort_values ordering ([-1] != xhigh)"
+[ "$(jq -r '."grok-build".effort_values[-1]' "$PJ")" = "high" ] \
+  && ok "contract: grok-build effort_values[-1] is the top tier (high)" || bad "contract: grok-build effort_values ordering ([-1] != high)"
 
 echo
 echo "==== $pass passed, $fail failed ===="

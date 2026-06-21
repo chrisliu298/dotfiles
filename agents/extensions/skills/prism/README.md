@@ -163,9 +163,11 @@ backgrounded process. The Integrator stays in the loop for the judgment.
                 --preset review|design|diagnosis|compare|research|decision|writing
                 pre-fills eight lenses by task type (N=1).
 
-  prepare   --dispatch <file>     (or --config <json>)
+  prepare   --dispatch <file>     (or --config <json>)  [--expect-n N] [--expect-m M]
               └ validate, render every launcher from templates, write the manifest,
-                inject ## Constraints into the packet if absent.
+                inject ## Constraints into the packet if absent. --expect-n N is an
+                opt-in floor check: fail closed unless every standard tier + the
+                subagents are at exactly N (and gpt-pro at M); omit for asymmetric runs.
 
   parallax  <manifest>            [--dry-run] [--only <peer>]
               └ fan out all relay calls as ONE backgrounded process; --dry-run shows
@@ -228,21 +230,25 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
   ├── README.md                   ◄── you are here (the picture)
   ├── scripts/
   │   ├── prism-launch            dispatch engine (the subcommands above)
-  │   └── test-prism-launch.sh    192-test suite (no network — fake-relay for dispatch)
+  │   └── test-prism-launch.sh    no-network suite (fake-relay for dispatch)
   └── templates/
       ├── launcher-subagent.tmpl       Claude subagent prompt (plain markdown)
       ├── launcher-relay-codex.tmpl    Codex / GPT  — <goal> style
       ├── launcher-relay-costar.tmpl   Grok/GLM/Kimi/DeepSeek/MiMo — CO-STAR XML
+      ├── lens-catalog.json            single source: lens descriptions, axis
+      │                                families, and --preset sets (scaffold reads it)
       ├── shared-constraints.md        canonical read-only / anti-recursion block
       │                                (prepare injects this; never hand-copied)
       └── shared-how-to-answer.md      canonical "## How to answer" block
                                        (prepare injects this; never hand-copied)
-            ▲ reads templates + the registry
+            ▲ reads templates + the catalog + the registry
             │
   relay/peers.json   ◄── single source of truth: which peers exist, their effort
                          knobs (effort_values, ordered low→high — prism derives the
-                         top/last as the fixed effort), transports, and launcher-template
-                         style. `relay` and `prism-launch` both read it — add a peer in
+                         top/last as the fixed effort), transports, launcher-template
+                         style, and each standard tier's order + lineage (scaffold
+                         order, peershape, and digest lineage all derive from these).
+                         `relay` and `prism-launch` both read it — add a peer in
                          one stanza.
 ```
 

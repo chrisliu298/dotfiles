@@ -31,6 +31,18 @@ allowed-tools:
 
 Prism sends the **same complete question** to multiple independent agents. Each agent answers the **entire question end-to-end**. The only thing that changes between agents is the **lens**: what they prioritize and what tradeoffs they weigh more heavily.
 
+## Operator quick reference
+
+A skim card for the orchestrating Claude — every line points to its authoritative section below; nothing here overrides them.
+
+- **Invoke:** `prism [N] [M] <question>`. A leading number (or a natural-language tier modifier) ⇒ honor it verbatim; **no** number ⇒ auto-size (anchor `N=1`). See *Config-presence gate*.
+- **The 8 standard tiers:** Claude subagent · Codex · Grok Build · Grok Composer · GLM · Kimi · DeepSeek · MiMo. gpt-pro is a *separate opt-in* tier (`M`, default 0). See *Counting Contract*.
+- **Counts:** dispatched = `8N+M`; perspectives = dispatched + self. The full 8-tier fan at `N` is the **floor** — drop or skew a tier *only* on explicit user instruction.
+- **Effort:** never authored — Codex `xhigh`, Grok Build `high`, derived from the registry; the rest have no knob.
+- **Run:** write packet `/tmp/prism-<id>.md` → `scaffold` → edit lenses → `prepare --dispatch … [--expect-n N]` → launch **all at once** (1 backgrounded `parallax` + `N` Agent calls + `M` gpt-pro) → **wait for every notification** → `results` / `digest` → synthesize verdict-first. See *Execution*.
+- **Hard gates:** no synthesis until *every* agent returns; dispatched agents are read-only leaves (no recursion or side effects); **never** revert the working tree. See *Guards*.
+- **Script:** `~/.claude/skills/prism/scripts/prism-launch` (always the absolute path).
+
 ## Core Principle
 
 **Prism is redundancy, not division of labor.** Every agent gets the full question, full scope, and full deliverable. The lens changes **emphasis**, not **coverage**. If agents own different files, sections, or outputs, that is division of labor, not Prism.
@@ -158,46 +170,23 @@ Don't tailor the prompt body per peer — Prism sends the **same shared prompt**
 
 **Web access is not a dispatch concern — don't verify it.** Every peer can reach the web (WebFetch + WebSearch both work, and the two native gaps — MiMo's WebSearch and GLM's WebFetch — are each covered by a verified fallback: Jina Search for MiMo, GLM's native `web_reader` or Jina Reader for GLM, so every tier effectively has both; neither is load-bearing here; see [[relay]]). Kimi K2.7-Code's native WebFetch and WebSearch both work (verified 2026-06-19 on the coding plan), so no fallback is needed. By default Prism front-loads all evidence in the shared packet (that's what Reference Materials is for), so agents reason over the provided Context rather than browsing — **but when the task requires live online research, each agent researches independently instead** (see the **Independent research for live-research tasks** rule under Shared Context). Either way, do **not** spend a dispatch-time step checking what the relay transport supports — it's settled and irrelevant to a well-built run.
 
-**Relay call syntax (exact)** — the command shapes Prism must emit:
+**Relay call syntax (exact)** — `prism-launch parallax` emits these for you, deriving each peer's fixed `--effort` from the registry; this is the shape it emits and the manual-fallback form. **One pattern serves every peer:**
 
 ```bash
-# Codex parallax (prism always uses --effort xhigh)
-relay call --to codex --name <slug> --effort xhigh <<'BODY'
-<prompt content here>
-BODY
-
-# Grok Build parallax (prism always uses --effort high)
-relay call --to grok-build --name <slug> --effort high <<'BODY'
-<prompt content here>
-BODY
-
-# Grok Composer parallax (no --effort — fast model, no effort knob)
-relay call --to grok-composer --name <slug> <<'BODY'
-<prompt content here>
-BODY
-
-# GLM parallax (no --effort — no effort knob)
-relay call --to glm --name <slug> <<'BODY'
-<prompt content here>
-BODY
-
-# Kimi parallax (no --effort — thinking pinned on via the registry, like GLM)
-relay call --to kimi --name <slug> <<'BODY'
-<prompt content here>
-BODY
-
-# DeepSeek parallax (no --effort — always max)
-relay call --to deepseek --name <slug> <<'BODY'
-<prompt content here>
-BODY
-
-# MiMo parallax (no --effort — no effort knob)
-relay call --to mimo --name <slug> <<'BODY'
+relay call --to <peer> --name <slug> [--effort <effort>] <<'BODY'
 <prompt content here>
 BODY
 ```
 
-Use a lowercase slug for `--name` (e.g., `prism-adversarial`). Prism always passes Codex `--effort xhigh` and Grok Build `--effort high` (the top tier — no other value); never pass `--effort` or model flags on GLM, Kimi, DeepSeek, MiMo, or Grok Composer (none has an effort knob). For all other invocation rules — `--name` required, `--to codex` as the default, non-empty heredoc, no model flags — follow the [[relay]] skill rather than restating them. For concurrency (backgrounding, timeouts), follow relay's Async / Parallel section.
+`<peer>` → its fixed `--effort` (the registry's top tier — never any other value, never authored; peers with no knob take no flag):
+
+| `--to <peer>` | `--effort` |
+|---|---|
+| `codex` | `xhigh` |
+| `grok-build` | `high` |
+| `grok-composer` · `glm` · `kimi` · `deepseek` · `mimo` | *(omit — no effort knob)* |
+
+Use a lowercase slug for `--name` (e.g., `prism-adversarial`). For all other invocation rules — `--name` required, `--to codex` as the default, non-empty heredoc, no model flags — follow the [[relay]] skill rather than restating them. For concurrency (backgrounding, timeouts), follow relay's Async / Parallel section.
 
 **Inspecting Parallax results:** Read only the `.res.md` response file — never the `.log` sidecar (token-heavy stderr; the relay script's Bash output already surfaces failure diagnostics).
 
@@ -298,11 +287,11 @@ Launcher prompts are committed template files in `templates/` alongside this SKI
 | `templates/launcher-relay-codex.tmpl` | Bash relay, Codex (GPT `<goal>` style) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
 | `templates/launcher-relay-costar.tmpl` | Bash relay, any CO-STAR peer (Grok Build, Grok Composer, GLM, Kimi, DeepSeek, MiMo) | `SHARED_PACKET_PATH`, `LENS_NAME`, `LENS_DESC` |
 
-There is **one relay template per prompting style**, not per peer — `prism-launch` selects it by the `template` field in `relay/peers.json` (Codex uses a GPT `<goal>` style; Grok/GLM/Kimi/DeepSeek/MiMo share the CO-STAR `launcher-relay-costar.tmpl`). The anti-recursion warning is the top line of every template. Adding a relay target's **transport and launcher selection** is one `relay/peers.json` stanza — `prism-launch` validates and renders it registry-driven, no script edit needed; add a new template file only for a genuinely new prompting style. (A new **symmetric default tier** additionally needs the hardcoded surface updated: the scaffold peer loop, the `--preset` lens lists, and the `peershape` display order in `prism-launch`, plus the model/agent counts throughout these docs.)
+There is **one relay template per prompting style**, not per peer — `prism-launch` selects it by the `template` field in `relay/peers.json` (Codex uses a GPT `<goal>` style; Grok/GLM/Kimi/DeepSeek/MiMo share the CO-STAR `launcher-relay-costar.tmpl`). The anti-recursion warning is the top line of every template. Adding a relay target's **transport and launcher selection** is one `relay/peers.json` stanza — `prism-launch` validates and renders it registry-driven, no script edit needed; add a new template file only for a genuinely new prompting style. (A new **symmetric default tier** sets `order` + `lineage` in that same stanza — the scaffold tier order, the `peershape` display, and the digest lineage all derive from the registry, so no script edit. It additionally needs one lens added to each `--preset` set in `templates/lens-catalog.json` — the scaffold count-guard fails closed until they match — plus the model/agent counts updated throughout these docs.)
 
 ### Dispatch via prism-launch
 
-You do **not** render templates or hand-write relay heredocs. The `prism-launch` script (`~/.claude/skills/prism/scripts/prism-launch`) owns the cross-model half of dispatch: it renders every launcher from the templates, validates dispatch shape mechanically, and fans all relay calls out as **one** backgrounded process that waits for every peer and writes a single structured result.
+You do **not** render templates or hand-write relay heredocs. The `prism-launch` script (`~/.claude/skills/prism/scripts/prism-launch`) owns the cross-model half of dispatch: it renders every launcher from the templates, validates dispatch shape mechanically, and fans all relay calls out as **one** backgrounded process that waits for every peer and writes a single structured result. Every subcommand (including `scaffold`, which reads the registry + lens catalog) requires `jq` in PATH.
 
 **Invoke it by its absolute path** — `~/.claude/skills/prism/scripts/prism-launch` — not the bare name. The bare command is on PATH only when the shell inherited the `.zshenv`-injected PATH; a sandboxed/non-zsh/reset-env agent shell will not have it, and a bare-name miss must NOT trigger the manual fallback. The absolute path is the script's real install location, so its templates resolve correctly with no extra handling. (`prism-launch` resolves its sibling `relay` the same way — by install path, falling back to PATH — so `parallax` dispatches even when `relay` is not on PATH either.)
 
@@ -364,6 +353,12 @@ Format rules: `Shared-Packet:` appears once. Each record starts at `Type: parall
 # 1) prepare (foreground): compiles the dispatch file into the canonical config,
 #    validates packet/shape/injection, renders all launchers, writes
 #    <id>-manifest.json. Fails loudly if anything is off.
+#    Optional opt-in floor check — assert the resolved shape is the symmetric
+#    default before launch (recommended for a symmetric run; omit for an
+#    intentional asymmetric / N=0 gpt-pro-only run):
+#      ... prepare --dispatch /tmp/prism-<id>.dispatch --expect-n <N> [--expect-m <M>]
+#    --expect-n N requires every standard tier AND the subagents at exactly N;
+#    --expect-m M additionally pins gpt-pro. A mismatch aborts naming the offending tier.
 ~/.claude/skills/prism/scripts/prism-launch prepare --dispatch /tmp/prism-<id>.dispatch
 
 # 2) parallax (ONE backgrounded Bash call, run_in_background: true): fans out all
@@ -399,7 +394,7 @@ Run these checks before launching. If any fails, rewrite and re-check. **When di
    - Never assign the same lens to two of Codex, GLM, Kimi, DeepSeek, MiMo, or the Grok tiers.
    - If an adversarial lens carries the heaviest reasoning load on a subtle technical question, assign it to Claude or Codex (`xhigh`) rather than a parallax tier; if a parallax tier must take it, prefer a middle-tier peer (GLM, Kimi, or Grok Build) over the bottom tier (DeepSeek/MiMo) (see "Tier strength and lens fit").
 
-5. **Dispatch-shape test (CRITICAL):** First resolve the config — every tier's count defaults to `N`, then apply any natural-language modifications (exclusions → `0`, per-tier counts). Total dispatched agents (Claude subagents + the seven parallax tiers) must equal the resolved per-tier counts; self does not count. Enumerate planned calls by type — `--to codex`, `--to grok-build`, `--to grok-composer`, `--to glm`, `--to kimi`, `--to deepseek`, `--to mimo` each equal to that tier's resolved count, and Agent calls equal to the resolved Claude-subagent count. The default symmetric run is `N` of each: `7N` relay calls + `N` Agent calls. If `M` > 0, also `M` `Type: gptpro` records — `prepare` composes each into a `<id>-gptpro-<slug>.md` launcher (listed in the manifest's `gptpro[]`), and you fire `M` backgrounded `gpt-pro` Bash calls, separate from the parallax fan (not relay, not in `7N`+`N`). Confirm the `M` records and the resolved `Reference:` list inline the right files. If any count mismatches the resolved config, fix before launching. **Intent-match (your judgment, not mechanical):** the full 8-tier fan at `N` is the floor (Counting Contract) — confirm every tier below `N` (or absent) traces to an **explicit user exclusion/override**, never an orchestrator choice, and echo the `8N+M` status line so the arithmetic is visible (`8×2+0=16`, never a bare `9`). **Zero-standard floor:** when every standard tier resolves to `0` (the `N=0` gpt-pro-only shape) this test passes vacuously (`0 = 0`), so additionally assert `M ≥ 1` — a zero-standard **and** `M=0` shape is the no-op `prepare` rejects; don't launch it. The most common failure is emitting fewer relay calls than the resolved parallax total.
+5. **Dispatch-shape test (CRITICAL):** First resolve the config — every tier's count defaults to `N`, then apply any natural-language modifications (exclusions → `0`, per-tier counts). Total dispatched agents (Claude subagents + the seven parallax tiers) must equal the resolved per-tier counts; self does not count. Enumerate planned calls by type — `--to codex`, `--to grok-build`, `--to grok-composer`, `--to glm`, `--to kimi`, `--to deepseek`, `--to mimo` each equal to that tier's resolved count, and Agent calls equal to the resolved Claude-subagent count. The default symmetric run is `N` of each: `7N` relay calls + `N` Agent calls. If `M` > 0, also `M` `Type: gptpro` records — `prepare` composes each into a `<id>-gptpro-<slug>.md` launcher (listed in the manifest's `gptpro[]`), and you fire `M` backgrounded `gpt-pro` Bash calls, separate from the parallax fan (not relay, not in `7N`+`N`). Confirm the `M` records and the resolved `Reference:` list inline the right files. If any count mismatches the resolved config, fix before launching. **Intent-match (your judgment — now also mechanically checkable):** the full 8-tier fan at `N` is the floor (Counting Contract) — confirm every tier below `N` (or absent) traces to an **explicit user exclusion/override**, never an orchestrator choice, and echo the `8N+M` status line so the arithmetic is visible (`8×2+0=16`, never a bare `9`). For a symmetric run you can make this structural rather than eyeballed: pass `prepare --expect-n <N> [--expect-m <M>]`, which fails closed (naming the offending tier) unless every standard tier + the subagents are at exactly `N` (and gpt-pro at `M`). Omit the flags for an intentional asymmetric / `N=0` run. **Zero-standard floor:** when every standard tier resolves to `0` (the `N=0` gpt-pro-only shape) this test passes vacuously (`0 = 0`), so additionally assert `M ≥ 1` — a zero-standard **and** `M=0` shape is the no-op `prepare` rejects; don't launch it. The most common failure is emitting fewer relay calls than the resolved parallax total.
 
 (Effort is no longer an agent-facing check: `prism-launch` derives the fixed per-peer effort from the registry — Codex `xhigh`, Grok Build `high`, the rest none — and emits `--effort` itself, so there is nothing to author or verify.)
 
@@ -413,7 +408,7 @@ On a **live-research task**, also weigh tier web-reach when placing research-til
 
 ### Lens Axes
 
-Lenses are grouped into **axis families**. Two lenses in the *same* family are near-substitutes — fielding both wastes a slot and silently fails the redundancy test. **Pick at most one lens per family per run;** field two (or more) from one family only when each earns its slot by a distinct on-task emphasis (the redundancy test must still pass). Two task types legitimately do this: **research/exploration**, where probing the option/framing space *is* the deliverable, so several Reframe/Search lenses (`First-Principles` rebuild-from-goal vs `Outsider` another-field's-eyes vs `Lateral-Generative` pattern-break) are the point; and **writing**, where `Clarity` (is it clear) and `Audience` (fit to the reader) are distinct Human/Value emphases. Everywhere else, aim for eight different families. This is the unit of selection — **choose by axis, not by scanning names.**
+Lenses are grouped into **axis families**. This table is the human-readable view; `templates/lens-catalog.json` mirrors it machine-readably (each lens's `axis` + one-line `desc`) and is what `prism-launch` reads to fill scaffolds — edit a lens's description or axis there. Two lenses in the *same* family are near-substitutes — fielding both wastes a slot and silently fails the redundancy test. **Pick at most one lens per family per run;** field two (or more) from one family only when each earns its slot by a distinct on-task emphasis (the redundancy test must still pass). Two task types legitimately do this: **research/exploration**, where probing the option/framing space *is* the deliverable, so several Reframe/Search lenses (`First-Principles` rebuild-from-goal vs `Outsider` another-field's-eyes vs `Lateral-Generative` pattern-break) are the point; and **writing**, where `Clarity` (is it clear) and `Audience` (fit to the reader) are distinct Human/Value emphases. Everywhere else, aim for eight different families. This is the unit of selection — **choose by axis, not by scanning names.**
 
 | Axis family | What it weighs | Member lenses |
 |---|---|---|
@@ -433,7 +428,7 @@ Lenses added to close coverage gaps: **`Empirical`** (the measurement / base-rat
 
 ### Suggested lenses by task type
 
-Starting points — every lens still answers the full question. The symmetric default dispatches **eight** agents, so each set below is eight distinct postures; most span eight different axis families (research and writing deliberately field two from one family — see Lens Axes). The seven `prism-launch scaffold --preset` sets pre-fill these (Implementation has no preset — compose it by hand). The adversarial-family slot (italicized) is a *candidate*, not a default: keep it only if stress-testing is the binding constraint for this specific question (see Lens quality test); otherwise replace it with another family's lens.
+Starting points — every lens still answers the full question. The symmetric default dispatches **eight** agents, so each set below is eight distinct postures; most span eight different axis families (research and writing deliberately field two from one family — see Lens Axes). These rows are task-type *guidance* (the adversarial-family slot is italicized as a *candidate*, not a default — keep it only if stress-testing is the binding constraint for this question; see Lens quality test). The seven `prism-launch scaffold --preset` sets pre-fill the same lenses, but the **exact ordered arrays the CLI emits live in `templates/lens-catalog.json` (`.presets`) — that file is authoritative** (the scaffold orders each set heaviest-reasoning-first for tier placement, so the catalog order differs from these reading-order rows). Edit a preset there, not here. Implementation has no preset — compose it by hand.
 
 - **Code review**: *Adversarial* + Correctness + Simplicity + Depth-Weighted + Temporal + Outsider + Stakeholder + Causal
 - **Architecture / design**: First-Principles + *Adversarial* + Simplicity + Stakeholder + Temporal + Empirical + Breadth-Weighted + Causal

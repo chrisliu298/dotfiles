@@ -35,6 +35,33 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 TEMPLATES_DIR=$(cd "$SCRIPT_DIR/../templates" && pwd 2>/dev/null) \
   || die "templates dir not found next to script ($SCRIPT_DIR/../templates)"
 
+# ── single sources of truth ──────────────────────────────────────────────────
+# Peer registry — relay's sibling file. The one place that declares which peers
+# exist, their effort knobs / template style, and (prism-consumed) each standard
+# tier's .order (dispatch + display position) and .lineage (synthesis-weighting
+# group; the two Grok tiers share "grok"). Adding a standard tier is one stanza
+# here — peershape, scaffold order, and digest lineage all derive from it.
+PEERS_JSON="$SCRIPT_DIR/../../relay/peers.json"
+# Lens catalog — the one place that declares lens descriptions, axis families, and
+# the --preset task-type lens sets. lens_desc_for / preset_lenses read it; SKILL.md
+# describes it but this file is authoritative.
+CATALOG_JSON="$TEMPLATES_DIR/lens-catalog.json"
+
+# Standard-tier peer names that carry an .order, newline-separated in canonical
+# (ascending .order) order. The sole source of the canonical tier ordering.
+registry_tier_peers() {
+  [ -f "$PEERS_JSON" ] || die "peer registry not found: $PEERS_JSON"
+  jq -r 'to_entries | map(select(.value.order != null)) | sort_by(.value.order) | .[].key' "$PEERS_JSON" \
+    || die "could not read peer order from $PEERS_JSON"
+}
+
+# Synthesis lineage for a peer (its .lineage, or the peer name itself if unset).
+registry_lineage_of() {
+  local lin
+  lin=$(jq -r --arg p "$1" '.[$p].lineage // empty' "$PEERS_JSON" 2>/dev/null)
+  printf '%s' "${lin:-$1}"
+}
+
 # ── --dispatch parser ─────────────────────────────────────────────────────────
 # Compiles the line-oriented dispatch format into the same JSON shape that
 # --config accepts; cmd_prepare's existing validation/render path then runs
@@ -154,17 +181,26 @@ dispatch_to_config() {
 # ── prepare ──────────────────────────────────────────────────────────────────
 
 cmd_prepare() {
-  local config="" dispatch=""
+  local config="" dispatch="" expect_n="" expect_m=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --config)   [ $# -ge 2 ] || die "prepare: --config requires a value";   config="$2";   shift 2 ;;
       --dispatch) [ $# -ge 2 ] || die "prepare: --dispatch requires a value"; dispatch="$2"; shift 2 ;;
+      --expect-n) [ $# -ge 2 ] && [ -n "$2" ] || die "prepare: --expect-n requires a non-empty integer value"; expect_n="$2"; shift 2 ;;
+      --expect-m) [ $# -ge 2 ] && [ -n "$2" ] || die "prepare: --expect-m requires a non-empty integer value"; expect_m="$2"; shift 2 ;;
       -*)         die "prepare: unknown flag: $1" ;;
       *)          die "prepare: unexpected argument: $1" ;;
     esac
   done
   [ -n "$config" ] && [ -n "$dispatch" ] && die "prepare: pass --config OR --dispatch, not both"
   [ -z "$config" ] && [ -z "$dispatch" ] && die "prepare: --config <config.json> or --dispatch <dispatch-file> required"
+  # Opt-in floor check: --expect-n N asserts the symmetric shape (every standard
+  # tier + subagents at exactly N); --expect-m M additionally pins gpt-pro. Absent
+  # → today's lenient validation. This makes the "full 8-tier fan at N is the floor"
+  # invariant structural, not prose-only.
+  case "$expect_n" in *[!0-9]*) die "prepare: --expect-n must be a non-negative integer, got: $expect_n" ;; esac
+  case "$expect_m" in *[!0-9]*) die "prepare: --expect-m must be a non-negative integer, got: $expect_m" ;; esac
+  [ -n "$expect_m" ] && [ -z "$expect_n" ] && die "prepare: --expect-m requires --expect-n (declare the standard-tier floor too; use --expect-n 0 for a gpt-pro-only run)"
   command -v jq >/dev/null 2>&1 || die "prepare: jq not found in PATH"
   # --dispatch: compile the line-oriented file into the canonical config JSON,
   # then fall through to the exact same validation/render path as --config.
@@ -176,9 +212,13 @@ cmd_prepare() {
   [ -f "$config" ] || die "prepare: config file not found: $config"
 
   # Peer registry — relay's sibling file, the single source of truth for which
-  # peers exist, their effort knobs, and their launcher template style.
-  local PEERS="$SCRIPT_DIR/../../relay/peers.json"
+  # peers exist, their effort knobs, launcher template style, and tier order/lineage.
+  local PEERS="$PEERS_JSON"
   [ -f "$PEERS" ] || die "prepare: peer registry not found at \$SCRIPT_DIR/../../relay/peers.json ($PEERS)"
+  # Canonical standard-tier order, derived from the registry once (reused by the
+  # optional floor check and the peershape display). JSON array of peer names.
+  local ord_json; ord_json=$(registry_tier_peers | jq -Rn '[inputs | select(length>0)]') \
+    || die "prepare: could not derive canonical tier order from $PEERS"
 
   local cfgerr
   cfgerr=$(jq -e . "$config" 2>&1 >/dev/null) || die "prepare: config is not valid JSON: $config
@@ -345,6 +385,36 @@ cmd_prepare() {
       }
   ' "$config") || die "prepare: validation failed (see message above)"
 
+  # Opt-in floor check (--expect-n / --expect-m): assert the manifest matches the
+  # declared symmetric shape exactly — every standard tier and the subagents at N,
+  # plus M gpt-pro lenses if given, and no non-standard peer. Runs BEFORE any
+  # launcher or the manifest is written, so a mismatch aborts without producing run
+  # artifacts (the packet's idempotent ## Constraints / ## How to answer injection
+  # above may already have run — that is the same content a successful prepare
+  # writes, not a corrupting side effect). en/em parse via tonumber so a value like
+  # "08" is accepted; empty values are rejected at flag parse. Non-empty list fails closed.
+  if [ -n "$expect_n" ]; then
+    local floor_err
+    floor_err=$(echo "$manifest_json" | jq -r \
+        --arg en "$expect_n" --argjson ord "$ord_json" --arg em "$expect_m" '
+      def emit($label; $got; $want):
+        if $got != $want then "  \($label): expected \($want), got \($got)" else empty end;
+      ($en | tonumber) as $enn
+      | .counts as $c
+      | ($c.by_peer // {}) as $bp
+      | [ emit("subagents"; ($c.subagents // 0); $enn),
+          ( $ord[] as $p | emit($p; ($bp[$p] // 0); $enn) ),
+          ( (($bp | keys) - $ord)[] as $x | "  \($x): unexpected non-standard peer in a symmetric --expect-n run" ),
+          ( if $em != "" then emit("gptpro"; ($c.gptpro // 0); ($em | tonumber)) else empty end )
+        ]
+      | .[]')
+    if [ -n "$floor_err" ]; then
+      die "prepare: floor check failed for --expect-n $expect_n${expect_m:+ --expect-m $expect_m}:
+$floor_err
+Resolve the dispatch to the declared symmetric shape, or drop the --expect flags for an intentional asymmetric / gpt-pro-only run."
+    fi
+  fi
+
   # Render every launcher FROM the manifest (manifest is authoritative — no drift).
   # Substitution is literal bash parameter expansion, so lens text cannot break
   # sed delimiters or replacement specials.
@@ -484,11 +554,10 @@ EOF
   # Human-facing summary for the orchestrator.
   local nsub peershape
   nsub=$(echo "$manifest_json" | jq '.counts.subagents')
-  # Display in canonical (docs) order — codex, the two Grok tiers, then GLM, Kimi, DeepSeek, MiMo —
-  # not jq's alphabetical key order; any future peer not in the list is appended.
-  peershape=$(echo "$manifest_json" | jq -r '
+  # Display in canonical registry order (peers by ascending .order) — not jq's
+  # alphabetical key order; any dispatched peer not in the registry is appended.
+  peershape=$(echo "$manifest_json" | jq -r --argjson ord "$ord_json" '
     .counts.by_peer as $bp
-    | ["codex","grok-build","grok-composer","glm","kimi","deepseek","mimo"] as $ord
     | ($ord + ($bp | keys | map(select(. as $k | ($ord | index($k)) == null))))
     | map(select($bp[.] != null) | "\(.)=\($bp[.])")
     | join(" ")')
@@ -747,58 +816,24 @@ $(jq -n --arg to "$to" --arg name "$name" --arg status "$status" --arg res "$res
 
 # ── scaffold ─────────────────────────────────────────────────────────────────
 
-# Standard one-line weighing-posture descriptions for the common lenses, grouped by
-# axis family (see SKILL.md "Lens Axes"), used to pre-fill --preset scaffolds (refine
-# as needed). The menu is open — unknown names get a generic stub, not an error.
+# One-line weighing-posture description for a lens, read from the lens catalog
+# (templates/lens-catalog.json) — the single source. Grouped there by axis family
+# (see SKILL.md "Lens Axes"). The menu is open — an unknown name gets a generic
+# stub, not an error, so a task-specific lens still scaffolds.
 lens_desc_for() {
-  case "$1" in
-    # Search axis
-    Breadth-Weighted)    echo "weigh wide coverage of options and angles over depth" ;;
-    Depth-Weighted)      echo "weigh deep, thorough analysis of the core over breadth" ;;
-    # Reframe axis
-    First-Principles)    echo "weigh how this looks rebuilt from the goal up, ignoring the current shape" ;;
-    Outsider)            echo "weigh how a newcomer from another field would approach it" ;;
-    Reframe)             echo "weigh an alternate prior or problem framing that recasts the question (exploratory, not an attack)" ;;
-    Lateral-Generative)  echo "weigh deliberately non-obvious, out-of-the-box options via analogy, inversion, or constraint removal — novelty over coverage" ;;
-    # Evidence axis
-    Empirical)           echo "weigh the claim by what is measurable: baseline, metric, magnitude, base rate — distrust unmeasured assertions" ;;
-    Correctness)         echo "weigh correctness guarantees and edge cases" ;;
-    # Mechanism axis
-    Causal)              echo "weigh the actual cause-and-effect chain down to the root" ;;
-    # Challenge axis (opt-in)
-    Adversarial)         echo "weigh the strongest attacks, flaws, and failure modes — find what breaks" ;;
-    Falsification)       echo "weigh what evidence would prove the leading hypothesis wrong" ;;
-    Disconfirming)       echo "weigh the evidence that most directly contradicts the leading choice" ;;
-    Risk)                echo "weigh what could go wrong and the blast radius if it does" ;;
-    # Human / Value axis
-    Stakeholder)         echo "weigh who is affected and how: incentives, who bears the cost, second-order effects on the people and systems it touches" ;;
-    Audience)            echo "weigh how the intended audience will actually receive it" ;;
-    Clarity)             echo "weigh how clearly the message lands for its reader" ;;
-    # Delivery axis
-    Pragmatist)          echo "weigh the workable path that ships under real constraints — resources, sequencing, what it takes to execute" ;;
-    Simplicity)          echo "weigh the approach with the fewest moving parts" ;;
-    Structural)          echo "weigh the structurally correct fix at the needed scope — reject the expedient hack and scope-padding alike (durable means correct, not bigger)" ;;
-    # Time axis
-    Temporal)            echo "weigh how the answer changes over time: lifecycle, sequencing, reversibility (one-way vs two-way doors), path dependence" ;;
-    *)                   echo "weigh the $1 axis — refine this description" ;;
-  esac
+  local d
+  d=$(jq -r --arg n "$1" '.lenses[] | select(.name == $n) | .desc' "$CATALOG_JSON" 2>/dev/null | head -1)
+  if [ -n "$d" ]; then printf '%s\n' "$d"; else printf 'weigh the %s axis — refine this description\n' "$1"; fi
 }
 
-# Eight distinct lenses per task-type preset, in canonical tier order (heaviest-
-# reasoning first, so it lands on the subagent/codex slots). Each set spreads across
-# distinct axis families (see SKILL.md "Lens Axes") — the 8th lands on the MiMo tier.
-# Returns 1 if unknown.
+# Eight distinct lenses for a task-type preset, read from the catalog's .presets —
+# in canonical tier order (heaviest-reasoning first, so it lands on the subagent/
+# codex slots), each spread across distinct axis families. Returns 1 if unknown.
 preset_lenses() {
-  case "$1" in
-    review)    echo "Adversarial Correctness Simplicity Depth-Weighted Temporal Outsider Stakeholder Causal" ;;
-    design)    echo "First-Principles Adversarial Simplicity Stakeholder Temporal Empirical Breadth-Weighted Causal" ;;
-    diagnosis) echo "Causal Falsification Empirical Depth-Weighted Temporal Outsider Stakeholder Pragmatist" ;;
-    compare)   echo "First-Principles Empirical Simplicity Stakeholder Temporal Disconfirming Breadth-Weighted Causal" ;;
-    research)  echo "First-Principles Breadth-Weighted Depth-Weighted Outsider Empirical Lateral-Generative Temporal Stakeholder" ;;
-    decision)  echo "First-Principles Empirical Stakeholder Temporal Pragmatist Disconfirming Breadth-Weighted Causal" ;;
-    writing)   echo "Adversarial Clarity Audience Simplicity Outsider Empirical Depth-Weighted Temporal" ;;
-    *) return 1 ;;
-  esac
+  local out
+  out=$(jq -r --arg t "$1" 'if (.presets | has($t)) then (.presets[$t] | join(" ")) else empty end' "$CATALOG_JSON" 2>/dev/null)
+  [ -n "$out" ] || return 1
+  printf '%s\n' "$out"
 }
 
 # Emit a ready-to-fill dispatch skeleton for the symmetric default (N of every
@@ -818,25 +853,36 @@ cmd_scaffold() {
   done
   case "$n" in ''|*[!0-9]*) die "scaffold: --n must be a positive integer" ;; esac
   [ "$n" -ge 1 ] || die "scaffold: --n must be >= 1"
+  command -v jq >/dev/null 2>&1 || die "scaffold: jq not found in PATH (needed to read the peer registry + lens catalog)"
   # Effort is fixed and CLI-derived (Codex xhigh, Grok Build high) — never authored in the dispatch.
   [ -n "$packet" ] || packet="/tmp/prism-<id>.md"
+
+  # Canonical tier order from the registry: a subagent slot first, then each standard
+  # parallax peer by ascending .order. ONE source — add a peer in peers.json and every
+  # scaffold/peershape/lineage surface follows. No hardcoded peer names below.
+  local peers npeers; peers=$(registry_tier_peers); npeers=$(printf '%s\n' "$peers" | grep -c . || true)
+  [ "$npeers" -ge 1 ] || die "scaffold: no standard tiers in the registry (no peer carries an .order) — $PEERS_JSON"
 
   if [ -n "$preset" ]; then
     [ "$n" -eq 1 ] || die "scaffold: --preset is for the N=1 default; for N>1, fill lenses by hand"
     local names; names=$(preset_lenses "$preset") \
-      || die "scaffold: unknown --preset '$preset' (try: review design diagnosis compare research decision writing)"
+      || die "scaffold: unknown --preset '$preset' (see templates/lens-catalog.json .presets for the valid set)"
     set -- $names
+    [ "$#" -eq "$((npeers + 1))" ] \
+      || die "scaffold: preset '$preset' has $# lenses but the registry defines $npeers tiers + 1 subagent = $((npeers + 1)) slots — update templates/lens-catalog.json (.presets) to match the registry."
     printf 'Shared-Packet: %s\n\n' "$packet"
     printf '# Preset "%s": eight lenses pre-filled in canonical tier order (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$preset"
     printf '# Edit any Lens / Lens-Desc to taste; write the Shared-Packet file before prepare.\n\n'
+    # Slot 1 → subagent; slots 2.. → parallax peers in canonical registry order.
+    # After `set -- $names`, $1 is the subagent lens and $2..$N the parallax lenses;
+    # ${!idx} indirectly reads the positional param numbered by $idx (2,3,…).
     printf 'Type: subagent\nLens: %s\nLens-Desc: %s\n\n' "$1" "$(lens_desc_for "$1")"
-    printf 'Type: parallax\nTo: codex\nLens: %s\nLens-Desc: %s\n\n' "$2" "$(lens_desc_for "$2")"
-    printf 'Type: parallax\nTo: grok-build\nLens: %s\nLens-Desc: %s\n\n' "$3" "$(lens_desc_for "$3")"
-    printf 'Type: parallax\nTo: grok-composer\nLens: %s\nLens-Desc: %s\n\n' "$4" "$(lens_desc_for "$4")"
-    printf 'Type: parallax\nTo: glm\nLens: %s\nLens-Desc: %s\n\n' "$5" "$(lens_desc_for "$5")"
-    printf 'Type: parallax\nTo: kimi\nLens: %s\nLens-Desc: %s\n\n' "$6" "$(lens_desc_for "$6")"
-    printf 'Type: parallax\nTo: deepseek\nLens: %s\nLens-Desc: %s\n\n' "$7" "$(lens_desc_for "$7")"
-    printf 'Type: parallax\nTo: mimo\nLens: %s\nLens-Desc: %s\n\n' "$8" "$(lens_desc_for "$8")"
+    local idx=2 peer
+    while IFS= read -r peer; do
+      [ -n "$peer" ] || continue
+      printf 'Type: parallax\nTo: %s\nLens: %s\nLens-Desc: %s\n\n' "$peer" "${!idx}" "$(lens_desc_for "${!idx}")"
+      idx=$((idx + 1))
+    done <<< "$peers"
     return 0
   fi
 
@@ -846,22 +892,16 @@ cmd_scaffold() {
   printf '# Order is the canonical tier order — put your heaviest-reasoning (e.g. Adversarial)\n'
   printf '# lens on a subagent or codex. Write the Shared-Packet file before running prepare.\n'
   printf '# Tip: --preset review|design|diagnosis|compare|research|decision|writing pre-fills lenses (N=1).\n\n'
-  local k i=0
+  local k i=0 peer
   k=1; while [ "$k" -le "$n" ]; do
-    i=$((i+1)); printf 'Type: subagent\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$i"; k=$((k+1))
+    i=$((i + 1)); printf 'Type: subagent\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$i"; k=$((k + 1))
   done
-  k=1; while [ "$k" -le "$n" ]; do
-    i=$((i+1)); printf 'Type: parallax\nTo: codex\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$i"; k=$((k+1))
-  done
-  k=1; while [ "$k" -le "$n" ]; do
-    i=$((i+1)); printf 'Type: parallax\nTo: grok-build\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$i"; k=$((k+1))
-  done
-  local peer
-  for peer in grok-composer glm kimi deepseek mimo; do
+  while IFS= read -r peer; do
+    [ -n "$peer" ] || continue
     k=1; while [ "$k" -le "$n" ]; do
-      i=$((i+1)); printf 'Type: parallax\nTo: %s\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$peer" "$i"; k=$((k+1))
+      i=$((i + 1)); printf 'Type: parallax\nTo: %s\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$peer" "$i"; k=$((k + 1))
     done
-  done
+  done <<< "$peers"
 }
 
 # ── clean ────────────────────────────────────────────────────────────────────
@@ -983,13 +1023,11 @@ cmd_results() {
 
 # ── digest ─────────────────────────────────────────────────────────────────
 
-# Collapse two Grok tiers to one lineage; every other peer is its own lineage.
-# Mirrors the SKILL.md tally rule (grok-build + grok-composer = one Grok lineage).
+# Synthesis lineage for a peer, from the registry's .lineage field (the two Grok
+# tiers share "grok"; every other peer is its own lineage). Single-sourced in
+# peers.json — see registry_lineage_of.
 digest_lineage_of() {
-  case "$1" in
-    grok-build|grok-composer) echo "grok" ;;
-    *)                        echo "$1"   ;;
-  esac
+  registry_lineage_of "$1"
 }
 
 # Print the LAST top-level "## Digest" block from a .res.md, ignoring anything
@@ -1129,10 +1167,10 @@ cmd_help() {
   cat <<'USAGE'
 prism-launch — Prism dispatch launcher (parallax fan-out + dispatch prep)
 
-Usage:
+Usage:  (all subcommands require `jq` in PATH)
   prism-launch scaffold [--n <N>] [--preset <type>] [--packet <path>]  # fill-in dispatch skeleton
-  prism-launch prepare  --dispatch <dispatch-file>   # default: line-oriented control file
-  prism-launch prepare  --config   <config.json>     # escape hatch: raw JSON (one of the two)
+  prism-launch prepare  --dispatch <dispatch-file>  [--expect-n <N> [--expect-m <M>]]   # default: line-oriented control file
+  prism-launch prepare  --config   <config.json>    [--expect-n <N> [--expect-m <M>]]   # escape hatch: raw JSON (one of the two)
   prism-launch parallax <manifest.json> [--dry-run]
   prism-launch parallax <manifest.json> --only <peer-name>   # re-dispatch ONE peer (retry), merge into result
   prism-launch results  <manifest.json>              # print each peer/gpt-pro lens status + .res.md path
@@ -1149,7 +1187,10 @@ prepare:   validate the dispatch/config, render all launchers from templates, wr
            absent (so you author the packet with just Full Question + Context). For any gpt-pro
            lens it also COMPOSES a self-contained launcher (inlines the frozen packet + every
            reference file's contents + grounding + calibration). Pass one of --dispatch (compiled
-           to the canonical config) or --config. See the prism SKILL.md.
+           to the canonical config) or --config. Optional opt-in floor check: --expect-n N fails
+           closed unless every standard tier + the subagents are at exactly N; --expect-m M also
+           pins gpt-pro to M (and checks gpt-pro only when given — tiers and gpt-pro are orthogonal).
+           Omit both for an asymmetric / N=0 run. See the prism SKILL.md.
 parallax:  fan out every relay call as ONE backgrounded process, wait for all, write a structured
            result. Run with run_in_background: true. --only <name> retries a single failed peer.
            Relay peers only — gpt-pro lenses are NOT in the parallax fan.

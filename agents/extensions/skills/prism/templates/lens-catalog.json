@@ -1,0 +1,35 @@
+{
+  "_comment": "Single source of truth for Prism's lens catalog: per-lens weighing-posture descriptions (grouped by axis family) and the --preset task-type lens sets. prism-launch reads this (lens_desc_for, preset_lenses); SKILL.md's Lens Axes table and the suggested-lenses guidance describe it but this file is authoritative. Preset arrays are in canonical tier order (heaviest-reasoning lens first, so it lands on the subagent/codex slot). The menu is open — add a lens with a one-sentence axis, or a preset of eight names drawn from .lenses. test-prism-launch.sh asserts every preset name is a known lens and every lens.axis is in .axes.",
+  "axes": ["Search", "Reframe", "Evidence", "Mechanism", "Challenge", "Human/Value", "Delivery", "Time"],
+  "lenses": [
+    { "name": "Breadth-Weighted",   "axis": "Search",      "desc": "weigh wide coverage of options and angles over depth" },
+    { "name": "Depth-Weighted",     "axis": "Search",      "desc": "weigh deep, thorough analysis of the core over breadth" },
+    { "name": "First-Principles",   "axis": "Reframe",     "desc": "weigh how this looks rebuilt from the goal up, ignoring the current shape" },
+    { "name": "Outsider",           "axis": "Reframe",     "desc": "weigh how a newcomer from another field would approach it" },
+    { "name": "Reframe",            "axis": "Reframe",     "desc": "weigh an alternate prior or problem framing that recasts the question (exploratory, not an attack)" },
+    { "name": "Lateral-Generative", "axis": "Reframe",     "desc": "weigh deliberately non-obvious, out-of-the-box options via analogy, inversion, or constraint removal — novelty over coverage" },
+    { "name": "Empirical",          "axis": "Evidence",    "desc": "weigh the claim by what is measurable: baseline, metric, magnitude, base rate — distrust unmeasured assertions" },
+    { "name": "Correctness",        "axis": "Evidence",    "desc": "weigh correctness guarantees and edge cases" },
+    { "name": "Causal",             "axis": "Mechanism",   "desc": "weigh the actual cause-and-effect chain down to the root" },
+    { "name": "Adversarial",        "axis": "Challenge",   "desc": "weigh the strongest attacks, flaws, and failure modes — find what breaks" },
+    { "name": "Falsification",      "axis": "Challenge",   "desc": "weigh what evidence would prove the leading hypothesis wrong" },
+    { "name": "Disconfirming",      "axis": "Challenge",   "desc": "weigh the evidence that most directly contradicts the leading choice" },
+    { "name": "Risk",               "axis": "Challenge",   "desc": "weigh what could go wrong and the blast radius if it does" },
+    { "name": "Stakeholder",        "axis": "Human/Value", "desc": "weigh who is affected and how: incentives, who bears the cost, second-order effects on the people and systems it touches" },
+    { "name": "Audience",           "axis": "Human/Value", "desc": "weigh how the intended audience will actually receive it" },
+    { "name": "Clarity",            "axis": "Human/Value", "desc": "weigh how clearly the message lands for its reader" },
+    { "name": "Pragmatist",         "axis": "Delivery",    "desc": "weigh the workable path that ships under real constraints — resources, sequencing, what it takes to execute" },
+    { "name": "Simplicity",         "axis": "Delivery",    "desc": "weigh the approach with the fewest moving parts" },
+    { "name": "Structural",         "axis": "Delivery",    "desc": "weigh the structurally correct fix at the needed scope — reject the expedient hack and scope-padding alike (durable means correct, not bigger)" },
+    { "name": "Temporal",           "axis": "Time",        "desc": "weigh how the answer changes over time: lifecycle, sequencing, reversibility (one-way vs two-way doors), path dependence" }
+  ],
+  "presets": {
+    "review":    ["Adversarial", "Correctness", "Simplicity", "Depth-Weighted", "Temporal", "Outsider", "Stakeholder", "Causal"],
+    "design":    ["First-Principles", "Adversarial", "Simplicity", "Stakeholder", "Temporal", "Empirical", "Breadth-Weighted", "Causal"],
+    "diagnosis": ["Causal", "Falsification", "Empirical", "Depth-Weighted", "Temporal", "Outsider", "Stakeholder", "Pragmatist"],
+    "compare":   ["First-Principles", "Empirical", "Simplicity", "Stakeholder", "Temporal", "Disconfirming", "Breadth-Weighted", "Causal"],
+    "research":  ["First-Principles", "Breadth-Weighted", "Depth-Weighted", "Outsider", "Empirical", "Lateral-Generative", "Temporal", "Stakeholder"],
+    "decision":  ["First-Principles", "Empirical", "Stakeholder", "Temporal", "Pragmatist", "Disconfirming", "Breadth-Weighted", "Causal"],
+    "writing":   ["Adversarial", "Clarity", "Audience", "Simplicity", "Outsider", "Empirical", "Depth-Weighted", "Temporal"]
+  }
+}

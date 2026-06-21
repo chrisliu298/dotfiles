@@ -1,5 +1,7 @@
 {
   "codex": {
+    "order": 1,
+    "lineage": "codex",
     "transport": "codex",
     "model": "gpt-5.5",
     "effort_values": ["medium", "xhigh"],
@@ -7,6 +9,8 @@
     "template": "codex"
   },
   "grok-build": {
+    "order": 2,
+    "lineage": "grok",
     "transport": "grok",
     "model": "grok-build",
     "effort_values": ["medium", "high"],
@@ -14,11 +18,15 @@
     "template": "costar"
   },
   "grok-composer": {
+    "order": 3,
+    "lineage": "grok",
     "transport": "grok",
     "model": "grok-composer-2.5-fast",
     "template": "costar"
   },
   "glm": {
+    "order": 4,
+    "lineage": "glm",
     "transport": "claude-env",
     "base": "https://api.z.ai/api/anthropic",
     "key_env": "GLM_API_KEY",
@@ -27,6 +35,8 @@
     "template": "costar"
   },
   "kimi": {
+    "order": 5,
+    "lineage": "kimi",
     "transport": "claude-env",
     "base": "https://api.kimi.com/coding/",
     "key_env": "KIMI_PLAN_KEY",
@@ -36,6 +46,8 @@
     "template": "costar"
   },
   "deepseek": {
+    "order": 6,
+    "lineage": "deepseek",
     "transport": "claude-env",
     "base": "https://api.deepseek.com/anthropic",
     "key_env": "DEEPSEEK_API_KEY",
@@ -44,6 +56,8 @@
     "template": "costar"
   },
   "mimo": {
+    "order": 7,
+    "lineage": "mimo",
     "transport": "claude-env",
     "base": "https://token-plan-sgp.xiaomimimo.com/anthropic",
     "key_env": "MIMO_PLAN_KEY",
