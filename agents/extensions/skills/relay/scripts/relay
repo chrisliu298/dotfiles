@@ -81,7 +81,7 @@ run_peer_tmux() {
   local -a icmd=("$@")
   local cmdfile="${req%.req.md}.tmux-cmd.sh" pane="${req%.req.md}.tmux-pane.log"
   local rc=1 i ready="" waited=0 last_size="" size cap ready_iters
-  cap=$(uint_or "${RELAY_TMUX_TIMEOUT:-600}" 600)
+  cap=$(uint_or "${RELAY_TMUX_TIMEOUT:-3600}" 3600)   # interactive GLM tasks (prism-scale) can run 10-20min; match prism's 3600s peer cap
   ready_iters=$(uint_or "${RELAY_TMUX_READY_TIMEOUT:-60}" 60)   # TUI-boot budget, separate from $cap
   if ! command -v tmux >/dev/null 2>&1; then
     echo "relay: tmux not found — cannot use interactive fallback" >&2
