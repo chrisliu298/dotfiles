@@ -159,15 +159,20 @@ backgrounded process. The Integrator stays in the loop for the judgment.
 
 ```
   scaffold  [--n N] [--preset TYPE] [--packet PATH]
-              └ print a fill-in dispatch skeleton (correct order; effort is CLI-derived, never authored).
+              └ print a fill-in dispatch skeleton (the Prism-Mode: full / Prism-N / Prism-M
+                roster contract + records in canonical order; effort is CLI-derived, never authored).
                 --preset review|design|diagnosis|compare|research|decision|writing
                 pre-fills eight lenses by task type (N=1).
 
   prepare   --dispatch <file>     (or --config <json>)  [--expect-n N] [--expect-m M]
               └ validate, render every launcher from templates, write the manifest,
-                inject ## Constraints into the packet if absent. --expect-n N is an
-                opt-in floor check: fail closed unless every standard tier + the
-                subagents are at exactly N (and gpt-pro at M); omit for asymmetric runs.
+                inject ## Constraints into the packet if absent. ROSTER CONTRACT (--dispatch):
+                a Prism-Mode line is REQUIRED — Prism-Mode: full + Prism-N runs a DEFAULT
+                fail-closed floor check (every standard tier + subagents at N, gpt-pro at
+                Prism-M, aborting on a missing/off-count tier); a reduced roster needs
+                Prism-Mode: partial + a verbatim Partial-User-Quote (recorded in manifest
+                .shape). --config stays lenient. CLI --expect-n/-m still work and override
+                the contract's N/M.
 
   parallax  <manifest>            [--dry-run] [--only <peer>]
               └ fan out all relay calls as ONE backgrounded process; --dry-run shows

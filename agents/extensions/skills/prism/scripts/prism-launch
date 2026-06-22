@@ -73,6 +73,7 @@ registry_lineage_of() {
 
 DISPATCH_CONFIG=""
 DP_packet=""; DP_px=""; DP_sa=""; DP_gp=""; DP_refs=""
+DP_mode=""; DP_n=""; DP_m=""; DP_quote=""
 DP_type=""; DP_to=""; DP_name=""; DP_lens=""; DP_desc=""; DP_posture=""; DP_in=0; DP_seen=""
 
 dp_trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; s="${s%"${s##*[![:space:]]}"}"; printf '%s' "$s"; }
@@ -109,6 +110,7 @@ dp_flush() {
 dispatch_to_config() {
   local file="$1" line t key val lineno=0
   DP_packet=""; DP_px=""; DP_sa=""; DP_gp=""; DP_refs=""
+  DP_mode=""; DP_n=""; DP_m=""; DP_quote=""
   DP_type=""; DP_to=""; DP_name=""; DP_lens=""; DP_desc=""; DP_posture=""; DP_in=0; DP_seen=""
 
   while IFS= read -r line || [ -n "$line" ]; do
@@ -128,6 +130,23 @@ dispatch_to_config() {
         # Top-level, repeatable: the authoritative inlining list for gptpro lenses.
         # `Reference: none` (sole entry) is an explicit opt-out (inline only the packet).
         DP_refs="$DP_refs$val"$'\n' ;;
+      Prism-Mode)
+        # Top-level roster-enforcement contract: full | partial. REQUIRED on the
+        # --dispatch path (validated after the loop) — this is what makes full-roster
+        # the enforced default instead of prose an agent can skip.
+        [ -z "$DP_mode" ] || die "prepare: --dispatch has more than one Prism-Mode line"
+        DP_mode="$val" ;;
+      Prism-N)
+        [ -z "$DP_n" ] || die "prepare: --dispatch has more than one Prism-N line"
+        DP_n="$val" ;;
+      Prism-M)
+        [ -z "$DP_m" ] || die "prepare: --dispatch has more than one Prism-M line"
+        DP_m="$val" ;;
+      Partial-User-Quote)
+        # The double-confirm: the user's verbatim words authorizing a reduced roster.
+        # Recorded into the manifest (audit trail) for a Prism-Mode: partial run.
+        [ -z "$DP_quote" ] || die "prepare: --dispatch has more than one Partial-User-Quote line"
+        DP_quote="$val" ;;
       Type)
         dp_flush; DP_in=1; DP_type="$val"; DP_seen="" ;;
       Effort)
@@ -143,7 +162,7 @@ dispatch_to_config() {
           Lens-Desc) DP_desc="$val" ;;
           Posture)   DP_posture="$val" ;;
         esac ;;
-      *) die "prepare: --dispatch line $lineno: unknown key '$key' (valid: Shared-Packet, Reference, Type, To, Name, Lens, Lens-Desc, Posture)" ;;
+      *) die "prepare: --dispatch line $lineno: unknown key '$key' (valid: Shared-Packet, Prism-Mode, Prism-N, Prism-M, Partial-User-Quote, Reference, Type, To, Name, Lens, Lens-Desc, Posture)" ;;
     esac
   done < "$file"
   dp_flush
@@ -157,7 +176,35 @@ dispatch_to_config() {
     *[[:space:]]*|*'*'*|*'?'*|*'['*) die "prepare: --dispatch Shared-Packet must not contain whitespace or glob characters: $DP_packet" ;;
   esac
 
-  local pxj saj gpj refj cfg gen
+  # Roster-enforcement contract (REQUIRED on the --dispatch path). This is the lever
+  # that makes the full roster the enforced default: a dispatch cannot reach the floor
+  # check by simply omitting the declaration — there IS no lenient no-contract path here.
+  [ -n "$DP_mode" ] || die "prepare: --dispatch missing required 'Prism-Mode:' line.
+Run 'prism-launch scaffold' (it emits the full contract for you), or add a top-level:
+  Prism-Mode: full
+  Prism-N: <N>          # every standard tier + subagents must be present at N
+To run a REDUCED roster you must have an EXPLICIT user request, declared as:
+  Prism-Mode: partial
+  Partial-User-Quote: \"<the user's exact words authorizing the reduced set>\""
+  case "$DP_mode" in
+    full)
+      case "$DP_n" in
+        '')        die "prepare: 'Prism-Mode: full' requires a 'Prism-N: <N>' line (the per-tier count the floor check asserts)." ;;
+        *[!0-9]*)  die "prepare: Prism-N must be a non-negative integer, got: $DP_n" ;;
+      esac
+      case "$DP_m" in *[!0-9]*) die "prepare: Prism-M must be a non-negative integer, got: $DP_m" ;; esac
+      # A full run's gpt-pro count is part of the declared shape: default an omitted
+      # Prism-M to 0 so the floor check always asserts gptpro==0 (a stray gptpro record
+      # in a full run with no Prism-M is then caught, not silently unchecked).
+      [ -n "$DP_m" ] || DP_m=0
+      [ -z "$DP_quote" ] || die "prepare: 'Prism-Mode: full' must not set Partial-User-Quote (that key authorizes a Prism-Mode: partial run only)." ;;
+    partial)
+      [ -z "$DP_n$DP_m" ] || die "prepare: 'Prism-Mode: partial' must not set Prism-N/Prism-M (a partial shape is asymmetric — there is no single floor N to assert; the records ARE the shape). Remove them."
+      [ -n "$(dp_trim "$DP_quote")" ] || die "prepare: 'Prism-Mode: partial' requires a non-empty 'Partial-User-Quote:' — the user's verbatim words authorizing the reduced roster. A partial prism without an explicit user request is a defect; if the user did not ask for it, run the full roster instead." ;;
+    *) die "prepare: Prism-Mode must be 'full' or 'partial', got: $DP_mode" ;;
+  esac
+
+  local pxj saj gpj refj shapej cfg gen
   pxj=$(printf '%s' "$DP_px" | jq -s '.')
   saj=$(printf '%s' "$DP_sa" | jq -s '.')
   gpj=$(printf '%s' "$DP_gp" | jq -s '.')
@@ -170,8 +217,15 @@ dispatch_to_config() {
     | if   ($lines | map(ascii_downcase)) == ["none"] then []
       elif ($lines | length) > 0                      then $lines
       else null end')
-  cfg=$(jq -n --arg p "$DP_packet" --argjson px "$pxj" --argjson sa "$saj" --argjson gp "$gpj" --argjson ref "$refj" \
-        '{shared_packet:$p, parallax:$px, subagents:$sa, gptpro:$gp}
+  # Shape contract → config .shape (carried through to cmd_prepare's floor check and
+  # then into the manifest for audit). Numbers tonumber'd; the quote stays a string.
+  shapej=$(jq -n --arg mode "$DP_mode" --arg n "$DP_n" --arg m "$DP_m" --arg q "$DP_quote" '
+    {mode:$mode}
+    + (if $n != "" then {n:($n|tonumber)} else {} end)
+    + (if $m != "" then {m:($m|tonumber)} else {} end)
+    + (if $q != "" then {partial_user_quote:$q} else {} end)')
+  cfg=$(jq -n --arg p "$DP_packet" --argjson px "$pxj" --argjson sa "$saj" --argjson gp "$gpj" --argjson ref "$refj" --argjson shape "$shapej" \
+        '{shared_packet:$p, parallax:$px, subagents:$sa, gptpro:$gp, shape:$shape}
          + (if $ref != null then {references:$ref} else {} end)')
   gen="${DP_packet%.md}-config.normalized.json"
   printf '%s\n' "$cfg" > "$gen" || die "prepare: could not write normalized config: $gen"
@@ -396,18 +450,67 @@ cmd_prepare() {
       }
   ' "$config") || die "prepare: validation failed (see message above)"
 
-  # Opt-in floor check (--expect-n / --expect-m): assert the manifest matches the
-  # declared symmetric shape exactly — every standard tier and the subagents at N,
-  # plus M gpt-pro lenses if given, and no non-standard peer. Runs BEFORE any
-  # launcher or the manifest is written, so a mismatch aborts without producing run
-  # artifacts (the packet's idempotent ## Constraints / ## How to answer injection
-  # above may already have run — that is the same content a successful prepare
-  # writes, not a corrupting side effect). en/em parse via tonumber so a value like
-  # "08" is accepted; empty values are rejected at flag parse. Non-empty list fails closed.
-  if [ -n "$expect_n" ]; then
+  # ── Roster-enforcement contract (the floor check — now default-on) ───────────
+  # The shape contract lives in the config .shape (written by the --dispatch parser,
+  # which REQUIRES a Prism-Mode line, or supplied by a --config author). Resolution:
+  #   * full      → floor-check every standard tier + subagents at N, gpt-pro at M.
+  #   * partial   → skip the symmetric check; require + record the user's verbatim
+  #                 authorization quote (the double-confirm), warn with the dropped tiers.
+  #   * (absent)  → lenient (--config with neither .shape nor --expect-n): legacy behavior.
+  # A CLI --expect-n still works and OVERRIDES the contract's N/M (advanced/back-compat).
+  # Runs BEFORE any launcher or the manifest is written, so a mismatch aborts without
+  # producing run artifacts (the idempotent ## Constraints / ## How to answer / ##
+  # Grounding injection above may already have run — that is the same content a
+  # successful prepare writes, not a corrupting side effect). Integers parse via
+  # tonumber so "08" is accepted; empty CLI values are rejected at flag parse.
+  local shape_mode shape_n shape_m shape_quote eff_n eff_m
+  shape_mode=$(jq -r '.shape.mode // ""' "$config")
+  shape_n=$(jq -r 'if (.shape.n == null) then "" else (.shape.n|tostring) end' "$config")
+  shape_m=$(jq -r 'if (.shape.m == null) then "" else (.shape.m|tostring) end' "$config")
+  shape_quote=$(jq -r '.shape.partial_user_quote // ""' "$config")
+  # Fail-closed validation of an author-supplied .shape. The --dispatch parser already
+  # validated its own output, but a hand-authored --config .shape reaches here unchecked
+  # — so validate here too (single backstop, both paths): mode is full|partial, full has
+  # an int N>=0 + optional int M>=0 + no quote, partial forbids N/M + needs a non-blank
+  # quote. Absent .shape (lenient --config) → skipped. tonumber below then never throws.
+  if jq -e 'has("shape")' "$config" >/dev/null 2>&1; then
+    jq -e '
+      .shape as $s
+      | ($s | type == "object")
+      and ( ( $s.mode == "full"
+              and ($s.n | type == "number") and ($s.n | floor == .) and ($s.n >= 0)
+              and ( ($s.m == null) or (($s.m | type == "number") and ($s.m | floor == .) and ($s.m >= 0)) )
+              and ($s.partial_user_quote == null) )
+          or ( $s.mode == "partial"
+              and ($s.n == null) and ($s.m == null)
+              and ($s.partial_user_quote | type == "string")
+              and ($s.partial_user_quote | test("[^[:space:]]")) ) )
+    ' "$config" >/dev/null 2>&1 \
+      || die "prepare: malformed .shape in config — must be {\"mode\":\"full\",\"n\":<int>=0[,\"m\":<int>=0]} (no partial_user_quote) OR {\"mode\":\"partial\",\"partial_user_quote\":\"<non-blank>\"} (no n/m). Got: $(jq -c '.shape' "$config" 2>/dev/null)"
+  fi
+  # Effective floor N/M: CLI --expect-n overrides; else the contract's full N/M.
+  eff_n="$expect_n"; eff_m="$expect_m"
+  if [ -z "$eff_n" ] && [ "$shape_mode" = "full" ]; then eff_n="$shape_n"; eff_m="$shape_m"; fi
+  # full N=0 is the gpt-pro-only shape — legal only with M >= 1 (no standard tiers AND
+  # no gpt-pro is not a Prism run; the zero-records jq guard above also catches it).
+  if [ "$shape_mode" = "full" ] && [ "$shape_n" = "0" ]; then
+    case "$shape_m" in ''|0) die "prepare: 'Prism-Mode: full' with 'Prism-N: 0' is the gpt-pro-only shape and needs 'Prism-M' >= 1. Raise Prism-N to dispatch standard tiers, or add gpt-pro lenses and set Prism-M." ;; esac
+  fi
+  # Partial NEVER runs the symmetric floor check — the records ARE the asymmetric shape.
+  # A CLI --expect-n on a partial run is therefore ignored (noted), not an error: the
+  # bug this guards is a valid authorized partial failing the floor because eff_n was
+  # seeded from --expect-n.
+  if [ "$shape_mode" = "partial" ] && [ -n "$expect_n" ]; then
+    echo "prism-launch: note — ignoring --expect-n on a Prism-Mode: partial run (partial skips the symmetric floor check; the authorized records ARE the shape)." >&2
+  fi
+  # Floor check (full / --expect-n) — but never for partial. floor_ran gates the
+  # manifest's validated_roster so a skipped-floor partial is never marked validated.
+  local floor_ran=false
+  if [ -n "$eff_n" ] && [ "$shape_mode" != "partial" ]; then
+    floor_ran=true
     local floor_err
     floor_err=$(echo "$manifest_json" | jq -r \
-        --arg en "$expect_n" --argjson ord "$ord_json" --arg em "$expect_m" '
+        --arg en "$eff_n" --argjson ord "$ord_json" --arg em "$eff_m" '
       def emit($label; $got; $want):
         if $got != $want then "  \($label): expected \($want), got \($got)" else empty end;
       ($en | tonumber) as $enn
@@ -415,14 +518,59 @@ cmd_prepare() {
       | ($c.by_peer // {}) as $bp
       | [ emit("subagents"; ($c.subagents // 0); $enn),
           ( $ord[] as $p | emit($p; ($bp[$p] // 0); $enn) ),
-          ( (($bp | keys) - $ord)[] as $x | "  \($x): unexpected non-standard peer in a symmetric --expect-n run" ),
+          ( (($bp | keys) - $ord)[] as $x | "  \($x): unexpected non-standard peer in a full-roster run" ),
           ( if $em != "" then emit("gptpro"; ($c.gptpro // 0); ($em | tonumber)) else empty end )
         ]
       | .[]')
     if [ -n "$floor_err" ]; then
-      die "prepare: floor check failed for --expect-n $expect_n${expect_m:+ --expect-m $expect_m}:
+      die "prepare: full-roster floor check failed (expected every standard tier + subagents at N=$eff_n${eff_m:+, gpt-pro at M=$eff_m}):
 $floor_err
-Resolve the dispatch to the declared symmetric shape, or drop the --expect flags for an intentional asymmetric / gpt-pro-only run."
+This is a PARTIAL prism. Either complete the roster — every standard tier at N ('prism-launch scaffold' emits all of them) — or, ONLY if the USER explicitly asked for a reduced set, authorize it: set 'Prism-Mode: partial' and 'Partial-User-Quote: \"<the user's exact words>\"' in the dispatch."
+    fi
+  fi
+
+  # Resolve the shape recorded into the manifest (audit trail). validated_roster is true
+  # ONLY when a floor check actually ran and passed. A partial records null N/M (the
+  # shape is asymmetric — the records are the shape), never the CLI override value.
+  local validated eff_mode man_n man_m
+  validated=false; [ "$floor_ran" = true ] && validated=true
+  eff_mode="$shape_mode"
+  [ -n "$eff_mode" ] || { if [ -n "$eff_n" ]; then eff_mode="full"; else eff_mode="unchecked"; fi; }
+  man_n="$eff_n"; man_m="$eff_m"
+  if [ "$eff_mode" = "partial" ]; then man_n=""; man_m=""; fi
+  manifest_json=$(echo "$manifest_json" | jq \
+      --arg mode "$eff_mode" --arg n "$man_n" --arg m "$man_m" \
+      --arg quote "$shape_quote" --argjson ord "$ord_json" --argjson validated "$validated" '
+    (.counts.by_peer // {}) as $bp
+    | ([ $ord[] | select((($bp[.]) // 0) == 0) ]
+       + (if ((.counts.subagents // 0) == 0) then ["subagents"] else [] end)) as $excluded
+    | . + {shape: ({mode: $mode, validated_roster: $validated}
+        + (if $n != "" then {n: ($n|tonumber)} else {n: null} end)
+        + (if $m != "" then {m: ($m|tonumber)} else {m: null} end)
+        + (if $quote != "" then {partial_user_quote: $quote} else {partial_user_quote: null} end)
+        + (if $mode == "partial" then {excluded_tiers: $excluded} else {excluded_tiers: []} end)
+      )}')
+
+  # A partial run is the double-confirm point: surface the dropped tiers + the cited
+  # user authorization loudly, and stamp both into the manifest above for the audit trail.
+  if [ "$eff_mode" = "partial" ]; then
+    local excl_list; excl_list=$(echo "$manifest_json" | jq -r '.shape.excluded_tiers | join(", ")')
+    echo "prism-launch: ⚠ PARTIAL prism — tier(s) dropped (parallax peers and/or the Claude subagent slot): ${excl_list:-none}" >&2
+    echo "prism-launch:   authorized by explicit user request: \"$shape_quote\"" >&2
+    echo "prism-launch:   (recorded in the manifest .shape for audit — cite it in your synthesis)" >&2
+  # Lenient --config (no .shape, no --expect-n): the roster was NOT validated. Make this
+  # conspicuous — it is the one path where an INCOMPLETE roster reaches a manifest
+  # without a floor check, so it must not be a quieter bypass than the partial waiver.
+  elif [ "$eff_mode" = "unchecked" ]; then
+    local absent
+    absent=$(echo "$manifest_json" | jq -r --argjson ord "$ord_json" '
+      (.counts.by_peer // {}) as $bp
+      | [ $ord[] | select((($bp[.]) // 0) == 0) ] as $a
+      | if (($bp | length) > 0) and (($a | length) > 0) then ($a | join(", ")) else "" end')
+    echo "prism-launch: ⚠ --config with no roster contract (.shape) — roster NOT validated (lenient escape hatch)." >&2
+    if [ -n "$absent" ]; then
+      echo "prism-launch:   INCOMPLETE roster — standard tier(s) absent: $absent." >&2
+      echo "prism-launch:   If a floor check failed, FIX THE DISPATCH — do not switch to --config to bypass it. For an intentional reduced roster, use Prism-Mode: partial + Partial-User-Quote on the --dispatch path." >&2
     fi
   fi
 
@@ -632,6 +780,16 @@ cmd_parallax() {
   [ -f "$manifest" ] || die "parallax: manifest not found: $manifest"
   command -v jq >/dev/null 2>&1 || die "parallax: jq not found in PATH"
   jq -e . "$manifest" >/dev/null 2>&1 || die "parallax: manifest is not valid JSON: $manifest"
+  # Defense in depth: every prepare-written manifest carries a structurally-valid .shape
+  # (mode in full|partial|unchecked + a boolean validated_roster). A missing or malformed
+  # .shape means a stale (pre-contract) or hand-authored manifest that never passed
+  # prepare's roster check — refuse it rather than dispatch a possibly-partial fan.
+  # (Presence alone is too weak: a hand-authored {"shape":{}} would pass.) Re-running
+  # prepare regenerates a valid manifest.
+  jq -e '(.shape.mode // "") as $m
+         | (($m == "full") or ($m == "partial") or ($m == "unchecked"))
+           and (.shape.validated_roster | type == "boolean")' "$manifest" >/dev/null 2>&1 \
+    || die "parallax: manifest has no valid .shape contract (mode + validated_roster) — it predates roster enforcement or was hand-authored (never validated by prepare). Re-run 'prism-launch prepare' to regenerate it."
 
   local packet run_base result n
   packet=$(jq -r '.shared_packet' "$manifest")
@@ -883,8 +1041,12 @@ cmd_scaffold() {
     set -- $names
     [ "$#" -eq "$((npeers + 1))" ] \
       || die "scaffold: preset '$preset' has $# lenses but the registry defines $npeers tiers + 1 subagent = $((npeers + 1)) slots — update templates/lens-catalog.json (.presets) to match the registry."
-    printf 'Shared-Packet: %s\n\n' "$packet"
+    printf 'Shared-Packet: %s\n' "$packet"
+    printf 'Prism-Mode: full\nPrism-N: 1\nPrism-M: 0\n\n'
     printf '# Preset "%s": eight lenses pre-filled in canonical tier order (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$preset"
+    printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
+    printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
+    printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
     printf '# Edit any Lens / Lens-Desc to taste; write the Shared-Packet file before prepare.\n\n'
     # Slot 1 → subagent; slots 2.. → parallax peers in canonical registry order.
     # After `set -- $names`, $1 is the subagent lens and $2..$N the parallax lenses;
@@ -899,8 +1061,12 @@ cmd_scaffold() {
     return 0
   fi
 
-  printf 'Shared-Packet: %s\n\n' "$packet"
+  printf 'Shared-Packet: %s\n' "$packet"
+  printf 'Prism-Mode: full\nPrism-N: %s\nPrism-M: 0\n\n' "$n"
   printf '# Symmetric scaffold: N=%s of each of the eight models (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$n"
+  printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
+  printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
+  printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
   printf '# Replace every "FILL" Lens / Lens-Desc (prepare rejects any leftover FILL).\n'
   printf '# Order is the canonical tier order — put your heaviest-reasoning (e.g. Adversarial)\n'
   printf '# lens on a subagent or codex. Write the Shared-Packet file before running prepare.\n'
@@ -1192,7 +1358,8 @@ Usage:  (all subcommands require `jq` in PATH)
   prism-launch --help | --version  ·  prism-launch <subcommand> --help
 
 scaffold:  emit a ready-to-fill dispatch skeleton for the symmetric default (N of each of the
-           eight models; Codex xhigh + Grok Build high fixed). Replace each "FILL" Lens/Lens-Desc, then Write it.
+           eight models; Codex xhigh + Grok Build high fixed). Emits the full-roster contract
+           (Prism-Mode: full / Prism-N / Prism-M) for you. Replace each "FILL" Lens/Lens-Desc, then Write it.
            --preset <review|design|diagnosis|compare|research|decision|writing> pre-fills eight
            lenses by task type (N=1). gpt-pro lenses are opt-in — add them by hand (below).
 prepare:   validate the dispatch/config, render all launchers from templates, write a manifest;
@@ -1200,11 +1367,13 @@ prepare:   validate the dispatch/config, render all launchers from templates, wr
            into the shared packet if absent (so you author the packet with just Full Question +
            Context). For any gpt-pro lens it also COMPOSES a self-contained launcher (inlines the
            frozen packet — which already carries Grounding — + every reference file's contents +
-           calibration). Pass one of --dispatch (compiled
-           to the canonical config) or --config. Optional opt-in floor check: --expect-n N fails
-           closed unless every standard tier + the subagents are at exactly N; --expect-m M also
-           pins gpt-pro to M (and checks gpt-pro only when given — tiers and gpt-pro are orthogonal).
-           Omit both for an asymmetric / N=0 run. See the prism SKILL.md.
+           calibration). Pass one of --dispatch (compiled to the canonical config) or --config.
+           ROSTER ENFORCEMENT (--dispatch): a Prism-Mode contract is REQUIRED. Prism-Mode: full +
+           Prism-N runs a default fail-closed floor check (every standard tier + subagents at N,
+           gpt-pro at Prism-M); a PARTIAL roster needs Prism-Mode: partial + a verbatim
+           Partial-User-Quote (the user's explicit authorization, recorded in the manifest).
+           --config stays lenient (escape hatch). CLI --expect-n N / --expect-m M still work and
+           OVERRIDE the contract's N/M (advanced/back-compat). See the prism SKILL.md.
 parallax:  fan out every relay call as ONE backgrounded process, wait for all, write a structured
            result. Run with run_in_background: true. --only <name> retries a single failed peer.
            Relay peers only — gpt-pro lenses are NOT in the parallax fan.
@@ -1216,6 +1385,8 @@ clean:     remove every temp artifact for a run (/tmp/prism-<id>*). Refuses to d
            run whose .log shows a run_id but has no .res.md yet (possibly-live worker) unless --force.
 
 Dispatch records (line-oriented; see prism SKILL.md):
+  Prism-Mode: full | partial   # REQUIRED (top-level). full → Prism-N: <N> (+ optional Prism-M: <M>);
+                               # partial → Partial-User-Quote: "<the user's exact words>" (no Prism-N/M).
   Type: parallax | subagent | gptpro
   - parallax: To/Lens/Lens-Desc required, Name optional (relay peer; effort is CLI-derived, never authored).
   - subagent: Lens/Lens-Desc only (Claude, Agent-tool).

@@ -229,6 +229,8 @@ PKTD="$TMP/prism-rund.md"; make_packet "$PKTD"
 DISP="$TMP/prism-rund.dispatch"
 cat > "$DISP" <<DSP
 Shared-Packet: $PKTD
+Prism-Mode: partial
+Partial-User-Quote: "just codex, deepseek, and a claude subagent"
 
 # a comment line, ignored
 Type: parallax
@@ -279,7 +281,7 @@ DRP="$TMP/drp.dispatch"; printf 'Shared-Packet: relative/path.md\n\nType: subage
 expect_err "rejects dispatch relative Shared-Packet" "$LAUNCH" prepare --dispatch "$DRP"
 
 # distinct lens names that slugify identically — caught by the new subagent-slug guard
-DSC="$TMP/dsc.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nLens: First Principles\nLens-Desc: a\n\nType: subagent\nLens: First-Principles\nLens-Desc: b\n' "$PKTD" > "$DSC"
+DSC="$TMP/dsc.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "test subset"\n\nType: subagent\nLens: First Principles\nLens-Desc: a\n\nType: subagent\nLens: First-Principles\nLens-Desc: b\n' "$PKTD" > "$DSC"
 expect_err "rejects subagent lens slug collision" "$LAUNCH" prepare --dispatch "$DSC"
 
 echo "== prepare --dispatch: hardening from review (fail-closed + parity) =="
@@ -292,7 +294,7 @@ DST="$TMP/dst.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nTo: codex\
 expect_err "rejects To/Name on a subagent record" "$LAUNCH" prepare --dispatch "$DST"
 
 # all-whitespace Lens-Desc via dispatch (trim -> empty -> rejected)
-DWS="$TMP/dws.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nLens: X\nLens-Desc:    \n' "$PKTD" > "$DWS"
+DWS="$TMP/dws.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "test subset"\n\nType: subagent\nLens: X\nLens-Desc:    \n' "$PKTD" > "$DWS"
 expect_err "rejects all-whitespace Lens-Desc (dispatch)" "$LAUNCH" prepare --dispatch "$DWS"
 
 # parity: all-whitespace lens_desc via --config must now also be rejected
@@ -300,11 +302,11 @@ CWS="$TMP/cws.json"; jq -n --arg p "$PKTD" '{shared_packet:$p,parallax:[],subage
 expect_err "rejects all-whitespace lens_desc (--config parity)" "$LAUNCH" prepare --config "$CWS"
 
 # subagent lens that slugifies to the empty string -> degenerate filename
-DES="$TMP/des.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nLens: !!!\nLens-Desc: y\n' "$PKTD" > "$DES"
+DES="$TMP/des.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "test subset"\n\nType: subagent\nLens: !!!\nLens-Desc: y\n' "$PKTD" > "$DES"
 expect_err "rejects subagent lens that slugifies to empty" "$LAUNCH" prepare --dispatch "$DES"
 
 # injection guard must not be bypassable via the dispatch path
-DIN="$TMP/din.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nLens: X\nLens-Desc: discuss the {{SLOT}} marker\n' "$PKTD" > "$DIN"
+DIN="$TMP/din.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "test subset"\n\nType: subagent\nLens: X\nLens-Desc: discuss the {{SLOT}} marker\n' "$PKTD" > "$DIN"
 expect_err "injection guard ({{) not bypassable via dispatch" "$LAUNCH" prepare --dispatch "$DIN"
 
 echo "== prepare --dispatch: effort is CLI-derived, never authored =="
@@ -312,7 +314,7 @@ echo "== prepare --dispatch: effort is CLI-derived, never authored =="
 # regression guard: it catches both the old default_effort fallback (would give medium)
 # and the lexicographic-max bug (would give grok-build medium, since "high" < "medium").
 PKTE="$TMP/prism-rune.md"; make_packet "$PKTE"
-DEF="$TMP/def.dispatch"; printf 'Shared-Packet: %s\n\nType: parallax\nTo: codex\nLens: Adversarial\nLens-Desc: d\n\nType: parallax\nTo: grok-build\nLens: Structural\nLens-Desc: d\n' "$PKTE" > "$DEF"
+DEF="$TMP/def.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "just codex and grok-build"\n\nType: parallax\nTo: codex\nLens: Adversarial\nLens-Desc: d\n\nType: parallax\nTo: grok-build\nLens: Structural\nLens-Desc: d\n' "$PKTE" > "$DEF"
 expect_ok "prepare --dispatch with no Effort lines" "$LAUNCH" prepare --dispatch "$DEF"
 MANE="$TMP/prism-rune-manifest.json"
 [ "$(jq -r '.parallax[0].effort' "$MANE" 2>/dev/null)" = "xhigh" ] && ok "dispatch: codex derives xhigh from registry (none authored)" || bad "dispatch: codex derives xhigh"
@@ -320,7 +322,7 @@ MANE="$TMP/prism-rune-manifest.json"
 
 # subagents-only dispatch exercises the empty-parallax accumulator ([], not an error)
 PKTZ="$TMP/prism-runz.md"; make_packet "$PKTZ"
-DZ="$TMP/dz.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nLens: Simplicity\nLens-Desc: fewest parts\n' "$PKTZ" > "$DZ"
+DZ="$TMP/dz.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "claude subagents only"\n\nType: subagent\nLens: Simplicity\nLens-Desc: fewest parts\n' "$PKTZ" > "$DZ"
 expect_ok "accepts a subagents-only dispatch (empty parallax accumulator)" "$LAUNCH" prepare --dispatch "$DZ"
 [ "$(jq -r '.counts.parallax_total' "$TMP/prism-runz-manifest.json" 2>/dev/null)" = "0" ] && ok "dispatch: empty parallax accumulator -> parallax_total 0" || bad "dispatch: empty parallax -> 0"
 
@@ -405,7 +407,7 @@ FAKE
 chmod +x "$FT/relay/scripts/relay"
 FL="$FT/prism/scripts/prism-launch"
 FPK="$TMP/prism-fakeonly.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$FPK"
-printf 'Shared-Packet: %s\n\nType: parallax\nTo: codex\nLens: Alpha\nLens-Desc: weigh a\n\nType: parallax\nTo: deepseek\nLens: Beta\nLens-Desc: weigh b\n' "$FPK" > "$TMP/fakeonly.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "just codex and deepseek"\n\nType: parallax\nTo: codex\nLens: Alpha\nLens-Desc: weigh a\n\nType: parallax\nTo: deepseek\nLens: Beta\nLens-Desc: weigh b\n' "$FPK" > "$TMP/fakeonly.dispatch"
 "$FL" prepare --dispatch "$TMP/fakeonly.dispatch" >/dev/null 2>&1
 FMAN="$TMP/prism-fakeonly-manifest.json"; FRES="$TMP/prism-fakeonly-result.json"
 "$FL" parallax "$FMAN" >/dev/null 2>&1
@@ -510,7 +512,7 @@ grep -q '100% coverage with `jq`'       "$DHOUT" && ok "percent + backtick in bo
 
 echo "== prepare: clears a stale -digest.md on re-run =="
 make_packet "$TMP/prism-stale.md"
-printf 'Shared-Packet: %s\n\nType: subagent\nLens: Xstale\nLens-Desc: y\n' "$TMP/prism-stale.md" > "$TMP/stale.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "subagent only"\n\nType: subagent\nLens: Xstale\nLens-Desc: y\n' "$TMP/prism-stale.md" > "$TMP/stale.dispatch"
 "$LAUNCH" prepare --dispatch "$TMP/stale.dispatch" >/dev/null 2>&1
 touch "$TMP/prism-stale-digest.md"
 "$LAUNCH" prepare --dispatch "$TMP/stale.dispatch" >/dev/null 2>&1
@@ -552,7 +554,7 @@ echo "== gptpro: --dispatch front-end + Reference keys + packet fallback =="
 GPKB="$TMP/prism-gpb.md"
 printf '## Full Question\nq\n\n## Context\nc\n\n### Reference Materials\n- %s\n' "$REF1" > "$GPKB"
 GDISP="$TMP/gpb.dispatch"
-printf 'Shared-Packet: %s\n\nType: gptpro\nLens: Falsification\nLens-Desc: try to break it\n' "$GPKB" > "$GDISP"
+printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gptpro\nLens: Falsification\nLens-Desc: try to break it\n' "$GPKB" > "$GDISP"
 expect_ok "gptpro: --dispatch with packet ### Reference Materials fallback" "$LAUNCH" prepare --dispatch "$GDISP"
 GMANB="$TMP/prism-gpb-manifest.json"
 GLB=$(jq -r '.gptpro[0].launcher' "$GMANB")
@@ -561,7 +563,7 @@ grep -q 'REF-ONE-CONTENT-MARKER' "$GLB" && ok "gptpro: packet ### Reference Mate
 GPKB2="$TMP/prism-gpb2.md"
 printf '## Full Question\nq\n\n## Context\nc\n\n### Reference Materials\n- %s\n' "$REF1" > "$GPKB2"
 GDISP2="$TMP/gpb2.dispatch"
-printf 'Shared-Packet: %s\nReference: none\n\nType: gptpro\nLens: Falsification\nLens-Desc: d\n' "$GPKB2" > "$GDISP2"
+printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\nReference: none\n\nType: gptpro\nLens: Falsification\nLens-Desc: d\n' "$GPKB2" > "$GDISP2"
 expect_ok "gptpro: 'Reference: none' inlines only the packet" "$LAUNCH" prepare --dispatch "$GDISP2"
 GLB2=$(jq -r '.gptpro[0].launcher' "$TMP/prism-gpb2-manifest.json")
 ! grep -q 'REF-ONE-CONTENT-MARKER' "$GLB2" && ok "gptpro: 'Reference: none' skips the packet list (no refs inlined)" || bad "gptpro Reference none"
@@ -569,7 +571,7 @@ GLB2=$(jq -r '.gptpro[0].launcher' "$TMP/prism-gpb2-manifest.json")
 echo "== gptpro: fail-closed validation =="
 # gptpro lens but NO reference source at all
 GPKN="$TMP/prism-gpn.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$GPKN"
-GDN="$TMP/gpn.dispatch"; printf 'Shared-Packet: %s\n\nType: gptpro\nLens: X\nLens-Desc: y\n' "$GPKN" > "$GDN"
+GDN="$TMP/gpn.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gptpro\nLens: X\nLens-Desc: y\n' "$GPKN" > "$GDN"
 expect_err "gptpro: no Reference keys and no ### Reference Materials -> fail-closed" "$LAUNCH" prepare --dispatch "$GDN"
 # directory reference
 GCD="$TMP/gpd.json"; jq -n --arg p "$GPKN" --arg d "$TMP" '{shared_packet:$p,references:[$d],parallax:[],subagents:[],gptpro:[{lens:"X",lens_desc:"y"}]}' > "$GCD"
@@ -648,36 +650,153 @@ rm -f /tmp/prism-gpcg*
 echo "== subcommand --help =="
 "$LAUNCH" scaffold --help 2>/dev/null | grep -q 'Usage:' && ok "scaffold --help prints usage" || bad "scaffold --help"
 
-echo "== prepare --expect-n / --expect-m: opt-in floor check =="
-FPKT="$TMP/prism-floor.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$FPKT"
+echo "== prepare: roster-enforcement contract (default-on floor + partial waiver) =="
+FPKT="$TMP/prism-floor.md"; make_packet "$FPKT"
+# scaffold now EMITS the contract (Prism-Mode: full / Prism-N: 1) — full is the easy path.
 "$LAUNCH" scaffold --preset review --packet "$FPKT" > "$TMP/prism-floor.dispatch"
-expect_ok  "floor: correct symmetric N=1 passes --expect-n 1"   "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n 1
-expect_err "floor: symmetric N=1 fails --expect-n 2"            "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n 2
-expect_err "floor: missing gpt-pro fails --expect-m 1"          "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n 1 --expect-m 1
-expect_err "floor: --expect-m without --expect-n is rejected"   "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-m 1
-expect_err "floor: --expect-n non-integer is rejected"          "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n foo
-expect_ok  "floor: absent flags keep lenient validation"        "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch"
+grep -q '^Prism-Mode: full' "$TMP/prism-floor.dispatch" && ok "scaffold emits Prism-Mode: full" || bad "scaffold emits Prism-Mode"
+grep -q '^Prism-N: 1'       "$TMP/prism-floor.dispatch" && ok "scaffold emits Prism-N"       || bad "scaffold emits Prism-N"
+# a full preset (all 8 tiers) passes the default floor with NO flag at all.
+expect_ok "contract: a full preset passes the default floor (no flag)" "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch"
+MANFL="$TMP/prism-floor-manifest.json"
+[ "$(jq -r '.shape.mode' "$MANFL" 2>/dev/null)" = "full" ] && ok "contract: manifest records shape.mode=full" || bad "manifest shape.mode"
+[ "$(jq -r '.shape.validated_roster' "$MANFL" 2>/dev/null)" = "true" ] && ok "contract: manifest records validated_roster=true" || bad "manifest validated_roster"
+# CLI --expect-n still OVERRIDES (back-compat): N=2 on an N=1 shape fails, naming the tier.
+expect_err "contract: --expect-n 2 overrides the contract and fails an N=1 shape" "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n 2
 FERR=$("$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n 2 2>&1 || true)
-printf '%s' "$FERR" | grep -q 'codex: expected 2, got 1' \
-  && ok "floor: failure message names the under-count tier" || bad "floor: failure message detail"
-# asymmetric dispatch (only subagent + codex): fails the floor, but prepares fine without the flag
-ASD="$TMP/prism-asym.dispatch"
-{ printf 'Shared-Packet: %s\n\n' "$FPKT"
+printf '%s' "$FERR" | grep -q 'codex: expected 2, got 1' && ok "contract: floor failure names the under-count tier" || bad "contract floor detail"
+
+# A dispatch with NO Prism-Mode is rejected — the enforced default cannot be dodged by omission.
+NOCON="$TMP/prism-nocon.md"; make_packet "$NOCON"
+NOCOND="$TMP/prism-nocon.dispatch"
+{ printf 'Shared-Packet: %s\n\n' "$NOCON"
   printf 'Type: subagent\nLens: A\nLens-Desc: d\n\n'
-  printf 'Type: parallax\nTo: codex\nLens: B\nLens-Desc: d\n\n'; } > "$ASD"
-expect_err "floor: asymmetric (missing tiers) fails --expect-n 1" "$LAUNCH" prepare --dispatch "$ASD" --expect-n 1
-expect_ok  "floor: asymmetric prepares fine without the flag"     "$LAUNCH" prepare --dispatch "$ASD"
-# gpt-pro-only: N=0 with M>=1 is a legal shape and must pass --expect-n 0 --expect-m 1
-GPO="$TMP/prism-gp-only.dispatch"
-{ printf 'Shared-Packet: %s\n\n' "$FPKT"
-  printf 'Reference: none\n\n'
+  printf 'Type: parallax\nTo: codex\nLens: B\nLens-Desc: d\n\n'; } > "$NOCOND"
+expect_err "contract: a dispatch with no Prism-Mode is rejected" "$LAUNCH" prepare --dispatch "$NOCOND"
+
+# Declaring 'full' on an incomplete (2-tier) shape fails the floor, naming a missing tier.
+ASF="$TMP/prism-asf.md"; make_packet "$ASF"
+ASFD="$TMP/prism-asf.dispatch"
+{ printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 1\n\n' "$ASF"
+  printf 'Type: subagent\nLens: A\nLens-Desc: d\n\n'
+  printf 'Type: parallax\nTo: codex\nLens: B\nLens-Desc: d\n\n'; } > "$ASFD"
+expect_err "contract: declaring 'full' on a 2-tier shape fails the floor" "$LAUNCH" prepare --dispatch "$ASFD"
+AERR=$("$LAUNCH" prepare --dispatch "$ASFD" 2>&1 || true)
+printf '%s' "$AERR" | grep -q 'mimo: expected 1, got 0' && ok "contract: full-on-partial names a missing tier" || bad "contract full-on-partial detail"
+
+# The SAME shape with an authorized partial waiver succeeds and records the quote (double-confirm).
+ASW="$TMP/prism-asw.md"; make_packet "$ASW"
+ASWD="$TMP/prism-asw.dispatch"
+{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "use only claude and codex"\n\n' "$ASW"
+  printf 'Type: subagent\nLens: A\nLens-Desc: d\n\n'
+  printf 'Type: parallax\nTo: codex\nLens: B\nLens-Desc: d\n\n'; } > "$ASWD"
+expect_ok "contract: partial + user quote authorizes a reduced roster" "$LAUNCH" prepare --dispatch "$ASWD"
+MANASW="$TMP/prism-asw-manifest.json"
+[ "$(jq -r '.shape.mode' "$MANASW" 2>/dev/null)" = "partial" ] && ok "contract: partial recorded in manifest" || bad "partial mode in manifest"
+[ "$(jq -r '.shape.partial_user_quote' "$MANASW" 2>/dev/null)" = '"use only claude and codex"' ] && ok "contract: user quote recorded verbatim (audit trail)" || bad "partial quote recorded"
+[ "$(jq -r '.shape.validated_roster' "$MANASW" 2>/dev/null)" = "false" ] && ok "contract: partial is not a validated full roster" || bad "partial validated flag"
+jq -e '.shape.excluded_tiers | index("mimo") != null' "$MANASW" >/dev/null 2>&1 && ok "contract: dropped tiers recorded in manifest" || bad "excluded tiers recorded"
+PWARN=$("$LAUNCH" prepare --dispatch "$ASWD" 2>&1 || true)
+{ printf '%s' "$PWARN" | grep -q 'PARTIAL prism' && printf '%s' "$PWARN" | grep -q 'use only claude and codex'; } && ok "contract: partial warns loudly with dropped tiers + cited quote" || bad "partial warning"
+
+# Partial WITHOUT a quote is rejected — the double-confirm is mandatory.
+PNQ="$TMP/prism-pnq.md"; make_packet "$PNQ"
+PNQD="$TMP/prism-pnq.dispatch"
+{ printf 'Shared-Packet: %s\nPrism-Mode: partial\n\n' "$PNQ"
+  printf 'Type: parallax\nTo: codex\nLens: B\nLens-Desc: d\n\n'; } > "$PNQD"
+expect_err "contract: partial without Partial-User-Quote is rejected" "$LAUNCH" prepare --dispatch "$PNQD"
+
+# Invalid Prism-Mode value, and 'full' without Prism-N.
+PBM="$TMP/prism-pbm.md"; make_packet "$PBM"
+PBMD="$TMP/prism-pbm.dispatch"; { printf 'Shared-Packet: %s\nPrism-Mode: half\nPrism-N: 1\n\n' "$PBM"; printf 'Type: subagent\nLens: A\nLens-Desc: d\n\n'; } > "$PBMD"
+expect_err "contract: an invalid Prism-Mode value is rejected" "$LAUNCH" prepare --dispatch "$PBMD"
+PNND="$TMP/prism-pnn.dispatch"; { printf 'Shared-Packet: %s\nPrism-Mode: full\n\n' "$PBM"; printf 'Type: subagent\nLens: A\nLens-Desc: d\n\n'; } > "$PNND"
+expect_err "contract: Prism-Mode: full without Prism-N is rejected" "$LAUNCH" prepare --dispatch "$PNND"
+
+# gpt-pro-only: full N=0 + M=1 is legal; full N=0 + M=0 is rejected (not a Prism run).
+GPKO="$TMP/prism-gponly.md"; make_packet "$GPKO"
+GPO="$TMP/prism-gponly.dispatch"
+{ printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\nReference: none\n\n' "$GPKO"
   printf 'Type: gptpro\nLens: Deep-Reasoning\nLens-Desc: d\n\n'; } > "$GPO"
-expect_ok  "floor: gpt-pro-only passes --expect-n 0 --expect-m 1"  "$LAUNCH" prepare --dispatch "$GPO" --expect-n 0 --expect-m 1
-expect_err "floor: gpt-pro-only fails --expect-n 0 --expect-m 0 (M mismatch)" "$LAUNCH" prepare --dispatch "$GPO" --expect-n 0 --expect-m 0
-expect_err "floor: gpt-pro-only fails --expect-n 1 (standard tiers expected)" "$LAUNCH" prepare --dispatch "$GPO" --expect-n 1 --expect-m 1
-# empty / non-canonical integer handling on the flags
-expect_err "floor: --expect-n '' (empty value) is rejected"       "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n ""
-expect_ok  "floor: --expect-n 01 (leading zero) parses as 1"      "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n 01
+expect_ok  "contract: gpt-pro-only (full N=0 M=1) passes"  "$LAUNCH" prepare --dispatch "$GPO"
+GPO0="$TMP/prism-gponly0.dispatch"
+{ printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 0\nReference: none\n\n' "$GPKO"
+  printf 'Type: gptpro\nLens: Deep-Reasoning\nLens-Desc: d\n\n'; } > "$GPO0"
+expect_err "contract: full N=0 with M=0 is rejected (gpt-pro-only needs M>=1)" "$LAUNCH" prepare --dispatch "$GPO0"
+
+# --config escape hatch stays lenient (no contract required); manifest shape = unchecked.
+CLENPKT="$TMP/prism-clen.md"; make_packet "$CLENPKT"
+CLEN="$TMP/clen.json"; jq -n --arg p "$CLENPKT" '{shared_packet:$p,parallax:[{to:"codex",name:"a",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CLEN"
+expect_ok "contract: --config without a shape stays lenient (escape hatch)" "$LAUNCH" prepare --config "$CLEN"
+[ "$(jq -r '.shape.mode' "$TMP/prism-clen-manifest.json" 2>/dev/null)" = "unchecked" ] && ok "contract: lenient --config records shape.mode=unchecked" || bad "lenient config shape"
+# --expect-n still works on --config (manual floor / override): 1 tier != full roster -> fail.
+CLEN2PKT="$TMP/prism-clen2.md"; make_packet "$CLEN2PKT"
+CLEN2="$TMP/clen2.json"; jq -n --arg p "$CLEN2PKT" '{shared_packet:$p,parallax:[{to:"codex",name:"a",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CLEN2"
+expect_err "contract: --config + --expect-n 1 floor-checks (1 tier != full roster)" "$LAUNCH" prepare --config "$CLEN2" --expect-n 1
+# Flag hygiene retained: --expect-m without --expect-n rejected; non-integer rejected; leading zero ok.
+expect_err "contract: --expect-m without --expect-n is rejected" "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-m 1
+expect_err "contract: --expect-n non-integer is rejected"        "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n foo
+expect_ok  "contract: --expect-n 01 (leading zero) parses as 1"  "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n 01
+
+echo "== prepare: review-fix hardening (#1-#6) =="
+# #1 — partial + --expect-n must SKIP the floor check (not fail an authorized partial),
+# record shape.n=null (not the override value), and stay validated_roster=false.
+HP1="$TMP/prism-h1.md"; make_packet "$HP1"
+HP1D="$TMP/h1.dispatch"
+{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "only codex"\n\n' "$HP1"
+  printf 'Type: parallax\nTo: codex\nLens: A\nLens-Desc: d\n\n'; } > "$HP1D"
+expect_ok "#1: partial + --expect-n succeeds (floor skipped, not a false failure)" "$LAUNCH" prepare --dispatch "$HP1D" --expect-n 1
+H1MAN="$TMP/prism-h1-manifest.json"
+[ "$(jq -r '.shape.n' "$H1MAN" 2>/dev/null)" = "null" ] && ok "#1: partial records shape.n=null (not the --expect-n value)" || bad "#1 partial shape.n null"
+[ "$(jq -r '.shape.validated_roster' "$H1MAN" 2>/dev/null)" = "false" ] && ok "#1: partial stays unvalidated even with --expect-n" || bad "#1 partial validated false"
+H1NOTE=$("$LAUNCH" prepare --dispatch "$HP1D" --expect-n 1 2>&1 || true)
+printf '%s' "$H1NOTE" | grep -q 'ignoring --expect-n on a Prism-Mode: partial' && ok "#1: notes that --expect-n is ignored on partial" || bad "#1 ignore note"
+
+# #2 — lenient --config with an INCOMPLETE roster warns loudly (and still prepares).
+HP2="$TMP/prism-h2.md"; make_packet "$HP2"
+HP2C="$TMP/h2.json"; jq -n --arg p "$HP2" '{shared_packet:$p,parallax:[{to:"codex",name:"a",lens:"A",lens_desc:"d"}],subagents:[]}' > "$HP2C"
+H2W=$("$LAUNCH" prepare --config "$HP2C" 2>&1)
+{ printf '%s' "$H2W" | grep -q 'roster NOT validated' && printf '%s' "$H2W" | grep -q 'INCOMPLETE roster'; } && ok "#2: lenient --config with incomplete roster warns loudly" || bad "#2 unchecked warning"
+
+# #3 — malformed author-supplied --config .shape fails closed.
+HP3="$TMP/prism-h3.md"; make_packet "$HP3"
+mkbad(){ jq -n --arg p "$HP3" --argjson s "$1" '{shared_packet:$p,shape:$s,parallax:[{to:"codex",name:"a",lens:"A",lens_desc:"d"}],subagents:[]}'; }
+mkbad '{"mode":"bogus"}'                                          > "$TMP/h3a.json"; expect_err "#3: --config .shape mode=bogus rejected"                "$LAUNCH" prepare --config "$TMP/h3a.json"
+mkbad '{"mode":"full"}'                                           > "$TMP/h3b.json"; expect_err "#3: --config full .shape without n rejected"          "$LAUNCH" prepare --config "$TMP/h3b.json"
+mkbad '{"mode":"full","n":1.5}'                                  > "$TMP/h3c.json"; expect_err "#3: --config full .shape non-integer n rejected"      "$LAUNCH" prepare --config "$TMP/h3c.json"
+mkbad '{"mode":"partial","n":1,"partial_user_quote":"x"}'        > "$TMP/h3d.json"; expect_err "#3: --config partial .shape with n rejected"          "$LAUNCH" prepare --config "$TMP/h3d.json"
+mkbad '{"mode":"partial","partial_user_quote":"   "}'            > "$TMP/h3e.json"; expect_err "#3: --config partial .shape blank quote rejected"      "$LAUNCH" prepare --config "$TMP/h3e.json"
+
+# #4 — a full dispatch omitting Prism-M defaults M to 0 (gpt-pro pinned, not unchecked).
+HP4="$TMP/prism-h4.md"; make_packet "$HP4"
+"$LAUNCH" scaffold --preset review --packet "$HP4" | grep -v '^Prism-M:' > "$TMP/h4.dispatch"
+expect_ok "#4: full dispatch omitting Prism-M still prepares" "$LAUNCH" prepare --dispatch "$TMP/h4.dispatch"
+[ "$(jq -r '.shape.m' "$TMP/prism-h4-manifest.json" 2>/dev/null)" = "0" ] && ok "#4: omitted Prism-M defaults to 0 (gpt-pro pinned, not unchecked)" || bad "#4 M defaults to 0"
+HP4B="$TMP/prism-h4b.md"; make_packet "$HP4B"
+{ printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nReference: none\n\n' "$HP4B"; printf 'Type: gptpro\nLens: Deep\nLens-Desc: d\n\n'; } > "$TMP/h4b.dispatch"
+expect_err "#4: full N=0 omitting Prism-M is rejected (defaults to 0, needs M>=1)" "$LAUNCH" prepare --dispatch "$TMP/h4b.dispatch"
+
+# #5 — parallax rejects an empty/malformed .shape, not only a missing one.
+HP5="$TMP/prism-h5.md"; make_packet "$HP5"
+{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "only codex"\n\n' "$HP5"; printf 'Type: parallax\nTo: codex\nLens: A\nLens-Desc: d\n\n'; } > "$TMP/h5.dispatch"
+"$LAUNCH" prepare --dispatch "$TMP/h5.dispatch" >/dev/null 2>&1
+jq '.shape = {}'  "$TMP/prism-h5-manifest.json" > "$TMP/prism-h5b-manifest.json"
+expect_err "#5: parallax rejects a manifest with empty .shape {}"   "$LAUNCH" parallax "$TMP/prism-h5b-manifest.json" --dry-run
+jq 'del(.shape)' "$TMP/prism-h5-manifest.json" > "$TMP/prism-h5c-manifest.json"
+expect_err "#5: parallax rejects a manifest with no .shape key"     "$LAUNCH" parallax "$TMP/prism-h5c-manifest.json" --dry-run
+
+# #6 — duplicate contract keys + non-integer contract values rejected at the parser.
+HP6="$TMP/prism-h6.md"; make_packet "$HP6"
+printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-Mode: partial\n\nType: subagent\nLens: A\nLens-Desc: d\n' "$HP6" > "$TMP/h6a.dispatch"
+expect_err "#6: duplicate Prism-Mode rejected"          "$LAUNCH" prepare --dispatch "$TMP/h6a.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 1\nPrism-N: 2\n\nType: subagent\nLens: A\nLens-Desc: d\n' "$HP6" > "$TMP/h6b.dispatch"
+expect_err "#6: duplicate Prism-N rejected"             "$LAUNCH" prepare --dispatch "$TMP/h6b.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "a"\nPartial-User-Quote: "b"\n\nType: parallax\nTo: codex\nLens: A\nLens-Desc: d\n' "$HP6" > "$TMP/h6c.dispatch"
+expect_err "#6: duplicate Partial-User-Quote rejected"  "$LAUNCH" prepare --dispatch "$TMP/h6c.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: abc\n\nType: subagent\nLens: A\nLens-Desc: d\n' "$HP6" > "$TMP/h6d.dispatch"
+expect_err "#6: non-integer Prism-N rejected (contract path)" "$LAUNCH" prepare --dispatch "$TMP/h6d.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 1\nPrism-M: 1.5\n\nType: subagent\nLens: A\nLens-Desc: d\n' "$HP6" > "$TMP/h6e.dispatch"
+expect_err "#6: non-integer Prism-M rejected (contract path)" "$LAUNCH" prepare --dispatch "$TMP/h6e.dispatch"
 
 echo "== lens catalog: single-source integrity =="
 CAT="$HERE/../templates/lens-catalog.json"
