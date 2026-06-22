@@ -29,7 +29,7 @@
     "lineage": "glm",
     "transport": "claude-env",
     "base": "https://api.z.ai/api/anthropic",
-    "key_env": "GLM_API_KEY_INT",
+    "key_env": "GLM_PLAN_KEY_INT",
     "model": "glm-5.2",
     "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max" },
     "template": "costar"
