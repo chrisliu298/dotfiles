@@ -25,16 +25,5 @@
   "skipAutoPermissionPrompt": true,
   "permissions": {
     "defaultMode": "bypassPermissions"
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          { "type": "command", "command": "~/.claude/hooks/log-tool-calls.sh" },
-          { "type": "command", "command": "~/.claude/hooks/auto-allow-bash.sh" }
-        ]
-      }
-    ]
   }
 }
