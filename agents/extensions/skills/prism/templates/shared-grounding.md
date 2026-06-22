@@ -12,7 +12,7 @@ returns no live results, OR may be answering from training data rather than the 
 peers' native search is silently stale — you can't always tell; when in doubt on a
 time-sensitive fact, use Jina):
 - search (needs `JINA_API_KEY`): `curl -s 'https://s.jina.ai/<URL-encoded query>' -H 'Accept: application/json' -H "Authorization: Bearer $JINA_API_KEY"`
-- fetch: `curl -s -X POST 'https://r.jina.ai/' -H 'Content-Type: application/json' ${JINA_API_KEY:+-H "Authorization: Bearer $JINA_API_KEY"} -d '{"url":"<url>"}'`
+- fetch: `curl -s -X POST 'https://r.jina.ai/' -H 'Content-Type: application/json' -H 'Accept: application/json' ${JINA_API_KEY:+-H "Authorization: Bearer $JINA_API_KEY"} -d '{"url":"<url>"}'`
 
 Either path is fine; what matters is that the fact is grounded in a live source.
 
