@@ -549,8 +549,16 @@ EOF
   # the shedding. For those peers, do NOT also stack headless retries (each can burn
   # ~190s of the CLI's own internal retry) — take a single headless shot, then escalate
   # straight to tmux. Other peers keep the bounded headless retry.
-  local tmux_fallback="false"
-  [ "$transport" = "claude-env" ] && tmux_fallback=$(jq -r '.tmux_fallback // false' <<<"$peer_json")
+  local tmux_fallback="false" tmux_only="false"
+  if [ "$transport" = "claude-env" ]; then
+    tmux_fallback=$(jq -r '.tmux_fallback // false' <<<"$peer_json")
+    tmux_only=$(jq -r '.tmux_only // false' <<<"$peer_json")
+  fi
+  # tmux_only ("tmux_only": true in the registry, or RELAY_TMUX_ONLY=1 in the env) forces
+  # the interactive path on EVERY call — skip the headless `claude -p` shot entirely. Use
+  # while the provider is actively shedding so no call eats the ~190s headless-retry grind.
+  # Gated on tmux_fallback (and, below, on tmux actually being usable).
+  [ -n "${RELAY_TMUX_ONLY:-}" ] && [ "$tmux_fallback" = "true" ] && tmux_only="true"
   local headless_attempts="$max_attempts"
   [ "$tmux_fallback" = "true" ] && headless_attempts=1
   # Circuit breaker (tmux_fallback peers only): the slow part of the fallback is the
@@ -564,18 +572,25 @@ EOF
   local breaker_open="false"
   # Open the breaker only if tmux is actually usable — otherwise skipping the headless
   # attempt would blackhole the peer for the whole cooldown with no working fallback.
-  if [ "$tmux_fallback" = "true" ] && [ "$cooldown" -gt 0 ] && [ -f "$shed_stamp" ] \
-     && command -v tmux >/dev/null 2>&1; then
-    local last_shed now
-    last_shed=$(uint_or "$(head -n1 "$shed_stamp" 2>/dev/null || echo 0)" 0)  # sanitize: corrupt stamp → 0
-    now=$(date +%s)
-    if [ $(( now - last_shed )) -lt "$cooldown" ]; then breaker_open="true"; fi
+  if [ "$tmux_fallback" = "true" ] && command -v tmux >/dev/null 2>&1; then
+    if [ "$tmux_only" = "true" ]; then
+      breaker_open="true"   # forced interactive: never run headless for this peer
+    elif [ "$cooldown" -gt 0 ] && [ -f "$shed_stamp" ]; then
+      local last_shed now
+      last_shed=$(uint_or "$(head -n1 "$shed_stamp" 2>/dev/null || echo 0)" 0)  # sanitize: corrupt stamp → 0
+      now=$(date +%s)
+      if [ $(( now - last_shed )) -lt "$cooldown" ]; then breaker_open="true"; fi
+    fi
   fi
 
   local attempt=1 wait_s=0
   if [ "$breaker_open" = "true" ]; then
-    # Recent shed still within cooldown — don't pay the ~190s headless dead time again.
-    echo "relay: peer '$to' recently overloaded (circuit open) — using interactive session directly" >&2
+    if [ "$tmux_only" = "true" ]; then
+      echo "relay: peer '$to' tmux_only mode — using interactive session directly" >&2
+    else
+      # Recent shed still within cooldown — don't pay the ~190s headless dead time again.
+      echo "relay: peer '$to' recently overloaded (circuit open) — using interactive session directly" >&2
+    fi
     : > "$out_path" 2>/dev/null || true
     : > "$log_path" 2>/dev/null || true
   else

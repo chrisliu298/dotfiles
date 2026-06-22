@@ -33,6 +33,7 @@
     "model": "glm-5.2",
     "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max" },
     "tmux_fallback": true,
+    "tmux_only": true,
     "template": "costar"
   },
   "kimi": {
