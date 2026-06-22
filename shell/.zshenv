@@ -42,8 +42,13 @@ fi
 # Claude Code
 # =============================================================================
 export ENABLE_PROMPT_CACHING_1H=1
-# Disabled to allow GrowthBook feature-flag fetch for /rc (remote-control). Re-enable to opt back out of telemetry.
-# export DISABLE_TELEMETRY=1
+# Telemetry left ENABLED so Claude Code can fetch the GrowthBook flag for /rc (remote-control).
+# Actively `unset` (not merely leave the export commented): commenting out only stops *setting* the
+# var — it does not clear a value already inherited from a long-lived parent (e.g. a tmux server
+# started before telemetry was re-enabled, which then injects DISABLE_TELEMETRY=1 into every pane).
+# unset clears that stale value in every new shell, so tmux panes get /rc too. To opt back out of
+# telemetry, replace the line below with: export DISABLE_TELEMETRY=1
+unset DISABLE_TELEMETRY
 
 # Unset CLAUDECODE inside tmux so claude can start fresh
 [[ -n "$TMUX" ]] && unset CLAUDECODE
