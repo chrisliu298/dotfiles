@@ -276,4 +276,49 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
 
 ---
 
+## Reference detail (relocated from SKILL.md — the runbook points here)
+
+### Parallax peers
+
+| Peer | Model | Lineage | Effort | Notes |
+|---|---|---|---|---|
+| `codex` | GPT-5.5 | OpenAI | `xhigh` | agentic code-review strength |
+| `grok-build` | Grok Build | xAI | `high` | independent of Anthropic/OpenAI |
+| `grok-composer` | Composer 2.5 fast | xAI (same as grok-build) | — | fast variant; quick xAI take |
+| `glm` | GLM-5.2 | Zhipu / z.ai (Anthropic-compatible endpoint) | pinned `max` | `reasoning_effort: max`, like DeepSeek |
+| `kimi` | Kimi K2.7-Code | Moonshot (Kimi-for-Coding plan, `api.kimi.com/coding/`) | thinking pinned | `CLAUDE_CODE_EFFORT_LEVEL=max` selects K2.7-Code; ignores `--effort` |
+| `deepseek` | DeepSeek V4-Pro | DeepSeek (open-weight) | `max` (DeepThink) | |
+| `mimo` | MiMo-V2.5-Pro | Xiaomi (open-weight) | — | |
+
+Grok Build + Grok Composer are **two dispatched tiers** but **one lineage** for lens-assignment and synthesis weighting. Web: every peer effectively has WebFetch + WebSearch — the two native gaps (MiMo WebSearch, GLM WebFetch) each have a verified Jina fallback. `relay/peers.json` is the single source of truth for endpoints, effort knobs, and launcher-template style.
+
+### Manifest count caveat
+
+`8N+M` is the orchestrator-level dispatched count. The manifest's `counts.dispatched_total` is the **standard-tier subtotal only** (parallax + subagents — `= 8N` on a full symmetric run, the actual record count on a partial); gpt-pro is tracked separately in `counts.gptpro` (`prism-launch` does not dispatch gpt-pro — the orchestrator does). So on a full run a `grep` of `dispatched_total` yields `8N`, not `8N+M` — add `counts.gptpro` for the full figure.
+
+### gpt-pro lane (architecture + recovery)
+
+gpt-pro is **orchestrator-direct** — not a relay peer and not in the `parallax` fan: a 5–20 min lens would block the fast relay batch, and its *inline-everything → stdout → run-id-recovery* shape is unlike relay's *read-a-file → write `.res.md`* contract. `prism-launch` composes (in `prepare`) and collects (in `results`/`digest`) the gpt-pro lane, but the transport, run-ids, reattach recovery, exit-code demux, and the macmini concurrency semaphore live wholly in the [[gpt-pro-relay]] wrapper. Exit-code recovery (authoritative in gpt-pro-relay): `0` use it · `124`/`255` reattach with the literal run-id (`gpt-pro --run-id <id>`, same envelope) · `1` inspect `reason`, don't blindly resubmit · `2` fix the call (no quota burned) · `3` engine cap, terminal · `4` fresh-submit only after a reattach proved never-landed. **Never raise `GPT_PRO_MAX_PARALLEL`** (account anti-abuse risk).
+
+### Suggested lenses by task type (`scaffold --preset`)
+
+Starting points — every lens still answers the full question. The **authoritative ordered arrays live in `templates/lens-catalog.json` (`.presets`)** (heaviest-reasoning-first for tier placement); edit a preset there. The italicized adversarial-family slot is a *candidate*, not a default — keep it only if stress-testing is the binding constraint for the question.
+
+- **Code review**: *Adversarial* + Correctness + Simplicity + Depth-Weighted + Temporal + Outsider + Stakeholder + Causal
+- **Architecture / design**: First-Principles + *Adversarial* + Simplicity + Stakeholder + Temporal + Empirical + Breadth-Weighted + Causal
+- **Implementation** (no preset — compose by hand): Correctness + Pragmatist + *Adversarial* + Depth-Weighted + Outsider + Temporal + Stakeholder + Causal
+- **Diagnosis / root cause**: Causal + *Falsification* + Empirical + Depth-Weighted + Temporal + Outsider + Stakeholder + Pragmatist
+- **Option comparison**: First-Principles + Empirical + Simplicity + Stakeholder + Temporal + *Disconfirming* + Breadth-Weighted + Causal
+- **Writing / communication**: Clarity + Audience + *Adversarial* + Simplicity + Outsider + Empirical + Depth-Weighted + Temporal
+- **Research / exploration**: First-Principles + Breadth-Weighted + Depth-Weighted + Outsider + Empirical + Lateral-Generative + Temporal + Stakeholder
+- **Decision / strategy**: First-Principles + Empirical + Stakeholder + Temporal + Pragmatist + *Disconfirming* + Breadth-Weighted + Causal
+
+The lens menu (descriptions, axis families) is also single-sourced in `lens-catalog.json` and stays open — mint a task-specific lens when you can name its axis in one sentence.
+
+### Adding a peer / standard tier
+
+Transport + launcher-template style is one `relay/peers.json` stanza (a standard tier also sets `order` + `lineage` — scaffold order, peershape, and digest lineage all derive from it). For a new **standard tier**, additionally add one lens to each `--preset` set in `templates/lens-catalog.json` (the scaffold count-guard fails closed until they match) and update the "8 tiers" / `8N` counts in `SKILL.md`.
+
+---
+
 *When in doubt, `SKILL.md` is authoritative. This README just shows the shape.*
