@@ -130,6 +130,3 @@ if [[ -n "$CMUX_SHELL_INTEGRATION" ]]; then
         [[ -o zle ]] && zle && zle reset-prompt
     }
 fi
-
-# kimi-code
-export PATH="/Users/chrisliu298/.kimi-code/bin:$PATH"
