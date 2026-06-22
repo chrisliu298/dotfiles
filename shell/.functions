@@ -120,7 +120,7 @@ dfs() {
 }
 
 # synckeys — propagate this machine's ~/.zshenv.local API/plan keys to dfs peers.
-# ~/.zshenv.local holds secrets (DEEPSEEK/GLM_API_KEY_INT, MIMO/KIMI_PLAN_KEY_CN/_INT, …) and is
+# ~/.zshenv.local holds secrets (DEEPSEEK/GLM/MIMO_API_KEY_INT, KIMI_PLAN_KEY_CN/_INT, …) and is
 # intentionally NOT in the dotfiles repo, so `dfs` never carries it — a
 # new `export FOO_API_KEY=...` added here must reach the other machines separately.
 # synckeys upserts the local `export *_API_KEY=` / `*_PLAN_KEY=` lines onto each peer (adds
@@ -302,8 +302,8 @@ xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex ex
 # update peers.json too (and vice versa). See relay SKILL.md "Peer registry".
 
 # Probe an Anthropic-compatible plan endpoint with a 1-token request; echo the HTTP
-# status. Sends a claude-cli User-Agent because some plan gateways (MiMo) 401 a
-# curl/* UA on Bearer auth. auth_style "apikey" -> x-api-key header, else Bearer.
+# status. Sends a claude-cli User-Agent because some plan gateways 401 a curl/* UA
+# on Bearer auth. auth_style "apikey" -> x-api-key header, else Bearer.
 _plan_probe_code(){
     local base="$1" auth_style="$2" key="$3" model="$4" hdr
     if [[ "$auth_style" == apikey ]]; then hdr="x-api-key: $key"; else hdr="Authorization: Bearer $key"; fi
@@ -318,7 +318,7 @@ _plan_probe_code(){
 # subscription plan's quota is exhausted) and the fallback answers, switch to it.
 # Echoes "<base>\t<key>". With no fallback key set (or curl missing), returns primary
 # unprobed — zero added latency, network untouched. Mirrors the relay script's
-# registry-driven fallback so `mm`/`km` behave like the relay/prism peers.
+# registry-driven fallback so `km` behaves like the relay/prism peers.
 # Args: label primary_base primary_key fallback_base fallback_key model auth_style
 _plan_live_creds(){
     local label="$1" pbase="$2" pkey="$3" fbase="$4" fkey="$5" model="$6" style="$7"
@@ -365,21 +365,17 @@ dshl(){ (( $# )) || { echo 'Usage: dshl "<prompt>"'; return 1; }; CLAUDE_CODE_EF
 # =============================================================================
 # MiMo (via Claude Code, Anthropic-compatible endpoint)
 # =============================================================================
-# Routes Claude Code at Xiaomi MiMo per-invocation via the MiMo *subscription
-# plan* endpoints (bills the plan, not pay-per-token), so default `c`/`cc` keep
-# using the Claude subscription. Defaults to the INT/SGP endpoint
-# (token-plan-sgp.xiaomimimo.com/anthropic, MIMO_PLAN_KEY_INT) and falls back to the
-# CN endpoint (token-plan-cn.xiaomimimo.com/anthropic, MIMO_PLAN_KEY_CN) on quota.
-# mimo-v2.5-pro exposes no effort tiers on this Anthropic/Claude Code endpoint
-# (the model's OpenAI-style low/medium/high reasoning_effort isn't surfaced here),
-# so CLAUDE_CODE_EFFORT_LEVEL is a no-op — unlike DeepSeek's high/max. mimo-v2.5-pro
-# is 1M-context-native, so no suffix is needed — both plan endpoints reject the
-# `[1m]` suffix (verified 2026-06-21: SGP returns 400 "Not supported model"). Model
-# IDs keep their dots (the endpoint rejects `mimo-v2-5-pro`). The plan endpoint
-# authenticates with Bearer ANTHROPIC_AUTH_TOKEN (unlike Kimi's coding plan, which
-# uses ANTHROPIC_API_KEY). Requires MIMO_PLAN_KEY_INT in env (see ~/.zshenv.local).
+# Routes Claude Code at Xiaomi MiMo per-invocation via the MiMo pay-per-token API
+# endpoint (api.xiaomimimo.com/anthropic, MIMO_API_KEY_INT), so default `c`/`cc`
+# keep using the Claude subscription. mimo-v2.5-pro exposes no effort tiers on this
+# Anthropic/Claude Code endpoint (the model's OpenAI-style low/medium/high
+# reasoning_effort isn't surfaced here), so CLAUDE_CODE_EFFORT_LEVEL is a no-op —
+# unlike DeepSeek's high/max. mimo-v2.5-pro is 1M-context-native, so no suffix is
+# needed (the endpoint rejects the `[1m]` suffix); model IDs keep their dots (the
+# endpoint rejects `mimo-v2-5-pro`). Authenticates with Bearer ANTHROPIC_AUTH_TOKEN.
+# Requires MIMO_API_KEY_INT in env (see ~/.zshenv.local).
 _mimo(){
-    [[ -n "${MIMO_PLAN_KEY_INT:-}" ]] || { echo 'MIMO_PLAN_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }
+    [[ -n "${MIMO_API_KEY_INT:-}" ]] || { echo 'MIMO_API_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }
     # Drop relay scripts dir from PATH so MiMo sessions can't shell out to relay.
     local _mm_path="${PATH//$HOME\/.claude\/skills\/relay\/scripts:/}"
     _mm_path="${_mm_path%:$HOME/.claude/skills/relay/scripts}"
@@ -387,17 +383,10 @@ _mimo(){
     # multimodal Reads so image data isn't silently dropped. Mirrors the relay
     # script's claude-env branch.
     local _mm_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
-    # Plan-key fallback: prefer MIMO_PLAN_KEY_INT (SGP); if it is quota-exhausted at
-    # launch, fall back to MIMO_PLAN_KEY_CN (CN). Same model id on both — both reject [1m].
-    local _mm_base _mm_key
-    IFS=$'\t' read -r _mm_base _mm_key < <(_plan_live_creds mimo \
-        https://token-plan-sgp.xiaomimimo.com/anthropic "$MIMO_PLAN_KEY_INT" \
-        https://token-plan-cn.xiaomimimo.com/anthropic "${MIMO_PLAN_KEY_CN:-}" \
-        mimo-v2.5-pro bearer)
     env -u TMUX -u ANTHROPIC_API_KEY COLORTERM=truecolor \
         PATH="$_mm_path" \
-        ANTHROPIC_BASE_URL="$_mm_base" \
-        ANTHROPIC_AUTH_TOKEN="$_mm_key" \
+        ANTHROPIC_BASE_URL=https://api.xiaomimimo.com/anthropic \
+        ANTHROPIC_AUTH_TOKEN="$MIMO_API_KEY_INT" \
         ANTHROPIC_MODEL=mimo-v2.5-pro \
         ANTHROPIC_DEFAULT_OPUS_MODEL=mimo-v2.5-pro \
         ANTHROPIC_DEFAULT_SONNET_MODEL=mimo-v2.5-pro \

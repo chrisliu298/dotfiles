@@ -220,8 +220,8 @@ EOF
 
 # Probe an Anthropic-compatible (claude-env) endpoint with a 1-token request and
 # echo the HTTP status. Sends a claude-cli User-Agent because some subscription-plan
-# gateways (MiMo) reject a curl/* UA on Bearer auth with 401 — the probe must look
-# like the real `claude -p` call so its pass/fail matches what that call would get.
+# gateways reject a curl/* UA with 401 — the probe must look like the real `claude -p`
+# call so its pass/fail matches what that call would get.
 # auth_style "api_key" sends the key as x-api-key (Kimi); anything else sends
 # Authorization: Bearer. Echoes 000 on a transport/timeout error so the caller
 # treats it as non-2xx (unhealthy).
@@ -330,8 +330,8 @@ cmd_call() {
     # plan's quota is exhausted) switch this one call to the fallback key/endpoint/
     # model. Prefer primary — switch only when primary is unhealthy AND the fallback
     # answers, so a transient primary blip never fails the call. .fallback.base /
-    # .fallback.model default to the primary's (Kimi swaps key only; MiMo swaps
-    # base+key, same model id — SGP rejects the [1m] suffix). auth_style is shared
+    # .fallback.model default to the primary's (Kimi swaps key only, same endpoint;
+    # a fallback may also override base/model). auth_style is shared
     # (never changes between primary and fallback). Peers without a .fallback, or
     # with no fallback key set, skip the probe entirely — no added latency.
     local fb_key_env fb_key fb_base fb_model primary_code fb_code

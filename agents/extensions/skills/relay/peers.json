@@ -60,10 +60,9 @@
     "order": 7,
     "lineage": "mimo",
     "transport": "claude-env",
-    "base": "https://token-plan-sgp.xiaomimimo.com/anthropic",
-    "key_env": "MIMO_PLAN_KEY_INT",
+    "base": "https://api.xiaomimimo.com/anthropic",
+    "key_env": "MIMO_API_KEY_INT",
     "model": "mimo-v2.5-pro",
-    "fallback": { "base": "https://token-plan-cn.xiaomimimo.com/anthropic", "key_env": "MIMO_PLAN_KEY_CN" },
     "template": "costar"
   }
 }
