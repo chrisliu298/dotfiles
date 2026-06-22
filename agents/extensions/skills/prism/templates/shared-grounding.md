@@ -6,13 +6,14 @@ anything that changes over time or that you'd otherwise answer from memory. For 
 you MUST use the web to ground the answer in what you find — do not answer external or
 time-sensitive questions from memory.
 
-Reach the web with whatever works in your harness: **use your native `WebSearch` / `WebFetch`
-tools when they work; if a web tool does not work — it's unavailable, errors, or returns no
-real results — use Jina instead** via Bash:
+Reach the web with whatever your harness provides. **In the Claude Code harness — Claude
+subagents and the GLM / Kimi / DeepSeek / MiMo relay peers — use the native `WebSearch` /
+`WebFetch` tools; if one does not work (unavailable, errors, or returns no real results),
+use Jina instead** via Bash:
 - search (needs `JINA_API_KEY`): `curl -s 'https://s.jina.ai/<URL-encoded query>' -H 'Accept: application/json' -H "Authorization: Bearer $JINA_API_KEY"`
 - fetch: `curl -s -X POST 'https://r.jina.ai/' -H 'Content-Type: application/json' -H 'Accept: application/json' ${JINA_API_KEY:+-H "Authorization: Bearer $JINA_API_KEY"} -d '{"url":"<url>"}'`
 
-Either path is fine; what matters is that the fact is grounded in a live source.
+**Codex, Grok, and gpt-pro** run their own harness with their own native web search/fetch — use those directly; the `WebSearch` / `WebFetch` and Jina details above are Claude-Code-only. Either way, what matters is that the fact is grounded in a live source.
 
 When you search:
 - Corroborate each load-bearing fact across at least two independent sources (prefer
