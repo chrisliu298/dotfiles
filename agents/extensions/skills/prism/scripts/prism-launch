@@ -261,6 +261,17 @@ cmd_prepare() {
     { printf '\n'; cat "$hfile"; } >> "$packet" || die "prepare: could not inject how-to-answer into $packet"
     echo "prism-launch: injected canonical ## How to answer into $(basename "$packet")" >&2
   fi
+  # Grounding: every agent gets the same fact-grounding block — verify any external /
+  # time-sensitive fact against a live source (native WebSearch/WebFetch if they work,
+  # else the Jina fallback), don't answer such facts from memory, and skip the web for
+  # self-contained tasks. Injected for ALL tiers via the shared packet; gpt-pro inherits
+  # it from the embedded packet (no separate append). Idempotent — present → left as-is.
+  if ! grep -q '^## Grounding external facts' "$packet"; then
+    local gfile="$TEMPLATES_DIR/shared-grounding.md"
+    [ -f "$gfile" ] || die "prepare: canonical grounding template missing: $gfile"
+    { printf '\n'; cat "$gfile"; } >> "$packet" || die "prepare: could not inject grounding into $packet"
+    echo "prism-launch: injected canonical ## Grounding external facts into $(basename "$packet")" >&2
+  fi
 
   # run_base: shared_packet path minus a trailing .md. All run artifacts hang off it.
   local run_base="${packet%.md}"
@@ -471,11 +482,12 @@ Resolve the dispatch to the declared symmetric shape, or drop the --expect flags
   if [ "$ngp" -gt 0 ]; then
     local GPTPRO_MAX_BYTES=1000000
     local gtmpl="$TEMPLATES_DIR/launcher-gptpro.tmpl"
-    local gground="$TEMPLATES_DIR/shared-gptpro-grounding.md"
     local gcalib="$TEMPLATES_DIR/shared-gptpro-calibration.md"
     [ -f "$gtmpl" ]   || die "prepare: gptpro launcher template missing: $gtmpl"
-    [ -f "$gground" ] || die "prepare: gptpro grounding template missing: $gground"
     [ -f "$gcalib" ]  || die "prepare: gptpro calibration template missing: $gcalib"
+    # Grounding is NOT appended here — it is already in the embedded shared packet
+    # (injected for every tier above), so gpt-pro inherits it. Only calibration is
+    # gpt-pro-specific.
 
     # Resolve the reference list. Authoritative source: the dispatch `Reference:`
     # keys (config .references — a present key, even empty, wins). Fallback: the
@@ -539,7 +551,6 @@ EOF
         done <<EOF
 $refs
 EOF
-        printf '\n'; cat "$gground"
         printf '\n'; cat "$gcalib"
       } > "$glauncher"
       gb=$(wc -c < "$glauncher" | tr -d ' ')
@@ -1185,10 +1196,11 @@ scaffold:  emit a ready-to-fill dispatch skeleton for the symmetric default (N o
            --preset <review|design|diagnosis|compare|research|decision|writing> pre-fills eight
            lenses by task type (N=1). gpt-pro lenses are opt-in — add them by hand (below).
 prepare:   validate the dispatch/config, render all launchers from templates, write a manifest;
-           inject the canonical ## Constraints and ## How to answer into the shared packet if
-           absent (so you author the packet with just Full Question + Context). For any gpt-pro
-           lens it also COMPOSES a self-contained launcher (inlines the frozen packet + every
-           reference file's contents + grounding + calibration). Pass one of --dispatch (compiled
+           inject the canonical ## Constraints, ## How to answer, and ## Grounding external facts
+           into the shared packet if absent (so you author the packet with just Full Question +
+           Context). For any gpt-pro lens it also COMPOSES a self-contained launcher (inlines the
+           frozen packet — which already carries Grounding — + every reference file's contents +
+           calibration). Pass one of --dispatch (compiled
            to the canonical config) or --config. Optional opt-in floor check: --expect-n N fails
            closed unless every standard tier + the subagents are at exactly N; --expect-m M also
            pins gpt-pro to M (and checks gpt-pro only when given — tiers and gpt-pro are orthogonal).

@@ -239,8 +239,11 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
       │                                families, and --preset sets (scaffold reads it)
       ├── shared-constraints.md        canonical read-only / anti-recursion block
       │                                (prepare injects this; never hand-copied)
-      └── shared-how-to-answer.md      canonical "## How to answer" block
-                                       (prepare injects this; never hand-copied)
+      ├── shared-how-to-answer.md      canonical "## How to answer" block
+      │                                (prepare injects this; never hand-copied)
+      └── shared-grounding.md          canonical "## Grounding external facts" block
+                                       (prepare injects this for every agent; gpt-pro
+                                       inherits it via the packet)
             ▲ reads templates + the catalog + the registry
             │
   relay/peers.json   ◄── single source of truth: which peers exist, their effort
