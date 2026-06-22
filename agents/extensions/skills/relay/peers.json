@@ -42,7 +42,6 @@
     "key_env": "KIMI_PLAN_KEY_CN",
     "auth_style": "api_key",
     "model": "kimi-k2.7-code",
-    "fallback": { "key_env": "KIMI_PLAN_KEY_INT" },
     "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "262144" },
     "template": "costar"
   },

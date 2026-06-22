@@ -120,7 +120,7 @@ dfs() {
 }
 
 # synckeys — propagate this machine's ~/.zshenv.local API/plan keys to dfs peers.
-# ~/.zshenv.local holds secrets (DEEPSEEK/MIMO_API_KEY_INT, GLM_PLAN_KEY_INT, KIMI_PLAN_KEY_CN/_INT, …) and is
+# ~/.zshenv.local holds secrets (DEEPSEEK/MIMO_API_KEY_INT, GLM_PLAN_KEY_INT, KIMI_PLAN_KEY_CN, …) and is
 # intentionally NOT in the dotfiles repo, so `dfs` never carries it — a
 # new `export FOO_API_KEY=...` added here must reach the other machines separately.
 # synckeys upserts the local `export *_API_KEY=` / `*_PLAN_KEY=` lines onto each peer (adds
@@ -298,42 +298,8 @@ xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex ex
 # NOTE: _deepseek/_mimo/_glm/_kimi below duplicate the model id, endpoint, and
 # extras that also live in agents/extensions/skills/relay/peers.json — the
 # relay/prism source of truth. These interactive launchers are a separate
-# consumer; if you change a model id, endpoint, or *_PLAN_KEY_INT fallback key,
-# update peers.json too (and vice versa). See relay SKILL.md "Peer registry".
-
-# Probe an Anthropic-compatible plan endpoint with a 1-token request; echo the HTTP
-# status. Sends a claude-cli User-Agent because some plan gateways 401 a curl/* UA
-# on Bearer auth. auth_style "apikey" -> x-api-key header, else Bearer.
-_plan_probe_code(){
-    local base="$1" auth_style="$2" key="$3" model="$4" hdr
-    if [[ "$auth_style" == apikey ]]; then hdr="x-api-key: $key"; else hdr="Authorization: Bearer $key"; fi
-    curl -sS --max-time 15 -o /dev/null -w '%{http_code}' -X POST "${base%/}/v1/messages" \
-        -H "$hdr" -H 'User-Agent: claude-cli/plan-probe (external, cli)' \
-        -H 'anthropic-version: 2023-06-01' -H 'content-type: application/json' \
-        -d "{\"model\":\"$model\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" \
-        2>/dev/null || echo 000
-}
-
-# Pick a live plan endpoint+key: prefer primary; if its probe is non-2xx (e.g. the
-# subscription plan's quota is exhausted) and the fallback answers, switch to it.
-# Echoes "<base>\t<key>". With no fallback key set (or curl missing), returns primary
-# unprobed — zero added latency, network untouched. Mirrors the relay script's
-# registry-driven fallback so `km` behaves like the relay/prism peers.
-# Args: label primary_base primary_key fallback_base fallback_key model auth_style
-_plan_live_creds(){
-    local label="$1" pbase="$2" pkey="$3" fbase="$4" fkey="$5" model="$6" style="$7"
-    if [[ -z "$fkey" ]] || ! command -v curl >/dev/null 2>&1; then printf '%s\t%s\n' "$pbase" "$pkey"; return; fi
-    local pc; pc=$(_plan_probe_code "$pbase" "$style" "$pkey" "$model")
-    if [[ "$pc" == 2* ]]; then printf '%s\t%s\n' "$pbase" "$pkey"; return; fi
-    local fc; fc=$(_plan_probe_code "$fbase" "$style" "$fkey" "$model")
-    if [[ "$fc" == 2* ]]; then
-        echo "$label: primary key unhealthy (HTTP $pc) -> using fallback key (HTTP $fc)" >&2
-        printf '%s\t%s\n' "$fbase" "$fkey"
-    else
-        echo "$label: primary HTTP $pc, fallback HTTP $fc -- staying on primary" >&2
-        printf '%s\t%s\n' "$pbase" "$pkey"
-    fi
-}
+# consumer; if you change a model id, endpoint, or key var, update peers.json too
+# (and vice versa). See relay SKILL.md "Peer registry".
 
 _deepseek(){
     [[ -n "${DEEPSEEK_API_KEY_INT:-}" ]] || { echo 'DEEPSEEK_API_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }
@@ -459,17 +425,10 @@ _kimi(){
     # Treated text-only here (K2.7-Code vision is unverified over the coding endpoint)
     # — deny multimodal Reads, mirroring ds/mm/glm.
     local _kimi_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
-    # Plan-key fallback: prefer KIMI_PLAN_KEY_CN; if it is quota-exhausted at launch,
-    # fall back to KIMI_PLAN_KEY_INT. Same endpoint + model — only the key swaps.
-    local _kimi_base _kimi_key
-    IFS=$'\t' read -r _kimi_base _kimi_key < <(_plan_live_creds kimi \
-        https://api.kimi.com/coding/ "$KIMI_PLAN_KEY_CN" \
-        https://api.kimi.com/coding/ "${KIMI_PLAN_KEY_INT:-}" \
-        kimi-k2.7-code apikey)
     env -u TMUX -u ANTHROPIC_AUTH_TOKEN COLORTERM=truecolor \
         PATH="$_kimi_path" \
-        ANTHROPIC_BASE_URL="$_kimi_base" \
-        ANTHROPIC_API_KEY="$_kimi_key" \
+        ANTHROPIC_BASE_URL=https://api.kimi.com/coding/ \
+        ANTHROPIC_API_KEY="$KIMI_PLAN_KEY_CN" \
         ANTHROPIC_MODEL=kimi-k2.7-code \
         ANTHROPIC_DEFAULT_OPUS_MODEL=kimi-k2.7-code \
         ANTHROPIC_DEFAULT_SONNET_MODEL=kimi-k2.7-code \

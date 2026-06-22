@@ -218,25 +218,6 @@ EOF
   echo "$filepath"
 }
 
-# Probe an Anthropic-compatible (claude-env) endpoint with a 1-token request and
-# echo the HTTP status. Sends a claude-cli User-Agent because some subscription-plan
-# gateways reject a curl/* UA with 401 — the probe must look like the real `claude -p`
-# call so its pass/fail matches what that call would get.
-# auth_style "api_key" sends the key as x-api-key (Kimi); anything else sends
-# Authorization: Bearer. Echoes 000 on a transport/timeout error so the caller
-# treats it as non-2xx (unhealthy).
-claude_env_probe() {
-  local base="$1" auth_style="$2" key="$3" model="$4" hdr
-  if [ "$auth_style" = "api_key" ]; then hdr="x-api-key: $key"; else hdr="Authorization: Bearer $key"; fi
-  curl -sS --max-time 15 -o /dev/null -w '%{http_code}' -X POST "${base%/}/v1/messages" \
-    -H "$hdr" \
-    -H 'User-Agent: claude-cli/relay-probe (external, cli)' \
-    -H 'anthropic-version: 2023-06-01' \
-    -H 'content-type: application/json' \
-    -d "{\"model\":\"$model\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" \
-    2>/dev/null || echo 000
-}
-
 cmd_call() {
   local name="" effort="medium" body="" from="" to=""
   local body_only=false
@@ -280,8 +261,7 @@ cmd_call() {
   peer_json=$(jq -e --arg p "$to" '.[$p]' "$PEERS" 2>/dev/null) \
     || die "call: unknown peer '$to' (known: $(jq -r 'keys|join(", ")' "$PEERS" 2>/dev/null))"
   transport=$(jq -r '.transport' <<<"$peer_json")
-  # Resolve the model id once, up front — the claude-env plan-key fallback probe
-  # (below) needs it before peer_cmd is built, and a fallback may reassign it.
+  # Resolve the model id once, up front (used below when building peer_cmd).
   local model
   model=$(jq -r '.model' <<<"$peer_json")
 
@@ -325,32 +305,6 @@ cmd_call() {
     [ -n "$auth_token" ] || die "call: $key_env not set (required for --to $to)"
     base=$(jq -r '.base' <<<"$peer_json")
     auth_style=$(jq -r '.auth_style // "auth_token"' <<<"$peer_json")
-    # Plan-key fallback (registry-driven): if this peer declares a .fallback whose
-    # key env is set, probe the primary endpoint; on a non-2xx (e.g. the subscription
-    # plan's quota is exhausted) switch this one call to the fallback key/endpoint/
-    # model. Prefer primary — switch only when primary is unhealthy AND the fallback
-    # answers, so a transient primary blip never fails the call. .fallback.base /
-    # .fallback.model default to the primary's (Kimi swaps key only, same endpoint;
-    # a fallback may also override base/model). auth_style is shared
-    # (never changes between primary and fallback). Peers without a .fallback, or
-    # with no fallback key set, skip the probe entirely — no added latency.
-    local fb_key_env fb_key fb_base fb_model primary_code fb_code
-    fb_key_env=$(jq -r '.fallback.key_env // empty' <<<"$peer_json")
-    if [ -n "$fb_key_env" ] && [ -n "${!fb_key_env:-}" ] && command -v curl >/dev/null 2>&1; then
-      fb_key="${!fb_key_env}"
-      fb_base=$(jq -r --arg b "$base" '.fallback.base // $b' <<<"$peer_json")
-      fb_model=$(jq -r --arg m "$model" '.fallback.model // $m' <<<"$peer_json")
-      primary_code=$(claude_env_probe "$base" "$auth_style" "$auth_token" "$model")
-      if [ "${primary_code#2}" = "$primary_code" ]; then   # primary not 2xx
-        fb_code=$(claude_env_probe "$fb_base" "$auth_style" "$fb_key" "$fb_model")
-        if [ "${fb_code#2}" != "$fb_code" ]; then           # fallback is 2xx
-          echo "relay: $to primary ($key_env) unhealthy HTTP $primary_code → fallback ($fb_key_env) HTTP $fb_code" >&2
-          base="$fb_base"; auth_token="$fb_key"; model="$fb_model"; key_env="$fb_key_env"
-        else
-          echo "relay: $to primary HTTP $primary_code, fallback HTTP $fb_code — staying on primary" >&2
-        fi
-      fi
-    fi
   else
     die "call: unknown transport '$transport' for peer '$to' in $PEERS"
   fi
@@ -423,8 +377,8 @@ EOF
       --no-auto-update --no-subagents)
     [ -n "$effort" ] && peer_cmd+=(--effort "$effort")
   else
-    # base / auth_style (and any plan-key fallback swap) were resolved in the
-    # claude-env preflight above. Auth header style: most claude-env peers send
+    # base / auth_style were resolved in the claude-env preflight above.
+    # Auth header style: most claude-env peers send
     # ANTHROPIC_AUTH_TOKEN (Bearer); a peer with "auth_style":"api_key" sends
     # ANTHROPIC_API_KEY (x-api-key) instead — e.g. Kimi's Kimi-for-Coding endpoint.
     local auth_var
