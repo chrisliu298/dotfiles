@@ -32,6 +32,7 @@
     "key_env": "GLM_PLAN_KEY_INT",
     "model": "glm-5.2",
     "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max" },
+    "tmux_fallback": true,
     "template": "costar"
   },
   "kimi": {

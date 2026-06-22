@@ -44,6 +44,17 @@ check_slug() {
   esac
 }
 
+# Echo $1 if it is a non-negative integer, else the default $2. Guards every numeric
+# env knob / stamp value before it reaches arithmetic or `[ -gt ]`, so a non-numeric
+# value (e.g. RELAY_OVERLOAD_RETRIES=foo, or a corrupt shed stamp) degrades to the
+# default instead of aborting the whole call under `set -euo pipefail`.
+uint_or() {
+  case "$1" in
+    ''|*[!0-9]*) echo "$2" ;;
+    *)           echo "$1" ;;
+  esac
+}
+
 # Resolve a stable root directory: git root or absolute cwd
 resolve_root() {
   git rev-parse --show-toplevel 2>/dev/null || pwd -P
@@ -56,6 +67,78 @@ ensure_relay_dir() {
   mkdir -p "$RELAY_DIR"
   local gitignore="$ROOT/.gitignore"
   grep -qxF '.relay/' "$gitignore" 2>/dev/null || echo '.relay/' >> "$gitignore"
+}
+
+# Run a claude-env peer INTERACTIVELY inside a detached tmux session, as a seamless
+# fallback when the headless `claude -p` path is shed by the provider (z.ai 529/1305).
+# Interactive Claude Code emits a request shape the shedder currently admits where the
+# `-p` batch shape is dropped. Completion is the same file-based signal relay uses for
+# every transport: poll for $res (the peer writes it). The full prompt already lives in
+# $req, so we send-keys only a one-line pointer — no large/multiline paste into the TUI.
+# Args: <session> <trusted-cwd> <req-path> <res-path> <interactive-cmd...>
+run_peer_tmux() {
+  local session="$1" cwd="$2" req="$3" res="$4"; shift 4
+  local -a icmd=("$@")
+  local cmdfile="${req%.req.md}.tmux-cmd.sh" pane="${req%.req.md}.tmux-pane.log"
+  local rc=1 i ready="" waited=0 last_size="" size cap ready_iters
+  cap=$(uint_or "${RELAY_TMUX_TIMEOUT:-600}" 600)
+  ready_iters=$(uint_or "${RELAY_TMUX_READY_TIMEOUT:-60}" 60)   # TUI-boot budget, separate from $cap
+  if ! command -v tmux >/dev/null 2>&1; then
+    echo "relay: tmux not found — cannot use interactive fallback" >&2
+    return 1
+  fi
+  # Materialize the exact env+claude invocation as a launcher script. Create it 0600
+  # FROM THE START via umask in a subshell — never a world/group-readable window — since
+  # it carries the auth token. printf %q quotes every element safely (no cmdline hazards,
+  # and the token never appears on the pane command line).
+  ( umask 077; { printf '#!/usr/bin/env bash\nexec'; printf ' %q' "${icmd[@]}"; printf '\n'; } > "$cmdfile" )
+  tmux kill-session -t "$session" 2>/dev/null || true
+  # %q-quote $cmdfile in the session command too — $ROOT (and thus the path) may contain spaces.
+  if ! tmux new-session -d -s "$session" -x 220 -y 50 -c "$cwd" "$(printf 'exec bash %q' "$cmdfile")" 2>/dev/null; then
+    echo "relay: tmux new-session failed — interactive fallback unavailable" >&2
+    rm -f "$cmdfile"; return 1
+  fi
+  # Tear the session + token launcher down even if relay is interrupted (SIGINT/SIGTERM)
+  # or exits mid-fallback — not only on the normal return paths. (SIGKILL is untrappable;
+  # that orphan is unavoidable and accepted.)
+  trap 'tmux kill-session -t "$session" 2>/dev/null; rm -f "$cmdfile"' EXIT INT TERM
+  # Wait for the TUI to accept input (footer shows the perms mode / shortcuts hint). A
+  # trust gate or other prompt matches none of these, so we time out clean, not hang.
+  for i in $(seq 1 "$ready_iters"); do
+    tmux capture-pane -t "$session" -p 2>/dev/null > "$pane" || true
+    if grep -qE 'bypass permissions|for shortcuts|⏵⏵' "$pane" 2>/dev/null; then ready=1; break; fi
+    sleep 1
+  done
+  rm -f "$cmdfile"   # claude has exec'd; drop the token-bearing launcher promptly
+  if [ -z "$ready" ]; then
+    echo "relay: interactive session never became ready (pane → $pane)" >&2
+    trap - EXIT INT TERM; tmux kill-session -t "$session" 2>/dev/null || true
+    return 1
+  fi
+  # -l = literal keystrokes (no tmux key-name interpretation). Ask for an atomic
+  # tmp→rename write; relay ALSO confirms completion via size-stability below, so a
+  # partial file is never read even if the peer writes $res directly.
+  local instr="Read and execute this relay request: $req — write the complete reply (including the relay frontmatter) to $res.tmp, then rename it to $res (e.g. via Bash: mv $res.tmp $res) so a partial file is never visible. Verify $res exists and is non-empty. Proceed autonomously; do not ask questions or enter plan mode."
+  tmux send-keys -t "$session" -l "$instr"
+  sleep 1
+  tmux send-keys -t "$session" Enter
+  # Completion = $res present AND its byte size unchanged across two consecutive polls,
+  # so a response still being written is never read mid-flight (partial-read guard).
+  while [ "$waited" -lt "$cap" ]; do
+    if [ -s "$res" ]; then
+      size=$(wc -c < "$res" 2>/dev/null || echo 0)
+      if [ "$size" = "$last_size" ]; then rc=0; break; fi
+      last_size="$size"
+    fi
+    sleep 3; waited=$(( waited + 3 ))
+  done
+  if [ "$rc" -ne 0 ]; then
+    tmux capture-pane -t "$session" -p 2>/dev/null > "$pane" || true
+    echo "relay: interactive fallback timed out after ${cap}s (pane → $pane)" >&2
+  fi
+  trap - EXIT INT TERM
+  tmux kill-session -t "$session" 2>/dev/null || true
+  return $rc
 }
 
 # Read body from stdin when no argument body was provided
@@ -346,7 +429,7 @@ EOF
   # registry. The six model vars all take the same model id (harness-required) —
   # incl. ANTHROPIC_SMALL_FAST_MODEL, else background calls fall back to a hardcoded
   # Haiku id that GLM/Kimi/DeepSeek/MiMo gateways bill as their cheap flash/lite tier.
-  local -a peer_cmd
+  local -a peer_cmd peer_cmd_tmux=()
   if [ "$transport" = "codex" ]; then
     peer_cmd=(env "PATH=$sanitized_path" "RELAY_PEER=$to"
       codex exec --model "$model"
@@ -431,12 +514,112 @@ EOF
     # swallowed as another tool name, so keep --dangerously-skip-permissions AFTER
     # it — that dashed token ends the list, leaving the prompt as the lone positional.
     local peer_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf),EnterPlanMode,ExitPlanMode,AskUserQuestion'
+    # Snapshot the env envelope (everything before `claude`) so a tmux_fallback peer
+    # can be re-run INTERACTIVELY (no -p) under the identical endpoint/key/model/deny.
+    # The interactive prompt is delivered via send-keys pointing at $req_path — the
+    # same indirection the headless peer_prompt uses (relay points the peer at the req
+    # file, the full body lives there) — so both paths write the same $res_path and the
+    # caller cannot tell which ran. Plan/Ask gates stay denied: there is no human here.
+    peer_cmd_tmux=("${peer_cmd[@]}" claude --disallowedTools "$peer_deny" --dangerously-skip-permissions)
     peer_cmd+=(claude -p --disallowedTools "$peer_deny" --dangerously-skip-permissions "$peer_prompt")
   fi
 
   # Invoke peer and capture exit status (don't let set -e abort before checking response)
+  # Capture stdout to a sidecar instead of discarding it: claude-env peers run
+  # `claude -p`, which prints API errors (e.g. z.ai 529 / overloaded_error 1305)
+  # to STDOUT — the stderr log is empty on a clean API failure, so `>/dev/null`
+  # left a failed peer with a 0-byte log and no diagnostic. On success the peer
+  # writes its real answer to $res_path itself; this stdout is only a confirmation.
   local peer_exit=0
-  "${peer_cmd[@]}" >/dev/null 2>"$log_path" || peer_exit=$?
+  local out_path="${req_path%.req.md}.out.log"
+  # Bounded retry on TRANSIENT overload only (z.ai 529 / overloaded_error 1305 and
+  # the like). The failure is server-side and intermittent — a 12-token curl to the
+  # same endpoint returns 200 in the same window a heavy `claude -p` is shed — so a
+  # FRESH process after a short backoff re-rolls the provider's admission. Gated on
+  # the same overload signature the failure path flags below, AND only when the peer
+  # produced no response file: a non-overload failure (or a peer that already wrote
+  # its answer) is never retried. Tunable: RELAY_OVERLOAD_RETRIES (default 1 retry =
+  # 2 attempts), RELAY_OVERLOAD_BACKOFF (default 15s, + up to 4s jitter so prism's
+  # concurrent fan does not re-hit in lockstep).
+  local max_attempts backoff
+  max_attempts=$(( $(uint_or "${RELAY_OVERLOAD_RETRIES:-1}" 1) + 1 ))
+  backoff=$(uint_or "${RELAY_OVERLOAD_BACKOFF:-15}" 15)
+  # A claude-env peer with "tmux_fallback": true (registry) has a stronger escalation
+  # than a headless re-roll: an interactive (non -p) session that empirically dodges
+  # the shedding. For those peers, do NOT also stack headless retries (each can burn
+  # ~190s of the CLI's own internal retry) — take a single headless shot, then escalate
+  # straight to tmux. Other peers keep the bounded headless retry.
+  local tmux_fallback="false"
+  [ "$transport" = "claude-env" ] && tmux_fallback=$(jq -r '.tmux_fallback // false' <<<"$peer_json")
+  local headless_attempts="$max_attempts"
+  [ "$tmux_fallback" = "true" ] && headless_attempts=1
+  # Circuit breaker (tmux_fallback peers only): the slow part of the fallback is the
+  # FIRST shed of a window — `claude -p` retries the 529 internally for ~190s before
+  # relay ever sees the failure and can escalate. Once a shed has been observed, skip
+  # that dead time on subsequent calls and go interactive-first until a cooldown
+  # elapses. A stamp file in $RELAY_DIR records the last observed shed (epoch);
+  # RELAY_SHED_COOLDOWN (default 300s) is the window — set 0 to disable the breaker.
+  local shed_stamp="$RELAY_DIR/.${to}-shed" cooldown
+  cooldown=$(uint_or "${RELAY_SHED_COOLDOWN:-300}" 300)
+  local breaker_open="false"
+  # Open the breaker only if tmux is actually usable — otherwise skipping the headless
+  # attempt would blackhole the peer for the whole cooldown with no working fallback.
+  if [ "$tmux_fallback" = "true" ] && [ "$cooldown" -gt 0 ] && [ -f "$shed_stamp" ] \
+     && command -v tmux >/dev/null 2>&1; then
+    local last_shed now
+    last_shed=$(uint_or "$(head -n1 "$shed_stamp" 2>/dev/null || echo 0)" 0)  # sanitize: corrupt stamp → 0
+    now=$(date +%s)
+    if [ $(( now - last_shed )) -lt "$cooldown" ]; then breaker_open="true"; fi
+  fi
+
+  local attempt=1 wait_s=0
+  if [ "$breaker_open" = "true" ]; then
+    # Recent shed still within cooldown — don't pay the ~190s headless dead time again.
+    echo "relay: peer '$to' recently overloaded (circuit open) — using interactive session directly" >&2
+    : > "$out_path" 2>/dev/null || true
+    : > "$log_path" 2>/dev/null || true
+  else
+    while : ; do
+      peer_exit=0
+      "${peer_cmd[@]}" >"$out_path" 2>"$log_path" || peer_exit=$?
+      if [ -f "$res_path" ]; then break; fi                       # peer wrote a response → done
+      if [ "$attempt" -ge "$headless_attempts" ]; then break; fi  # out of headless attempts
+      if ! grep -qiE '529|overloaded|1305|temporarily' "$out_path" 2>/dev/null; then break; fi
+      wait_s=$(( backoff + RANDOM % 5 ))
+      echo "relay: peer '$to' transient overload — retry $attempt/$(( headless_attempts - 1 )) in ${wait_s}s" >&2
+      sleep "$wait_s"
+      attempt=$(( attempt + 1 ))
+    done
+    # Recovered on the headless fast path → clear any stale breaker stamp so the next
+    # call goes straight back to headless without an unneeded interactive detour.
+    if [ "$tmux_fallback" = "true" ] && [ -f "$res_path" ] && [ -f "$shed_stamp" ]; then rm -f "$shed_stamp"; fi
+  fi
+
+  # Seamless interactive fallback: fire when the breaker is open (headless skipped) OR
+  # the headless shot was shed. Transparently re-run the peer as an interactive (non -p)
+  # tmux session, which dodges z.ai's 529/1305 shedding (verified: concurrent A/B —
+  # headless 529'd, interactive answered). The caller is unaware: it still just gets
+  # $res_path. The full prompt already lives in $req_path, so the interactive peer is
+  # pointed there exactly like the headless one. GLM-only by registry flag; degrades
+  # safely (logs + normal failure path) if tmux is missing or the session stalls.
+  if [ ! -f "$res_path" ] && [ "$tmux_fallback" = "true" ] \
+     && { [ "$breaker_open" = "true" ] || grep -qiE '529|overloaded|1305|temporarily' "$out_path" 2>/dev/null; }; then
+    if [ "$breaker_open" != "true" ]; then
+      echo "relay: peer '$to' overloaded headless — escalating to interactive tmux session" >&2
+      # Trip the breaker so the NEXT call skips the ~190s headless dead time. Only an
+      # actually-observed shed stamps; breaker-open reuse does not, so the window ages
+      # out and a later call probes headless again (self-healing on recovery). Atomic
+      # temp+rename so prism's concurrent fan can't read a torn stamp.
+      if [ "$cooldown" -gt 0 ]; then
+        date +%s > "$shed_stamp.tmp" 2>/dev/null && mv -f "$shed_stamp.tmp" "$shed_stamp" 2>/dev/null || true
+      fi
+    fi
+    if run_peer_tmux "relay_${to}_${$}_${RANDOM}" "$ROOT" "$req_path" "$res_path" "${peer_cmd_tmux[@]}"; then
+      peer_exit=0   # the interactive fallback produced the response — not a failure
+    else
+      if [ "$peer_exit" -eq 0 ]; then peer_exit=1; fi  # breaker-open skipped headless → record the failure
+    fi
+  fi
 
   # Failure-only recovery: if the peer (Codex) finished without writing
   # the response file, salvage the last assistant block from the log.
@@ -462,6 +645,18 @@ EOF
     fi
   else
     echo "relay: peer log  → $log_path" >&2
+    # Surface the peer's stdout — for claude-env peers the API error lands here,
+    # not in the (usually empty) stderr log. Flag a transient z.ai/overload so a
+    # 529 reads as "retry later", not "broken config".
+    if [ -s "$out_path" ]; then
+      echo "relay: peer out  → $out_path" >&2
+      if grep -qiE '529|overloaded|1305|temporarily' "$out_path"; then
+        echo "relay: peer hit a transient overload (HTTP 529 / 1305) — server-side, retry later" >&2
+      fi
+      echo "relay: ---- last peer output ----" >&2
+      tail -n 15 "$out_path" >&2
+      echo "relay: ----------------------------" >&2
+    fi
     die "call: response file not found — peer exited $peer_exit: $res_path"
   fi
 }
