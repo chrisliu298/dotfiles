@@ -6,11 +6,9 @@ anything that changes over time or that you'd otherwise answer from memory. For 
 you MUST use the web to ground the answer in what you find — do not answer external or
 time-sensitive questions from memory.
 
-Reach the web with whatever works in your harness: **if your `WebSearch` / `WebFetch` tools
-return live results, use them.** Fall back to **Jina** via Bash when a tool is unavailable,
-returns no live results, OR may be answering from training data rather than the live web (some
-peers' native search is silently stale — you can't always tell; when in doubt on a
-time-sensitive fact, use Jina):
+Reach the web with whatever works in your harness: **use your native `WebSearch` / `WebFetch`
+tools when they work; if a web tool does not work — it's unavailable, errors, or returns no
+real results — use Jina instead** via Bash:
 - search (needs `JINA_API_KEY`): `curl -s 'https://s.jina.ai/<URL-encoded query>' -H 'Accept: application/json' -H "Authorization: Bearer $JINA_API_KEY"`
 - fetch: `curl -s -X POST 'https://r.jina.ai/' -H 'Content-Type: application/json' -H 'Accept: application/json' ${JINA_API_KEY:+-H "Authorization: Bearer $JINA_API_KEY"} -d '{"url":"<url>"}'`
 
