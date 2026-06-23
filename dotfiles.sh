@@ -482,7 +482,33 @@ lint_skills() {
         hits=1
     done
     (( hits )) && warn "fix per agents/extensions/references/universal-skill-authoring.md, or scope the skill claude-only"
-    return 0
+    lint_docmaint   # its status propagates: fatal for `./dotfiles.sh lint`, advisory in a full run
+}
+
+# ── docmaint drift-guard ─────────────────────────────────────────
+# The todo/exec-status/mental-seal skills each ship a copy of docmaint.py that MUST be
+# byte-identical except the one `DOC = "..."` line (todo|status|seal). Catch drift (a fix
+# landing in one copy but not the others) and a DOC value that doesn't match its skill dir.
+lint_docmaint() {
+    local -a copies=(
+        "todo:agents/extensions/skills/todo/scripts/docmaint.py"
+        "status:agents/extensions/skills/exec-status/scripts/docmaint.py"
+        "seal:agents/extensions/skills/mental-seal/scripts/docmaint.py"
+    )
+    local entry want path norm prev="" prev_name="" doc rc=0
+    for entry in "${copies[@]}"; do
+        want="${entry%%:*}"; path="${entry#*:}"
+        if [[ ! -f "$ROOT/$path" ]]; then warn "docmaint: missing copy $path"; rc=1; continue; fi
+        doc=$(sed -nE 's/^DOC = "(todo|status|seal)"$/\1/p' "$ROOT/$path" | head -1)
+        [[ "$doc" == "$want" ]] || { warn "docmaint: $path has DOC=\"$doc\", expected \"$want\""; rc=1; }
+        norm=$(sed -E 's/^DOC = "(todo|status|seal)"$/DOC = "X"/' "$ROOT/$path" | shasum | cut -d' ' -f1)
+        if [[ -n "$prev" && "$norm" != "$prev" ]]; then
+            warn "docmaint: $path drifted from $prev_name (copies must be identical except the DOC line) — re-sync them"
+            rc=1
+        fi
+        prev="$norm"; prev_name="$path"
+    done
+    return "$rc"
 }
 
 # ── Main ─────────────────────────────────────────────────────────

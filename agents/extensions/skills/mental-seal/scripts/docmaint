@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Thin launcher for docmaint.py. The implementation is stdlib-only Python, so no venv or
+# third-party install is needed — any python3 will do. The doc type is baked into the
+# sibling docmaint.py (its DOC constant); this launcher just finds an interpreter.
+#
+#   docmaint locate|scaffold|check|sync|stamp|print [--path P] [--root D] …
+#   docmaint check --handoff        # the gate to run before stopping / going unattended
+#   docmaint stamp --attest …       # the ONLY verb that moves semantic freshness
+#   docmaint self-test
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+script="$here/docmaint.py"
+
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 "$script" "$@"
+elif command -v python >/dev/null 2>&1 \
+     && python -c 'import sys; sys.exit(0 if sys.version_info[0] == 3 else 1)' 2>/dev/null; then
+  exec python "$script" "$@"   # only if `python` is actually Python 3
+fi
+
+echo "docmaint: requires python3 (stdlib only; no venv needed)" >&2
+exit 127

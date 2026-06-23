@@ -11,6 +11,7 @@ discharge_when: "<observable condition that releases the seal>"
 expires_if: "<condition that makes the seal stale — e.g. the user changes the goal>"
 supersedes: null          # id of the prior seal this replaced (its full record is under ## History)
 last_recalled: null       # YYYY-MM-DD — stamped ONLY during a reconcile that re-checked the seal, never on a bare recall
+last_recalled_against: null  # what that reconcile checked against (evidence) — set together with last_recalled, never alone
 ---
 
 # THE SEAL — one thing held

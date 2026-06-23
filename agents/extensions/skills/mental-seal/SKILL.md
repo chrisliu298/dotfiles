@@ -41,7 +41,7 @@ Skip it when:
 
 One file, `SEAL.md`, at the project root. A template lives beside this skill as `SEAL.template.md` — copy it (don't retype it) and fill it in. The shape:
 
-- **Frontmatter** — the lifecycle and provenance: `status`, `scope`, `set_by`, `set_at`, `priority` (one sentence), `purpose`, `end_state`, `discharge_when`, `expires_if`, `supersedes`, `last_recalled`.
+- **Frontmatter** — the lifecycle and provenance: `status`, `scope`, `set_by`, `set_at`, `priority` (one sentence), `purpose`, `end_state`, `discharge_when`, `expires_if`, `supersedes`, `last_recalled`, `last_recalled_against` (what the last reconcile checked against — set together with `last_recalled`, never alone).
 - **Litany** — the soul: a compact first-person vow, recited at set / conflict / discharge, *not* every turn. It ends in action (the path that serves the seal wins; everything else waits) — a focusing phrase, never genre cosplay.
 - **Commander's intent** — purpose, end state, and **non-goals** (the scope fence). The seal stores *intent*, not a procedure, so the agent can re-route toward the same end when the plan breaks — and re-prioritize when the user says so.
 - **If-then wards** — explicit cue→response rules ("IF about to edit/finalize → THEN check the seal"). This is the part that actually changes behavior; keep it in working memory.
@@ -93,7 +93,7 @@ Only from explicit user intent — never self-seal silently. Distill the request
 Before substantial work, **search upward from the current directory to the project/git root** for `SEAL.md` — it lives at the project root, so a bare `./SEAL.md` check misses it from a subdirectory. If it exists and `status: active`:
 
 1. Read it. Re-state the `priority` in one line to re-seat it.
-2. **Reconcile against reality** — if the code/state shows the priority is already met, or the work has moved past it, surface the drift to the user; mark `status: needs_review` rather than obeying a stale seal. (Externalized memory can be wrong — never treat the file as sacred.) Stamp `last_recalled` to today *as part of this reconcile* — only here, where you actually re-checked the seal against reality, never on a bare recall (a fresh timestamp over an unchecked seal manufactures false trust).
+2. **Reconcile against reality** — if the code/state shows the priority is already met, or the work has moved past it, surface the drift to the user; mark `status: needs_review` rather than obeying a stale seal. (Externalized memory can be wrong — never treat the file as sacred.) Stamp `last_recalled` to today *as part of this reconcile* — only here, where you actually re-checked the seal against reality, never on a bare recall (a fresh timestamp over an unchecked seal manufactures false trust). If you can run the helper, `<this-skill-dir>/scripts/docmaint stamp --attest reconciled --against "<what you checked>"` sets `last_recalled` + `last_recalled_against` together and records a checkpoint, so a later edit to the seal's substance without a fresh reconcile is caught by `docmaint check --handoff`.
 
 ### Recall (Do-Confirm at decision points)
 
@@ -106,6 +106,17 @@ If a fresh request, a discovered fact, or a tempting improvement conflicts with 
 ### Discharge
 
 When `discharge_when` is verified met, set `status: released`, add the date and the evidence, and move the full record to `## History`. **Leave the project's recall anchor in place** — it is dormant without an active `SEAL.md` and is shared per-project, not per-seal. If the user changes the priority, mark the old seal `superseded` (its record goes to `## History`, referenced by `id`) and set the new active seal. Never silently ignore an active seal, and never delete a discharged one — archive it.
+
+## Optional helper
+
+`scripts/docmaint` (beside this skill) is a stdlib-only helper that `todo`, `exec-status`, and `mental-seal` all share with the **same verbs** — `locate · scaffold · check · sync · stamp · print · self-test` (exit `0` ok · `1` stale/missing · `2` malformed). It is a pure accelerator: the seal's actual mechanism is the file on disk plus the in-context wards (the hook-free floor in *How recall survives*), and the skill works with **zero** script. `docmaint` only does the deterministic parts, and auto-locates `SEAL.md` by searching upward to the project/git root (so it works from any subdirectory):
+
+- `scaffold` — copy `SEAL.template.md` to the project root if `SEAL.md` is missing (you still fill every field by hand from explicit user intent).
+- `check [--handoff] [--strict-anchor]` — validate the lifecycle invariants: required frontmatter, a valid `status`, **exactly one active seal**, no `<placeholders>` in an active seal, and the recall-freshness checkpoint (below). The `mental-seal` anchor's presence in `CLAUDE.md`/`AGENTS.md` is a warning by default, a failure under `--strict-anchor`.
+- `sync` — refresh only a hidden, mechanical `validated_at` comment; it never touches the vow, the lifecycle fields, or `last_recalled`.
+- `stamp --attest reconciled --against "<evidence>"` — the **only** verb that moves `last_recalled`. It sets `last_recalled` to today and `last_recalled_against` from your argument, and records a content-hash checkpoint over the seal's substance — `priority`/`purpose`/`end_state`/`discharge_when`/`expires_if`/`status` and the body, with the archival `## History` section excluded (editing old records won't flag the active seal). This is how auto-stamping stays *honest*: the tool writes the date, but only inside your explicit attestation that you reconciled the seal against reality — and any later edit to that substance (even a hand-bumped `last_recalled`) makes `check --handoff` fail until you re-`stamp`. The checkpoint is **tamper-evident, not tamper-proof** (it catches honest drift, not a deliberately rewritten hidden hash). Never run it on a bare recall.
+
+The script never *invents* recall freshness — a bare `check`/`sync` will not move `last_recalled`; only an attested `stamp` does. It writes only `SEAL.md` (never the instruction-file anchor — that stays a one-time manual Setup). `docmaint self-test` verifies it. This keeps the skill universal: an agent whose harness can't run the script maintains `SEAL.md` and `last_recalled` by hand, exactly as before.
 
 ## Guardrails
 

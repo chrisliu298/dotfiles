@@ -94,6 +94,8 @@ they never have to ask "what's the status?" and only ever read the file or answe
 - **The freshness trio travels together.** Whenever you update content, also update `Fresh as of`,
   `Last checked against`, and `Out of date if`. Never bump the timestamp without re-checking the evidence
   boundary — a fresh-looking report over a stale boundary manufactures false trust, which is worse than no report.
+  If you can run the helper, `docmaint stamp --attest rechecked --checked-against … --out-of-date-if …` writes the
+  three together and records a checkpoint, so a later un-attested edit is caught by `check --handoff`.
 - **Edit the changed section in place, don't rewrite the whole file** — anchor on the section heading. That keeps
   upkeep cheap on a long run. Reserve a full rewrite for a reconcile.
 - **Full reconcile** (re-derive every line from durable state): on start/resume, at a phase boundary
@@ -148,20 +150,34 @@ let each file keep its own job.
 
 ## Optional helper
 
-`scripts/status_check.py` (in this skill's own directory) does only the deterministic parts — never prose:
+`scripts/docmaint` (in this skill's own directory) is a stdlib-only helper that `todo`, `exec-status`, and
+`mental-seal` all share with the **same verbs** — `locate · scaffold · check · sync · stamp · print · self-test`
+(exit `0` ok · `1` stale/missing · `2` malformed). It does only the deterministic parts — never prose — and
+auto-locates `STATUS.md` by searching upward to the project/git root (pass `--path` for a run-specific file below the
+repo root):
 
-- `scaffold [path]` — write the template to `STATUS.md` if it's missing.
-- `check [path] [--max-age-min N]` — verify the required sections (including `For the AI`) and freshness fields are
-  present, the `Health` value is valid, no `<placeholders>` remain, and the report hasn't bloated (warns past ~one
-  screen, fails past ~2×). With `--max-age-min` it also warns if `Fresh as of` is older than N minutes (off by
-  default, since this skill is event-driven); it also warns (nonfatally) if a filled findings section names no
-  `Checked against:` handle or `Confidence:` label. Exits non-zero on a structural problem, so run it as a handoff
-  gate — before you leave the run unattended or after a full reconcile, not as routine ceremony:
-  `python <this-skill-dir>/scripts/status_check.py check ./STATUS.md`.
+- `scaffold` — write the template to `STATUS.md` if it's missing.
+- `check [--handoff] [--required] [--max-lines N]` — verify the required sections (including `For the AI`) and
+  freshness fields are present, `Health` is valid, no `<placeholders>` remain, and the report hasn't bloated (warns
+  past ~one screen, fails past ~2×); warns (nonfatally) when a finding names no `Checked against:` handle or
+  `Confidence:` label. It also checks the **freshness checkpoint** (below): a stale or never-attested `Fresh as of`
+  is a warning by default, a **failure under `--handoff`**. Run `docmaint check --handoff` as the gate before you
+  leave the run unattended or after a full reconcile — not as routine ceremony.
+- `sync` — refresh only a hidden, mechanical `validated_at` comment after structure passes; it never touches prose or
+  the visible freshness fields.
+- `stamp --attest rechecked --checked-against "<evidence>" --out-of-date-if "<condition>"` — the **only** verb that
+  moves `Fresh as of`. It sets the whole freshness trio together (`Fresh as of` → now, plus `Last checked against`
+  and `Out of date if` — both required, so the trio can't half-update) and records a content-hash checkpoint over
+  the report, *including the visible `Fresh as of`*. This is how auto-stamping stays *honest*: the tool writes the
+  timestamp, but only inside your explicit attestation that you re-checked the evidence — and any later edit (even a
+  hand-bumped timestamp) makes `check --handoff` fail until you re-`stamp`. The checkpoint is **tamper-evident, not
+  tamper-proof**: it catches honest drift and accidental edits, not an agent that deliberately recomputes and
+  rewrites the hidden hash. Run it only after you have actually re-checked the evidence boundary.
 
-The skill works without the script — it's a convenience, not a dependency. Write the `Fresh as of` time yourself
-(e.g. from `date`); there's deliberately no auto-stamp, because a timestamp must only move when you've re-checked
-the evidence boundary alongside it.
+The skill works without the script — it's an accelerator, not the mechanism: the format above is documented, so an
+agent that can't run it maintains `STATUS.md` by hand (write the freshness trio yourself, moving the timestamp only
+when you re-checked the boundary). The script never *invents* freshness — a bare `check`/`sync` will not move `Fresh
+as of`; only an attested `stamp` does. `docmaint self-test` verifies the helper.
 
 ## Surviving a long run
 
