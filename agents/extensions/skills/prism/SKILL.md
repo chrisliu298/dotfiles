@@ -236,7 +236,7 @@ Write this to `/tmp/prism-<unique-id>.md` with the Write tool (one call, before 
 
 ## Context
 
-{Shared evidence packet. Identical across all agents.}
+{Shared evidence packet. Identical across all agents. Nest ALL domain content here as `###` subsections — background, constraints, sub-questions, lens notes. `## Full Question` and `## Context` are the only top-level `##` sections you author.}
 
 ### Reference Materials
 
@@ -250,7 +250,7 @@ Write this to `/tmp/prism-<unique-id>.md` with the Write tool (one call, before 
 {Name the EXACT question(s) each agent must research independently, plus any common-floor sources. Do NOT front-load findings. See the Independent research rule.}
 ```
 
-`prepare` appends the canonical blocks (from `templates/shared-{constraints,how-to-answer,grounding}.md`) only if absent — idempotent, so a re-run won't double any. (Supply your own `##` section to override; Constraints additionally **fails closed** if a bespoke block drops the anti-recursion guard — How-to-answer and Grounding carry no such safety load.) The packet is **frozen** once `prepare` runs — do not modify it after, since dispatched agents read it live.
+`prepare` appends the canonical blocks (`templates/shared-{constraints,how-to-answer,grounding}.md`) only when absent — idempotent, so re-runs never double them. **It keys on the section prefix, so those three reserved `##` names collide even when extended: `## Constraints on the program` still clashes. A collision either fails closed (Constraints' anti-recursion check) or *silently* drops the canonical block, losing the `## Digest` instruction agents need (How to answer / Grounding). Keep domain content under `## Context` as `###` subsections.** To override one deliberately, author that exact `##` yourself — Constraints **fails closed** without the anti-recursion guard. The packet is **frozen** after `prepare` runs; agents read it live.
 
 Launcher prompts are committed templates in `templates/` with `{{PLACEHOLDER}}` slots filled by `prism-launch` (one relay template per prompting style, selected by `relay/peers.json`'s `template` field; anti-recursion is the first line of every template). Don't hand-regenerate them. (Adding a peer/template is a `peers.json` + `lens-catalog.json` change — see README.)
 
