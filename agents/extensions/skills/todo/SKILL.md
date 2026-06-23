@@ -62,6 +62,31 @@ The frontmatter is the orientation block: `task` is the one-line goal, `started_
 
 Items are markdown checkboxes, one line each. Inline blockers as `— blocked on …` rather than nested bullets — the file should stay scannable when it grows long. New work uncovered during a session goes to `## To Do`.
 
+### Overview block (auto-derived)
+
+Directly after the frontmatter, `TODO.md` may carry an auto-derived **Overview** — a fixed-size, human-facing snapshot of the checklist, fenced by HTML-comment markers:
+
+```markdown
+<!-- TODO-OVERVIEW:BEGIN input_sha=8f31c7e0d2b4 rendered_at=2026-05-07T18:42-07:00 -->
+## Overview
+**Progress:** 6/14 done (43%) `[####------]` · 3 in progress · 5 to do
+**Areas:** Backend 4/6 (67%) · SDK 1/5 (20%) · Infra 1/3 (33%) · Other 0/0
+**Needs attention:** 2 — Backend: callback handler blocked on infra #4821; SDK: waiting on human deprecation-window choice
+**Recent:** latest 2026-05-02 Provision IdP app · started 2026-05-01 · last touched 2026-05-07 · 6-day span
+<!-- TODO-OVERVIEW:END -->
+```
+
+It is **derived, not authored** — a projection of the checkboxes below, never a second source of truth. Don't hand-edit anything between the markers; fix the checklist and re-render (see The discipline). The render script owns only the marked region — everything below `:END` is your hand-maintained checklist, echoed back untouched.
+
+**Area tags.** Items may carry one optional trailing `#area/<slug>` tag for the per-area tally:
+
+```markdown
+- [ ] Wire up callback handler — blocked on infra ticket #4821 #area/backend
+- [x] 2026-05-02 — Provision IdP app #area/infra
+```
+
+The slug renders title-cased, so write it uppercase (`#area/SDK`) to keep it uppercase. Tags are optional and append-only — one token, no extra line; untagged items still count toward totals under **Other**. Use `#area/` (not a bare `#backend`) so it can't be confused with issue refs like `#4821`. Keep areas few and broad — they're an at-a-glance grouping, not a subsystem taxonomy.
+
 ## The discipline
 
 ### Bootstrap (session start)
@@ -72,11 +97,15 @@ Before doing any other work, read `./TODO.md`. If it exists:
 2. Reconcile the In Progress item against the actual state of the code. If Done claims something shipped but the codebase shows otherwise, surface the drift to the user before proceeding — don't silently re-execute work, and don't assume the file is wrong
 3. Confirm briefly with the user what to pick up first
 
+If your harness can run shell commands, run `<this-skill-dir>/scripts/todo-overview check ./TODO.md`; if it reports the Overview is stale or missing (e.g. the checklist was hand-edited), run `<this-skill-dir>/scripts/todo-overview write ./TODO.md` before trusting the numbers. If you can't run the script, keep the checklist correct and treat the Overview as possibly stale.
+
 If it doesn't exist and the work qualifies as long-running, create it. Seed `## In Progress` with the immediate next step and `## To Do` with the rest of what the user described.
 
 ### Work (during the session)
 
 When starting a To Do item, move it to In Progress. When understanding shifts or a blocker appears, append a one-line note to the In Progress item. When you uncover new work, add it to To Do. Flush updates regularly rather than batching them to the end of the session — sudden compaction or an unexpected interruption shouldn't lose state.
+
+After each flush, re-render the Overview: `<this-skill-dir>/scripts/todo-overview write ./TODO.md`. It's mechanical and idempotent — it rewrites only the Overview block from the current checkboxes, and does nothing when they haven't changed. Never hand-edit the Overview to make it read better; fix the checkbox line instead.
 
 ### Close (session end or compaction warning)
 
@@ -85,6 +114,7 @@ Before stopping, when the user signals they're wrapping up, or when context star
 1. Move completed items from In Progress to Done with a `YYYY-MM-DD —` prefix
 2. Update `last_session` in the frontmatter
 3. Write the file
+4. Re-render the Overview: `<this-skill-dir>/scripts/todo-overview write ./TODO.md`
 
 Don't wait for the user to ask. The file is only useful if it's current when the session ends.
 
@@ -94,6 +124,9 @@ Don't wait for the user to ask. The file is only useful if it's current when the
 - **Markdown checkboxes** read equally well to the model parsing the file and to a human scanning it directly. No format surprises.
 - **Date-stamped Done** acts as a long-form audit trail — when work spans weeks, it's useful to see what shipped when, and to bisect when something regressed.
 - **Frontmatter dates** let the model see at a glance whether this is a two-day or two-month effort, which informs how aggressively to rely on the file as ground truth.
+- **The Overview is derived, not authored.** A script projects progress, per-area tallies, blockers, and time-sense from the same checkboxes, so a human gets the global picture at the top of the file while the numbers can't drift from reality — and the one-line-per-item authoring discipline is untouched (the block is generated, never hand-written).
+- **Area tags are optional, single-line metadata.** `#area/<slug>` adds grouping without sub-headings, a frontmatter registry, or multi-line items; untagged items stay valid and roll into Other.
+- **The script is an accelerator, not the mechanism.** The Overview's format is documented above, so an agent whose harness can't run the script can hand-render it or skip it — the skill stays portable across Claude, Codex, and Grok. Run `<this-skill-dir>/scripts/todo-overview self-test` to verify the renderer.
 
 ## Gotchas
 
@@ -102,3 +135,7 @@ Don't wait for the user to ask. The file is only useful if it's current when the
 - **Don't auto-create on small tasks.** The description leans pushy because under-triggering is the bigger risk, but a single bug fix doesn't need a TODO.md. If the work fits comfortably in one session and won't be revisited, skip the file.
 - **Don't shadow the native task list.** In-session steps belong in `TaskCreate` / `TodoWrite`. `TODO.md` is for items that need to outlast the conversation. Using both at the right altitude is the goal, not picking one.
 - **Don't place it outside the project root.** If `pwd` is `$HOME`, a tmp dir, or a directory with no recognizable project boundary, ask the user where the file should live before creating anything.
+- **Don't hand-edit the Overview block.** Everything between the `TODO-OVERVIEW` markers is regenerated from the checkboxes; edits there are overwritten. Fix the checkbox, date, blocker note, or area tag, then re-render.
+- **Don't over-tag.** Areas are a few broad themes for an at-a-glance scan — if every item needs its own area, the tally stops helping. And use `#area/<slug>`, never a bare `#tag` (it collides with issue refs like `#4821`).
+- **Don't let the Overview become a second `STATUS.md`.** It stays todo-internal — counts, areas, blockers, recency. Plain-English stakeholder interpretation belongs in `exec-status`/`STATUS.md`.
+- **Re-render after edits; re-check on resume.** If `todo-overview check` flags the block stale (e.g. someone hand-edited the checklist), run `write` before relying on the numbers.

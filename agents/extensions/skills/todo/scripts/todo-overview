@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Thin launcher for todo_overview.py. The renderer is stdlib-only Python, so no
+# venv or third-party install is needed — any python3 will do. Usage:
+#   todo-overview write|check|print ./TODO.md
+#   todo-overview self-test
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+script="$here/todo_overview.py"
+
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 "$script" "$@"
+elif command -v python >/dev/null 2>&1; then
+  exec python "$script" "$@"
+fi
+
+echo "todo-overview: requires python3 (stdlib only; no venv needed)" >&2
+exit 127
