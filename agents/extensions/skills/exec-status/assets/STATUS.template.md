@@ -17,6 +17,7 @@ If nothing is wrong, name what has NOT been tested or proven yet, so "all clear"
 - <…keep to about 3; gloss every model/dataset/method/metric name the first time it appears>
 
 ## Where we are
+- Progress: <OPTIONAL — include only when the run has a finite, decision-relevant scope. One line, no sub-bullets; count outcomes not activity ("3 of 4 gates passed", never "ran 47 commands"); point at the operator checklist instead of pasting its rows, e.g. "7 of 10 services migrated; the 3 remaining include the only high-risk one. Full checklist: TODO.md". OMIT entirely for open-ended/exploratory work — a forced or stale count manufactures false precision.>
 - Done: <highest-level completed milestone, in plain words>
 - Now: <current activity; say plainly if waiting on a long-running job>
 - Next: <next meaningful step or decision>
@@ -32,6 +33,7 @@ Out of date if: <the next durable event, threshold, or result that could change 
 - Update whenever the answer a stakeholder would give changes: a finding lands / is reproduced / is overturned, a phase or experiment completes, a blocker appears or clears, or Health would change. Skip routine commands that change nothing a stakeholder cares about.
 - Edit the section that changed in place (don't rewrite the whole file) and move the three freshness lines (Fresh as of / Last checked against / Out of date if) together — never bump the time without re-checking the evidence boundary. Full reconcile on resume, at phase boundaries, and when control returns from a long command.
 - Keep it plain and small: gloss every model/dataset/method/metric on first use, never paste logs or tables, prefer UNKNOWN to optimism. This is a one-screen snapshot you overwrite, not a log — replace stale findings (keep ~3), don't accumulate, and never add a history section.
+- The `Progress:` line in `Where we are` is optional: keep it only when scope is finite and decision-relevant, count CEO-relevant outcomes, cite the durable source of truth, and never duplicate `TODO.md`, experiment tables, logs, or history. Drop it for open-ended work — a stale count is false precision, and detailed per-item counting belongs in `todo`/`TODO.md`, not here.
 - Health: default toward WATCH/UNKNOWN and treat ON TRACK/DONE as claims that must be earned (an always-green run is a warning sign). ON TRACK only with an explicit success criterion met by current evidence; WATCH for mixed/thin evidence; BLOCKED when stuck; DONE when the goal is met and verified; UNKNOWN when the goal/baseline/eval isn't established. Confidence on a finding: early = seen once; moderate = reproduced once or corroborated; strong = reproduced under the intended comparison and not contradicted.
 - Check before trusting/continuing: <files or commands, e.g. results.tsv, run.log, git log --oneline -5>
 - Keep this section current as the evidence boundary shifts (new files, commands, or checkpoints).

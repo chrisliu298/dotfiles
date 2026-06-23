@@ -124,6 +124,13 @@ they never have to ask "what's the status?" and only ever read the file or answe
 - **Translate, don't duplicate.** If `autoresearch.md` / `TODO.md` already hold the technical state, lift the
   *meaning* into plain outcomes — don't paste experiment rows or checklist items, and don't keep two copies of a
   fact that will drift. Point at the other file instead.
+- **At most one `Progress:` line — never a checklist.** `## Where we are` may carry a single optional `Progress:`
+  line, but only when the run has a finite, decision-relevant scope (e.g. `7 of 10 services migrated; the 3 left
+  include the only high-risk one — full checklist in TODO.md`). Count *outcomes, not activity* ("3 of 4 gates
+  passed", never "ran 47 commands"); keep it to one line with no sub-bullets — the moment it wants nesting or
+  per-item status it has become an operator checklist and belongs in `todo`/`TODO.md`, not here. Cite the durable
+  source in `Last checked against:`, and **omit the line entirely** for open-ended or exploratory work, where a
+  forced or stale count manufactures the false precision this section exists to avoid.
 - **The busy test.** If a sentence only proves you *were busy* rather than what it means for the reader's next
   decision, cut it — outcomes and their decision implications only, never activity for its own sake.
 - **One screen, and a snapshot — not a log.** It's a fixed-size briefing you overwrite, never a growing record: when a
