@@ -152,7 +152,7 @@ let each file keep its own job.
 
 `scripts/docmaint` (in this skill's own directory) is a stdlib-only helper that `todo`, `exec-status`, and
 `mental-seal` all share with the **same verbs** — `locate · scaffold · check · sync · stamp · print · self-test`
-(exit `0` ok · `1` stale/missing · `2` malformed). It does only the deterministic parts — never prose — and
+(exit `0` ok · `1` stale under `--handoff` / missing under `--required` · `2` malformed). It does only the deterministic parts — never prose — and
 auto-locates `STATUS.md` by searching upward to the project/git root (pass `--path` for a run-specific file below the
 repo root):
 

@@ -58,7 +58,7 @@ last_session: 2026-05-03
 - [x] 2026-05-02 — Provision IdP app
 ```
 
-The frontmatter is the orientation block: `task` is the one-line goal, `started_at` is when work began, `last_session` is the most recent session date in `YYYY-MM-DD`. Update `last_session` whenever you flush state to the file — or run `docmaint stamp --attest flush` (see The discipline), which sets it to today and re-renders the Overview in one step.
+The frontmatter is the orientation block: `task` is the one-line goal, `started_at` is when work began, `last_session` is the most recent session date in `YYYY-MM-DD`. Update `last_session` whenever you flush state to the file — or run `docmaint stamp --attest flushed` (see The discipline), which sets it to today and re-renders the Overview in one step.
 
 Items are markdown checkboxes, one line each. Inline blockers as `— blocked on …` rather than nested bullets — the file should stay scannable when it grows long. New work uncovered during a session goes to `## To Do`.
 
@@ -97,7 +97,7 @@ Before doing any other work, read `./TODO.md`. If it exists:
 2. Reconcile the In Progress item against the actual state of the code. If Done claims something shipped but the codebase shows otherwise, surface the drift to the user before proceeding — don't silently re-execute work, and don't assume the file is wrong
 3. Confirm briefly with the user what to pick up first
 
-If your harness can run shell commands, use the `docmaint` helper (`<this-skill-dir>/scripts/docmaint`) — a stdlib-only script that `todo`, `exec-status`, and `mental-seal` all share with the **same verbs**: `locate · scaffold · check · sync · stamp · print · self-test` (exit `0` ok · `1` stale/missing · `2` malformed). It auto-locates `TODO.md` by searching upward to the project/git root, so you can call it from any subdirectory. On bootstrap run `docmaint check`; if it reports the Overview stale or missing (e.g. the checklist was hand-edited), run `docmaint sync` before trusting the numbers. If you can't run the script, keep the checklist correct and treat the Overview as possibly stale.
+If your harness can run shell commands, use the `docmaint` helper (`<this-skill-dir>/scripts/docmaint`) — a stdlib-only script that `todo`, `exec-status`, and `mental-seal` all share with the **same verbs**: `locate · scaffold · check · sync · stamp · print · self-test` (exit `0` ok · `1` stale under `--handoff` / missing under `--required` · `2` malformed). It auto-locates `TODO.md` by searching upward to the project/git root, so you can call it from any subdirectory. On bootstrap run `docmaint check` — a bare `check` *warns* on a stale/missing Overview but still exits `0`; `check --handoff` makes staleness a failure. If it flags the Overview stale or missing, run `docmaint sync` before trusting the numbers. If you can't run the script, keep the checklist correct and treat the Overview as possibly stale.
 
 If it doesn't exist and the work qualifies as long-running, create it. Seed `## In Progress` with the immediate next step and `## To Do` with the rest of what the user described.
 
@@ -112,7 +112,7 @@ After each flush, re-render the Overview: `<this-skill-dir>/scripts/docmaint syn
 Before stopping, when the user signals they're wrapping up, or when context starts filling up:
 
 1. Move completed items from In Progress to Done with a `YYYY-MM-DD —` prefix
-2. Flush the session: `<this-skill-dir>/scripts/docmaint stamp --attest flush` — sets `last_session` to today and re-renders the Overview in one step (or update `last_session` by hand, then `docmaint sync`)
+2. Flush the session: `<this-skill-dir>/scripts/docmaint stamp --attest flushed` — sets `last_session` to today and re-renders the Overview in one step (or update `last_session` by hand, then `docmaint sync`)
 3. Run the gate: `<this-skill-dir>/scripts/docmaint check --handoff` — exits non-zero if the Overview is stale, so a broken handoff is loud rather than silent
 
 Don't wait for the user to ask. The file is only useful if it's current when the session ends.

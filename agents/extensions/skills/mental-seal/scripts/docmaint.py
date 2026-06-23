@@ -59,10 +59,12 @@ CONTRACT = "docmaint/1 verbs=locate,scaffold,check,sync,stamp,print,self-test ex
 VERBS = ("locate", "scaffold", "check", "sync", "stamp", "print", "self-test")
 
 DOC_CONFIG = {
-    "todo":   {"filename": "TODO.md",   "attest": "flush",      "frontmatter": True},
+    # attest kinds are all past-tense (flushed/rechecked/reconciled) so the grammar is parallel.
+    "todo":   {"filename": "TODO.md",   "attest": "flushed",    "frontmatter": True},
     "status": {"filename": "STATUS.md", "attest": "rechecked",  "frontmatter": False},
     "seal":   {"filename": "SEAL.md",   "attest": "reconciled", "frontmatter": True},
 }
+ATTEST_ALIASES = {"flush": "flushed"}  # back-compat for the pre-rename kind
 
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATE_PATH = {
@@ -265,7 +267,8 @@ def parse_meta(text):
 
 
 def render_meta(meta):
-    parts = " ".join("%s=%s" % (k, meta[k]) for k in ("validated_at", "attested_at", "freshness_sha") if meta.get(k))
+    keys = ("validated_at", "validated_sha", "attested_at", "freshness_sha")
+    parts = " ".join("%s=%s" % (k, meta[k]) for k in keys if meta.get(k))
     return "<!-- DOCMAINT %s -->" % parts
 
 
@@ -510,7 +513,7 @@ def check_status(path, problems, warnings, opts):
     if "Confidence:" not in text:
         warnings.append("findings have no 'Confidence:' label")
     n_lines = text.count("\n") + 1
-    ml = opts.get("max_lines", 60)
+    ml = opts.get("max_lines") or 60
     if n_lines > ml * 2:
         problems.append("bloated: %d lines (>%d) — a STATUS.md is a fixed-size snapshot" % (n_lines, ml * 2))
     elif n_lines > ml:
@@ -594,17 +597,22 @@ def sync_doc(doc, path):
     if any(p for p in problems if "stale" not in p and "never attested" not in p):
         raise DocError("refusing to sync — structure invalid: %s" % problems[0])
     text = read_file(path)
-    new = upsert_meta(text, validated_at=now_iso())
-    if new != text:
-        write_file(path, new)
-    return "ok", "validated; mechanical validated_at stamped (semantic freshness untouched — use `stamp`)"
+    body_sha = sha12(_normalize(strip_meta(text)))
+    meta = parse_meta(text)
+    # Idempotent like todo's sync: move validated_at only when the body changed since it was set,
+    # so re-running sync on unchanged content is a no-op (no churn).
+    if meta.get("validated_at") and meta.get("validated_sha") == body_sha:
+        return "ok", "validated; up to date (semantic freshness untouched — use `stamp`)"
+    write_file(path, upsert_meta(text, validated_at=now_iso(), validated_sha=body_sha))
+    return "changed", "validated; validated_at stamped (semantic freshness untouched — use `stamp`)"
 
 
 # ── per-doc stamp (the ONLY verb that moves semantic freshness) ───────────────
 
 def stamp_doc(doc, path, args):
     want = cfg(doc)["attest"]
-    if args.get("attest") != want:
+    got = ATTEST_ALIASES.get(args.get("attest"), args.get("attest"))
+    if got != want:
         raise DocError("%s stamp needs --attest %s (got %r)" % (doc, want, args.get("attest")))
     if doc == "todo":
         return _stamp_todo(path)
@@ -639,26 +647,33 @@ def _stamp_todo(path):
 
 
 def _stamp_status(path, args):
-    # The freshness trio travels together — require both evidence args so a stamp can't half-update it.
-    if not args.get("checked_against") or not args.get("out_of_date_if"):
+    # The freshness trio travels together — require both evidence args (non-empty) so a stamp can't
+    # half-update it or record an empty-but-valid-looking attestation.
+    checked = (args.get("checked_against") or "").strip()
+    ood = (args.get("out_of_date_if") or "").strip()
+    if not checked or not ood:
         raise DocError("status stamp needs --checked-against \"<evidence>\" AND --out-of-date-if \"<condition>\" (the freshness trio travels together)")
     text = read_file(path)
     if not (FRESH_VAL_RE.search(text) and CHECKED_VAL_RE.search(text) and OOD_VAL_RE.search(text)):
         raise DocError("can't find the freshness trio lines (Fresh as of / Last checked against / Out of date if) — scaffold or fix structure first")
     text = FRESH_VAL_RE.sub(lambda m: "%s%s" % (m.group(1), now_human()), text, count=1)
-    text = CHECKED_VAL_RE.sub(lambda m: "%s%s" % (m.group(1), args["checked_against"]), text, count=1)
-    text = OOD_VAL_RE.sub(lambda m: "%s%s" % (m.group(1), args["out_of_date_if"]), text, count=1)
+    text = CHECKED_VAL_RE.sub(lambda m: "%s%s" % (m.group(1), checked), text, count=1)
+    text = OOD_VAL_RE.sub(lambda m: "%s%s" % (m.group(1), ood), text, count=1)
     text = upsert_meta(text, attested_at=now_iso(), freshness_sha=freshness_sha("status", text))
     write_file(path, text)
-    return "changed", "attested: Fresh as of=%s; freshness trio + checkpoint recorded" % now_human()
+    return "changed", "rechecked: Fresh as of=%s; freshness trio + checkpoint recorded" % now_human()
 
 
 def _stamp_seal(path, args):
-    if not args.get("against"):
-        raise DocError("seal stamp needs --against \"<what you reconciled against>\"")
+    # accept bare or pre-quoted, reject empty/whitespace (no empty-but-valid-looking attestation),
+    # and neutralize embedded double-quotes so the YAML value stays valid + round-trips.
+    against = (args.get("checked_against") or "").strip().strip('"').strip()  # --checked-against (alias --against)
+    if not against:
+        raise DocError("seal stamp needs --checked-against \"<what you reconciled against>\" (alias: --against)")
+    against = against.replace('"', "'")
     text = read_file(path)
     text = _set_frontmatter_field(text, "last_recalled", today())
-    text = _set_frontmatter_field(text, "last_recalled_against", '"%s"' % args["against"])
+    text = _set_frontmatter_field(text, "last_recalled_against", '"%s"' % against)
     text = upsert_meta(text, attested_at=now_iso(), freshness_sha=freshness_sha("seal", text))
     write_file(path, text)
     return "changed", "reconciled: last_recalled=%s; checkpoint recorded" % today()
@@ -717,11 +732,13 @@ def parse_args(argv):
         raise DocError("usage: docmaint <%s> [--path P] [--root D] …" % "|".join(VERBS))
     verb = argv[0]
     opts = {"path": None, "root": None, "force": False, "required": False, "handoff": False,
-            "strict_anchor": False, "max_lines": 60, "attest": None, "checked_against": None,
-            "out_of_date_if": None, "against": None}
+            "strict_anchor": False, "max_lines": None, "attest": None, "checked_against": None,
+            "out_of_date_if": None}
     val_flags = {"--path": "path", "--root": "root", "--attest": "attest",
                  "--checked-against": "checked_against", "--out-of-date-if": "out_of_date_if",
-                 "--against": "against"}
+                 # --against is a back-compat ALIAS for --checked-against (seal stamp), so the
+                 # evidence-boundary flag has ONE name across status and seal.
+                 "--against": "checked_against"}
     bool_flags = {"--force": "force", "--required": "required", "--handoff": "handoff",
                   "--strict-anchor": "strict_anchor"}
     i = 1
@@ -751,6 +768,17 @@ def run(doc, argv):
         return run_self_test()
     if verb not in VERBS:
         raise DocError("unknown verb %r — one of %s" % (verb, ", ".join(VERBS)))
+
+    # Reject flags that don't apply to THIS doc, rather than silently swallowing them — a flag
+    # accepted-but-ignored is a divergence in disguise that trains agents to assume uniformity.
+    if opts.get("max_lines") is not None and doc != "status":
+        raise DocError("--max-lines applies only to STATUS.md (exec-status)")
+    if opts.get("strict_anchor") and doc != "seal":
+        raise DocError("--strict-anchor applies only to SEAL.md (mental-seal)")
+    if opts.get("out_of_date_if") and doc != "status":
+        raise DocError("--out-of-date-if applies only to STATUS.md (exec-status)")
+    if opts.get("checked_against") and doc == "todo":
+        raise DocError("todo stamp takes no evidence flag — use `--attest flushed` alone")
 
     path, exists = locate(doc, opts["path"], opts["root"])
 
@@ -838,8 +866,9 @@ def run_self_test():
     probs = []; check_todo(tp, probs, [], {"handoff": True}); ok(not probs, "fresh todo should pass")
     write_file(tp,t1.replace("- [ ] Rollback notes", "- [x] 2026-05-08 — Rollback notes"))
     probs = []; check_todo(tp, probs, [], {"handoff": True}); ok(probs, "edited todo should be stale under handoff")
-    s, _r = stamp_doc("todo", tp, {"attest": "flush"}); ok(s == "changed", "todo flush stamp")
-    ok("last_session: %s" % today() in open(tp).read(), "todo flush should set last_session")
+    s, _r = stamp_doc("todo", tp, {"attest": "flushed"}); ok(s == "changed", "todo flushed stamp")
+    ok("last_session: %s" % today() in open(tp).read(), "todo flushed should set last_session")
+    ok(stamp_doc("todo", tp, {"attest": "flush"})[0] == "changed", "flush is accepted as an alias for flushed")
 
     # ---- status ----
     sp = os.path.join(d, "STATUS.md")
@@ -856,7 +885,8 @@ def run_self_test():
     ok(any("never attested" in w for w in warns), "status should warn freshness not attested")
     probs = []; check_status(sp, probs, [], {"handoff": True})
     ok(any("never attested" in p for p in probs), "unattested status should FAIL under handoff")
-    s, _r = sync_doc("status", sp); ok(s == "ok", "status sync ok")
+    s, _r = sync_doc("status", sp); ok(s == "changed", "first status sync writes validated_at -> changed")
+    ok(sync_doc("status", sp)[0] == "ok", "second status sync is idempotent -> ok (no churn)")
     ok("validated_at=" in open(sp).read(), "status sync should write mechanical validated_at")
     ok("Fresh as of: 2026-06-17 14:32 PT" in open(sp).read(), "status sync must NOT move Fresh as of")
     s, _r = stamp_doc("status", sp, {"attest": "rechecked", "checked_against": "exp 23, commit abc",
@@ -890,7 +920,7 @@ def run_self_test():
     probs, warns = [], []; check_seal(sealp, probs, warns, {"handoff": False})
     ok(not probs, "valid seal should pass structure: %s" % probs)
     ok(any("never attested" in w for w in warns), "seal should warn freshness not attested")
-    s, _r = stamp_doc("seal", sealp, {"attest": "reconciled", "against": "tests pass at commit abc"})
+    s, _r = stamp_doc("seal", sealp, {"attest": "reconciled", "checked_against": "tests pass at commit abc"})
     ok(s == "changed", "seal stamp")
     txt = open(sealp).read()
     ok("last_recalled: %s" % today() in txt, "seal stamp should set last_recalled")
@@ -948,7 +978,7 @@ def run_self_test():
         "---\nid: x\nstatus: active\nscope: project\nset_by: user\nset_at: 2026-06-23\n"
         "priority: \"Ship\"\npurpose: \"x\"\nend_state: \"x\"\ndischarge_when: \"x\"\nexpires_if: \"x\"\n"
         "supersedes: null\nlast_recalled: null\n---\n\n# S\n## If-then wards\n- IF x THEN y\n## History\n")
-    stamp_doc("seal", sealp, {"attest": "reconciled", "against": "checked"})
+    stamp_doc("seal", sealp, {"attest": "reconciled", "checked_against": "checked"})
     after = open(sealp).read()
     probs = []; check_seal(sealp, probs, [], {"handoff": True}); ok(not probs, "freshly stamped seal passes")
     write_file(sealp, after.replace("## History", "## History\n- 2026-01-01-old — released 2026-01-02 — priority: \"old\""))
@@ -980,6 +1010,42 @@ def run_self_test():
         stamp_doc("status", sp, {"attest": "rechecked", "checked_against": "x"}); ok(False, "status stamp without --out-of-date-if must raise")
     except DocError:
         ok(True, "")
+
+    # --- interface-consistency regressions (the audit's findings) ---
+    # the evidence-boundary flag has ONE canonical name across status+seal; --against is an alias
+    ok(parse_args(["stamp", "--attest", "reconciled", "--against", "x"])[1]["checked_against"] == "x",
+       "--against must alias to checked_against")
+    ok(parse_args(["stamp", "--attest", "rechecked", "--checked-against", "y"])[1]["checked_against"] == "y",
+       "--checked-against parses")
+    # misapplied flags are REJECTED (loud), not silently ignored
+    for dc, av in (("todo", ["check", "--max-lines", "5"]), ("seal", ["check", "--max-lines", "5"]),
+                   ("todo", ["check", "--strict-anchor"]), ("status", ["check", "--strict-anchor"]),
+                   ("seal", ["stamp", "--attest", "reconciled", "--out-of-date-if", "z"]),
+                   ("todo", ["stamp", "--attest", "flushed", "--checked-against", "z"])):
+        try:
+            run(dc, av); ok(False, "misapplied flag must be rejected: %s %s" % (dc, av))
+        except DocError:
+            ok(True, "")
+    # seal evidence value is YAML-quoted exactly once (a pre-quoted arg is not double-quoted)
+    sq = os.path.join(d, "SEALQ.md")
+    write_file(sq, "---\nid: q\nstatus: active\nscope: project\nset_by: user\nset_at: 2026-06-23\n"
+        "priority: \"P\"\npurpose: \"x\"\nend_state: \"x\"\ndischarge_when: \"x\"\nexpires_if: \"x\"\n"
+        "supersedes: null\nlast_recalled: null\n---\n\n# S\n## If-then wards\n- IF x THEN y\n## History\n")
+    stamp_doc("seal", sq, {"attest": "reconciled", "checked_against": '"pre-quoted"'})
+    ok('last_recalled_against: "pre-quoted"' in open(sq).read(), "seal must YAML-quote evidence exactly once")
+    # empty/whitespace evidence must NOT pass as an attestation (no empty-but-valid-looking stamp)
+    for dc, a in (("seal", {"attest": "reconciled", "checked_against": "   "}),
+                  ("status", {"attest": "rechecked", "checked_against": "  ", "out_of_date_if": "x"}),
+                  ("status", {"attest": "rechecked", "checked_against": "x", "out_of_date_if": "  "})):
+        try:
+            stamp_doc(dc, sq if dc == "seal" else sp, a); ok(False, "empty evidence must be rejected (%s)" % dc)
+        except DocError:
+            ok(True, "")
+    # seal evidence with embedded double-quotes stays valid YAML (round-trips without truncation)
+    stamp_doc("seal", sq, {"attest": "reconciled", "checked_against": 'commit "abc" passes'})
+    _fm = parse_frontmatter(split_frontmatter(open(sq).read())[0])
+    ok(_fm.get("last_recalled_against", "").endswith("passes"),
+       "embedded-quote evidence must round-trip without truncation: %r" % _fm.get("last_recalled_against"))
 
     import shutil
     shutil.rmtree(d, ignore_errors=True)
