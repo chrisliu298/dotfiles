@@ -842,6 +842,173 @@ grep -qF '## Digest' "$HTA" \
 [ "$(jq -r '."grok-build".effort_values[-1]' "$PJ")" = "high" ] \
   && ok "contract: grok-build effort_values[-1] is the top tier (high)" || bad "contract: grok-build effort_values ordering ([-1] != high)"
 
+echo "== Include: file front door =="
+INCD="$TMP/incsrc"; mkdir -p "$INCD"
+printf 'alpha contents\n' > "$INCD/a.md"
+printf 'beta contents\n'  > "$INCD/b.md"
+printf 'SECRET=zzz\n'      > "$INCD/.env"
+# minimal partial-roster dispatch carrying Include:
+inc_dispatch() {  # <packet> <extra-records-file-or-empty> ... writes a dispatch on stdout
+  local pkt="$1"; shift
+  printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "test"\n' "$pkt"
+  cat
+}
+# 1) happy path: two explicit files → resolves, generates region, sets references
+PKI="$TMP/inc1.md"; make_packet "$PKI"
+{ inc_dispatch "$PKI" <<EOF
+Include: $INCD/a.md
+Include: $INCD/b.md
+
+Type: subagent
+Lens: Simplicity
+Lens-Desc: weigh fewest moving parts
+EOF
+} > "$TMP/inc1.dispatch"
+expect_ok "Include: two explicit files prepares" "$LAUNCH" prepare --dispatch "$TMP/inc1.dispatch"
+grep -q 'PRISM-INCLUDE-START' "$PKI" \
+  && ok "Include: generates the managed ### Reference Materials region" || bad "Include: no generated region"
+[ "$(jq -r '.references|length' "$TMP/inc1-config.normalized.json")" = "2" ] \
+  && ok "Include: sets config.references to the resolved set" || bad "Include: references not set"
+
+# 2) re-run idempotency: exactly one managed region
+"$LAUNCH" prepare --dispatch "$TMP/inc1.dispatch" >/dev/null 2>&1
+[ "$(grep -c 'PRISM-INCLUDE-START' "$PKI")" = "1" ] \
+  && ok "Include: re-run leaves exactly one managed region (idempotent)" || bad "Include: duplicate region on re-run"
+
+# 3) glob spec resolves
+PKI2="$TMP/inc2.md"; make_packet "$PKI2"
+{ inc_dispatch "$PKI2" <<EOF
+Include-Base: $INCD
+Include: @*.md
+
+Type: subagent
+Lens: Simplicity
+Lens-Desc: weigh fewest moving parts
+EOF
+} > "$TMP/inc2.dispatch"
+expect_ok "Include: glob spec resolves" "$LAUNCH" prepare --dispatch "$TMP/inc2.dispatch"
+
+# 4) mutual exclusion with Reference:
+PKI3="$TMP/inc3.md"; make_packet "$PKI3"
+{ inc_dispatch "$PKI3" <<EOF
+Include: $INCD/a.md
+Reference: $INCD/b.md
+
+Type: subagent
+Lens: Simplicity
+Lens-Desc: d
+EOF
+} > "$TMP/inc3.dispatch"
+expect_err "Include: + Reference: is rejected" "$LAUNCH" prepare --dispatch "$TMP/inc3.dispatch"
+
+# 5) mutual exclusion with a hand-written ### Reference Materials
+PKI4="$TMP/inc4.md"
+cat > "$PKI4" <<EOF
+## Full Question
+q
+## Context
+c
+### Reference Materials
+- $INCD/a.md
+## Constraints
+You are a read-only leaf node.
+EOF
+{ inc_dispatch "$PKI4" <<EOF
+Include: $INCD/b.md
+
+Type: subagent
+Lens: Simplicity
+Lens-Desc: d
+EOF
+} > "$TMP/inc4.dispatch"
+expect_err "Include: + hand-written ### Reference Materials is rejected" "$LAUNCH" prepare --dispatch "$TMP/inc4.dispatch"
+
+# 6) missing file fails closed
+PKI5="$TMP/inc5.md"; make_packet "$PKI5"
+{ inc_dispatch "$PKI5" <<EOF
+Include: $INCD/nope.md
+
+Type: subagent
+Lens: Simplicity
+Lens-Desc: d
+EOF
+} > "$TMP/inc5.dispatch"
+expect_err "Include: missing file fails closed" "$LAUNCH" prepare --dispatch "$TMP/inc5.dispatch"
+
+# 7) secret refused by default, included under FILECTX_SECRETS=warn
+PKI6="$TMP/inc6.md"; make_packet "$PKI6"
+{ inc_dispatch "$PKI6" <<EOF
+Include: $INCD/.env
+
+Type: subagent
+Lens: Simplicity
+Lens-Desc: d
+EOF
+} > "$TMP/inc6.dispatch"
+expect_err "Include: secret file refused by default" "$LAUNCH" prepare --dispatch "$TMP/inc6.dispatch"
+expect_ok "Include: FILECTX_SECRETS=warn includes the secret" env FILECTX_SECRETS=warn "$LAUNCH" prepare --dispatch "$TMP/inc6.dispatch"
+
+# 8) gpt-pro lens inlines the included file contents
+PKI7="$TMP/inc7.md"; make_packet "$PKI7"
+{ inc_dispatch "$PKI7" <<EOF
+Include: $INCD/a.md
+
+Type: gptpro
+Lens: Deep
+Lens-Desc: d
+Posture: deep-reasoning
+EOF
+} > "$TMP/inc7.dispatch"
+expect_ok "Include: prepares with a gpt-pro lens" "$LAUNCH" prepare --dispatch "$TMP/inc7.dispatch"
+grep -q 'alpha contents' "$TMP/inc7-gptpro-deep.md" \
+  && ok "Include: gpt-pro launcher inlines the included file contents" || bad "Include: gpt-pro launcher missing inlined contents"
+
+# 8b) stale-region cleanup: an Include: run then a no-Include run on the SAME packet
+# must leave NO orphaned managed region (else path-reading tiers read stale paths)
+PKI8="$TMP/inc8.md"; make_packet "$PKI8"
+{ inc_dispatch "$PKI8" <<EOF
+Include: $INCD/a.md
+
+Type: subagent
+Lens: S
+Lens-Desc: d
+EOF
+} > "$TMP/inc8a.dispatch"
+"$LAUNCH" prepare --dispatch "$TMP/inc8a.dispatch" >/dev/null 2>&1
+{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "test"\n' "$PKI8"
+  printf '\nType: subagent\nLens: S\nLens-Desc: d\n'; } > "$TMP/inc8b.dispatch"
+"$LAUNCH" prepare --dispatch "$TMP/inc8b.dispatch" >/dev/null 2>&1
+grep -q 'PRISM-INCLUDE-START' "$PKI8" \
+  && bad "stale Include region survives a no-Include re-run on the same packet" \
+  || ok "stale Include region is cleared on a no-Include re-run (same packet)"
+
+# 8c) LARGE-packet mutual exclusion (regression: the sed|grep -q conflict check was
+# fail-OPEN under pipefail+SIGPIPE on a big packet — must still reject Include+manual RM)
+PKIL="$TMP/incL.md"
+{ printf '## Full Question\nq\n## Context\nc\n### Reference Materials\n- %s\n' "$INCD/a.md"
+  head -c 200000 /dev/zero | tr '\0' x
+  printf '\n## Constraints\nYou are a read-only leaf node.\n'; } > "$PKIL"
+{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "test"\n' "$PKIL"
+  printf 'Include: %s\n\nType: subagent\nLens: S\nLens-Desc: d\n' "$INCD/b.md"; } > "$TMP/incL.dispatch"
+expect_err "Include: + manual ### Reference Materials rejected even on a large packet" \
+  "$LAUNCH" prepare --dispatch "$TMP/incL.dispatch"
+
+# 8d) malformed managed region (START with no END) must fail closed, not truncate
+PKIM="$TMP/incM.md"
+printf '## Full Question\nq\n## Context\nc\n<!-- PRISM-INCLUDE-START -->\n### Reference Materials\n- x\n## Constraints\nYou are a read-only leaf node.\n' > "$PKIM"
+{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "test"\n' "$PKIM"
+  printf '\nType: subagent\nLens: S\nLens-Desc: d\n'; } > "$TMP/incM.dispatch"
+expect_err "malformed Include sentinel (START, no END) fails closed (no truncation)" \
+  "$LAUNCH" prepare --dispatch "$TMP/incM.dispatch"
+
+# 9) scaffold emits the Include awareness stub (capture first — grep -q + pipefail
+# would SIGPIPE the producer and false-fail the pipeline)
+scaffold_out=$("$LAUNCH" scaffold --n 1 2>/dev/null)
+case "$scaffold_out" in
+  *$'\n# Include: '*) ok "scaffold emits the Include: awareness stub" ;;
+  *) bad "scaffold missing Include: stub" ;;
+esac
+
 echo
 echo "==== $pass passed, $fail failed ===="
 [ "$fail" -eq 0 ]

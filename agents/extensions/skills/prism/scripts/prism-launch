@@ -47,6 +47,13 @@ PEERS_JSON="$SCRIPT_DIR/../../relay/peers.json"
 # describes it but this file is authoritative.
 CATALOG_JSON="$TEMPLATES_DIR/lens-catalog.json"
 
+# filectx — shared file-context resolver, a sibling-skill script (lives with
+# gpt-pro-relay, which prism already depends on). Resolves Include: dispatch specs
+# and secret-scans every reference fed to the gpt-pro inliner. Same sibling-then-PATH
+# resolution prism uses for relay.
+FILECTX_BIN="$SCRIPT_DIR/../../gpt-pro-relay/scripts/filectx"
+[ -x "$FILECTX_BIN" ] || FILECTX_BIN="$(command -v filectx 2>/dev/null || true)"
+
 # Standard-tier peer names that carry an .order, newline-separated in canonical
 # (ascending .order) order. The sole source of the canonical tier ordering.
 registry_tier_peers() {
@@ -110,6 +117,7 @@ dp_flush() {
 dispatch_to_config() {
   local file="$1" line t key val lineno=0
   DP_packet=""; DP_px=""; DP_sa=""; DP_gp=""; DP_refs=""
+  DP_includes=""; DP_inc_base=""; DP_inc_from=""; DP_inc_tree=""
   DP_mode=""; DP_n=""; DP_m=""; DP_quote=""
   DP_type=""; DP_to=""; DP_name=""; DP_lens=""; DP_desc=""; DP_posture=""; DP_in=0; DP_seen=""
 
@@ -130,6 +138,18 @@ dispatch_to_config() {
         # Top-level, repeatable: the authoritative inlining list for gptpro lenses.
         # `Reference: none` (sole entry) is an explicit opt-out (inline only the packet).
         DP_refs="$DP_refs$val"$'\n' ;;
+      Include)
+        # Top-level, repeatable: a file/glob spec resolved by filectx at prepare time
+        # into the packet's ### Reference Materials (for path-reading tiers) AND the
+        # gpt-pro inline list. The ergonomic front door — globs/@base-relative ok.
+        DP_includes="$DP_includes$val"$'\n' ;;
+      Include-Base)
+        [ -z "$DP_inc_base" ] || die "prepare: --dispatch has more than one Include-Base line"
+        DP_inc_base="$val" ;;
+      Include-From)
+        DP_inc_from="$DP_inc_from$val"$'\n' ;;
+      Include-Tree)
+        DP_inc_tree="$DP_inc_tree$val"$'\n' ;;
       Prism-Mode)
         # Top-level roster-enforcement contract: full | partial. REQUIRED on the
         # --dispatch path (validated after the loop) — this is what makes full-roster
@@ -162,7 +182,7 @@ dispatch_to_config() {
           Lens-Desc) DP_desc="$val" ;;
           Posture)   DP_posture="$val" ;;
         esac ;;
-      *) die "prepare: --dispatch line $lineno: unknown key '$key' (valid: Shared-Packet, Prism-Mode, Prism-N, Prism-M, Partial-User-Quote, Reference, Type, To, Name, Lens, Lens-Desc, Posture)" ;;
+      *) die "prepare: --dispatch line $lineno: unknown key '$key' (valid: Shared-Packet, Prism-Mode, Prism-N, Prism-M, Partial-User-Quote, Reference, Include, Include-Base, Include-From, Include-Tree, Type, To, Name, Lens, Lens-Desc, Posture)" ;;
     esac
   done < "$file"
   dp_flush
@@ -204,10 +224,20 @@ To run a REDUCED roster you must have an EXPLICIT user request, declared as:
     *) die "prepare: Prism-Mode must be 'full' or 'partial', got: $DP_mode" ;;
   esac
 
-  local pxj saj gpj refj shapej cfg gen
+  local pxj saj gpj refj incj shapej cfg gen
   pxj=$(printf '%s' "$DP_px" | jq -s '.')
   saj=$(printf '%s' "$DP_sa" | jq -s '.')
   gpj=$(printf '%s' "$DP_gp" | jq -s '.')
+  # includes: filectx specs (Include:), an optional base (Include-Base:), and the
+  # repeatable Include-From:/Include-Tree: lists. Present only when at least one is
+  # set — cmd_prepare resolves them through filectx into references + packet bullets.
+  incj=$(jq -n \
+      --arg base "$DP_inc_base" \
+      --argjson specs "$(printf '%s' "$DP_includes" | jq -R -s '[splits("\n")|select(length>0)]')" \
+      --argjson from  "$(printf '%s' "$DP_inc_from" | jq -R -s '[splits("\n")|select(length>0)]')" \
+      --argjson tree  "$(printf '%s' "$DP_inc_tree" | jq -R -s '[splits("\n")|select(length>0)]')" '
+    if ($specs|length)+($from|length)+($tree|length) == 0 and $base == "" then null
+    else {specs:$specs, from:$from, tree:$tree} + (if $base != "" then {base:$base} else {} end) end')
   # references: one absolute path per non-empty line. A sole `none` (any case) →
   # explicit empty list (present-but-empty: inline only the packet). No Reference
   # lines at all → key omitted (prepare then falls back to the packet's
@@ -224,9 +254,10 @@ To run a REDUCED roster you must have an EXPLICIT user request, declared as:
     + (if $n != "" then {n:($n|tonumber)} else {} end)
     + (if $m != "" then {m:($m|tonumber)} else {} end)
     + (if $q != "" then {partial_user_quote:$q} else {} end)')
-  cfg=$(jq -n --arg p "$DP_packet" --argjson px "$pxj" --argjson sa "$saj" --argjson gp "$gpj" --argjson ref "$refj" --argjson shape "$shapej" \
+  cfg=$(jq -n --arg p "$DP_packet" --argjson px "$pxj" --argjson sa "$saj" --argjson gp "$gpj" --argjson ref "$refj" --argjson inc "$incj" --argjson shape "$shapej" \
         '{shared_packet:$p, parallax:$px, subagents:$sa, gptpro:$gp, shape:$shape}
-         + (if $ref != null then {references:$ref} else {} end)')
+         + (if $ref != null then {references:$ref} else {} end)
+         + (if $inc != null then {includes:$inc} else {} end)')
   gen="${DP_packet%.md}-config.normalized.json"
   printf '%s\n' "$cfg" > "$gen" || die "prepare: could not write normalized config: $gen"
   DISPATCH_CONFIG="$gen"
@@ -290,6 +321,25 @@ cmd_prepare() {
   [ -s "$packet" ]            || die "prepare: shared_packet is empty: $packet"
   grep -q '^## Full Question' "$packet" || die "prepare: shared_packet missing '## Full Question' section"
   grep -q '^## Context'       "$packet" || die "prepare: shared_packet missing '## Context' section"
+  # Clear any prism-managed Include region up front (UNCONDITIONAL), so a packet
+  # reused across a mode switch (an Include: run, then a Reference:/no-ref run on the
+  # SAME packet file) cannot leave an orphaned ### Reference Materials region that
+  # path-reading tiers would still read. The Include block below regenerates it when
+  # Include: is in play; otherwise it stays gone.
+  if grep -q '<!-- PRISM-INCLUDE-START' "$packet"; then
+    # Guard against a malformed managed region (a START with no matching END, or
+    # duplicates) — sed's range delete would otherwise drop START→EOF and silently
+    # truncate the packet. Require exactly one balanced START/END before touching it.
+    local n_start n_end
+    n_start=$(grep -c '<!-- PRISM-INCLUDE-START' "$packet")
+    n_end=$(grep -c 'PRISM-INCLUDE-END -->' "$packet")
+    { [ "$n_start" = 1 ] && [ "$n_end" = 1 ]; } \
+      || die "prepare: the packet has a malformed prism-managed Include region ($n_start START / $n_end END markers) — refusing to rewrite it (would truncate). Inspect/restore $packet."
+    local pkt_tmp0="${packet}.inc0.tmp"
+    sed '/<!-- PRISM-INCLUDE-START/,/PRISM-INCLUDE-END -->/d' "$packet" > "$pkt_tmp0" \
+      || die "prepare: could not clear a stale Include region from $packet"
+    mv "$pkt_tmp0" "$packet"
+  fi
   # Constraints: the anti-recursion guard requires this block verbatim, so the
   # script OWNS it. Author the packet with just Full Question + Context (+ Reference
   # Materials); prepare injects the canonical block here when it is absent.
@@ -325,6 +375,67 @@ cmd_prepare() {
     [ -f "$gfile" ] || die "prepare: canonical grounding template missing: $gfile"
     { printf '\n'; cat "$gfile"; } >> "$packet" || die "prepare: could not inject grounding into $packet"
     echo "prism-launch: injected canonical ## Grounding external facts into $(basename "$packet")" >&2
+  fi
+
+  # ── Include: resolution (the ergonomic file front door) ───────────────────────
+  # If the dispatch carried Include:/Include-From:/Include-Tree:, resolve them once
+  # via filectx (validates, expands globs/dir-trees, secret-scans, fail-closed) into
+  # an authoritative absolute-path set, then (a) regenerate the packet's
+  # ### Reference Materials (a sentinel-guarded managed region, idempotent across
+  # re-runs) so path-reading tiers see the files, and (b) feed the SAME set to the
+  # gpt-pro inliner by writing config.references. Include: is the single source: it
+  # cannot coexist with a Reference: key or a hand-written packet ### Reference Materials.
+  if [ "$(jq 'has("includes")' "$config")" = "true" ]; then
+    [ -n "$FILECTX_BIN" ] && [ -x "$FILECTX_BIN" ] \
+      || die "prepare: Include: used but the 'filectx' helper was not found (expected at \$SCRIPT_DIR/../../gpt-pro-relay/scripts/filectx or on PATH). Reinstall via ./dotfiles.sh, or use a hand-written ### Reference Materials instead."
+    [ "$(jq 'has("references")' "$config")" = "true" ] \
+      && die "prepare: both Include: and Reference: are set — pick one. Include: is the unified front door (it generates the gpt-pro inline list too); drop Reference:, or drop Include: to keep the legacy gpt-pro-only override."
+    # Detect a hand-written ### Reference Materials OUTSIDE the managed region. Write the
+    # stripped packet to a temp file and grep THAT — never `sed | grep -q`, whose early
+    # grep exit SIGPIPEs sed and (under pipefail) returns non-zero, silently skipping this
+    # mutual-exclusion check on a large packet (a fail-OPEN hole).
+    local rmcheck="${packet}.rmcheck.tmp"
+    sed '/<!-- PRISM-INCLUDE-START/,/PRISM-INCLUDE-END -->/d' "$packet" > "$rmcheck" \
+      || die "prepare: could not scan the packet for a hand-written ### Reference Materials"
+    if grep -q '^### Reference Materials' "$rmcheck"; then
+      rm -f "$rmcheck"
+      die "prepare: both Include: and a hand-written '### Reference Materials' are present in the packet — pick one. Remove the packet's ### Reference Materials to let Include: generate it, or drop Include:."
+    fi
+    rm -f "$rmcheck"
+    local inc_base inc_total_cap x; local -a inc_args
+    inc_base=$(jq -r '.includes.base // ""' "$config")
+    [ -n "$inc_base" ] || inc_base="$PWD"
+    case "$inc_base" in /*) ;; *) inc_base="$PWD/$inc_base" ;; esac
+    # Per-file cap is the gpt-pro 1 MB reality; total cap is 1 MB when a gpt-pro lens
+    # will inline the set, else a looser sanity bound (path tiers read selectively).
+    inc_total_cap=5000000
+    [ "$(jq '.gptpro|length' "$config")" -gt 0 ] && inc_total_cap=1000000
+    inc_args=(resolve --base "$inc_base" --json --max-bytes 1000000 --max-total "$inc_total_cap")
+    while IFS= read -r x; do [ -n "$x" ] && inc_args+=(--from "$x"); done < <(jq -r '.includes.from[]?' "$config")
+    while IFS= read -r x; do [ -n "$x" ] && inc_args+=(--tree "$x"); done < <(jq -r '.includes.tree[]?' "$config")
+    inc_args+=(--)
+    while IFS= read -r x; do [ -n "$x" ] && inc_args+=("$x"); done < <(jq -r '.includes.specs[]?' "$config")
+    local inc_json inc_paths_json inc_n inc_bytes
+    inc_json=$("$FILECTX_BIN" "${inc_args[@]}") \
+      || die "prepare: Include: resolution failed (see the filectx error above) — fix the specs/paths in the dispatch. No agents dispatched."
+    inc_paths_json=$(printf '%s' "$inc_json" | jq -c '[.files[].path]')
+    inc_n=$(printf '%s' "$inc_json" | jq -r '.files | length')
+    inc_bytes=$(printf '%s' "$inc_json" | jq -r '.total_bytes')
+    # Append the managed Reference Materials region. Any prior region was already
+    # stripped unconditionally near the top of cmd_prepare, so this just appends.
+    {
+      printf '\n<!-- PRISM-INCLUDE-START (generated from Include: by prism-launch — edit the dispatch, not here) -->\n'
+      printf '### Reference Materials\n\n'
+      printf '%s' "$inc_json" | jq -r '.files[].path' | while IFS= read -r p; do [ -n "$p" ] && printf -- '- %s\n' "$p"; done
+      printf '<!-- PRISM-INCLUDE-END -->\n'
+    } >> "$packet" || die "prepare: could not write generated Reference Materials into $packet"
+    # Feed the same resolved set to the gpt-pro inliner. Drop .includes once resolved so
+    # the normalized config is a valid standalone (re-)`prepare --config` input — leaving
+    # both .includes and .references would trip the mutual-exclusion check on reuse.
+    jq --argjson refs "$inc_paths_json" 'del(.includes) + {references:$refs}' "$config" > "${config}.tmp" \
+      || die "prepare: could not write resolved references into the normalized config"
+    mv "${config}.tmp" "$config"
+    echo "prism-launch: Include: resolved $inc_n file(s) ($inc_bytes bytes) → generated ### Reference Materials + gpt-pro inline list" >&2
   fi
 
   # run_base: shared_packet path minus a trailing .md. All run artifacts hang off it.
@@ -675,6 +786,28 @@ This is a PARTIAL prism. Either complete the roster — every standard tier at N
 $refs
 EOF
 
+    # Secret-scan the resolved references through filectx (the single-sourced guard)
+    # so even the LEGACY Reference:/### Reference Materials path cannot inline a secret
+    # (or a binary) into a quota-bearing gpt-pro call. Caps are left to the loop above
+    # and the composed-launcher check below; filectx here only adds the secret/binary
+    # screen. Honors FILECTX_SECRETS (deny|warn|off). Fail-CLOSED: a missing helper for a
+    # quota-bearing inline path dies (the content leaves the machine), unless the operator
+    # explicitly set FILECTX_SECRETS=off. NB: `[[ =~ ]]`, never `printf | grep -q` — the
+    # latter SIGPIPEs printf under pipefail on a large ref list and skips the scan (fail-open).
+    if [[ "$refs" =~ [^[:space:]] ]]; then
+      if [ -n "$FILECTX_BIN" ] && [ -x "$FILECTX_BIN" ]; then
+        local reflist; reflist=$(mktemp "${TMPDIR:-/tmp}/prism-gptref.XXXXXX")
+        printf '%s\n' "$refs" > "$reflist"
+        "$FILECTX_BIN" resolve --max-bytes 999999999 --max-total 999999999 --from "$reflist" >/dev/null \
+          || { rm -f "$reflist"; die "prepare: a gpt-pro reference failed the filectx secret/binary screen (see above) — excerpt or remove it, or set FILECTX_SECRETS=warn for this run. No quota burned."; }
+        rm -f "$reflist"
+      elif [ "${FILECTX_SECRETS:-deny}" = off ]; then
+        echo "prism-launch: ⚠ filectx absent + FILECTX_SECRETS=off — gpt-pro references inlined WITHOUT a secret scan (by request)." >&2
+      else
+        die "prepare: a gpt-pro lens would inline reference files, but the filectx helper needed to secret-scan them is missing (expected at \$SCRIPT_DIR/../../gpt-pro-relay/scripts/filectx). Reinstall via ./dotfiles.sh, or set FILECTX_SECRETS=off to inline WITHOUT a scan. No quota burned."
+      fi
+    fi
+
     # Compose one self-contained launcher per gpt-pro lens, streaming file contents
     # with cat so a large packet/ref never sits in one shell variable.
     local gtpl; gtpl=$(cat "$gtmpl")
@@ -1011,6 +1144,22 @@ preset_lenses() {
 # model; Codex xhigh + Grok Build high are fixed). With --preset <task-type>, pre-fill eight lenses (N=1).
 # Otherwise replace each "FILL" Lens / Lens-Desc, then Write it as the dispatch
 # file. Removes the mechanical Type/To/order boilerplate.
+
+# Awareness stub: the commented Include: front door, pre-printed in every scaffold so
+# the orchestrator sees the file-attach affordance at authoring time (the single
+# highest-leverage fix for the silent forgotten-reference failure).
+scaffold_include_hint() {
+  printf '# Local files for the agents (optional — uncomment to attach). prepare resolves these\n'
+  printf '# via filectx: relay/subagent tiers READ the paths; gpt-pro gets the contents INLINED.\n'
+  printf '# Globs and @base-relative paths ok; directories need Include-Tree. Mutually exclusive\n'
+  printf '# with a hand-written Reference: / ### Reference Materials. Secrets are refused fail-closed.\n'
+  printf '# Include-Base: /abs/project/root      # default: cwd at prepare time\n'
+  printf '# Include: @path/to/file\n'
+  printf '# Include: @src/*.py\n'
+  printf '# Include-From: /abs/file-list.txt     # one path per line (# comments ok)\n'
+  printf '# Include-Tree: @docs/                 # recursive, capped, hidden/vendor/binary/secret skipped\n\n'
+}
+
 cmd_scaffold() {
   local n=1 packet="" preset=""
   while [ $# -gt 0 ]; do
@@ -1048,6 +1197,7 @@ cmd_scaffold() {
     printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
     printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
     printf '# Edit any Lens / Lens-Desc to taste; write the Shared-Packet file before prepare.\n\n'
+    scaffold_include_hint
     # Slot 1 → subagent; slots 2.. → parallax peers in canonical registry order.
     # After `set -- $names`, $1 is the subagent lens and $2..$N the parallax lenses;
     # ${!idx} indirectly reads the positional param numbered by $idx (2,3,…).
@@ -1071,6 +1221,7 @@ cmd_scaffold() {
   printf '# Order is the canonical tier order — put your heaviest-reasoning (e.g. Adversarial)\n'
   printf '# lens on a subagent or codex. Write the Shared-Packet file before running prepare.\n'
   printf '# Tip: --preset review|design|diagnosis|compare|research|decision|writing pre-fills lenses (N=1).\n\n'
+  scaffold_include_hint
   local k i=0 peer
   k=1; while [ "$k" -le "$n" ]; do
     i=$((i + 1)); printf 'Type: subagent\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$i"; k=$((k + 1))
@@ -1392,11 +1543,17 @@ Dispatch records (line-oriented; see prism SKILL.md):
   - subagent: Lens/Lens-Desc only (Claude, Agent-tool).
   - gptpro:   Lens/Lens-Desc required, optional Posture (deep-reasoning|research-grounded).
               Orchestrator-direct — you fire each `gpt-pro < launcher` call prepare prints.
-  Reference: <abs-path>   # repeatable, top-level: the authoritative inlining list for gptpro
-                          # lenses; defaults to the packet's `### Reference Materials`; `none` = packet only.
+  Include: <spec>         # repeatable, top-level: the ergonomic file front door. prepare resolves
+                          # specs via filectx → generates the packet's ### Reference Materials (path
+                          # tiers read them) AND the gpt-pro inline list. Specs: /abs, @base-relative,
+                          # or single-level glob. Include-Base: <dir> (default cwd), Include-From: <list>,
+                          # Include-Tree: <dir> (recursive, capped). Mutually exclusive with Reference:.
+  Reference: <abs-path>   # repeatable, top-level: the legacy explicit gptpro inline list;
+                          # defaults to the packet's `### Reference Materials`; `none` = packet only.
 
 Env:
   PRISM_PEER_TIMEOUT  per-peer timeout in seconds (default 3600; 0 = no cap; needs coreutils timeout).
+  FILECTX_SECRETS     deny (default) | warn | off — secret screen on Include:/gpt-pro references.
 USAGE
 }
 

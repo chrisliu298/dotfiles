@@ -111,6 +111,22 @@ EXP_OUT="LOCAL ANSWER";                      run_case "local blocking ask → ok
 EXP_ERR="empty response";                    run_case "local empty body → exit 1"           local local_empty      1   ""
 EXP_OUT="LOCAL REATTACH";                    run_case "local --run-id blocking fetch → ok"  local local_reattach   0   "--run-id ask-20260530T000000Z-abc"
 
+# ---- file inclusion (-f / --file) composition, via the shared filectx helper ----
+# These exercise the compose-before-submit path: a clean file composes and submits
+# (fake-ssh success), while a missing/secret file fails closed at exit 2 with no quota.
+INCF="$TMP/inc"; mkdir -p "$INCF"
+printf 'ALPHA CONTENTS\n' > "$INCF/a.txt"
+printf 'PW=secret\n'      > "$INCF/.env"
+EXP_ERR="included 1 local file"; run_case "-f attaches one file → composes + submits ok" ssh success 0 "-f $INCF/a.txt"
+EXP_ERR="no quota burned";       run_case "-f missing file → fail-closed exit 2"          ssh success 2 "-f $INCF/nope.txt"
+EXP_ERR="no quota burned";       run_case "-f secret .env → refused exit 2"               ssh success 2 "-f $INCF/.env"
+EXP_OUT="THE ANSWER";            run_case "--allow-secret overrides the secret screen"    ssh success 0 "--allow-secret $INCF/.env -f $INCF/.env"
+printf '%s\n' "$INCF/a.txt" > "$INCF/list.txt"
+mkdir -p "$INCF/tree"; printf 'TT\n' > "$INCF/tree/t.txt"
+EXP_ERR="included 1 local file"; run_case "--files-from composes the listed file"          ssh success 0 "--files-from $INCF/list.txt"
+EXP_ERR="included 1 local file"; run_case "--include-tree composes a directory"            ssh success 0 "--include-tree $INCF/tree"
+EXP_ERR="would include";         run_case "--dry-run lists resolved files, no submit"       ssh success 0 "--dry-run -f $INCF/a.txt"
+
 echo
 echo "──────────────────────────────"
 printf 'total: %d passed, %d failed\n' "$PASS" "$FAIL"

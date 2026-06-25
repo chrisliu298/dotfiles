@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# filectx — shared local-file context resolver/packer for the prism and
+# gpt-pro-relay CLIs. ONE source of truth for: expanding file specs (absolute
+# paths, @base-relative paths, single-level globs, frozen lists, capped directory
+# trees), validating them fail-closed, scanning for secrets, and either emitting
+# the resolved absolute paths (for agents that read files themselves) or the
+# fenced file contents (for gpt-pro, which cannot read local files).
+#
+# Two modes:
+#   filectx resolve [opts] [--] [spec...]   # stdout: validated absolute paths, one per line (or --json)
+#   filectx pack    [opts] [--] [spec...]   # stdout: "### <path>\n```\n<contents>\n```" per file
+#
+# A spec is one of:
+#   /abs/file              absolute path to a regular file
+#   @rel/file | rel/file   path resolved against --base (default: $PWD)
+#   glob (* ? [)           single-level shell glob; zero matches is a fail-closed error
+# Directories are NOT valid specs — pass them with --tree (recursive, capped).
+#
+# Options:
+#   --base DIR             base for relative/@ specs (default: $PWD)
+#   --from FILE            read extra specs from FILE, one per line ('#' comments + blanks ignored); repeatable
+#   --tree DIR             include a directory recursively, capped + filtered; repeatable
+#   --max-bytes N          per-file cap (default 1000000); a file over this fails closed
+#   --max-total N          total-bytes cap for the whole set (default 1000000)
+#   --tree-max-files N     per-tree file cap (default 50)
+#   --tree-max-bytes N     per-tree total cap (default 512000)
+#   --allow-secret PATH    whitelist one path the secret scan would otherwise reject; repeatable
+#   --json                 (resolve only) emit {base, files:[{path,bytes}], total_bytes, skipped:[]}
+#   --quiet                suppress non-fatal warnings on stderr
+#
+# Secret handling is governed by FILECTX_SECRETS = deny (default) | warn | off.
+# In deny mode a secret-looking file aborts the whole run (use --allow-secret to
+# override per path); warn includes it with a stderr warning; off disables the scan.
+#
+# Exit: 0 ok · 1 any validation/secret/cap failure (fail-closed, no partial output)
+#       · 2 usage error. Resolution is all-or-nothing: nothing is emitted on failure.
+
+VERSION=1
+die()  { echo "filectx: $*" >&2; exit 1; }
+usage_die() { echo "filectx: $*" >&2; exit 2; }
+warn() { [ "$QUIET" = true ] || echo "filectx: $*" >&2; }
+
+# ---- parse args ----
+MODE=""; BASE="$PWD"; JSON=false; QUIET=false
+MAX_BYTES=1000000; MAX_TOTAL=1000000
+TREE_MAX_FILES=50; TREE_MAX_BYTES=512000
+SPECS=(); FROMS=(); TREES=(); ALLOW=()
+SECRETS_MODE="${FILECTX_SECRETS:-deny}"
+case "$SECRETS_MODE" in deny|warn|off) ;; *) usage_die "FILECTX_SECRETS must be deny|warn|off, got: $SECRETS_MODE" ;; esac
+
+[ $# -ge 1 ] || usage_die "mode required: filectx resolve|pack [opts] [--] [spec...]"
+case "$1" in
+  resolve|pack) MODE="$1"; shift ;;
+  --help|-h)    sed -n '3,40p' "$0"; exit 0 ;;
+  --version|-V) echo "filectx v$VERSION"; exit 0 ;;
+  *)            usage_die "unknown mode: $1 (expected 'resolve' or 'pack')" ;;
+esac
+
+need_val() { [ $# -ge 2 ] || usage_die "$1 requires a value"; }
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --base)          need_val "$@"; BASE="$2"; shift 2 ;;
+    --from)          need_val "$@"; FROMS+=("$2"); shift 2 ;;
+    --tree)          need_val "$@"; TREES+=("$2"); shift 2 ;;
+    --max-bytes)     need_val "$@"; MAX_BYTES="$2"; shift 2 ;;
+    --max-total)     need_val "$@"; MAX_TOTAL="$2"; shift 2 ;;
+    --tree-max-files) need_val "$@"; TREE_MAX_FILES="$2"; shift 2 ;;
+    --tree-max-bytes) need_val "$@"; TREE_MAX_BYTES="$2"; shift 2 ;;
+    --allow-secret)  need_val "$@"; ALLOW+=("$2"); shift 2 ;;
+    --json)          JSON=true; shift ;;
+    --quiet)         QUIET=true; shift ;;
+    --)              shift; while [ $# -gt 0 ]; do SPECS+=("$1"); shift; done ;;
+    -*)              usage_die "unknown flag: $1" ;;
+    *)               SPECS+=("$1"); shift ;;
+  esac
+done
+[ "$MODE" = resolve ] || ! $JSON || usage_die "--json is only valid for 'resolve'"
+for v in MAX_BYTES MAX_TOTAL TREE_MAX_FILES TREE_MAX_BYTES; do
+  case "${!v}" in ''|*[!0-9]*) usage_die "$v must be a non-negative integer" ;; esac
+done
+case "$BASE" in /*) ;; *) BASE="$PWD/$BASE" ;; esac
+[ -d "$BASE" ] || die "--base is not a directory: $BASE"
+
+if $JSON; then command -v jq >/dev/null 2>&1 || die "jq not found in PATH (needed for --json)"; fi
+
+# ---- helpers ----
+# Canonical absolute path (physical dir + basename); portable (no readlink -f on BSD).
+# Follows a final symlink to its PHYSICAL target so the secret scan keys off the real
+# file's name and contents — a link named notes.txt -> ../.env must not slip a secret
+# past the filename classifier (the link's own basename would otherwise be scanned).
+canon() {
+  local p="$1" d b t hops=0
+  while [ -L "$p" ] && [ "$hops" -lt 40 ]; do
+    t=$(readlink "$p")
+    case "$t" in /*) p="$t" ;; *) p="$(dirname -- "$p")/$t" ;; esac
+    hops=$((hops + 1))
+  done
+  d=$(dirname -- "$p"); b=$(basename -- "$p")
+  ( cd "$d" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$b" ) || printf '%s\n' "$p"
+}
+fsize() { wc -c < "$1" | tr -d ' '; }
+
+# A file is "binary" if its first 8 KB contain a NUL byte (no UTF-8 false positives).
+is_binary() {
+  local f="$1" want got
+  want=$(head -c 8192 "$f" | wc -c | tr -d ' ')
+  got=$(head -c 8192 "$f" | LC_ALL=C tr -d '\000' | wc -c | tr -d ' ')
+  [ "$got" -lt "$want" ]
+}
+
+# Compare a whitelist entry to the already-canonical abs path. Resolve the entry the
+# SAME way specs resolve (@base / bare-relative against --base, then canonicalize) so a
+# user can whitelist a file with the exact string they included it as.
+is_allowed() {
+  local p path
+  for p in "${ALLOW[@]:-}"; do
+    [ -n "$p" ] || continue
+    case "$p" in @*) path="$BASE/${p#@}" ;; /*) path="$p" ;; *) path="$BASE/$p" ;; esac
+    [ "$(canon "$path")" = "$1" ] && return 0
+  done
+  return 1
+}
+
+# Secret heuristics: filename class first, then a content-signature scan over the
+# WHOLE file (is_binary already excluded binaries in add_file, so a full-text grep is
+# safe and avoids the prior 16 KB blind spot). Best-effort deny-list — high-precision
+# prefixes, not an entropy scanner. Returns the violated class on stdout, empty if clean.
+secret_class() {
+  local f="$1" b; b=$(basename -- "$f")
+  case "$b" in
+    .env|.env.local|.env.*.local) printf 'env-file'; return ;;
+    .env.example|.env.sample|.env.template) ;;             # documented templates are fine
+    .env.*) printf 'env-file'; return ;;
+    *.pem|*.key|*.p12|*.pfx|*.keystore|*.jks) printf 'key-or-cert-file'; return ;;
+    id_rsa|id_rsa.*|id_dsa|id_dsa.*|id_ecdsa|id_ecdsa.*|id_ed25519|id_ed25519.*) printf 'ssh-private-key'; return ;;
+    *.zshenv.local|.zshenv.local|.netrc|.git-credentials|.npmrc|.pypirc|.dockercfg|kubeconfig|*.kubeconfig) printf 'local-secrets-file'; return ;;
+    *secret*|*credential*|*credentials*|*private?key*|*private-key*) printf 'sensitive-name'; return ;;
+  esac
+  # Private-key headers (PEM/OpenSSH/PGP — match through "PRIVATE KEY", not the closing dashes).
+  if LC_ALL=C grep -qaE -- '-----BEGIN [A-Z0-9 ]*PRIVATE KEY' "$f"; then printf 'private-key-header'; return; fi
+  # Token-shaped signatures (high-precision prefixes). This helper ships context TO
+  # ChatGPT, so provider keys are the likeliest leak — verified against provider docs.
+  if LC_ALL=C grep -qaE 'AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|sk-(proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}|sk_(live|test)_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{35}|AQ\.[A-Za-z0-9_-]{20,}|gh[opusr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{30,}|glpat-[A-Za-z0-9_-]{20,}|xox[pbarose]-[A-Za-z0-9-]{10,}|xapp-[0-9]-[A-Za-z0-9-]{10,}' "$f"; then
+    printf 'embedded-credential'; return
+  fi
+  printf ''
+}
+
+# ---- resolve specs into RESOLVED[] (canonical abs paths, deduped, ordered) ----
+# No associative arrays (macOS ships bash 3.2): dedup is a linear scan, fine for
+# the small capped sets filectx handles.
+RESOLVED=(); RBYTES=(); SKIPPED=()
+already_seen() { local p; for p in "${RESOLVED[@]:-}"; do [ "$p" = "$1" ] && return 0; done; return 1; }
+
+add_file() {  # <path> <origin: spec|tree>
+  local raw="$1" origin="$2" abs
+  abs=$(canon "$raw")
+  [ -e "$abs" ] || die "not found: $raw"
+  [ -d "$abs" ] && die "is a directory, not a file (use --tree for directories): $raw"
+  [ -f "$abs" ] || die "not a regular file: $raw"
+  [ -r "$abs" ] || die "not readable: $raw"
+  case "$abs" in *[[:space:]]*) die "path contains whitespace (unsupported): $raw" ;; esac
+  if already_seen "$abs"; then warn "duplicate skipped: $abs"; return 0; fi
+  if is_binary "$abs"; then
+    if [ "$origin" = tree ]; then warn "tree: skipped binary file: $abs"; SKIPPED+=("$abs"); return 0
+    else die "binary file, not text (cannot inline): $raw"; fi
+  fi
+  local cls; cls=$(secret_class "$abs")
+  if [ -n "$cls" ] && ! is_allowed "$abs"; then
+    case "$SECRETS_MODE" in
+      deny) die "refusing a possible secret ($cls): $raw — pass --allow-secret '$abs' to override, or set FILECTX_SECRETS=warn" ;;
+      warn) warn "WARNING including a possible secret ($cls): $abs" ;;
+      off)  : ;;
+    esac
+  fi
+  local b; b=$(fsize "$abs")
+  [ "$b" -le "$MAX_BYTES" ] || die "file is ${b} bytes, over the ${MAX_BYTES}-byte per-file cap: $raw"
+  RESOLVED+=("$abs"); RBYTES+=("$b")
+}
+
+expand_spec() {  # <spec> — a file, @rel/rel, or single-level glob
+  local spec="$1" path
+  case "$spec" in
+    @*) path="$BASE/${spec#@}" ;;
+    /*) path="$spec" ;;
+    *)  path="$BASE/$spec" ;;
+  esac
+  case "$spec" in
+    *'*'*|*'?'*|*'['*)
+      # Single-level glob (no globstar): expand against the filesystem, nullglob.
+      local matches=() g
+      while IFS= read -r g; do [ -n "$g" ] && matches+=("$g"); done < <(shopt -s nullglob; printf '%s\n' $path)
+      [ "${#matches[@]}" -gt 0 ] || die "glob matched zero files: $spec"
+      # NB: an `[ -f "$g" ] && add_file` loop whose LAST iteration's test is false
+      # returns non-zero, which under `set -e` (expand_spec is the RHS of an &&-list)
+      # silently aborts the whole run mid-resolution. Use an explicit if so the loop
+      # never ends on a failing test (a glob match that isn't a regular file is skipped).
+      for g in "${matches[@]}"; do
+        if [ -f "$g" ]; then add_file "$g" spec; else warn "glob skipped a non-file match: $g"; fi
+      done
+      ;;
+    *) add_file "$path" spec ;;
+  esac
+}
+
+walk_tree() {  # <dir> — recursive, capped, filtered (no hidden, no vendor dirs, no symlink-follow)
+  local dir="$1" abs
+  case "$dir" in @*) dir="$BASE/${dir#@}" ;; /*) ;; *) dir="$BASE/$dir" ;; esac
+  abs=$(canon "$dir")
+  [ -d "$abs" ] || die "--tree is not a directory: $dir"
+  local count=0 total=0 f b before
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    [ -f "$f" ] || continue
+    # Add first, then count only files actually included — a skipped binary/dup must
+    # NOT consume the tree caps (else a dir of binaries spuriously trips the file cap).
+    before=${#RESOLVED[@]}
+    add_file "$f" tree
+    [ "${#RESOLVED[@]}" -gt "$before" ] || continue
+    b=$(fsize "$f")
+    count=$((count + 1)); total=$((total + b))
+    [ "$count" -le "$TREE_MAX_FILES" ] || die "--tree '$dir' exceeds the ${TREE_MAX_FILES}-file cap — narrow it or pass an explicit --from list"
+    [ "$total" -le "$TREE_MAX_BYTES" ] || die "--tree '$dir' exceeds the ${TREE_MAX_BYTES}-byte cap — narrow it or pass an explicit --from list"
+  done < <(
+    find "$abs" \
+      \( -name '.*' -o -name node_modules -o -name .git -o -name .venv -o -name venv \
+         -o -name dist -o -name build -o -name target -o -name __pycache__ -o -name '*.egg-info' \) -prune -o \
+      -type f -print 2>/dev/null | LC_ALL=C sort
+  )
+}
+
+# Read --from list files into the spec stream (preserving order: froms, then specs, then trees).
+read_from() {  # <file>
+  local file="$1" ln
+  [ -f "$file" ] || die "--from file not found: $file"
+  [ -r "$file" ] || die "--from file not readable: $file"
+  while IFS= read -r ln || [ -n "$ln" ]; do
+    ln="${ln#"${ln%%[![:space:]]*}"}"; ln="${ln%"${ln##*[![:space:]]}"}"   # trim
+    case "$ln" in ''|'#'*) continue ;; esac
+    expand_spec "$ln"
+  done < "$file"
+}
+
+for f in "${FROMS[@]:-}";  do [ -n "$f" ] && read_from "$f"; done
+for s in "${SPECS[@]:-}";  do [ -n "$s" ] && expand_spec "$s"; done
+for t in "${TREES[@]:-}";  do [ -n "$t" ] && walk_tree "$t"; done
+
+[ "${#RESOLVED[@]}" -gt 0 ] || die "no files resolved from the given specs"
+
+# Total-bytes cap across the whole set.
+grand=0; for b in "${RBYTES[@]}"; do grand=$((grand + b)); done
+[ "$grand" -le "$MAX_TOTAL" ] || die "resolved set is ${grand} bytes, over the ${MAX_TOTAL}-byte total cap — trim the file list"
+[ "$grand" -le $((MAX_TOTAL / 2)) ] || warn "resolved set is ${grand} bytes (over half the ${MAX_TOTAL}-byte cap) — large contexts can distract agents"
+
+# ---- emit ----
+if [ "$MODE" = resolve ]; then
+  if $JSON; then
+    skipped_json=$(printf '%s\n' "${SKIPPED[@]:-}" | jq -R -s '[split("\n")[]|select(length>0)]')
+    { for i in "${!RESOLVED[@]}"; do printf '%s\t%s\n' "${RESOLVED[$i]}" "${RBYTES[$i]}"; done; } \
+      | jq -R -s --arg base "$BASE" --argjson total "$grand" --argjson skipped "$skipped_json" '
+          {base:$base,
+           files:[ split("\n")[] | select(length>0) | split("\t") | {path:.[0], bytes:(.[1]|tonumber)} ],
+           total_bytes:$total, skipped:$skipped}'
+  else
+    printf '%s\n' "${RESOLVED[@]}"
+  fi
+else  # pack
+  for p in "${RESOLVED[@]}"; do
+    printf '\n### %s\n```\n' "$p"
+    cat -- "$p"
+    printf '\n```\n'
+  done
+fi

@@ -29,11 +29,15 @@ detail; this is the shape:
    invocation (direct, or a calling skill adding a gpt-pro lens) is the
    go-ahead. Never pause to confirm — mention the runtime only as passing
    context if useful.
-2. **Compose a self-contained prompt in a file** — GPT-Pro can't see anything
-   local to you (codebase, shell, this conversation), so paste in every file,
-   excerpt, and prior decision it needs. It *can* search the public web, so when
-   the answer turns on external facts, include the grounding directive — see
-   "Grounding external facts".
+2. **Put the question in a file; attach local files with `-f`** — GPT-Pro can't see
+   anything local to you (codebase, shell, this conversation). Don't hand-`cat` files
+   into the prompt: pass each one with **`-f <path>`** (repeatable; globs and
+   `@base-relative` paths ok; whole dirs via `--include-tree`) and `gpt-pro` inlines
+   them for you — validated, secret-scanned, and capped (1 MB composed) **before**
+   submit, no quota burned on rejection. The file on stdin then holds just your
+   question (plus any prior decisions only you know). GPT-Pro *can* search the public
+   web, so for external facts include the grounding directive — see "Grounding external
+   facts". (Hand-paste only when you need a surgical excerpt `-f` can't express.)
 3. **Run it as a Bash-tool call** — mandatory on every call (a bare shell command
    is a trap: it blocks the turn and drops the envelope). Issue exactly:
    ```text
@@ -67,15 +71,21 @@ inside the Bash-tool envelope (`run_in_background: true`, `timeout: 7260000`) �
 Background and timeout.
 
 ```
-gpt-pro [--max-wait <sec>] [--dry-run] < prompt.md   # new run
-gpt-pro --run-id <id> [--max-wait <sec>]             # reattach / recover
+gpt-pro [-f <path>]... [--max-wait <sec>] [--dry-run] < prompt.md   # new run
+gpt-pro --run-id <id> [--max-wait <sec>]                            # reattach / recover
 ```
 
 | Flag | Purpose |
 |---|---|
+| `-f`, `--file <path>` | Attach a local file — contents inlined into the prompt (GPT-Pro can't read local paths). Repeatable; accepts a single-level glob (`-f 'src/*.py'`); `@`-prefix is optional sugar. |
+| `--files-from <file>` | Inline every path listed in `<file>` (one per line; `#` comments ok). Repeatable. |
+| `--include-tree <dir>` | Inline a directory recursively — capped, skips hidden/vendor/binary/secret files. Repeatable. |
+| `--allow-secret <path>` | Permit one file the secret scan would otherwise refuse. Repeatable. |
 | `--run-id <id>` | Reattach to an existing run (recovery); skips submit, then waits for the result (blocking fetch on macmini, poll loop over SSH). |
 | `--max-wait <sec>` | Poll deadline on the SSH path (default 7200 = 120 min — generous so a queued run isn't killed mid-flight). Ignored on macmini, where the engine's own 60-min cap and the Bash-tool `timeout` bound the run. |
-| `--dry-run` | Print the resolved run-id and transport, then exit. No Pro quota used. |
+| `--dry-run` | Resolve the included files + run-id, report the composed size, then exit. No Pro quota used. |
+
+Files are inlined through the shared **`filectx`** helper (sibling script): validated, secret-scanned (`FILECTX_SECRETS=deny\|warn\|off`), and capped — all **before** submit, so a bad file burns no quota.
 
 Want a durable copy? Keep the streams **separate**: `gpt-pro < prompt.md > answer.md 2> gpt-pro.log` — never `2>&1` (it contaminates the answer and buries the `run_id`). Optional: the backgrounded task output already captures both streams, so a redirect is only for a persistent on-disk artifact.
 
@@ -87,37 +97,33 @@ the `gpt-pro` script sits beside this `SKILL.md` (`<this-skill-dir>/scripts/gpt-
 
 GPT-Pro runs in a ChatGPT web tab. **It cannot see anything local to you — your codebase,
 your shell, the files on your machine, or this conversation.** Every byte of *local* context
-it needs must be inside the prompt you pipe in: if you reference a file path, paste its
-contents; if a decision earlier in this session shapes the answer, paste that excerpt. It
-*can*, however, reach the **public web** through its own browser/search tool — so don't paste
-public docs it can fetch itself; tell it what to look up (see "Grounding external facts"). The
-rule: private-local context is pasted in; public-external facts are searched for.
+it needs must be inside the prompt: **attach files with `-f <path>`** (the wrapper inlines them
+for you, validated/secret-scanned/capped before submit) and paste any non-file context (a
+decision earlier in this session) into the stdin prompt. Use `-f` instead of hand-`cat`-ing —
+it eliminates the most error-prone step (a forgotten file, mangled `$`/backticks, a silently
+oversized prompt, an accidentally-pasted secret). It *can*, however, reach the **public web**
+through its own browser/search tool — so don't attach public docs it can fetch itself; tell it
+what to look up (see "Grounding external facts"). The rule: private-local context comes in via
+`-f` (or paste); public-external facts are searched for.
 
 Err toward more context, not less — the 1 MB submission cap is generous, and a run that
-fails for missing context still burns 5–20 min. Compose the prompt in a file.
-Prefer the **Write tool** — it's in this skill's `allowed-tools` (bare `mktemp`/`cat`/heredocs
-may not be), and it sidesteps `$`/backtick/heredoc mangling entirely. In a plain shell you
-can instead build it inline:
+fails for missing context still burns 5–20 min. Put the **question** in a file (the **Write
+tool** sidesteps `$`/backtick/heredoc mangling) and attach **files** with `-f`:
 
 ```bash
-PROMPT_FILE=$(mktemp)
-{
-  cat <<'TASK'
-<one-sentence outcome>
-
-Success criteria:
-- ...
-TASK
-  echo
-  echo '=== src/foo.py ==='
-  cat src/foo.py
-} > "$PROMPT_FILE"
-
-gpt-pro < "$PROMPT_FILE"
+gpt-pro -f src/foo.py -f src/bar.py -f 'tests/*.py' < question.md
 ```
 
-For recurring tasks, factor the composer into a small `compose-prompt.sh` in the project —
-keep the file list and section headers there rather than rewriting them on every call.
+`question.md` holds only the question (plus any non-file context); each `-f` is inlined under a
+fenced `## Included files` section. Preview exactly what would be sent — resolved files and the
+composed byte total — without spending quota:
+
+```bash
+gpt-pro --dry-run -f src/foo.py --include-tree docs/ < question.md
+```
+
+You rarely need to assemble the prompt by hand now. If you must (a surgical excerpt `-f` can't
+express), build the whole prompt in a file with the Write tool and pipe it in with no `-f`.
 
 ## Grounding external facts
 
