@@ -29,6 +29,14 @@ exception**, not by per-step approval. Read this before driving the first unit; 
              Declarative, NOT a permission request — the contract already authorized this.
 5. ACT       do the work, strictly inside `authority` (allow_paths / allow_commands) and scope
              (scope_out / anti-goals). Reversible, in-scope actions only without asking.
+             PREFER INVARIANTS OVER FALLBACKS: when handling a possible failure, first try to make
+             the bad state unrepresentable (strengthen a type/invariant, validate once at the
+             boundary, narrow the input) rather than adding a local catch/guard for a state the
+             design could forbid. A change whose whole content is a defensive branch for a state
+             nothing can produce is a smell — across a multi-unit run these accrete into code that
+             looks more robust while becoming less comprehensible. Defend only states that can
+             genuinely occur; otherwise eliminate the class. (This is a quality nudge inside the
+             authorized work, never a license to expand scope.)
 6. VERIFY    run the unit's acceptance (acceptance_per_item / phase Acceptance / each done_when item).
              Surface the verifier's REAL output into the transcript — the command + a bounded
              excerpt of its result / exit code (≤~20 lines), not just a pass/fail claim. The
@@ -36,7 +44,8 @@ exception**, not by per-step approval. Read this before driving the first unit; 
                pass → LEDGER it (step 7)
                fail → before repairing, if the failure has a systematic shape (same category across
                       many units, or a count far beyond the change's scope) rule out a bad signal
-                      first (Stop conditions § Suspect signal). Otherwise repair, up to `repair_budget`
+                      first (Stop conditions § Suspect signal). Otherwise repair toward the invariant,
+                      not another local defense (step 5), up to `repair_budget`
                       attempts (default 3), recording each failed attempt in the unit's evidence/note.
                       Still failing → mark the unit `blocked` with the reason, write it to the
                       artifact, and STOP. Do not advance.

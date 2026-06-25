@@ -10,6 +10,7 @@ schema_version: goal-contract/v1
 id: 20260503-2200-api-timeout-fix      # YYYYMMDD-HHMM-<slug>; slug ≤ 30 chars, kebab-case
 status: ready                           # ready | blocked | draft
 cynefin_domain: complicated             # clear | complicated | complex
+durability: load_bearing                # mechanical | disposable | load_bearing — shelf life of the output; tunes downstream loop autonomy (default load_bearing)
 created_by: goal-elicit
 created_at: 2026-05-03T22:00:00Z        # ISO 8601 UTC
 approved_by_user: true
@@ -24,6 +25,7 @@ source_prompt_summary: "User asked to clarify what they wanted before building X
 - `id` — `<YYYYMMDD>-<HHMM>-<slug>`. Generate with `date -u +%Y%m%d-%H%M`. Slug is a short kebab-case summary (≤ 30 chars).
 - `status` — exactly one of three values. No "in_progress", no "almost_done".
 - `cynefin_domain` — set in Phase 0; do not revise downward (don't claim "clear" after asking 4 rounds).
+- `durability` — set in Phase 0 (orthogonal to `cynefin_domain`); the shelf life of the output. `mechanical`/`disposable` permit looser downstream gates; `load_bearing` (the default when unsure) keeps a human in the loop for comprehension and biases acceptance toward invariants. An absent or unrecognized value falls back to `load_bearing` (the safe default). See goal-elicit's "Durability" triage.
 - `approved_by_user` — `true` only after the user explicitly said "approved", "yes use this", or supplied edits that you incorporated. Silence is not assent.
 - `rounds_used` — number of user turns consumed by the interview, including resumed turns.
 - `blocking_unknowns` — empty list if `status: ready`. Non-empty list of P0 questions when `status: blocked`.

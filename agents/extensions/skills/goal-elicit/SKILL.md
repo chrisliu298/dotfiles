@@ -49,6 +49,18 @@ If the request is Clear, do not run the full interview — it's a tax on simple 
 
 Triage also selects the **work shape** — which artifact to write (contract / checklist / phased doc) — orthogonally to the domain. See the "Work shape" section in `references/cynefin-triage.md`. Default to a contract; promote to a checklist (enumerable, script-generatable items) or a phased doc (staged build with per-phase acceptance) only on a clear signal.
 
+### Durability — the shelf-life axis (records `durability`)
+
+A third, orthogonal classification: the **shelf life of what the goal produces**. It is orthogonal to both Cynefin (how knowable) and work shape (how enumerated), and it decides how much autonomy a downstream loop should be trusted with — because a hands-off loop is reliable when it transforms existing code or makes short-lived artifacts, but amplifies defensive sprawl and erodes comprehensibility when it authors lasting code unattended.
+
+| `durability` | What the goal produces | Downstream effect |
+|---|---|---|
+| `mechanical` | A verifiable transform of existing code/data — a port, migration, rename, or refactor with a binary or LLM-judgeable oracle. | Looser gates: a binary/LLM judge is a sufficient continue-signal; a downstream loop may auto-skip spec-review (the legibility lens stays advisory). |
+| `disposable` | A short-shelf-life artifact — a PoC, experiment, research finding, benchmark probe. | Looser gates: optimize for speed and coverage; legibility of throwaway implementation code is secondary to reproducibility and result interpretability. |
+| `load_bearing` | Lasting code others read, maintain, and depend on. | Tighter gates: acceptance emphasizes **invariants** (make bad states unrepresentable, not "handle every case"), and a downstream loop must keep a human in for comprehension — never fully hands-off. |
+
+Record the choice in the artifact frontmatter (`durability: …`); **default to `load_bearing` when unsure** — the conservative, more-oversight choice. For `load_bearing` goals, bias acceptance criteria toward invariants and comprehensibility, not just behavioral pass/fail. For a `disposable` metric-optimization or performance-exploration loop (try → measure → keep-or-revert), the purpose-built driver is the **autoresearch** skill, not a goal-drive/goal-loop artifact.
+
 ## The interview
 
 Five phases for Complicated/Complex domains. Round count below counts **user turns**, not assistant turns.

@@ -57,7 +57,9 @@ load artifact → reconcile against the repo (trust only verified facts)
 while unverified units remain AND no exception:
     unit  = next pending  (checklist: a batch of batch_size | phased: first non-done phase | contract: the goal)
     announce the next unit in 1–3 lines (declarative — not a permission request)
-    act    within the artifact's authority (reversible / in-scope only)
+    act    within the artifact's authority (reversible / in-scope only); prefer making bad states
+           unrepresentable over adding a local fallback (execution-loop.md § ACT) — defensive
+           branches compound across units into code that looks robust but reads as sprawl
     verify against the unit's acceptance
     ledger: flip to done with evidence — patch the artifact in place (never regenerate)
     if commit_policy == per_unit → one local git commit for this verified unit

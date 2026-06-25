@@ -94,6 +94,17 @@ no review tax on trivial goals). Override the depth with `--spec-review "<config
 sign-off → `GOAL-LOOP STOPPED` (`spec_rejected`); re-run goal-elicit. Details:
 `references/loop-protocol.md` § Spec review.
 
+## Durability triage — tune autonomy to the goal's shelf life
+
+The loop reads the artifact's `durability` field (goal-elicit's Phase 0 axis: `mechanical | disposable |
+load_bearing`; **default `load_bearing` if absent**). It encodes how trustworthy a hands-off loop is for
+*this* output — drawing on the post's distinction (where-loops-work vs. lasting-code authorship): loops are
+reliable transforming existing code (`mechanical`) or making short-lived artifacts (`disposable`), and risky
+authoring lasting code (`load_bearing`) unattended. It tunes
+**exactly two levers** and nothing else (it never widens what's fixable or relaxes the two non-negotiables):
+spec-review **auto-skips** for `mechanical`/`disposable`, and the legibility lens + regression guard are
+**mandatory for `load_bearing`** but advisory otherwise. Full table: `references/loop-protocol.md` § Durability.
+
 ## Autonomous mode (`--auto`) — summary; mechanism in the reference
 
 `--auto` runs the loop **unattended** under Claude Code's native `/goal`. Because the `/goal` evaluator
@@ -164,10 +175,10 @@ State = the source artifact + `.goals/<id>.loop.json`. **Advance exactly one pha
 persist the ledger, STOP.** On (re)entry, read `current_phase`, reconcile against the repo, run only it:
 
 ```
-elicit    no ready artifact → goal-elicit (once). Stop after: ready → current_phase = spec-review
-          (default; → drive directly if --no-spec-review or a Clear-domain one-shot artifact);
-          draft/blocked → stopped.                                                         ← ends invocation
-spec-rev  (default; skipped by --no-spec-review / Clear-domain) freeze a SPEC packet {objective ·
+elicit    no ready artifact → goal-elicit (once). Stop after: ready → read `durability` (default
+          load_bearing); current_phase = spec-review (default; → drive directly if --no-spec-review,
+          a Clear-domain one-shot artifact, or a mechanical/disposable artifact); draft/blocked → stopped. ← ends invocation
+spec-rev  (default; skipped by --no-spec-review / Clear-domain / mechanical|disposable) freeze a SPEC packet {objective ·
           acceptance/done_when · scope · constraints}; run the review backend; persist .spec-review.md;
           present findings; YOU approve/edit the spec (pre-lock); on sign-off freeze → current_phase=drive;
           on reject → stopped (spec_rejected). STOP.                                          [human gate]
@@ -176,8 +187,9 @@ drive     **record round_start_ref FIRST** (on entering drive — the diff basel
           stopped. STOP.                                                                   ← ends invocation
 review    if round > max_rounds → stopped (max_rounds), do not dispatch. Else if `prism_config` is empty,
           ask the user for it now (under `--auto`: do not ask — default to `2`); freeze the review packet {artifact · diff since round_start_ref ·
-          COMPLETE marker · verification}; run the backend; persist .review-rN.md, normalize →
-          .findings.json, set current_phase=classify LAST. STOP.                            ← ends invocation
+          COMPLETE marker · verification + the legibility lens}; run the backend; persist .review-rN.md,
+          record this round's `legibility_delta`, normalize → .findings.json, set current_phase=classify
+          LAST. STOP. (load_bearing: 2nd consecutive `worse` → stopped (legibility_regression))  ← ends invocation
 classify  the router mechanically **disposes the non-actionable bulk** (you never see it):
           out-of-scope/`could` → DEFER (ledger), needs_user/ambiguous/one-way-door/recurrence → HALT
           (GOAL-LOOP STOPPED). Only the remaining **actionable batch** (in_scope-mapped +
@@ -242,10 +254,13 @@ fix-checklist template: `references/loop-protocol.md`.
   `needs_user`, `spec_rejected`, `review_rejected`, scope/authority-exceeded, one-way-door, `max_rounds`,
   `oscillation` (same finding recurs), `normalization_failed` (extraction incomplete/invalid),
   `findings_escalating` (each round surfaces more/higher-severity findings than the last — the work is
-  regressing)} — under `--auto` the AUTO-HALTED set adds several `--auto`-specific reasons (artifact,
+  regressing), `legibility_regression` (two consecutive rounds make `load_bearing` code less
+  comprehensible while appearing more robust — the loop's amplified failure mode; see the legibility
+  ratchet)} — under `--auto` the AUTO-HALTED set adds several `--auto`-specific reasons (artifact,
   baseline, lock, path, oracle-manifest, oracle-timeout, spec-contradiction), drops the interactive-only
-  `spec_rejected` (`--auto` freezes the spec, never rejects), and folds `findings_escalating` into the
-  `--auto` regression/oscillation guard; full list:
+  `spec_rejected` (`--auto` freezes the spec, never rejects), folds `findings_escalating` into the `--auto`
+  regression guard, and keeps `legibility_regression` as a **named AUTO-HALTED reason** (the delta has no
+  oracle to fold into); full list:
   `references/loop-protocol.md` § Termination. Print the marker first, then hand back.
 - **Resume** — read `current_phase`, reconcile against verified artifacts + repo (files over the
   pointer; if `review-rN.findings.json` exists, skip re-review → classify). Crash-safety write order:
@@ -271,6 +286,28 @@ improvements; if they silently become work, the loop stops driving *your* goal a
 redefine it. Defense is the two non-negotiables: you classify the actionable batch (nothing written
 until `approve`) + binding-authority (fixes map to acceptance or you author it; out-of-scope never
 touches the source), plus the round cap and oscillation guard.
+
+## The legibility ratchet (the second risk)
+
+A fix loop amplifies the model's worst structural habit: each round answers a local failure with a local
+defense — a fallback for an impossible state, a guard, duplicated machinery — so the code grows **more
+robust-looking and less comprehensible** every iteration, the failure Karpathy frames as models being
+"mortally terrified of exceptions." Severity escalation and scope mutation guards don't catch this: the
+diff stays in-scope and each finding looks reasonable. Two specific defenses, both `load_bearing`-only
+(see § Durability) and detailed in `references/loop-protocol.md`:
+
+1. **Legibility lens** — the review packet asks the reviewer to flag exactly these loop-amplified
+   anti-patterns (fallbacks where an invariant would do, handling of impossible states, defensive
+   duplication, complexity with no error class removed), rate them `should`+ so the router can't auto-defer
+   them, and propose fixes that **remove** machinery / make the bad state unrepresentable. They surface to
+   you (as `in_scope-unmapped`, or as a `needs_user` scope call when the fix exceeds the unit's paths) — the
+   in-loop human-judgment jolt the post argues for. **This in-loop jolt is interactive only**; under `--auto`
+   the findings defer to the morning report / `AUTO-HANDOFF` queue, not an in-loop prompt.
+2. **Legibility regression guard** — each review ends with a `legibility_delta`; two consecutive `worse`
+   rounds HALT (`legibility_regression`) so a human re-reads the cumulative diff before the ratchet
+   compounds. The delta is a **coarse, reviewer-judged liveness heuristic — not an objective bound** (the
+   real defense is the per-round lens above; this just caps continued compounding). (goal-drive carries the
+   executor-side half: prefer invariants over fallbacks while building.)
 
 ## Must not
 

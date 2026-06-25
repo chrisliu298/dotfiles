@@ -29,6 +29,7 @@ to resume. It **must not** duplicate per-unit execution state (goal-drive owns t
   "id": "20260612-roadmap-acquisition-layer",
   "source_artifact": ".goals/20260612-roadmap-acquisition-layer.plan.md",
   "current_phase": "classify",          // elicit|spec-review|drive|review|classify|fix|done|stopped
+  "durability": "load_bearing",         // from the artifact frontmatter (default load_bearing); gates spec-review skip + the legibility guard
   "round": 2,
   "max_rounds": 2,
   "review_backend": "prism",            // prism|external|local|none
@@ -37,6 +38,7 @@ to resume. It **must not** duplicate per-unit execution state (goal-drive owns t
   "round_start_ref": "a1b2c3d",         // git rev captured on entering drive/fix this round (diff baseline)
   "rounds": [
     { "round": 1, "round_start_ref": "0f9e8d7", "drive_marker": "GOAL-DRIVE COMPLETE: <id> — …",
+      "legibility_delta": "same",       // better|same|worse — from the review's legibility lens; two consecutive "worse" → legibility_regression HALT
       "review_report": ".goals/<id>.review-r1.md", "findings": ".goals/<id>.review-r1.findings.json",
       "fix_artifact": ".goals/<id>.fix-r1.checklist.json",
       "disposition": { "accepted": ["R1-F02"], "deferred": ["R1-F05","R1-F08"], "needs_user": [] },
@@ -77,8 +79,10 @@ uncommitted work — never revert it (inherit goal-drive's authority rail).
 
 ## Spec review (mod #1)
 
-**On by default**, between `elicit` and `drive` (config `1`); **skipped by `--no-spec-review` or for a
-Clear-domain one-shot artifact** (goal-elicit's triage = Clear); override depth with `--spec-review
+**On by default**, between `elicit` and `drive` (config `1`); **skipped by `--no-spec-review`, for a
+Clear-domain one-shot artifact** (goal-elicit's triage = Clear), **or for a `mechanical`/`disposable`
+artifact** (durability — a verifiable transform with a real oracle, or a short-shelf-life output, carries little spec-quality tax);
+override depth with `--spec-review
 "<config>"`. It reviews the **goal artifact as a contract**, before any code, to strengthen the
 acceptance criteria — and it is the one point the artifact may still change. It uses its own review
 backend independent of `--review` (prism if available, else `local`); `--review none` suppresses only
@@ -110,6 +114,39 @@ nothing for interactive runs, but they are exactly what lets a later **`--auto`*
 any implementation review — never synthesize one after seeing a finding (reward-hacking). Validate with
 `scripts/oracle_manifest.py validate <manifest> <artifact>`. Skipping them is fine — `--auto` then defers
 everything instead of auto-fixing.
+
+## Durability — tuning autonomy to shelf life
+
+On entering the loop, read the artifact's `durability` frontmatter field (goal-elicit's Phase 0 axis:
+`mechanical | disposable | load_bearing`; **default `load_bearing` if absent or unreadable** — the
+conservative choice) and persist it on `loop.json`. It encodes *how trustworthy a hands-off loop is for
+this output*, which the post's distinction (where-loops-work vs. lasting-code authorship) makes orthogonal
+to scope and clarity: loops are reliable when
+they transform existing code (`mechanical`) or make short-lived artifacts (`disposable`), and risky when
+they author lasting code (`load_bearing`) unattended — that is where defensive sprawl accretes and
+comprehension erodes. It tunes exactly two levers, nothing else (it never changes what is fixable or
+relaxes the two non-negotiables):
+
+| `durability` | Spec-review | Legibility lens + regression guard |
+|---|---|---|
+| `mechanical` | auto-skipped *when the transform is verifiable via a real oracle* — little spec-quality tax | lens reports advisory; `worse` does **not** halt |
+| `disposable` | auto-skipped (short shelf life) | lens reports advisory; `worse` does **not** halt |
+| `load_bearing` | runs by default | lens **mandatory**; two consecutive `worse` → `legibility_regression` HALT |
+
+A `mechanical`/`disposable` classification is a claim the operator made at elicit time; if the diff is in
+fact authoring lasting load-bearing code, that is a spec error to surface, not a reason to silently widen
+autonomy. Under `--auto`, `load_bearing` additionally means an `AUTO-COMPLETE` is **blocked** while the
+latest `legibility_delta` is `worse` (it becomes `AUTO-HANDOFF` with the legibility findings queued) — the
+loop never reports a lasting-code goal "done" on a round that made it less comprehensible. A `load_bearing`
+legibility finding whose fix exceeds the unit's `allow_paths` or trips a one-way-door keyword routes to
+`needs_user` (see The router); under `--auto` that biases toward **AUTO-HALT**, never the default
+defer-and-continue — otherwise a structural "remove the machinery" fix would queue in the morning report
+while the loop keeps amplifying.
+
+This bounds the **per-round** legibility of one goal's diff; it does **not** address the codebase-level
+*cognitive dependency* the post calls its "scariest part" — a system becoming loop-built, loop-reviewed,
+loop-maintained, and no longer humanly explicable. No single goal artifact can own that portfolio-level
+trajectory; treat it as out of scope here, not solved.
 
 ## The router — nominator, not apply-authority
 
@@ -187,6 +224,29 @@ A round-N finding **recurs** if its `maps_to` equals that of an accepted+fixed f
 round**, or its `claim` shares ≥50% key terms with one. Compute at classify time by scanning all prior
 `findings.json`. On recurrence → `stop_reason: oscillation`, do not write the fix, emit `GOAL-LOOP STOPPED`.
 
+### Legibility regression rule
+
+The legibility lens ends each review with `legibility_delta: better|same|worse`; record it on the round
+ledger entry. If **two consecutive rounds report `worse`** — the fix loop is ratcheting up defensive
+machinery faster than it removes error classes, i.e. the code "appears more robust while becoming less
+understandable" — HALT: `stop_reason: legibility_regression`, emit `GOAL-LOOP STOPPED`, and hand back so a
+human re-reads the cumulative diff before more rounds compound it. A **single** `worse` round does **not**
+halt — its legibility findings just surface in the normal actionable batch (that's the per-round jolt).
+
+`legibility_delta` is a **subjective, reviewer-judged signal — not an objective measurement.** In the
+post's own terms it is a signal "useful enough to drive another iteration" (here, a human re-read), never a
+quantitative bound; it is a **liveness** guard alongside oscillation and `findings_escalating`, not proof
+the ratchet was prevented. It is not game-proof — a non-monotone `worse/same/worse` pattern slips the
+two-consecutive gate — so the **real defense is the per-round lens findings** (`should`+, surfaced); this
+HALT only bounds *continued compounding*. For a `load_bearing` review the lens **MUST emit exactly one
+parseable `legibility_delta`**; a missing or unparseable value **fails closed** — `normalization_failed`
+interactively, `AUTO-HALTED legibility_regression` under `--auto` — never a silent `same`. Prior rounds with
+no recorded delta (e.g. an artifact upgraded mid-loop) count as **neutral** — a missing value never forms a
+`worse` pair.
+
+**Relaxed for a `mechanical`/`disposable` artifact** (durability): the lens still reports, but `worse` does
+not halt — those outputs are short-shelf-life by design, so comprehensibility of the code is not load-bearing.
+
 ## The child fix artifact — `.goals/<id>.fix-rN.checklist.json`
 
 A conforming goal-drive bring-your-own checklist (must pass `goal-drive/scripts/lint_goal_artifact.py`).
@@ -227,6 +287,18 @@ Review this implementation against its source goal artifact. Return actionable f
 violate an acceptance criterion, done_when item, constraint, or verification integrity. Classify
 anything else as optional or out-of-scope. For each: severity, the specific claim, a bounded fix, an
 acceptance criterion, and how to verify it.
+### Legibility lens (the loop's second failure mode)
+Also judge whether this round made the code LESS COMPREHENSIBLE WHILE APPEARING MORE ROBUST — the
+characteristic damage a fix loop does. Flag as distinct findings: fallbacks/guards added for states the
+design could make unrepresentable; handling of states that cannot occur; defensive duplication; new
+abstraction or machinery that papers over unclear design; net complexity growth with no error class
+removed. Rate these `should` MINIMUM (`blocker` when an invariant is actually violated) — NEVER `could`,
+so the router cannot silently defer them — and let each proposed fix REMOVE machinery or make the bad
+state unrepresentable, not add more. End the review with one line —
+`legibility_delta: better|same|worse — <one clause>` — where **`worse`** = this round added defensive
+machinery/complexity with no error class removed; **`same`** = net neutral (some added and some removed, or
+none found); **`better`** = a net reduction in machinery or complexity. (The per-round signal the
+legibility_regression guard reads; it is a subjective judgement, not a measurement — see the rule.)
 ### Source artifact
 <path + the acceptance_criteria / done_when / constraints block, verbatim>
 ### What changed
@@ -236,6 +308,16 @@ acceptance criterion, and how to verify it.
 ```
 
 For `--review prism`, forward `prism_config` verbatim ahead of the packet (`Skill(prism, "2 <packet>")`).
+Rating legibility findings `should`+ keeps them off the `could → out_of_scope → DEFER` auto-path; the
+guarantee is **surfaced or fail-closed**, not specifically `in_scope-unmapped`. Most carry no acceptance line
+and route to `in_scope-unmapped` (**surfaced**; accept ⇒ author the acceptance line first). But a structural
+fix that *removes machinery* often exceeds the unit's `allow_paths` or trips a one-way-door keyword → the
+router routes it to `needs_user` instead: interactively a **surfaced scope call** (a STOP, not silently
+lost); under `--auto` it biases toward **AUTO-HALT** (§ Durability), not the default defer-and-continue.
+**The in-loop "jolt" is interactive only** — under `--auto`, legibility findings land in the morning report /
+`AUTO-HANDOFF` queue (a deferred review), not an in-loop comprehension prompt. The `legibility_delta` is
+recorded in the round ledger and drives the **Legibility regression rule** above. For a `mechanical`/`disposable`
+artifact (durability), the lens still reports but is advisory — see § Durability.
 
 ## The path beyond report-only — oracle-gating (realized by `--auto`)
 
@@ -418,7 +500,8 @@ full deferred queue.
   ready spec to drive — see Precondition), `needs_user` (blocker), `one_way_door`, `oscillation`,
   `normalization_failed`, `stale_baseline`, `lock_conflict`, `unauthorized_path`, `stale_oracle_manifest`,
   `oracle_timeout` (a mechanical oracle never resolves GREEN/RED), `review_backend_unavailable` (when review
-  was required), `max_rounds`, `spec_contradiction`} — each produced by a rule in the policy table,
+  was required), `max_rounds`, `spec_contradiction`, `legibility_regression` (two consecutive `worse`
+  legibility deltas on a `load_bearing` goal, or a missing/unparseable delta)} — each produced by a rule in the policy table,
   Precondition, or hardening section. Ledger: `current_phase=stopped`, `stop_reason=<reason>`,
   `auto_terminal=halted`.
 
@@ -480,7 +563,13 @@ Same defenses as interactive mode, but with no human to catch a slip, `--auto` *
   oracle* goes RED again after a prior GREEN (a regressing fix would loop forever). The interactive
   `findings_escalating` stop_reason is **folded into these guards under `--auto`** (a round whose oracle-RED
   set grew after a fix is the regression signal) — it is not a separate `--auto` AUTO-HALTED reason;
-  non-oracle escalating findings simply accrue in the morning queue.
+  non-oracle escalating findings simply accrue in the morning queue. **Legibility regression** (two consecutive
+  `worse` legibility deltas, `load_bearing` only — or a missing/unparseable delta) is handled here too, but
+  because the delta has no oracle to fold into it is a **named AUTO-HALTED reason** (`legibility_regression`),
+  not a fold: a single `worse` round blocks AUTO-COMPLETE (→ AUTO-HANDOFF with legibility findings queued); a
+  second consecutive `worse`, or an unparseable delta, emits `GOAL-LOOP AUTO-HALTED: <id> — legibility_regression`;
+  and a `load_bearing` legibility finding routed to `needs_user` biases toward AUTO-HALT rather than
+  defer-and-continue. For `mechanical`/`disposable` the whole guard is inert (§ Durability).
 - **False-positive `/goal` completion** — evidence block must precede the marker; AUTO-COMPLETE forbidden on a
   DEFER-only round; TIMEOUT bounds a stuck run with a TIMEOUT *report*, not "done".
 - **Normalization loss** — schema-validate every record, **fail closed**; mandatory `source_review` anchor;
