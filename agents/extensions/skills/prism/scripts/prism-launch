@@ -472,6 +472,14 @@ cmd_prepare() {
     | ($px | type) as $pxt | (if $pxt != "array" then bad("parallax must be an array") else . end)
     | ($sa | type) as $sat | (if $sat != "array" then bad("subagents must be an array") else . end)
     | ($gp | type) as $gpt | (if $gpt != "array" then bad("gptpro must be an array") else . end)
+    # Fail-closed on the one mis-spelling that silently loses data. The gpt-pro lens
+    # list key is the hyphen-less "gptpro" (read as $gp above). On the lenient --config
+    # raw-JSON path a hand-authored "gpt-pro"/"gpt_pro" key is otherwise silently ignored,
+    # dropping the ENTIRE gpt-pro lane with no error on a mixed run (the zero-records guard
+    # below only fires when ALL lanes are empty). The --dispatch compiler only ever emits
+    # "gptpro", so this never fires on that path — it guards the raw-JSON escape hatch.
+    | (if has("gpt-pro") then bad("config key \"gpt-pro\" is invalid — the gpt-pro lens list key is the hyphen-less \"gptpro\"; the hyphenated key is silently ignored and would drop the entire gpt-pro lane.") else . end)
+    | (if has("gpt_pro") then bad("config key \"gpt_pro\" is invalid — the gpt-pro lens list key is the hyphen-less \"gptpro\"; the underscore key is silently ignored and would drop the entire gpt-pro lane.") else . end)
 
     # Validate + normalize parallax entries against the peer registry.
     | ($peers | keys) as $valid_peers
@@ -1274,6 +1282,10 @@ cmd_clean() {
     local glog grun gres live=""
     for glog in "$base"-gptpro-*.log; do
       [ -f "$glog" ] || continue
+      # CONTRACT: this prefix mirrors the gpt-pro wrapper's stderr namespace —
+      # gpt-pro-relay/scripts/gpt-pro prints "gpt-pro: run_id=<id> ...". Drift on either
+      # side silently breaks recovery (no run_id → abandon/double-submit). Keep in sync;
+      # pinned by the cross-file contract test in test-prism-launch.sh.
       grun=$(sed -n 's/^gpt-pro: run_id=\([^ ]*\).*/\1/p' "$glog" 2>/dev/null | tail -1)
       [ -n "$grun" ] || continue
       gres="${glog%.log}.res.md"
@@ -1337,6 +1349,7 @@ cmd_results() {
       if [ -s "$gres" ]; then
         echo "  [done ] $glens  $gres"
       else
+        # CONTRACT: prefix mirrors gpt-pro-relay/scripts/gpt-pro's stderr namespace (see clean's note).
         grun=$(sed -n 's/^gpt-pro: run_id=\([^ ]*\).*/\1/p' "$glog" 2>/dev/null | tail -1)
         if [ -n "$grun" ]; then
           echo "  [pending] $glens  run_id=$grun  (reattach: gpt-pro --run-id $grun · log: $glog)"

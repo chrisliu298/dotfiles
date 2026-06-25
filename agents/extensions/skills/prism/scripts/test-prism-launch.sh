@@ -598,6 +598,23 @@ expect_err "gptpro: rejects an invalid posture" "$LAUNCH" prepare --config "$GCP
 # duplicate lens across the run (subagent + gptpro share a name)
 GCDUP="$TMP/gpdup.json"; jq -n --arg p "$GPKB" '{shared_packet:$p,references:[],parallax:[],subagents:[{lens:"Same",lens_desc:"d"}],gptpro:[{lens:"Same",lens_desc:"d"}]}' > "$GCDUP"
 expect_err "gptpro: rejects a lens name shared with a subagent" "$LAUNCH" prepare --config "$GCDUP"
+# the hyphenated product spelling as a dispatch Type token must fail-closed (the just-fixed
+# operator-typo class): the parser accepts only the hyphen-less "gptpro" record type.
+GHYP="$TMP/gpt-hyphen.dispatch"
+printf 'Shared-Packet: %s\nReference: none\n\nType: gpt-pro\nLens: X\nLens-Desc: y\n' "$GPKB" > "$GHYP"
+expect_err "gptpro: rejects 'Type: gpt-pro' (hyphenated) — must be 'gptpro'" "$LAUNCH" prepare --dispatch "$GHYP"
+GUND="$TMP/gpt-under.dispatch"
+printf 'Shared-Packet: %s\nReference: none\n\nType: gpt_pro\nLens: X\nLens-Desc: y\n' "$GPKB" > "$GUND"
+expect_err "gptpro: rejects 'Type: gpt_pro' (underscore) — must be 'gptpro'" "$LAUNCH" prepare --dispatch "$GUND"
+# the lenient --config raw-JSON path must ALSO fail-closed on a misspelled lens-list key:
+# a "gpt-pro"/"gpt_pro" key is silently ignored, so a mixed run (parallax present) would
+# otherwise pass the zero-records guard and drop the whole gpt-pro lane with no error.
+GCKEY="$TMP/gp-badkey.json"
+jq -n --arg p "$GPKN" '{shared_packet:$p,references:[],parallax:[{to:"codex",name:"adv",lens:"Adversarial",lens_desc:"attack it"}],subagents:[],"gpt-pro":[{lens:"X",lens_desc:"y"}]}' > "$GCKEY"
+expect_err "gptpro: --config rejects a 'gpt-pro' lens-list key (would silently drop the lane)" "$LAUNCH" prepare --config "$GCKEY"
+GCKEY2="$TMP/gp-badkey2.json"
+jq -n --arg p "$GPKN" '{shared_packet:$p,references:[],parallax:[{to:"codex",name:"adv",lens:"Adversarial",lens_desc:"attack it"}],subagents:[],"gpt_pro":[{lens:"X",lens_desc:"y"}]}' > "$GCKEY2"
+expect_err "gptpro: --config rejects a 'gpt_pro' lens-list key (would silently drop the lane)" "$LAUNCH" prepare --config "$GCKEY2"
 
 echo "== gptpro: gptpro-only run + results/digest/clean lanes =="
 GPKO="$TMP/prism-gpo.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$GPKO"
@@ -841,6 +858,21 @@ grep -qF '## Digest' "$HTA" \
   && ok "contract: codex effort_values[-1] is the top tier (xhigh)" || bad "contract: codex effort_values ordering ([-1] != xhigh)"
 [ "$(jq -r '."grok-build".effort_values[-1]' "$PJ")" = "high" ] \
   && ok "contract: grok-build effort_values[-1] is the top tier (high)" || bad "contract: grok-build effort_values ordering ([-1] != high)"
+# gpt-pro run_id recovery is a cross-SKILL string coupling: the gpt-pro wrapper prints
+# "gpt-pro: run_id=<id> ..." on stderr, and prism-launch greps '^gpt-pro: run_id=' (clean's
+# live-worker guard + results' reattach hint). A spelling/format drift on EITHER side
+# silently makes recovery find nothing → abandon/double-submit risk. Pin both sides.
+GPWRAP="$HERE/../../gpt-pro-relay/scripts/gpt-pro"
+if [ -f "$GPWRAP" ]; then
+  grep -qF 'gpt-pro: run_id=' "$GPWRAP" \
+    && ok "contract: gpt-pro wrapper emits the 'gpt-pro: run_id=' stderr prefix prism-launch greps" \
+    || bad "contract: 'gpt-pro: run_id=' prefix missing/renamed in gpt-pro-relay/scripts/gpt-pro (prism recovery would silently find nothing)"
+else
+  echo "  SKIP: gpt-pro wrapper not found at $GPWRAP (cross-skill run_id contract unchecked)"
+fi
+grep -qF '^gpt-pro: run_id=' "$LAUNCH" \
+  && ok "contract: prism-launch greps the '^gpt-pro: run_id=' prefix the wrapper emits" \
+  || bad "contract: prism-launch no longer greps '^gpt-pro: run_id=' (recovery drift from the wrapper)"
 
 echo "== Include: file front door =="
 INCD="$TMP/incsrc"; mkdir -p "$INCD"
