@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Thin launcher for crons.py. The implementation is stdlib-only Python, so no venv or
+# third-party install is needed — any python3 will do. This launcher just finds an
+# interpreter and execs the sibling crons.py.
+#
+#   crons scaffold|render|check [--root D]
+#   crons reconcile [--root D] [--rearm-all]   # reads a CronList dump on STDIN
+#   crons self-test
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+script="$here/crons.py"
+
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 "$script" "$@"
+elif command -v python >/dev/null 2>&1 \
+     && python -c 'import sys; sys.exit(0 if sys.version_info[0] == 3 else 1)' 2>/dev/null; then
+  exec python "$script" "$@"   # only if `python` is actually Python 3
+fi
+
+echo "crons: requires python3 (stdlib only; no venv needed)" >&2
+exit 127

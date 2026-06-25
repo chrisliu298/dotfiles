@@ -37,6 +37,9 @@ SKILLS=(
     "relay|./agents/extensions/skills/relay|claude"
     # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup)
     "keep-warm|./agents/extensions/skills/keep-warm|claude"
+    # crons: claude-only durable manifest + re-arm for the recurring /loop + CronCreate fleet
+    # (CronCreate/CronList/CronDelete are Claude-only); preparer-not-actuator, no docmaint freshness gate
+    "crons|./agents/extensions/skills/crons|claude"
     # prism: claude-only caller (dispatches parallax to Codex + Grok + GLM + Kimi + DeepSeek + MiMo via relay)
     "prism|./agents/extensions/skills/prism|claude"
     # goal-loop: default review backend is prism (claude-only); built on the Skill/AskUserQuestion
