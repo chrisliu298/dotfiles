@@ -168,7 +168,16 @@ dispatch_to_config() {
         [ -z "$DP_quote" ] || die "prepare: --dispatch has more than one Partial-User-Quote line"
         DP_quote="$val" ;;
       Type)
-        dp_flush; DP_in=1; DP_type="$val"; DP_seen="" ;;
+        # Accept the hyphenated/underscore product spelling as an alias for the record
+        # token. Unlike the --config lens-list KEY (where a mis-spelled "gpt-pro" key is
+        # silently ignored and drops the whole lane, so it must fail closed), the dispatch
+        # Type VALUE is explicit and already hard-fails on anything unrecognized — so
+        # normalizing gpt-pro/gpt_pro → gptpro just removes a pointless re-prepare cycle.
+        dp_flush; DP_in=1; DP_seen=""
+        case "$val" in
+          gpt-pro|gpt_pro) DP_type="gptpro" ;;
+          *)               DP_type="$val" ;;
+        esac ;;
       Effort)
         die "prepare: --dispatch line $lineno: 'Effort:' is no longer authored — prism-launch sets effort per peer from the registry (Codex xhigh, Grok Build high). Remove the line." ;;
       To|Name|Lens|Lens-Desc|Posture)
@@ -1169,12 +1178,13 @@ scaffold_include_hint() {
 }
 
 cmd_scaffold() {
-  local n=1 packet="" preset=""
+  local n=1 packet="" preset="" out=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --n)      [ $# -ge 2 ] || die "scaffold: --n requires a value";      n="$2";      shift 2 ;;
       --packet) [ $# -ge 2 ] || die "scaffold: --packet requires a value"; packet="$2"; shift 2 ;;
       --preset) [ $# -ge 2 ] || die "scaffold: --preset requires a value"; preset="$2"; shift 2 ;;
+      --out)    [ $# -ge 2 ] || die "scaffold: --out requires a value";    out="$2";    shift 2 ;;
       -*) die "scaffold: unknown flag: $1 (effort is fixed — Codex xhigh, Grok Build high — there is no --effort)" ;;
       *)  die "scaffold: unexpected argument: $1" ;;
     esac
@@ -1182,6 +1192,16 @@ cmd_scaffold() {
   case "$n" in ''|*[!0-9]*) die "scaffold: --n must be a positive integer" ;; esac
   [ "$n" -ge 1 ] || die "scaffold: --n must be >= 1"
   command -v jq >/dev/null 2>&1 || die "scaffold: jq not found in PATH (needed to read the peer registry + lens catalog)"
+  # --out writes a prepare-READY dispatch directly (no Write/Edit by the agent → no
+  # wasted Read). It is therefore restricted to the zero-FILL case: --preset (a complete
+  # lens set) + a real --packet (so Shared-Packet is not the placeholder). A FILL skeleton
+  # written to a file would force the agent to Edit it, re-creating the shell-made-file
+  # Read trap this whole flow exists to avoid — so refuse it.
+  if [ -n "$out" ]; then
+    case "$out" in /*) ;; *) die "scaffold: --out path must be absolute: $out" ;; esac
+    [ -n "$preset" ] || die "scaffold: --out requires --preset (a FILL skeleton written to a file would force a wasted Read to edit it — author custom lenses with the Write tool instead)"
+    [ -n "$packet" ] || die "scaffold: --out requires --packet <real path> so the Shared-Packet line is prepare-ready (not the /tmp/prism-<id>.md placeholder)"
+  fi
   # Effort is fixed and CLI-derived (Codex xhigh, Grok Build high) — never authored in the dispatch.
   [ -n "$packet" ] || packet="/tmp/prism-<id>.md"
 
@@ -1198,26 +1218,32 @@ cmd_scaffold() {
     set -- $names
     [ "$#" -eq "$((npeers + 1))" ] \
       || die "scaffold: preset '$preset' has $# lenses but the registry defines $npeers tiers + 1 subagent = $((npeers + 1)) slots — update templates/lens-catalog.json (.presets) to match the registry."
-    printf 'Shared-Packet: %s\n' "$packet"
-    printf 'Prism-Mode: full\nPrism-N: 1\nPrism-M: 0\n\n'
-    printf '# Preset "%s": eight lenses pre-filled in canonical tier order (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$preset"
-    printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
-    printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
-    printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
-    printf '# Edit any Lens / Lens-Desc to taste; write the Shared-Packet file before prepare.\n\n'
-    scaffold_include_hint
-    # Slot 1 → subagent; slots 2.. → parallax peers in canonical registry order.
-    # After `set -- $names`, $1 is the subagent lens and $2..$N the parallax lenses;
-    # ${!idx} indirectly reads the positional param numbered by $idx (2,3,…).
-    printf 'Type: subagent\nLens: %s\nLens-Desc: %s\n\n' "$1" "$(lens_desc_for "$1")"
-    local idx=2 peer
-    while IFS= read -r peer; do
-      [ -n "$peer" ] || continue
-      printf 'Type: parallax\nTo: %s\nLens: %s\nLens-Desc: %s\n\n' "$peer" "${!idx}" "$(lens_desc_for "${!idx}")"
-      idx=$((idx + 1))
-    done <<< "$peers"
+    # Emit the complete preset dispatch to --out (a prepare-ready file) or stdout.
+    # die()s above already fired to stderr; only the dispatch body is routed here.
+    {
+      printf 'Shared-Packet: %s\n' "$packet"
+      printf 'Prism-Mode: full\nPrism-N: 1\nPrism-M: 0\n\n'
+      printf '# Preset "%s": eight lenses pre-filled in canonical tier order (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$preset"
+      printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
+      printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
+      printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
+      printf '# Edit any Lens / Lens-Desc to taste; write the Shared-Packet file before prepare.\n\n'
+      scaffold_include_hint
+      # Slot 1 → subagent; slots 2.. → parallax peers in canonical registry order.
+      # After `set -- $names`, $1 is the subagent lens and $2..$N the parallax lenses;
+      # ${!idx} indirectly reads the positional param numbered by $idx (2,3,…).
+      printf 'Type: subagent\nLens: %s\nLens-Desc: %s\n\n' "$1" "$(lens_desc_for "$1")"
+      local idx=2 peer
+      while IFS= read -r peer; do
+        [ -n "$peer" ] || continue
+        printf 'Type: parallax\nTo: %s\nLens: %s\nLens-Desc: %s\n\n' "$peer" "${!idx}" "$(lens_desc_for "${!idx}")"
+        idx=$((idx + 1))
+      done <<< "$peers"
+    } > "${out:-/dev/stdout}"
+    [ -n "$out" ] && echo "prism-launch: wrote prepare-ready dispatch → $out (write the packet $packet, then: prism-launch prepare --dispatch $out)" >&2
     return 0
   fi
+  [ -z "$out" ] || die "scaffold: --out reached the FILL path — this should be unreachable (--out requires --preset). File a bug."
 
   printf 'Shared-Packet: %s\n' "$packet"
   printf 'Prism-Mode: full\nPrism-N: %s\nPrism-M: 0\n\n' "$n"
@@ -1522,7 +1548,7 @@ cmd_help() {
 prism-launch — Prism dispatch launcher (parallax fan-out + dispatch prep)
 
 Usage:  (all subcommands require `jq` in PATH)
-  prism-launch scaffold [--n <N>] [--preset <type>] [--packet <path>]  # fill-in dispatch skeleton
+  prism-launch scaffold [--n <N>] [--preset <type>] [--packet <path>] [--out <path>]  # dispatch skeleton
   prism-launch prepare  --dispatch <dispatch-file>  [--expect-n <N> [--expect-m <M>]]   # default: line-oriented control file
   prism-launch prepare  --config   <config.json>    [--expect-n <N> [--expect-m <M>]]   # escape hatch: raw JSON (one of the two)
   prism-launch parallax <manifest.json> [--dry-run]
@@ -1534,9 +1560,14 @@ Usage:  (all subcommands require `jq` in PATH)
 
 scaffold:  emit a ready-to-fill dispatch skeleton for the symmetric default (N of each of the
            eight models; Codex xhigh + Grok Build high fixed). Emits the full-roster contract
-           (Prism-Mode: full / Prism-N / Prism-M) for you. Replace each "FILL" Lens/Lens-Desc, then Write it.
+           (Prism-Mode: full / Prism-N / Prism-M) for you. Prints to stdout as a copy-from
+           template — author the dispatch with the Write tool (do NOT redirect stdout into the
+           file and then edit it: a shell-made file forces a wasted Read). Replace each "FILL".
            --preset <review|design|diagnosis|compare|research|decision|writing> pre-fills eight
-           lenses by task type (N=1). gpt-pro lenses are opt-in — add them by hand (below).
+           lenses by task type (N=1). --out <path> writes a prepare-READY dispatch directly
+           (requires --preset + --packet, i.e. zero FILLs) so the agent skips Write/Edit
+           entirely. gpt-pro lenses are opt-in — add them by hand (below); the record Type
+           accepts gptpro (and the gpt-pro/gpt_pro spellings as aliases).
 prepare:   validate the dispatch/config, render all launchers from templates, write a manifest;
            inject the canonical ## Constraints, ## How to answer, and ## Grounding external facts
            into the shared packet if absent (so you author the packet with just Full Question +

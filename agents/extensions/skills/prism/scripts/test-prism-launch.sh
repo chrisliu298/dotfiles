@@ -380,6 +380,15 @@ expect_err "scaffold rejects --preset with --n > 1" "$LAUNCH" scaffold --n 2 --p
 printf '## Full Question\nq\n\n## Context\nc\n' > /tmp/prism-pp.md
 "$LAUNCH" scaffold --preset review --packet /tmp/prism-pp.md > /tmp/prism-pp.dispatch
 expect_ok "a preset scaffold round-trips through prepare" "$LAUNCH" prepare --dispatch /tmp/prism-pp.dispatch
+# --out writes a prepare-ready dispatch directly (no Write/Edit by the agent → no Read trap)
+SCOUT="$TMP/scout.dispatch"; SCOUTPKT="$TMP/prism-scout.md"
+printf '## Full Question\nq\n\n## Context\nc\n' > "$SCOUTPKT"
+expect_ok "scaffold --out writes a preset dispatch to a file" "$LAUNCH" scaffold --preset review --packet "$SCOUTPKT" --out "$SCOUT"
+{ [ -f "$SCOUT" ] && [ "$(grep -c '^Type:' "$SCOUT")" = "8" ] && grep -q "^Shared-Packet: $SCOUTPKT" "$SCOUT"; } && ok "scaffold --out file is a complete 8-record dispatch with the real packet" || bad "scaffold --out content"
+expect_ok "scaffold --out file is directly prepare-ready (no edit)" "$LAUNCH" prepare --dispatch "$SCOUT"
+expect_err "scaffold --out requires --preset (a FILL file would force a Read)" "$LAUNCH" scaffold --packet "$SCOUTPKT" --out "$SCOUT"
+expect_err "scaffold --out requires --packet (Shared-Packet must be real)" "$LAUNCH" scaffold --preset review --out "$SCOUT"
+expect_err "scaffold --out rejects a relative path" "$LAUNCH" scaffold --preset review --packet "$SCOUTPKT" --out rel.dispatch
 # prepare prints the expected-notification count (capture first — grep -q on the pipe would SIGPIPE prepare mid-dump)
 "$LAUNCH" prepare --dispatch /tmp/prism-pp.dispatch >"$TMP/ppnotif.out" 2>/dev/null
 grep -q 'wait for 2 completion notification' "$TMP/ppnotif.out" && ok "prepare prints the expected-notification count" || bad "notification-count line"
@@ -599,14 +608,18 @@ expect_err "gptpro: rejects an invalid posture" "$LAUNCH" prepare --config "$GCP
 # duplicate lens across the run (subagent + gptpro share a name)
 GCDUP="$TMP/gpdup.json"; jq -n --arg p "$GPKB" '{shared_packet:$p,references:[],parallax:[],subagents:[{lens:"Same",lens_desc:"d"}],gptpro:[{lens:"Same",lens_desc:"d"}]}' > "$GCDUP"
 expect_err "gptpro: rejects a lens name shared with a subagent" "$LAUNCH" prepare --config "$GCDUP"
-# the hyphenated product spelling as a dispatch Type token must fail-closed (the just-fixed
-# operator-typo class): the parser accepts only the hyphen-less "gptpro" record type.
+# the hyphenated/underscore product spelling as a dispatch Type token is NORMALIZED to the
+# canonical "gptpro" (an agentic-usability alias). Safe because the Type VALUE is explicit and
+# already hard-fails on the unrecognized — aliasing it cannot silently drop a lane (unlike the
+# --config lens-list KEY below, which must still fail closed). Otherwise-valid dispatch so the
+# only thing under test is the spelling.
 GHYP="$TMP/gpt-hyphen.dispatch"
-printf 'Shared-Packet: %s\nReference: none\n\nType: gpt-pro\nLens: X\nLens-Desc: y\n' "$GPKB" > "$GHYP"
-expect_err "gptpro: rejects 'Type: gpt-pro' (hyphenated) — must be 'gptpro'" "$LAUNCH" prepare --dispatch "$GHYP"
+printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gpt-pro\nLens: X\nLens-Desc: y\n' "$GPKB" > "$GHYP"
+expect_ok "gptpro: accepts 'Type: gpt-pro' (hyphenated) as an alias for 'gptpro'" "$LAUNCH" prepare --dispatch "$GHYP"
+[ "$(jq -r '.counts.gptpro' "$GMANB" 2>/dev/null)" = "1" ] && ok "gptpro: 'Type: gpt-pro' normalized into a gptpro record" || bad "gptpro alias normalization (hyphen)"
 GUND="$TMP/gpt-under.dispatch"
-printf 'Shared-Packet: %s\nReference: none\n\nType: gpt_pro\nLens: X\nLens-Desc: y\n' "$GPKB" > "$GUND"
-expect_err "gptpro: rejects 'Type: gpt_pro' (underscore) — must be 'gptpro'" "$LAUNCH" prepare --dispatch "$GUND"
+printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gpt_pro\nLens: X\nLens-Desc: y\n' "$GPKB" > "$GUND"
+expect_ok "gptpro: accepts 'Type: gpt_pro' (underscore) as an alias for 'gptpro'" "$LAUNCH" prepare --dispatch "$GUND"
 # the lenient --config raw-JSON path must ALSO fail-closed on a misspelled lens-list key:
 # a "gpt-pro"/"gpt_pro" key is silently ignored, so a mixed run (parallax present) would
 # otherwise pass the zero-records guard and drop the whole gpt-pro lane with no error.
