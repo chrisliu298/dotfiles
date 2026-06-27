@@ -423,12 +423,18 @@ FMAN="$TMP/prism-fakeonly-manifest.json"; FRES="$TMP/prism-fakeonly-result.json"
 { [ "$(jq '.results|length' "$FRES" 2>/dev/null)" = "2" ] && [ "$(jq '.succeeded' "$FRES" 2>/dev/null)" = "2" ]; } && ok "fake fan wrote a 2-peer result" || bad "fake fan result"
 "$FL" parallax "$FMAN" --only codex >/dev/null 2>&1
 { [ "$(jq '.results|length' "$FRES")" = "2" ] && [ "$(jq '[.results[]|select(.name=="prism-alpha")]|length' "$FRES")" = "1" ]; } && ok "--only retry replaces one peer (no dup; count stays 2)" || bad "--only merge replace"
-# fail-closed: an EMPTY existing result must not be silently kept empty
-: > "$FRES"; "$FL" parallax "$FMAN" --only codex >/dev/null 2>&1
-{ [ -s "$FRES" ] && jq -e '(.results|type)=="array"' "$FRES" >/dev/null 2>&1; } && ok "--only fails closed on an empty result.json" || bad "--only empty-result corruption"
-# fail-closed: a MALFORMED existing result must not silently corrupt
-printf 'not json{' > "$FRES"; "$FL" parallax "$FMAN" --only codex >/dev/null 2>&1
-{ [ -s "$FRES" ] && jq -e '(.results|type)=="array"' "$FRES" >/dev/null 2>&1; } && ok "--only fails closed on a malformed result.json" || bad "--only malformed-result corruption"
+# fail-closed: an EMPTY existing result + a MULTI-peer manifest must REFUSE a single-peer
+# rewrite (it would read as falsely complete) — re-run the whole fan instead.
+: > "$FRES"; expect_err "--only refuses a single-peer rewrite over an empty result (multi-peer manifest)" "$FL" parallax "$FMAN" --only codex
+# a MALFORMED existing result likewise refuses
+printf 'not json{' > "$FRES"; expect_err "--only refuses a single-peer rewrite over a malformed result (multi-peer manifest)" "$FL" parallax "$FMAN" --only codex
+# carve-out: a SINGLE-peer manifest may legitimately write a fresh result over an empty one
+FPK1="$TMP/prism-fake1.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$FPK1"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "just codex"\n\nType: parallax\nTo: codex\nLens: Solo\nLens-Desc: weigh s\n' "$FPK1" > "$TMP/fake1.dispatch"
+"$FL" prepare --dispatch "$TMP/fake1.dispatch" >/dev/null 2>&1
+FMAN1="$TMP/prism-fake1-manifest.json"; FRES1="$TMP/prism-fake1-result.json"
+: > "$FRES1"; "$FL" parallax "$FMAN1" --only codex >/dev/null 2>&1
+{ [ -s "$FRES1" ] && jq -e '(.results|type)=="array"' "$FRES1" >/dev/null 2>&1; } && ok "--only writes a fresh result over an empty one for a single-peer manifest" || bad "--only single-peer fresh write"
 
 echo "== results: structured view from result.json =="
 # empty/malformed result.json is rejected, not printed as a blank summary
@@ -436,16 +442,36 @@ echo "== results: structured view from result.json =="
 printf '{"id":"prism-empty","shared_packet":"/tmp/prism-empty.md"}' > /tmp/prism-empty-manifest.json
 expect_err "results rejects an empty result.json" "$LAUNCH" results /tmp/prism-empty-manifest.json
 rm -f /tmp/prism-empty*
-printf '{"id":"prism-pp","expected":2,"succeeded":2,"failed":0,"results":[{"to":"codex","name":"prism-correctness","status":"done","res":"/tmp/a.res.md","log":"/tmp/a.log"},{"to":"mimo","name":"prism-outsider","status":"done","res":"/tmp/b.res.md","log":"/tmp/b.log"}]}' > /tmp/prism-pp-result.json
+# Build the result from MPP's ACTUAL parallax set so the completeness gate (result peer
+# set must match the manifest) is satisfied; all peers done → exit 0.
+jq -c '{id:.id, expected:(.parallax|length), succeeded:(.parallax|length), failed:0,
+        results:[.parallax[]|{to:.to, name:.name, status:"done", res:"/tmp/a.res.md", log:"/tmp/a.log"}]}' "$MPP" > /tmp/prism-pp-result.json
 RES=$("$LAUNCH" results "$MPP")
-printf '%s\n' "$RES" | grep -q '/tmp/a.res.md' && printf '%s\n' "$RES" | grep -q '2/2 succeeded' && ok "results prints each peer's .res.md path + summary" || bad "results output"
-expect_ok "results exits 0 when all peers succeeded" "$LAUNCH" results "$MPP"
-printf '{"id":"prism-pp","expected":1,"succeeded":0,"failed":1,"results":[{"to":"mimo","name":"prism-outsider","status":"error","res":null,"log":"/tmp/b.log"}]}' > /tmp/prism-pp-result.json
+printf '%s\n' "$RES" | grep -q '/tmp/a.res.md' && printf '%s\n' "$RES" | grep -q '0 failed' && ok "results prints each peer's .res.md path + summary" || bad "results output"
+expect_ok "results exits 0 when all peers complete" "$LAUNCH" results "$MPP"
+# A complete result with one peer in error → exit 1 (failure), completeness still satisfied.
+jq -c '{id:.id, expected:(.parallax|length),
+        results:[.parallax[]|{to:.to, name:.name, status:"done", res:"/tmp/a.res.md", log:"/tmp/a.log"}]}
+       | .results[0].status="error" | .results[0].res=null
+       | .succeeded=([.results[]|select(.status=="done")]|length) | .failed=([.results[]|select(.status!="done")]|length)' "$MPP" > /tmp/prism-pp-result.json
 expect_err "results exits non-zero when a peer failed" "$LAUNCH" results "$MPP"
 "$LAUNCH" results "$MPP" >/dev/null 2>&1; rc=$?; [ "$rc" -eq 1 ] && ok "results exits exactly 1 (terminal failure) when a peer errored" || bad "results failure exit code (got $rc, want 1)"
+# COMPLETENESS GATE: a result with only some of the manifest's peers must NOT read as done —
+# it exits 2 (pending) and flags INCOMPLETE, so a partial result can't bypass the hard gate.
+jq -c '{id:.id, expected:1, succeeded:1, failed:0, results:[(.parallax[0])|{to:.to, name:.name, status:"done", res:"/tmp/a.res.md", log:"/tmp/a.log"}]}' "$MPP" > /tmp/prism-pp-result.json
+ROUT=$("$LAUNCH" results "$MPP" 2>&1); rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s\n' "$ROUT" | grep -q 'INCOMPLETE'; } && ok "results flags a partial result (peers missing vs manifest) INCOMPLETE, exit 2" || bad "results completeness gate (got $rc)"
+# #3a: a parallax manifest with NO result file yet is pending (exit 2), not a die/failure.
+rm -f /tmp/prism-pp-result.json
+"$LAUNCH" results "$MPP" >/dev/null 2>&1; rc=$?; [ "$rc" -eq 2 ] && ok "results exits 2 (pending) when the parallax result file is absent" || bad "results missing-result exit (got $rc, want 2)"
 printf '{"id":"prism-nores","shared_packet":"/tmp/prism-nores.md"}' > /tmp/prism-nores-manifest.json
-expect_err "results errors when no result file exists yet" "$LAUNCH" results /tmp/prism-nores-manifest.json
+expect_err "results errors on a manifest with no parallax/gptpro/subagent entries" "$LAUNCH" results /tmp/prism-nores-manifest.json
 "$LAUNCH" clean pp >/dev/null; rm -f /tmp/prism-nores*
+# #3b: a subagents-only manifest has no file-backed lanes — results is a clean no-op (exit 0)
+SOMAN="$TMP/prism-subonly-manifest.json"
+printf '{"id":"prism-subonly","shared_packet":"%s","subagents":[{"lens":"Simplicity"}],"parallax":[],"gptpro":[],"counts":{"subagents":1,"parallax_total":0,"gptpro":0}}' "$TMP/prism-subonly.md" > "$SOMAN"
+SOUT=$("$LAUNCH" results "$SOMAN" 2>&1); rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s\n' "$SOUT" | grep -q 'subagents-only'; } && ok "results: subagents-only manifest is a clean no-op (exit 0)" || bad "results subagents-only (got $rc)"
 
 echo "== digest: extract ## Digest blocks (lineage-tagged, compaction-only) =="
 DGP="$TMP/prism-dg.md"            # packet path only used to derive sibling artifact paths
@@ -559,6 +585,8 @@ grep -qF "### $REF1" "$GLAUNCH" && ok "gptpro: each ref under its ### path heade
 echo "$GOUT" | grep -q 'gptpro=1' && ok "gptpro: dispatch shape shows gptpro=1" || bad "gptpro dispatch shape"
 echo "$GOUT" | grep -q 'one per gpt-pro lens' && ok "gptpro: notification count includes gpt-pro" || bad "gptpro notif count"
 echo "$GOUT" | grep -qF "gpt-pro < $GLAUNCH" && ok "gptpro: prints the exact backgrounded launch command" || bad "gptpro launch line"
+# the printed launch command records the exit code to a .exit sidecar so results can tell failed from pending
+echo "$GOUT" | grep -qF 'printf %s "$?" >' && echo "$GOUT" | grep -q '\.exit' && ok "gptpro: launch line records the exit code to a .exit sidecar" || bad "gptpro exit-sentinel print"
 
 echo "== gptpro: --dispatch front-end + Reference keys + packet fallback =="
 GPKB="$TMP/prism-gpb.md"
@@ -643,6 +671,12 @@ expect_err "gptpro: results exits non-zero while a lens is pending" "$LAUNCH" re
 # results exits non-zero while pending, so capture first (pipefail would mask the grep)
 RUNOUT=$("$LAUNCH" results "$GMANO" 2>/dev/null || true)
 printf '%s\n' "$RUNOUT" | grep -q 'run_id=ask-20260618-abc' && ok "gptpro: results surfaces the pending run_id for reattach" || bad "gptpro results run_id"
+# #2: a recorded .exit (the launch wrapper) with an empty .res.md = finished-but-FAILED,
+# not 'pending' — results must report [FAILED] and exit 1, never passive pending (2).
+GEXIT="${GRES%.res.md}.exit"; printf '124\n' > "$GEXIT"
+GFOUT=$("$LAUNCH" results "$GMANO" 2>&1); rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s\n' "$GFOUT" | grep -q 'FAILED'; } && ok "gptpro: a recorded non-zero .exit with no .res.md reports FAILED, exit 1 (not pending)" || bad "gptpro exit-sentinel results (got $rc)"
+rm -f "$GEXIT"
 # completed: .res.md present -> results exits 0, digest extracts the block tagged gpt-pro
 cat > "$GRES" <<'RES'
 Body of the gpt-pro answer.

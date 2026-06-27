@@ -180,8 +180,11 @@ backgrounded process. The Integrator stays in the loop for the judgment.
               └ fan out all relay calls as ONE backgrounded process; --dry-run shows
                 the commands; --only retries a single peer and merges the result.
 
-  results   <manifest>            └ print each peer's status + .res.md path; non-zero
-                                    exit if any failed.
+  results   <manifest>            └ print each parallax peer's + gpt-pro lens's status +
+                                    .res.md path. Exit: 0 all done · 1 a peer/lens failed ·
+                                    2 a lane still pending (not a failure — not ready to
+                                    synthesize). Covers parallax + gpt-pro only; subagents
+                                    are tracked via Agent-tool notifications.
 
   digest    <manifest> [--out P]  └ extract each peer's ## Digest block into one small
                                     lineage-tagged file (large- or high-volume-run

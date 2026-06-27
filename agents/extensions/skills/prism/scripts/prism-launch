@@ -890,9 +890,11 @@ EOF
     echo "design, NOT one batched command: each lens streams back and recovers independently."
     echo "Fire each YOURSELF as a backgrounded Bash call"
     echo "(run_in_background: true, timeout: 7260000; each is its own completion notification):"
-    echo "$manifest_json" | jq -r '.gptpro[] | "  gpt-pro < \(.launcher) > \(.res) 2> \(.log)"'
-    echo "On a non-zero exit, follow gpt-pro-relay's recovery table (124/255 reattach with the"
-    echo "literal run-id from the task .output; 4 fresh-submit; 2/3 terminal). Never raise GPT_PRO_MAX_PARALLEL."
+    echo "$manifest_json" | jq -r '.gptpro[] | "  gpt-pro < \(.launcher) > \(.res) 2> \(.log); printf %s \"$?\" > \((.res|rtrimstr(".res.md")) + ".exit")"'
+    echo "(The trailing 'printf … > .exit' records the exit code so 'results' can tell a finished-"
+    echo "but-failed lens from one still running — copy the whole line.) On a non-zero exit, follow"
+    echo "gpt-pro-relay's recovery table (124/255 reattach with the literal run-id from the task"
+    echo ".output; 4 fresh-submit; 2/3 terminal). Never raise GPT_PRO_MAX_PARALLEL."
     echo
   fi
   echo "manifest: $manifest"
@@ -1017,6 +1019,11 @@ cmd_parallax() {
       fi
       mv "$result.tmp" "$result"
     else
+      # The existing result is missing/malformed and the manifest expects more than one
+      # peer: writing a single-peer result here would read as falsely complete (results
+      # can't distinguish it from a finished 1-peer run). Refuse — re-run the whole fan.
+      local pexp; pexp=$(jq '.parallax | length' "$manifest")
+      [ "$pexp" -le 1 ] || die "parallax --only: the result file ($result) is missing or malformed and the manifest expects $pexp peers — a single-peer result would look falsely complete. Re-run the whole fan instead: $0 parallax $manifest"
       printf '%s\n' "$newentry" | jq -s --arg id "$id" \
         '{id:$id, expected:(.|length), succeeded:([.[]|select(.status=="done")]|length), failed:([.[]|select(.status!="done")]|length), results:.}' > "$result"
     fi
@@ -1345,25 +1352,55 @@ cmd_results() {
   #   2 = nothing failed but a lane is still pending (gpt-pro not back yet).
   # Failure outranks pending. The hard completion gate still holds — 2 means
   # NOT READY TO SYNTHESIZE, it is not success.
-  local packet base result id ptot gtot failed=0 pending=0
+  local packet base result id ptot gtot stot failed=0 pending=0
   packet=$(jq -r '.shared_packet' "$manifest")
   base="${packet%.md}"; result="${base}-result.json"
   id=$(jq -r '.id // "?"' "$manifest")
   ptot=$(jq -r '.counts.parallax_total // (.parallax|length) // 0' "$manifest")
   gtot=$(jq -r '.counts.gptpro // (.gptpro|length) // 0' "$manifest")
-  [ "$ptot" -gt 0 ] || [ "$gtot" -gt 0 ] || die "results: manifest has no parallax or gptpro entries"
+  stot=$(jq -r '.counts.subagents // (.subagents|length) // 0' "$manifest")
   echo "prism-launch: results for '$id'"
+  # Subagents-only run (an authorized partial): there are no file-backed lanes to
+  # collect — subagent outputs live in the orchestrator's conversation. Report and
+  # exit 0 rather than dying (prepare accepts this shape, so results must too).
+  if [ "$ptot" -eq 0 ] && [ "$gtot" -eq 0 ]; then
+    [ "$stot" -gt 0 ] || die "results: manifest has no parallax, gptpro, or subagent entries"
+    echo "subagents-only run: $stot Claude subagent(s) — outputs are in THIS conversation"
+    echo "(Agent-tool results), not in any file. Nothing for 'results' to collect; ready to"
+    echo "synthesize once every subagent completion notification has arrived."
+    return 0
+  fi
 
   # Parallax lane (relay peers) — driven by the backgrounded fan's result.json.
   if [ "$ptot" -gt 0 ]; then
-    [ -f "$result" ] || die "results: no parallax result file yet ($result) — has the parallax fan finished?"
-    [ -s "$result" ] && jq -e '(.results | type) == "array"' "$result" >/dev/null 2>&1 \
-      || die "results: parallax result file is empty or malformed: $result"
-    echo "parallax:"
-    jq -r '.results[] | "  [" + (if .status=="done" then "done " else "ERROR" end) + "] " + .to + "  " + .name + "  " + (.res // ("(failed — see " + .log + ")"))' "$result"
-    # Recompute counts from .results rather than trusting (possibly stale) counters.
-    echo "  summary: $(jq -r '([.results[]|select(.status=="done")]|length) as $ok | "\($ok)/\(.results|length) succeeded, \((.results|length)-$ok) failed"' "$result")"
-    [ "$(jq '[.results[]|select(.status!="done")]|length' "$result")" -eq 0 ] || failed=1
+    if [ ! -f "$result" ]; then
+      # No result file yet = the fan has not finished (or was never launched). That is
+      # PENDING (exit 2 — not ready), not a failure: do not die.
+      echo "parallax: [pending] no result file yet ($result) — the parallax fan has not finished (or was not launched)."
+      pending=1
+    elif ! { [ -s "$result" ] && jq -e '(.results | type) == "array"' "$result" >/dev/null 2>&1; }; then
+      die "results: parallax result file is empty or malformed: $result"
+    else
+      echo "parallax:"
+      jq -r '.results[] | "  [" + (if .status=="done" then "done " else "ERROR" end) + "] " + .to + "  " + .name + "  " + (.res // ("(failed — see " + .log + ")"))' "$result"
+      # Recompute counts from .results rather than trusting (possibly stale) counters.
+      echo "  summary: $(jq -r '([.results[]|select(.status=="done")]|length) as $ok | "\($ok)/\(.results|length) succeeded, \((.results|length)-$ok) failed"' "$result")"
+      [ "$(jq '[.results[]|select(.status!="done")]|length' "$result")" -eq 0 ] || failed=1
+      # COMPLETENESS GATE: compare the result's peer set against the manifest's expected
+      # parallax set. A partial result (e.g. a single-peer `--only` written over a missing
+      # fan result) must NOT read as complete — that would silently bypass the hard gate.
+      local miss
+      miss=$(jq -rn --slurpfile man "$manifest" --slurpfile res "$result" '
+        (($man[0].parallax // []) | map(.name)) as $want
+        | (($res[0].results // []) | map(.name)) as $got
+        | ($want - $got) | .[]' 2>/dev/null)
+      if [ -n "$miss" ]; then
+        echo "  ⚠ INCOMPLETE: the result is missing $(printf '%s\n' "$miss" | grep -c .) peer(s) the manifest expects:"
+        echo "    $(printf '%s ' $miss)"
+        echo "    (a partial result — re-run the whole fan: $0 parallax $manifest)"
+        pending=1
+      fi
+    fi
   fi
 
   # GPT-Pro lane (orchestrator-direct) — status read from each lens's .res.md
@@ -1371,17 +1408,28 @@ cmd_results() {
   # prism-launch never owns gpt-pro's recovery; it only reports it.
   if [ "$gtot" -gt 0 ]; then
     echo "gpt-pro:"
-    local gi=0 gn glens gres glog grun
+    local gi=0 gn glens gres glog grun gexit gec
     gn=$(jq '.gptpro | length' "$manifest")
     while [ "$gi" -lt "$gn" ]; do
       glens=$(jq -r ".gptpro[$gi].lens" "$manifest")
       gres=$(jq -r ".gptpro[$gi].res" "$manifest")
       glog=$(jq -r ".gptpro[$gi].log" "$manifest")
+      gexit="${gres%.res.md}.exit"
+      # CONTRACT: prefix mirrors gpt-pro-relay/scripts/gpt-pro's stderr namespace (see clean's note).
+      grun=$(sed -n 's/^gpt-pro: run_id=\([^ ]*\).*/\1/p' "$glog" 2>/dev/null | tail -1)
       if [ -s "$gres" ]; then
         echo "  [done ] $glens  $gres"
+      elif [ -f "$gexit" ]; then
+        # The launch wrapper recorded an exit code → the Bash task FINISHED. An empty/absent
+        # .res.md with a recorded exit means terminal-or-needs-action, NOT 'still running' —
+        # so it must register as a failure (exit 1), never as passive pending (exit 2).
+        gec=$(tr -dc '0-9' < "$gexit" 2>/dev/null); gec="${gec:-?}"
+        echo "  [FAILED] $glens  exited $gec, no .res.md — needs action (NOT still running)${grun:+  run_id=$grun}"
+        echo "           recovery (gpt-pro-relay): 124/255 → reattach 'gpt-pro --run-id ${grun:-<id>}'; 4 → fresh-submit; 2/3 → terminal. log: $glog"
+        failed=1
       else
-        # CONTRACT: prefix mirrors gpt-pro-relay/scripts/gpt-pro's stderr namespace (see clean's note).
-        grun=$(sed -n 's/^gpt-pro: run_id=\([^ ]*\).*/\1/p' "$glog" 2>/dev/null | tail -1)
+        # No .res.md and no recorded exit = still running (or launched without the
+        # exit-recording wrapper prepare now prints). Treat as pending.
         if [ -n "$grun" ]; then
           echo "  [pending] $glens  run_id=$grun  (reattach: gpt-pro --run-id $grun · log: $glog)"
         else
@@ -1391,6 +1439,11 @@ cmd_results() {
       fi
       gi=$((gi + 1))
     done
+  fi
+  # 'results' is file-backed (parallax + gpt-pro). Subagents have no on-disk artifact —
+  # remind the orchestrator that a clean exit here does NOT account for them.
+  if [ "$stot" -gt 0 ]; then
+    echo "note: 'results' covers parallax + gpt-pro only — the $stot subagent(s) are tracked via Agent-tool completion notifications in the conversation, not here. Confirm those before synthesizing." >&2
   fi
   # Failure (1) outranks pending (2); all-clear is 0.
   if [ "$failed" = 1 ]; then return 1
