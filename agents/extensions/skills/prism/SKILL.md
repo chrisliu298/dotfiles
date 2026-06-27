@@ -39,7 +39,7 @@ A skim card + execution TOC for the orchestrating Claude — every line points t
 - **The 8 standard tiers:** Claude subagent · Codex · Grok Build · Grok Composer · GLM · Kimi · DeepSeek · MiMo. gpt-pro is a *separate opt-in* tier (`M`, default 0). See *Counting Contract*.
 - **Counts:** dispatched = `8N+M`; perspectives = dispatched + self. The full 8-tier fan at `N` is the **floor** — drop or skew a tier *only* on explicit user instruction.
 - **Effort:** never authored — Codex `xhigh`, Grok Build `high`, derived from the registry; the rest have no knob.
-- **Run** (see *Execution Spine*): write packet `/tmp/prism-<id>.md` → `scaffold` (emits the `Prism-Mode: full` roster contract) → edit lenses → `prepare --dispatch …` (default fail-closed floor check on the contract) → launch **all at once** (1 backgrounded `parallax` + `N` Agent calls + `M` gpt-pro) → **wait for every notification** → `results` / `digest` → synthesize verdict-first. A reduced roster needs an explicit `Prism-Mode: partial` + `Partial-User-Quote:` waiver.
+- **Run** (see *Execution Spine*): write packet `/tmp/prism-<id>.md` → `scaffold` (prints the `Prism-Mode: full` roster contract to stdout, for reference) → **Write** the dispatch directly with your lenses (never `scaffold > file` then edit) → `prepare --dispatch …` (default fail-closed floor check on the contract) → launch **all at once** (1 backgrounded `parallax` + `N` Agent calls + `M` gpt-pro) → **wait for every notification** → `results` / `digest` → synthesize verdict-first. A reduced roster needs an explicit `Prism-Mode: partial` + `Partial-User-Quote:` waiver.
 - **Hard gates:** no synthesis until *every* agent returns; dispatched agents are read-only leaves (no recursion or side effects); **never** revert the working tree. See *Guards*.
 - **Local files:** attach repo files with `Include:` dispatch lines (repeatable; `/abs`, `@base-relative`, or single-level glob; `Include-Base:`/`Include-From:`/`Include-Tree:` too). `prepare` resolves them via `filectx` → generates the packet's `### Reference Materials` (relay/subagent tiers **read** the paths) **and** the gpt-pro **inline** list — one source, secret-scanned, fail-closed. `scaffold` pre-prints the commented slot. Mutually exclusive with hand-written `Reference:` / `### Reference Materials`. See *Shared Context*.
 - **Script:** `~/.claude/skills/prism/scripts/prism-launch` (always the absolute path).
@@ -231,7 +231,7 @@ Build one shared evidence packet (Full Question + Context; `prepare` injects the
 
 ### Shared Packet Template
 
-Write this to `/tmp/prism-<unique-id>.md` with the Write tool (one call, before any dispatch; use a unique id to avoid collisions between concurrent runs). **Write only Full Question + Context (with Reference Materials)** — `prepare` injects `## Constraints`, `## How to answer`, and `## Grounding external facts` when absent, so you never hand-copy them.
+Write this to `/tmp/prism-<unique-id>.md` with the Write tool (one call, before any dispatch; use a unique id to avoid collisions between concurrent runs). **Write only Full Question + Context** — attach files via `Include:` in the **dispatch** (`prepare` generates the `### Reference Materials` section from them; hand-author that block here only as a manual fallback, and never alongside `Include:`). `prepare` injects `## Constraints`, `## How to answer`, and `## Grounding external facts` when absent, so you never hand-copy them.
 
 ```
 ## Full Question
@@ -242,12 +242,10 @@ Write this to `/tmp/prism-<unique-id>.md` with the Write tool (one call, before 
 
 {Shared evidence packet. Identical across all agents. Nest ALL domain content here as `###` subsections — background, constraints, sub-questions, lens notes. `## Full Question` and `## Context` are the only top-level `##` sections you author.}
 
-### Reference Materials
-
-{Absolute paths to every file relevant to the question. Agents MUST read these before answering.}
-
-- /path/to/relevant/file1
-- /path/to/relevant/file2
+<!-- Reference Materials: attach files via `Include:` lines in the DISPATCH (see Shared Context →
+     Reference materials). `prepare` generates the packet's `### Reference Materials` from them,
+     secret-scanned. ONLY hand-author a `### Reference Materials` block here as a manual fallback
+     when NOT using Include — having both makes `prepare` abort (fail-closed, by design). -->
 
 ### Live research (omit unless the task needs live online facts)
 
@@ -264,15 +262,19 @@ The authoritative run path. `PL` = `~/.claude/skills/prism/scripts/prism-launch`
 
 **1. Resolve the invocation shape** (per *Invocation* + the Config-presence gate) and emit the `8N+M` status line.
 
-**2. Write the shared packet** `/tmp/prism-<id>.md` — just `## Full Question` + `## Context` (with Reference Materials). Add a `### Live research` block only if the answer depends on live online facts (don't front-load findings). `prepare` injects Constraints / How-to-answer / Grounding.
+**2. Write the shared packet** `/tmp/prism-<id>.md` — just `## Full Question` + `## Context` (attach files via `Include:` in the dispatch, not a hand-written block). Add a `### Live research` block only if the answer depends on live online facts (don't front-load findings). `prepare` injects Constraints / How-to-answer / Grounding.
 
-**3. Write the dispatch file** `/tmp/prism-<id>.dispatch` (Write tool, one record per agent — never a shell heredoc). Run `PL scaffold --n <N>` first — it emits the `Prism-Mode` contract + records in canonical model order, so you only replace the `FILL` lens names + descriptions (at `N ≥ 2`, give each copy a **distinct** lens name — e.g. `Adversarial-A`/`-B` — `prepare` rejects duplicates). `--preset review|design|diagnosis|compare|research|decision|writing` pre-fills eight lenses (N=1). The format is plain `Key: value` lines in blank-line-separated records — no braces/commas/quoting/escaping. Canonical default (all eight at `N=1`):
+**3. Write the dispatch file** `/tmp/prism-<id>.dispatch` **with the Write tool** (one record per agent — never a shell heredoc, and **never `scaffold > file` then edit it**). Run `PL scaffold --n <N>` first to **print** the `Prism-Mode` contract + all records in canonical order to stdout — use that output as a **copy-from template**, then author the whole dispatch in **one Write call**, replacing the `FILL` lens names + descriptions. (Authoring a brand-new file with Write needs no prior Read; *redirecting* scaffold into the dispatch and then editing it forces a wasted Read, because the harness does not track shell-created files. The line format below exists precisely so the Write tool can author it with no escaping.) At `N ≥ 2`, give each copy a **distinct** lens name — e.g. `Adversarial-A`/`-B` — `prepare` rejects duplicates. `--preset review|design|diagnosis|compare|research|decision|writing` pre-fills eight lenses (N=1), often leaving **zero** FILLs to replace. The format is plain `Key: value` lines in blank-line-separated records — no braces/commas/quoting/escaping. Canonical default (all eight at `N=1`, one lens per axis family):
 
 ```text
 Shared-Packet: /tmp/prism-<id>.md
 Prism-Mode: full
 Prism-N: 1
 Prism-M: 0
+
+Type: subagent
+Lens: Simplicity
+Lens-Desc: weigh the approach that requires the fewest moving parts
 
 Type: parallax
 To: codex
@@ -285,11 +287,30 @@ To: grok-build
 Lens: First-Principles
 Lens-Desc: weigh how this looks rebuilt from the goal up
 
-# … grok-composer, glm, kimi, deepseek, mimo records …
+Type: parallax
+To: grok-composer
+Lens: Causal
+Lens-Desc: weigh the cause-and-effect chain behind the outcome
 
-Type: subagent
-Lens: Simplicity
-Lens-Desc: weigh the approach that requires the fewest moving parts
+Type: parallax
+To: glm
+Lens: Empirical
+Lens-Desc: weigh what the evidence and data actually support
+
+Type: parallax
+To: kimi
+Lens: Temporal
+Lens-Desc: weigh lifecycle, sequencing, and reversibility
+
+Type: parallax
+To: deepseek
+Lens: Stakeholder
+Lens-Desc: weigh how the affected parties experience the outcome
+
+Type: parallax
+To: mimo
+Lens: Breadth-Weighted
+Lens-Desc: weigh the full option space over depth on any one
 ```
 
 Format rules: `Shared-Packet:` once; `Prism-Mode:` required. Optional top-level file keys: `Include:` (repeatable), `Include-Base:` (once), `Include-From:`/`Include-Tree:` (repeatable) — the ergonomic file front door (see *Shared Context* → Reference materials); mutually exclusive with `Reference:`. Each record starts at `Type: parallax|subagent|gptpro`; blank lines separate records; `#` begins a comment. `parallax` needs `To:`/`Lens:`/`Lens-Desc:` (`Name:` optional, defaults to the slugified lens); `subagent` needs only `Lens:`/`Lens-Desc:`; `gptpro` needs `Lens:`/`Lens-Desc:` + optional `Posture:` (`To:`/`Name:` rejected). **Never author `Effort:`** — `prism-launch` derives it and rejects the line. Everything after the **first** `:` is the literal value (quotes, colons, `>`, `<`, single braces fine) — except the reserved `</` and `{{` (injection guard), which `prepare` rejects.
@@ -313,7 +334,7 @@ Partial-User-Quote: "<paste the user's exact words, verbatim, in double quotes>"
 
 Rules: `partial` **omits** `Prism-N`/`Prism-M` (the shape is asymmetric — the records *are* the shape). The quote is stored **verbatim** — paste the user's actual words, do not paraphrase (an unverifiable paraphrase defeats the audit; `prepare` records it but cannot prove it). `prepare` records the quote + dropped tiers in the manifest `.shape` and prints a loud `⚠ PARTIAL` warning; **cite that quote in your synthesis** so a fabricated authorization is visible to the user. A `partial` with no (or whitespace-only) quote, or any `--dispatch` with **no** `Prism-Mode` line, is rejected — the enforcement cannot be dodged by omission.
 
-**4. Prepare** (foreground): `PL prepare --dispatch /tmp/prism-<id>.dispatch`. It compiles the dispatch into a normalized config (kept for audit), validates, renders all launchers, prints each subagent launcher's contents inline + the parallax command + the expected notification count, and writes `<id>-manifest.json`. If it exits non-zero, fix the packet/dispatch and re-run — nothing has been dispatched. (`prepare --config <config.json>` is the lenient raw-JSON escape hatch; `--expect-n N [--expect-m M]` still works and OVERRIDES the contract's N/M — useful on `--config`. See "What prepare enforces" below.)
+**4. Prepare** (foreground): `PL prepare --dispatch /tmp/prism-<id>.dispatch`. It compiles the dispatch into a normalized config (kept for audit), validates, renders all launchers, prints each subagent launcher's contents inline + the parallax command + the expected notification count, and writes `<id>-manifest.json`. If it exits non-zero, fix the packet/dispatch and re-run — nothing has been dispatched. (Note: `prepare` injects the canonical blocks into the packet *before* it validates the dispatch, so a failed run can leave the packet already mutated on disk — **Read it again before editing it**.) (`prepare --config <config.json>` is the lenient raw-JSON escape hatch; `--expect-n N [--expect-m M]` still works and OVERRIDES the contract's N/M — useful on `--config`. See "What prepare enforces" below.)
 
 **5. Launch all lanes concurrently** (`run_in_background: true`) — do not serialize:
 - **Parallax — ONE backgrounded Bash call:** `PL parallax /tmp/prism-<id>-manifest.json` (set the Bash `timeout` above `PRISM_PEER_TIMEOUT` (default 3600s), e.g. `3660000`). Fans out every relay call, waits for all, yields one completion notification.
@@ -322,7 +343,7 @@ Rules: `partial` **omits** `Prism-N`/`Prism-M` (the shape is asymmetric — the 
 
 Do not poll or sleep-loop — the system notifies you when agents finish.
 
-**6. Wait for ALL** (HARD GATE — see Step 3 below), then **7. Safety check + collect** (Step 3.5; `PL results <manifest>` → read `.res.md`; `PL digest` first for large/high-volume runs), then **8. Synthesize** (Step 4) and optionally `PL clean <id>`.
+**6. Wait for ALL** (HARD GATE — see Step 3 below), then **7. Safety check + collect** (Step 3.5; `PL results <manifest>` → read `.res.md`; `PL digest` first for large/high-volume runs), then **8. Synthesize** (Step 4) and optionally `PL clean <id>`. (`results` exit codes: `0` all done · `1` a peer failed — retry with `parallax --only` · `2` a lane still pending, e.g. gpt-pro — not a failure, but not ready to synthesize.)
 
 **What `prepare` enforces** (so this prose can defer to it on the `--dispatch` path): packet has the required sections; canonical blocks injected; no surviving `{{slot}}`; each launcher's first line is `CRITICAL:`; dispatch shape valid (`Type`, `To` ∈ registry, required keys); `Prism-Mode: full` floor-checks every standard tier + subagents at N and gpt-pro at M, naming any offender; `Prism-Mode: partial` requires a non-empty quote; effort registry-derived (`Effort:` rejected); duplicate lens/relay-name/slug rejected; gpt-pro references + 1 MB caps validated; `N=0` legal only with `M ≥ 1`; malformed `.shape` rejected; injection tokens (`</`, `{{`) rejected; zero-records rejected. `parallax` refuses a manifest with no valid `.shape`. **What you still own:** parsing the invocation + Config-presence gate; choosing N/M; whether a `partial` quote is genuinely user-authored; non-duplicative lenses (the two checks below); live-research instructions; launching all lanes concurrently; waiting for all; self-review; synthesis.
 

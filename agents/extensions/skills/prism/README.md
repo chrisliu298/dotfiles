@@ -115,8 +115,10 @@ backgrounded process. The Integrator stays in the loop for the judgment.
                                       ## Constraints       (Constraints owned by
                                       (verbatim, safe)      the script — not you)
 
- 2  scaffold ──► fill ─────►  /tmp/prism-<id>.dispatch     one record per lens
-    (--preset pre-fills 8 lenses)        Type/To/Lens
+ 2  scaffold (stdout) ─► Write ►  /tmp/prism-<id>.dispatch  one record per lens
+    (--preset pre-fills 8 lenses)         Type/To/Lens
+    scaffold = copy-from template; author the dispatch with the Write tool
+    (never `scaffold > file` then edit — a shell-made file forces a wasted Read)
 
  3  prepare ───────────────►  ┌────────────────────────────────────────────┐
                               │ validate · render launchers · write        │

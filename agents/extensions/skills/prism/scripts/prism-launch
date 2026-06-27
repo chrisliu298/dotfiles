@@ -1314,7 +1314,12 @@ cmd_results() {
   [ -n "$manifest" ] || die "results: <manifest.json> required"
   [ -f "$manifest" ] || die "results: manifest not found: $manifest"
   command -v jq >/dev/null 2>&1 || die "results: jq not found in PATH"
-  local packet base result id ptot gtot rc=0
+  # Exit code is tri-state so an agent can tell "still waiting" from "broken":
+  #   0 = every lane done · 1 = a terminal failure (a parallax peer errored) ·
+  #   2 = nothing failed but a lane is still pending (gpt-pro not back yet).
+  # Failure outranks pending. The hard completion gate still holds — 2 means
+  # NOT READY TO SYNTHESIZE, it is not success.
+  local packet base result id ptot gtot failed=0 pending=0
   packet=$(jq -r '.shared_packet' "$manifest")
   base="${packet%.md}"; result="${base}-result.json"
   id=$(jq -r '.id // "?"' "$manifest")
@@ -1332,7 +1337,7 @@ cmd_results() {
     jq -r '.results[] | "  [" + (if .status=="done" then "done " else "ERROR" end) + "] " + .to + "  " + .name + "  " + (.res // ("(failed — see " + .log + ")"))' "$result"
     # Recompute counts from .results rather than trusting (possibly stale) counters.
     echo "  summary: $(jq -r '([.results[]|select(.status=="done")]|length) as $ok | "\($ok)/\(.results|length) succeeded, \((.results|length)-$ok) failed"' "$result")"
-    [ "$(jq '[.results[]|select(.status!="done")]|length' "$result")" -eq 0 ] || rc=1
+    [ "$(jq '[.results[]|select(.status!="done")]|length' "$result")" -eq 0 ] || failed=1
   fi
 
   # GPT-Pro lane (orchestrator-direct) — status read from each lens's .res.md
@@ -1356,12 +1361,18 @@ cmd_results() {
         else
           echo "  [pending] $glens  (not started or no run_id logged yet · log: $glog)"
         fi
-        rc=1
+        pending=1
       fi
       gi=$((gi + 1))
     done
   fi
-  return "$rc"
+  # Failure (1) outranks pending (2); all-clear is 0.
+  if [ "$failed" = 1 ]; then return 1
+  elif [ "$pending" = 1 ]; then
+    echo "prism-launch: status — PENDING (a lane has not returned; NOT ready to synthesize). exit 2 ≠ failure." >&2
+    return 2
+  fi
+  return 0
 }
 
 # ── digest ─────────────────────────────────────────────────────────────────
@@ -1542,7 +1553,10 @@ parallax:  fan out every relay call as ONE backgrounded process, wait for all, w
            result. Run with run_in_background: true. --only <name> retries a single failed peer.
            Relay peers only — gpt-pro lenses are NOT in the parallax fan.
 results:   print each parallax peer's + gpt-pro lens's status + .res.md path. A pending gpt-pro
-           lens surfaces its run_id (from the .log) for reattach. Exits non-zero unless all are done.
+           lens surfaces its run_id (from the .log) for reattach. Exit codes: 0 = all lanes done ·
+           1 = a terminal failure (a parallax peer errored — retry with parallax --only) ·
+           2 = nothing failed but a lane is still pending (e.g. gpt-pro not back). 2 ≠ failure,
+           but it still means NOT ready to synthesize.
 digest:    extract each parallax peer's + gpt-pro lens's "## Digest" block (lineage-tagged) into
            one small <id>-digest.md. Subagent + self digests are already in the conversation.
 clean:     remove every temp artifact for a run (/tmp/prism-<id>*). Refuses to delete a gpt-pro

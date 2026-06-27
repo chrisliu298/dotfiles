@@ -433,6 +433,7 @@ printf '%s\n' "$RES" | grep -q '/tmp/a.res.md' && printf '%s\n' "$RES" | grep -q
 expect_ok "results exits 0 when all peers succeeded" "$LAUNCH" results "$MPP"
 printf '{"id":"prism-pp","expected":1,"succeeded":0,"failed":1,"results":[{"to":"mimo","name":"prism-outsider","status":"error","res":null,"log":"/tmp/b.log"}]}' > /tmp/prism-pp-result.json
 expect_err "results exits non-zero when a peer failed" "$LAUNCH" results "$MPP"
+"$LAUNCH" results "$MPP" >/dev/null 2>&1; rc=$?; [ "$rc" -eq 1 ] && ok "results exits exactly 1 (terminal failure) when a peer errored" || bad "results failure exit code (got $rc, want 1)"
 printf '{"id":"prism-nores","shared_packet":"/tmp/prism-nores.md"}' > /tmp/prism-nores-manifest.json
 expect_err "results errors when no result file exists yet" "$LAUNCH" results /tmp/prism-nores-manifest.json
 "$LAUNCH" clean pp >/dev/null; rm -f /tmp/prism-nores*
@@ -625,6 +626,7 @@ GRES=$(jq -r '.gptpro[0].res' "$GMANO"); GLOG=$(jq -r '.gptpro[0].log' "$GMANO")
 # pending: no .res.md yet, a .log with a run_id -> results surfaces it, exits non-zero
 printf 'gpt-pro: run_id=ask-20260618-abc transport=ssh mode=submit\n' > "$GLOG"
 expect_err "gptpro: results exits non-zero while a lens is pending" "$LAUNCH" results "$GMANO"
+"$LAUNCH" results "$GMANO" >/dev/null 2>&1; rc=$?; [ "$rc" -eq 2 ] && ok "gptpro: results exits exactly 2 (pending, not failure) while a lens is pending" || bad "results pending exit code (got $rc, want 2)"
 # results exits non-zero while pending, so capture first (pipefail would mask the grep)
 RUNOUT=$("$LAUNCH" results "$GMANO" 2>/dev/null || true)
 printf '%s\n' "$RUNOUT" | grep -q 'run_id=ask-20260618-abc' && ok "gptpro: results surfaces the pending run_id for reattach" || bad "gptpro results run_id"
