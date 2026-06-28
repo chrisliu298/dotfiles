@@ -328,8 +328,22 @@ cmd_prepare() {
   case "$packet" in *[[:space:]]*|*'*'*|*'?'*|*'['*) die "prepare: shared_packet path must not contain whitespace or glob characters: $packet" ;; esac
   [ -f "$packet" ]            || die "prepare: shared_packet not found: $packet"
   [ -s "$packet" ]            || die "prepare: shared_packet is empty: $packet"
-  grep -q '^## Full Question' "$packet" || die "prepare: shared_packet missing '## Full Question' section"
-  grep -q '^## Context'       "$packet" || die "prepare: shared_packet missing '## Context' section"
+  grep -q '^## Full Question' "$packet" || die "prepare: shared_packet missing a '## Full Question' H2 section.
+You author exactly two top-level sections (prepare injects ## Constraints / ## How to answer / ## Grounding):
+  ## Full Question
+
+  <the complete question, verbatim>
+
+  ## Context
+
+  <shared evidence; nest ALL domain content here as ### subsections>
+Add a top-level '## Full Question' heading (a '## ' line, not '###' or bare prose) and re-run."
+  grep -q '^## Context'       "$packet" || die "prepare: shared_packet missing a '## Context' H2 section.
+Context is load-bearing author content (prepare cannot synthesize it, unlike Constraints/How-to-answer/Grounding). Put it under a top-level header:
+  ## Context
+
+  <shared evidence; nest ALL domain content here as ### subsections — do NOT leave it under ## Full Question or outside any section>
+Add a top-level '## Context' heading (a '## ' line, not '###' or bare prose) and re-run."
   # Clear any prism-managed Include region up front (UNCONDITIONAL), so a packet
   # reused across a mode switch (an Include: run, then a Reference:/no-ref run on the
   # SAME packet file) cannot leave an orphaned ### Reference Materials region that
@@ -772,17 +786,29 @@ This is a PARTIAL prism. Either complete the roster — every standard tier at N
     local refs="" have_refs_key
     have_refs_key=$(jq 'has("references")' "$config")
     if [ "$have_refs_key" = "true" ]; then
+      # Explicit dispatch Reference: keys (incl. `Reference: none` → an empty list). The
+      # author declared the reference set deliberately, so an empty one is a deliberate
+      # opt-in to packet-only — no warning.
       refs=$(jq -r '.references[]' "$config")
     else
-      grep -q '^### Reference Materials' "$packet" \
-        || die "prepare: gptpro lens(es) requested but the shared packet has no '### Reference Materials' list and the dispatch has no 'Reference:' keys — gpt-pro cannot read local files, so it has nothing to inline. Add 'Reference:' lines to the dispatch (or 'Reference: none' to inline only the packet), or a '### Reference Materials' list to the packet."
-      # Bullets `- /abs/path` under the heading, until the next heading. Strip only
-      # the leading "- " (do not word-split); ignore non-bullet prose lines.
-      refs=$(awk '
-        /^### Reference Materials/                { cap=1; next }
-        cap && /^#[#]*[[:space:]]/                { cap=0 }
-        cap && /^[[:space:]]*-[[:space:]]+\//     { l=$0; sub(/^[[:space:]]*-[[:space:]]+/,"",l); print l }
-      ' "$packet")
+      # No Reference: keys → fall back to the packet's ### Reference Materials bullets
+      # (`- /abs/path` under the heading, until the next heading; strip only the leading
+      # "- ", do not word-split; ignore prose / relative bullets).
+      if grep -q '^### Reference Materials' "$packet"; then
+        refs=$(awk '
+          /^### Reference Materials/                { cap=1; next }
+          cap && /^#[#]*[[:space:]]/                { cap=0 }
+          cap && /^[[:space:]]*-[[:space:]]+\//     { l=$0; sub(/^[[:space:]]*-[[:space:]]+/,"",l); print l }
+        ' "$packet")
+      fi
+      # A self-contained packet IS valid gpt-pro input (== an explicit `Reference: none`),
+      # so default to packet-only rather than aborting a valid run. But warn LOUDLY and
+      # UNIFORMLY whenever nothing resolved — covering an absent heading, an empty heading,
+      # AND a heading whose bullets were all dropped (relative paths / typos). This keeps the
+      # "did you forget to attach evidence?" signal from ever going silent, without a bounce.
+      if ! [[ "$refs" =~ [^[:space:]] ]]; then
+        echo "prism-launch: ⚠ gpt-pro lens(es) present but NO reference files resolved (no Include:/Reference:, and the packet has no '### Reference Materials' with valid '- /abs/path' bullets) — gpt-pro will receive the shared packet ONLY, no files inlined. If you meant to attach evidence, add Include: lines (or absolute-path bullets) and re-run." >&2
+      fi
     fi
 
     # Validate every resolved reference, fail-closed, BEFORE composing any launcher
@@ -842,13 +868,18 @@ EOF
       {
         printf '%s\n' "$ghdr"
         cat "$packet"
-        printf '\n\n## Inlined reference materials (you cannot open these paths — full contents pasted)\n'
-        while IFS= read -r r; do
-          [ -n "$r" ] || continue
-          printf '\n### %s\n```\n' "$r"; cat "$r"; printf '\n```\n'
-        done <<EOF
+        # Reference section only when refs actually resolved — a packet-only run (no refs)
+        # must not leave a dangling "## Inlined reference materials" heading with nothing
+        # under it (the F2 default path). Same non-empty test as the secret-scan gate above.
+        if [[ "$refs" =~ [^[:space:]] ]]; then
+          printf '\n\n## Inlined reference materials (you cannot open these paths — full contents pasted)\n'
+          while IFS= read -r r; do
+            [ -n "$r" ] || continue
+            printf '\n### %s\n```\n' "$r"; cat "$r"; printf '\n```\n'
+          done <<EOF
 $refs
 EOF
+        fi
         printf '\n'; cat "$gcalib"
       } > "$glauncher"
       gb=$(wc -c < "$glauncher" | tr -d ' ')
@@ -1174,7 +1205,8 @@ preset_lenses() {
 # highest-leverage fix for the silent forgotten-reference failure).
 scaffold_include_hint() {
   printf '# Local files for the agents (optional — uncomment to attach). prepare resolves these\n'
-  printf '# via filectx: relay/subagent tiers READ the paths; gpt-pro gets the contents INLINED.\n'
+  printf '# via filectx: relay/subagent tiers READ the paths; gpt-pro gets the contents INLINED\n'
+  printf '# (omit all Include: and a gpt-pro lens gets the shared packet ONLY — prepare warns, no error).\n'
   printf '# Globs and @base-relative paths ok; directories need Include-Tree. Mutually exclusive\n'
   printf '# with a hand-written Reference: / ### Reference Materials. Secrets are refused fail-closed.\n'
   printf '# Include-Base: /abs/project/root      # default: cwd at prepare time\n'
@@ -1184,11 +1216,34 @@ scaffold_include_hint() {
   printf '# Include-Tree: @docs/                 # recursive, capped, hidden/vendor/binary/secret skipped\n\n'
 }
 
+# Emit M gpt-pro dispatch records with canonical default postures/names (Deep-Reasoning,
+# Research-Grounded, then suffixed for M>2) so a scaffold with --m is prepare-ready without
+# the author hand-writing the Type: gptpro / Posture: format from SKILL.md. Real names (not
+# FILL) keep a --preset --out scaffold zero-FILL; the author edits lenses/postures to taste.
+# With no Include:, prepare defaults gpt-pro to packet-only (warns) — no Reference: line needed.
+scaffold_gptpro_records() {
+  local count="$1" gi=1 gname gpost gdesc
+  [ "$count" -ge 1 ] 2>/dev/null || return 0
+  printf '# gpt-pro lens(es): orchestrator-direct, M=%s (NOT a relay peer / not in the parallax fan).\n' "$count"
+  printf '# Attach evidence via Include: above; with none, gpt-pro gets the shared packet only.\n\n'
+  while [ "$gi" -le "$count" ]; do
+    if [ $((gi % 2)) -eq 1 ]; then
+      gpost="deep-reasoning";   gname="Deep-Reasoning";   gdesc="weigh the hardest end-to-end reasoning"
+    else
+      gpost="research-grounded"; gname="Research-Grounded"; gdesc="weigh research-grounded judgment over live sources"
+    fi
+    [ "$gi" -gt 2 ] && gname="${gname}-${gi}"
+    printf 'Type: gptpro\nLens: %s\nLens-Desc: %s\nPosture: %s\n\n' "$gname" "$gdesc" "$gpost"
+    gi=$((gi + 1))
+  done
+}
+
 cmd_scaffold() {
-  local n=1 packet="" preset="" out=""
+  local n=1 m=0 packet="" preset="" out=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --n)      [ $# -ge 2 ] || die "scaffold: --n requires a value";      n="$2";      shift 2 ;;
+      --m)      [ $# -ge 2 ] || die "scaffold: --m requires a value";      m="$2";      shift 2 ;;
       --packet) [ $# -ge 2 ] || die "scaffold: --packet requires a value"; packet="$2"; shift 2 ;;
       --preset) [ $# -ge 2 ] || die "scaffold: --preset requires a value"; preset="$2"; shift 2 ;;
       --out)    [ $# -ge 2 ] || die "scaffold: --out requires a value";    out="$2";    shift 2 ;;
@@ -1196,8 +1251,13 @@ cmd_scaffold() {
       *)  die "scaffold: unexpected argument: $1" ;;
     esac
   done
-  case "$n" in ''|*[!0-9]*) die "scaffold: --n must be a positive integer" ;; esac
-  [ "$n" -ge 1 ] || die "scaffold: --n must be >= 1"
+  case "$n" in ''|*[!0-9]*) die "scaffold: --n must be a non-negative integer" ;; esac
+  case "$m" in ''|*[!0-9]*) die "scaffold: --m must be a non-negative integer" ;; esac
+  # N=0 is the gpt-pro-only shape (drop all standard tiers) — legal only with M>=1,
+  # mirroring prepare's `Prism-Mode: full` + `Prism-N: 0` rule. N>=1 keeps the full roster.
+  if [ "$n" -lt 1 ]; then
+    [ "$m" -ge 1 ] || die "scaffold: --n 0 is the gpt-pro-only shape and needs --m >= 1 (no standard tiers AND no gpt-pro is not a Prism run). Use --n >= 1, or add --m."
+  fi
   command -v jq >/dev/null 2>&1 || die "scaffold: jq not found in PATH (needed to read the peer registry + lens catalog)"
   # --out writes a prepare-READY dispatch directly (no Write/Edit by the agent → no
   # wasted Read). It is therefore restricted to the zero-FILL case: --preset (a complete
@@ -1219,7 +1279,7 @@ cmd_scaffold() {
   [ "$npeers" -ge 1 ] || die "scaffold: no standard tiers in the registry (no peer carries an .order) — $PEERS_JSON"
 
   if [ -n "$preset" ]; then
-    [ "$n" -eq 1 ] || die "scaffold: --preset is for the N=1 default; for N>1, fill lenses by hand"
+    [ "$n" -eq 1 ] || die "scaffold: --preset is for the N=1 standard roster; for other N, fill lenses by hand"
     local names; names=$(preset_lenses "$preset") \
       || die "scaffold: unknown --preset '$preset' (see templates/lens-catalog.json .presets for the valid set)"
     set -- $names
@@ -1229,7 +1289,7 @@ cmd_scaffold() {
     # die()s above already fired to stderr; only the dispatch body is routed here.
     {
       printf 'Shared-Packet: %s\n' "$packet"
-      printf 'Prism-Mode: full\nPrism-N: 1\nPrism-M: 0\n\n'
+      printf 'Prism-Mode: full\nPrism-N: 1\nPrism-M: %s\n\n' "$m"
       printf '# Preset "%s": eight lenses pre-filled in canonical tier order (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$preset"
       printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
       printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
@@ -1246,6 +1306,7 @@ cmd_scaffold() {
         printf 'Type: parallax\nTo: %s\nLens: %s\nLens-Desc: %s\n\n' "$peer" "${!idx}" "$(lens_desc_for "${!idx}")"
         idx=$((idx + 1))
       done <<< "$peers"
+      scaffold_gptpro_records "$m"
     } > "${out:-/dev/stdout}"
     [ -n "$out" ] && echo "prism-launch: wrote prepare-ready dispatch → $out (write the packet $packet, then: prism-launch prepare --dispatch $out)" >&2
     return 0
@@ -1253,7 +1314,7 @@ cmd_scaffold() {
   [ -z "$out" ] || die "scaffold: --out reached the FILL path — this should be unreachable (--out requires --preset). File a bug."
 
   printf 'Shared-Packet: %s\n' "$packet"
-  printf 'Prism-Mode: full\nPrism-N: %s\nPrism-M: 0\n\n' "$n"
+  printf 'Prism-Mode: full\nPrism-N: %s\nPrism-M: %s\n\n' "$n" "$m"
   printf '# Symmetric scaffold: N=%s of each of the eight models (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$n"
   printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
   printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
@@ -1273,6 +1334,7 @@ cmd_scaffold() {
       i=$((i + 1)); printf 'Type: parallax\nTo: %s\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$peer" "$i"; k=$((k + 1))
     done
   done <<< "$peers"
+  scaffold_gptpro_records "$m"
 }
 
 # ── clean ────────────────────────────────────────────────────────────────────
@@ -1601,7 +1663,7 @@ cmd_help() {
 prism-launch — Prism dispatch launcher (parallax fan-out + dispatch prep)
 
 Usage:  (all subcommands require `jq` in PATH)
-  prism-launch scaffold [--n <N>] [--preset <type>] [--packet <path>] [--out <path>]  # dispatch skeleton
+  prism-launch scaffold [--n <N>] [--m <M>] [--preset <type>] [--packet <path>] [--out <path>]  # dispatch skeleton
   prism-launch prepare  --dispatch <dispatch-file>  [--expect-n <N> [--expect-m <M>]]   # default: line-oriented control file
   prism-launch prepare  --config   <config.json>    [--expect-n <N> [--expect-m <M>]]   # escape hatch: raw JSON (one of the two)
   prism-launch parallax <manifest.json> [--dry-run]
@@ -1619,8 +1681,10 @@ scaffold:  emit a ready-to-fill dispatch skeleton for the symmetric default (N o
            --preset <review|design|diagnosis|compare|research|decision|writing> pre-fills eight
            lenses by task type (N=1). --out <path> writes a prepare-READY dispatch directly
            (requires --preset + --packet, i.e. zero FILLs) so the agent skips Write/Edit
-           entirely. gpt-pro lenses are opt-in — add them by hand (below); the record Type
-           accepts gptpro (and the gpt-pro/gpt_pro spellings as aliases).
+           entirely. --m <M> emits M ready Type: gptpro records (canonical Deep-Reasoning /
+           Research-Grounded postures — no hand-writing the gptpro format); --n 0 --m <M>
+           scaffolds a gpt-pro-only run (legal only with M >= 1). The record Type also
+           accepts the gpt-pro/gpt_pro spellings as aliases.
 prepare:   validate the dispatch/config, render all launchers from templates, write a manifest;
            inject the canonical ## Constraints, ## How to answer, and ## Grounding external facts
            into the shared packet if absent (so you author the packet with just Full Question +
@@ -1661,6 +1725,8 @@ Dispatch records (line-oriented; see prism SKILL.md):
                           # Include-Tree: <dir> (recursive, capped). Mutually exclusive with Reference:.
   Reference: <abs-path>   # repeatable, top-level: the legacy explicit gptpro inline list;
                           # defaults to the packet's `### Reference Materials`; `none` = packet only.
+                          # With NO Reference:/Include: and no valid bullets, gpt-pro defaults to
+                          # packet-only with a loud warning (not an abort) — a self-contained run is fine.
 
 Env:
   PRISM_PEER_TIMEOUT  per-peer timeout in seconds (default 3600; 0 = no cap; needs coreutils timeout).

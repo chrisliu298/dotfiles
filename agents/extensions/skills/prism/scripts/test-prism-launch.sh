@@ -142,6 +142,10 @@ echo "== prepare: negative cases (fail-closed) =="
 P2="$TMP/p2.md"; printf '## Full Question\nq\n' > "$P2"
 C2="$TMP/c2.json"; jq -n --arg p "$P2" '{shared_packet:$p,parallax:[],subagents:[{lens:"X",lens_desc:"y"}]}' > "$C2"
 expect_err "rejects packet missing a required section (## Context)" "$LAUNCH" prepare --config "$C2"
+# F1: the missing-section error is actionable — prints the copy-paste skeleton, not just the section
+# name. Capture first (prepare exits non-zero → pipefail would mask the grep match).
+F1ERR=$("$LAUNCH" prepare --config "$C2" 2>&1 || true)
+printf '%s\n' "$F1ERR" | grep -q 'nest ALL domain content here as ### subsections' && ok "missing-## Context error prints an actionable skeleton" || bad "missing-section error not actionable"
 
 # missing ## Constraints → prepare INJECTS the canonical block (not a failure)
 P2c="$TMP/p2c.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$P2c"
@@ -389,6 +393,36 @@ expect_ok "scaffold --out file is directly prepare-ready (no edit)" "$LAUNCH" pr
 expect_err "scaffold --out requires --preset (a FILL file would force a Read)" "$LAUNCH" scaffold --packet "$SCOUTPKT" --out "$SCOUT"
 expect_err "scaffold --out requires --packet (Shared-Packet must be real)" "$LAUNCH" scaffold --preset review --out "$SCOUT"
 expect_err "scaffold --out rejects a relative path" "$LAUNCH" scaffold --preset review --packet "$SCOUTPKT" --out rel.dispatch
+
+echo "== scaffold --m / --n 0: gpt-pro-shape-aware (F3/F6) =="
+SCM=$("$LAUNCH" scaffold --n 1 --m 2)
+printf '%s\n' "$SCM" | grep -q '^Prism-M: 2' && ok "scaffold --m sets Prism-M" || bad "scaffold --m Prism-M"
+[ "$(printf '%s\n' "$SCM" | grep -c '^Type: gptpro')" = "2" ] && ok "scaffold --m 2 emits 2 gptpro records" || bad "scaffold --m gptpro count"
+{ printf '%s\n' "$SCM" | grep -q '^Posture: deep-reasoning' && printf '%s\n' "$SCM" | grep -q '^Posture: research-grounded'; } && ok "scaffold --m emits canonical postures" || bad "scaffold --m postures"
+# M>2: the default gptpro lens names must stay distinct (suffixed), or prepare's duplicate-lens check bounces
+SCM3LENS=$("$LAUNCH" scaffold --n 1 --m 3 | awk '/^Type: gptpro/{g=1;next} g&&/^Lens:/{print;g=0}')
+{ [ "$(printf '%s\n' "$SCM3LENS" | wc -l | tr -d ' ')" = "3" ] && [ "$(printf '%s\n' "$SCM3LENS" | sort -u | wc -l | tr -d ' ')" = "3" ] && printf '%s\n' "$SCM3LENS" | grep -q 'Deep-Reasoning-3'; } && ok "scaffold --m 3 gptpro lens names stay distinct (suffix at M>2)" || bad "scaffold --m 3 distinct names"
+# gpt-pro-only: --n 0 --m M emits no standard records, only gptpro
+SC0=$("$LAUNCH" scaffold --n 0 --m 1)
+{ printf '%s\n' "$SC0" | grep -q '^Prism-N: 0' \
+  && [ "$(printf '%s\n' "$SC0" | grep -c '^Type: parallax')" = "0" ] \
+  && [ "$(printf '%s\n' "$SC0" | grep -c '^Type: subagent')" = "0" ] \
+  && [ "$(printf '%s\n' "$SC0" | grep -c '^Type: gptpro')" = "1" ]; } \
+  && ok "scaffold --n 0 --m 1 = gpt-pro-only (no standard records)" || bad "scaffold --n 0 shape"
+expect_err "scaffold --n 0 without --m is rejected (gpt-pro-only needs M>=1)" "$LAUNCH" scaffold --n 0
+expect_err "scaffold --m rejects a non-integer" "$LAUNCH" scaffold --m x
+# preset + --m stays zero-FILL and round-trips through prepare
+SCMPKT="$TMP/prism-scm.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$SCMPKT"
+SCMOUT="$TMP/scm.dispatch"
+"$LAUNCH" scaffold --preset review --m 1 --packet "$SCMPKT" --out "$SCMOUT" 2>/dev/null
+{ [ "$(grep -c FILL "$SCMOUT")" = "0" ] && [ "$(grep -c '^Type: gptpro' "$SCMOUT")" = "1" ]; } && ok "scaffold --preset --m stays zero-FILL with a gptpro record" || bad "scaffold preset --m"
+expect_ok "scaffold --preset --m round-trips through prepare" "$LAUNCH" prepare --dispatch "$SCMOUT"
+# a gpt-pro-only scaffold (--n 0 --m, default postures are valid lenses) round-trips through prepare
+SC0PKT="$TMP/prism-sc0.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$SC0PKT"
+SC0OUT="$TMP/sc0.dispatch"
+"$LAUNCH" scaffold --n 0 --m 2 --packet "$SC0PKT" 2>/dev/null > "$SC0OUT"
+expect_ok "scaffold --n 0 --m round-trips through prepare (gpt-pro-only)" "$LAUNCH" prepare --dispatch "$SC0OUT"
+
 # prepare prints the expected-notification count (capture first — grep -q on the pipe would SIGPIPE prepare mid-dump)
 "$LAUNCH" prepare --dispatch /tmp/prism-pp.dispatch >"$TMP/ppnotif.out" 2>/dev/null
 grep -q 'wait for 2 completion notification' "$TMP/ppnotif.out" && ok "prepare prints the expected-notification count" || bad "notification-count line"
@@ -607,10 +641,25 @@ GLB2=$(jq -r '.gptpro[0].launcher' "$TMP/prism-gpb2-manifest.json")
 ! grep -q 'REF-ONE-CONTENT-MARKER' "$GLB2" && ok "gptpro: 'Reference: none' skips the packet list (no refs inlined)" || bad "gptpro Reference none"
 
 echo "== gptpro: fail-closed validation =="
-# gptpro lens but NO reference source at all
+# gptpro lens but NO reference source at all -> NOT a bounce: a self-contained packet is
+# valid gpt-pro input, so prepare defaults to packet-only and WARNS loudly (F2). The hard
+# error is reserved for an explicitly DECLARED bad reference (the cases below).
 GPKN="$TMP/prism-gpn.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$GPKN"
 GDN="$TMP/gpn.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gptpro\nLens: X\nLens-Desc: y\n' "$GPKN" > "$GDN"
-expect_err "gptpro: no Reference keys and no ### Reference Materials -> fail-closed" "$LAUNCH" prepare --dispatch "$GDN"
+GNERR=$("$LAUNCH" prepare --dispatch "$GDN" 2>&1); GNRC=$?
+[ "$GNRC" -eq 0 ] && ok "gptpro: no reference source -> packet-only default, not a bounce" || bad "gptpro no-ref default exit (got $GNRC)"
+printf '%s\n' "$GNERR" | grep -q 'shared packet ONLY' && ok "gptpro: no-reference run warns loudly (packet-only)" || bad "gptpro no-ref warning"
+GLN=$(jq -r '.gptpro[0].launcher' "$TMP/prism-gpn-manifest.json" 2>/dev/null)
+{ [ -f "$GLN" ] && grep -q '^## Full Question' "$GLN" && ! grep -q '^### .*ref-one' "$GLN"; } && ok "gptpro: packet-only launcher composed (packet inlined, no refs)" || bad "gptpro no-ref launcher"
+# review fix: a packet-only launcher must NOT carry a dangling "Inlined reference materials" heading
+! grep -q 'Inlined reference materials' "$GLN" && ok "gptpro: packet-only launcher omits the dangling reference heading" || bad "gptpro packet-only dangling heading"
+# review fix: a ### Reference Materials heading with NO valid absolute bullets (empty / all-relative)
+# must also default to packet-only AND warn — never silently (the old elif branch was silent).
+GPKE="$TMP/prism-gpe.md"; printf '## Full Question\nq\n\n## Context\nc\n\n### Reference Materials\n\n- relative/not-absolute.md\n' > "$GPKE"
+GDE2="$TMP/gpe2.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gptpro\nLens: Z\nLens-Desc: y\n' "$GPKE" > "$GDE2"
+GEERR=$("$LAUNCH" prepare --dispatch "$GDE2" 2>&1); GERC=$?
+[ "$GERC" -eq 0 ] && ok "gptpro: empty/malformed ### Reference Materials -> packet-only (not a bounce)" || bad "gptpro empty-RM exit (got $GERC)"
+printf '%s\n' "$GEERR" | grep -q 'NO reference files resolved' && ok "gptpro: empty/malformed ### Reference Materials WARNS (no silent packet-only)" || bad "gptpro empty-RM warning"
 # directory reference
 GCD="$TMP/gpd.json"; jq -n --arg p "$GPKN" --arg d "$TMP" '{shared_packet:$p,references:[$d],parallax:[],subagents:[],gptpro:[{lens:"X",lens_desc:"y"}]}' > "$GCD"
 expect_err "gptpro: a directory Reference -> fail-closed" "$LAUNCH" prepare --config "$GCD"
