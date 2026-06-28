@@ -72,6 +72,11 @@ if (( IS_MACOS )) && [[ "$HOST" == "macmini" ]] && [[ -f ~/.openclaw/completions
     source ~/.openclaw/completions/openclaw.zsh
 fi
 
+# interview-prep make completion
+_interview_prep_completion="$HOME/Developer/GitHub/interview-prep/completions/_interview_prep_make"
+[[ -f "$_interview_prep_completion" ]] && source "$_interview_prep_completion"
+unset _interview_prep_completion
+
 # =============================================================================
 # Keybindings
 # =============================================================================
