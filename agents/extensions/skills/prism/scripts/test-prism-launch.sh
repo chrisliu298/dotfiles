@@ -1139,6 +1139,128 @@ case "$scaffold_out" in
   *) bad "scaffold missing Include: stub" ;;
 esac
 
+echo "== scaffold + prepare: no-subagents variant =="
+PKTN="$TMP/prism-nosub.md"; make_packet "$PKTN"
+
+# scaffold --no-subagents: partial + Variant header, zero subagent records, parallax fan kept
+NS_OUT=$("$LAUNCH" scaffold --no-subagents --preset review 2>/dev/null)
+case "$NS_OUT" in *$'\nVariant: no-subagents\n'*) ok "scaffold --no-subagents emits Variant: no-subagents" ;; *) bad "scaffold --no-subagents Variant header" ;; esac
+case "$NS_OUT" in *'Prism-Mode: partial'*) ok "scaffold --no-subagents emits Prism-Mode: partial" ;; *) bad "scaffold --no-subagents partial mode" ;; esac
+[ "$(printf '%s\n' "$NS_OUT" | grep -c '^Type: subagent$')" = "0" ] && ok "scaffold --no-subagents emits zero subagent records" || bad "scaffold --no-subagents zero subagent"
+[ "$(printf '%s\n' "$NS_OUT" | grep -c '^Type: parallax$')" -ge 7 ] && ok "scaffold --no-subagents keeps the parallax fan" || bad "scaffold --no-subagents parallax fan"
+# heaviest (subagent-slot) lens moves onto codex (review preset slot-0 = Adversarial)
+printf '%s\n' "$NS_OUT" | grep -A1 '^To: codex$' | grep -q 'Lens: Adversarial' && ok "scaffold --no-subagents moves heaviest lens onto codex (xhigh)" || bad "scaffold --no-subagents codex lens shift"
+
+# --n 0 with --no-subagents is rejected (that's the gpt-pro-only shape, not no-subagents)
+expect_err "scaffold --no-subagents --n 0 rejected" "$LAUNCH" scaffold --no-subagents --n 0
+# --out --no-subagents without a quote is rejected (it would be a FILL file → wasted Read)
+expect_err "scaffold --out --no-subagents needs --partial-user-quote" "$LAUNCH" scaffold --no-subagents --preset review --packet "$PKTN" --out "$TMP/nsx.dispatch"
+
+# happy path: scaffold a real no-subagents dispatch, prepare it, inspect the manifest
+NSD="$TMP/prism-nosub.dispatch"
+"$LAUNCH" scaffold --no-subagents --preset review --packet "$PKTN" --out "$NSD" --partial-user-quote "no subagents" >/dev/null 2>&1
+expect_ok "prepare accepts a valid no-subagents dispatch" "$LAUNCH" prepare --dispatch "$NSD"
+MANN="$TMP/prism-nosub-manifest.json"
+[ "$(jq -r '.shape.variant' "$MANN" 2>/dev/null)" = "no-subagents" ] && ok "manifest .shape.variant = no-subagents" || bad "manifest variant"
+[ "$(jq -r '.shape.mode' "$MANN" 2>/dev/null)" = "partial" ] && ok "manifest .shape.mode stays partial (minimal consumer fork)" || bad "manifest mode"
+[ "$(jq -r '.shape.validated_roster' "$MANN" 2>/dev/null)" = "true" ] && ok "no-subagents roster is floor-checked (validated_roster true)" || bad "validated_roster"
+[ "$(jq -r '.counts.subagents' "$MANN" 2>/dev/null)" = "0" ] && ok "manifest counts.subagents = 0" || bad "counts.subagents"
+[ "$(jq -r '.shape.n' "$MANN" 2>/dev/null)" = "1" ] && ok "manifest .shape.n retained (drives the floor check)" || bad "shape.n retained"
+jq -e '.shape.excluded_tiers | index("subagents")' "$MANN" >/dev/null 2>&1 && ok "manifest excluded_tiers includes subagents" || bad "excluded_tiers"
+
+# floor check FAILS when a parallax tier is missing (the guarantee the variant adds over bare partial)
+NSMISS="$TMP/nsmiss.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: no-subagents\nPrism-N: 1\nPartial-User-Quote: "no subagents"\n\nType: parallax\nTo: codex\nLens: Adversarial\nLens-Desc: d\n' "$PKTN" > "$NSMISS"
+expect_err "no-subagents floor check fails on a missing parallax tier" "$LAUNCH" prepare --dispatch "$NSMISS"
+
+# a smuggled subagent record under the variant is rejected
+NSSUB="$TMP/nssub.dispatch"; cp "$NSD" "$NSSUB"; printf '\nType: subagent\nLens: SneakySub\nLens-Desc: should be rejected\n' >> "$NSSUB"
+expect_err "no-subagents rejects a smuggled subagent record" "$LAUNCH" prepare --dispatch "$NSSUB"
+
+# missing quote rejected (still a user-authorized reduced roster)
+NSNOQ="$TMP/nsnoq.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: no-subagents\nPrism-N: 1\n\nType: parallax\nTo: codex\nLens: A\nLens-Desc: d\n' "$PKTN" > "$NSNOQ"
+expect_err "no-subagents without a Partial-User-Quote rejected" "$LAUNCH" prepare --dispatch "$NSNOQ"
+
+# Variant on Prism-Mode: full rejected
+NSVF="$TMP/nsvf.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: full\nVariant: no-subagents\nPrism-N: 1\n' "$PKTN" > "$NSVF"
+expect_err "Variant on Prism-Mode: full rejected" "$LAUNCH" prepare --dispatch "$NSVF"
+
+# unknown Variant rejected
+NSUV="$TMP/nsuv.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: bananas\nPrism-N: 1\nPartial-User-Quote: "x"\n\nType: parallax\nTo: codex\nLens: A\nLens-Desc: d\n' "$PKTN" > "$NSUV"
+expect_err "unknown Variant rejected" "$LAUNCH" prepare --dispatch "$NSUV"
+
+# back-compat: a bare partial (no Variant) carrying Prism-N is STILL rejected
+NSBP="$TMP/nsbp.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nPrism-N: 1\nPartial-User-Quote: "x"\n\nType: parallax\nTo: codex\nLens: A\nLens-Desc: d\n' "$PKTN" > "$NSBP"
+expect_err "bare partial with Prism-N still rejected (variant-free path unchanged)" "$LAUNCH" prepare --dispatch "$NSBP"
+
+echo "== no-subagents variant: review fixes (N>1, M>0, --config, alias, calm) =="
+
+# N=2 floor check passes; manifest records 14 parallax + shape.n=2 (preset is N=1 only → hand-build)
+PKN2="$TMP/nsn2.md"; make_packet "$PKN2"; NSN2="$TMP/nsn2.dispatch"
+{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: no-subagents\nPrism-N: 2\nPartial-User-Quote: "no subagents"\n' "$PKN2"
+  i=0; for p in codex grok-build grok-composer glm kimi deepseek mimo; do for c in a b; do i=$((i+1)); printf '\nType: parallax\nTo: %s\nLens: L%s\nLens-Desc: d\n' "$p" "$i"; done; done; } > "$NSN2"
+expect_ok "no-subagents N=2 floor check passes (14 parallax)" "$LAUNCH" prepare --dispatch "$NSN2"
+[ "$(jq -r '.counts.parallax_total' "$TMP/nsn2-manifest.json" 2>/dev/null)" = "14" ] && ok "no-subagents N=2 manifest parallax_total=14" || bad "N=2 parallax_total"
+[ "$(jq -r '.shape.n' "$TMP/nsn2-manifest.json" 2>/dev/null)" = "2" ] && ok "no-subagents N=2 shape.n=2" || bad "N=2 shape.n"
+
+# M=1 happy path: gpt-pro asserted; manifest counts.gptpro=1 + shape.m=1
+PKM1="$TMP/nsm1.md"; make_packet "$PKM1"; NSM1="$TMP/nsm1.dispatch"
+"$LAUNCH" scaffold --no-subagents --preset review --m 1 --packet "$PKM1" --out "$NSM1" --partial-user-quote "no subagents" >/dev/null 2>&1
+expect_ok "no-subagents --m 1 prepares" "$LAUNCH" prepare --dispatch "$NSM1"
+[ "$(jq -r '.counts.gptpro' "$TMP/nsm1-manifest.json" 2>/dev/null)" = "1" ] && ok "no-subagents M=1 manifest gptpro=1" || bad "M=1 gptpro"
+[ "$(jq -r '.shape.m' "$TMP/nsm1-manifest.json" 2>/dev/null)" = "1" ] && ok "no-subagents M=1 shape.m=1" || bad "M=1 shape.m"
+
+# M=1 declared but zero gpt-pro records → variant floor check fails
+NSM1B="$TMP/nsm1b.dispatch"
+{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: no-subagents\nPrism-N: 1\nPrism-M: 1\nPartial-User-Quote: "x"\n' "$PKM1"
+  for p in codex grok-build grok-composer glm kimi deepseek mimo; do printf '\nType: parallax\nTo: %s\nLens: LB-%s\nLens-Desc: d\n' "$p" "$p"; done; } > "$NSM1B"
+expect_err "no-subagents M=1 with zero gpt-pro records fails floor check" "$LAUNCH" prepare --dispatch "$NSM1B"
+
+# --no-subagent (singular) alias behaves identically
+NS_SING=$("$LAUNCH" scaffold --no-subagent --preset review 2>/dev/null)
+case "$NS_SING" in *$'\nVariant: no-subagents\n'*) ok "scaffold --no-subagent (singular) alias works" ;; *) bad "--no-subagent alias" ;; esac
+
+# scaffold --partial-user-quote WITHOUT --no-subagents is rejected (no silent discard)
+expect_err "scaffold --partial-user-quote without --no-subagents rejected" "$LAUNCH" scaffold --partial-user-quote "x" --preset review
+
+# leftover scaffold FILL placeholder quote is rejected by prepare
+PKF="$TMP/nsf.md"; make_packet "$PKF"; NSF="$TMP/nsf.dispatch"
+{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: no-subagents\nPrism-N: 1\nPartial-User-Quote: "FILL — the user'"'"'s exact words"\n' "$PKF"
+  for p in codex grok-build grok-composer glm kimi deepseek mimo; do printf '\nType: parallax\nTo: %s\nLens: LF-%s\nLens-Desc: d\n' "$p" "$p"; done; } > "$NSF"
+expect_err "no-subagents leftover FILL placeholder quote rejected" "$LAUNCH" prepare --dispatch "$NSF"
+
+# calm informational line on the variant; the loud ⚠ PARTIAL must NOT appear
+NSCALM=$("$LAUNCH" prepare --dispatch "$NSD" 2>&1 >/dev/null)
+case "$NSCALM" in *"no-subagents run"*) ok "variant prepare prints the calm no-subagents line" ;; *) bad "variant calm line" ;; esac
+case "$NSCALM" in *"PARTIAL"*) bad "variant must NOT print ⚠ PARTIAL" ;; *) ok "variant suppresses the loud ⚠ PARTIAL" ;; esac
+
+# --config raw path: a valid no-subagents .shape with omitted m prepares + normalizes m→0
+PKC="$TMP/nsc.md"; make_packet "$PKC"; CFGNS="$TMP/cfgns.json"
+jq -n --arg p "$PKC" '{shared_packet:$p,
+  parallax:[ ["codex","grok-build","grok-composer","glm","kimi","deepseek","mimo"][] | {to:., name:("ns-"+.), lens:("L-"+.), lens_desc:"d"} ],
+  subagents:[],
+  shape:{mode:"partial", variant:"no-subagents", n:1, partial_user_quote:"no subagents"}}' > "$CFGNS"
+expect_ok "--config no-subagents variant (omitted m) prepares" "$LAUNCH" prepare --config "$CFGNS"
+[ "$(jq -r '.shape.m' "$TMP/nsc-manifest.json" 2>/dev/null)" = "0" ] && ok "--config no-subagents omitted m normalized to 0" || bad "--config m normalized"
+
+# --config raw path: variant on mode:full is rejected by the schema validator
+PKCF="$TMP/nscf.md"; make_packet "$PKCF"; CFGFV="$TMP/cfgfv.json"
+jq -n --arg p "$PKCF" '{shared_packet:$p, parallax:[], subagents:[{lens:"S",lens_desc:"d"}],
+  shape:{mode:"full", variant:"no-subagents", n:1}}' > "$CFGFV"
+expect_err "--config rejects variant on mode:full (schema)" "$LAUNCH" prepare --config "$CFGFV"
+
+# --config raw path: omitted m normalized to 0 → a stray gpt-pro record is caught by the floor check
+PKCG="$TMP/nscg.md"; make_packet "$PKCG"; CFGNSG="$TMP/cfgnsg.json"
+jq -n --arg p "$PKCG" '{shared_packet:$p,
+  parallax:[ ["codex","grok-build","grok-composer","glm","kimi","deepseek","mimo"][] | {to:., name:("ng-"+.), lens:("L-"+.), lens_desc:"d"} ],
+  subagents:[], gptpro:[{lens:"G", lens_desc:"d"}],
+  shape:{mode:"partial", variant:"no-subagents", n:1, partial_user_quote:"x"}}' > "$CFGNSG"
+expect_err "--config no-subagents omitted m + stray gpt-pro caught by floor check" "$LAUNCH" prepare --config "$CFGNSG"
+
 echo
 echo "==== $pass passed, $fail failed ===="
 [ "$fail" -eq 0 ]

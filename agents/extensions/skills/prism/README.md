@@ -82,12 +82,14 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
 ## Invocation
 
 ```
-   prism  [N]  [M]  <question>
-          │    │
-          │    └─ M gpt-pro lenses (optional second number; default 0)
+   prism  [N|Nns]  [M]  <question>
+          │         │
+          │         └─ M gpt-pro lenses (optional second number; default 0)
           └─ how many of EACH of the eight standard tiers (default 1; the full 8
              is the floor — a partial fan needs an explicit exclusion). Dispatched
              = 8N+M; perspectives = 8N+M+1. 0 = drop all eight (gpt-pro-only), M ≥ 1.
+             Nns (e.g. 1ns) = no-subagents: drop the Claude tier, keep 7 parallax at
+             N → dispatched 7N+M, perspectives 7N+M+1. Same as "<q> no subagents".
 
    No reasoning-effort knob — Codex always xhigh, Grok-Build always high.
 
@@ -95,7 +97,9 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
    prism 2 Which architecture?          → 2 of each, no gpt-pro
    prism 2 3 Bet-the-company call?      → 2 of each + 3 gpt-pro lenses
    prism 0 4 Which approach?            → gpt-pro-only: 4 lenses + self (no standard tiers)
+   prism 1ns 1 Why does X?              → no-subagents: 7 parallax + 1 gpt-pro + self (/9)
    prism no deepseek, why X?            → natural-language deviations (exclude/count)
+   prism no subagents, why X?           → no-subagents (external-only) via natural language
 ```
 
 ---
@@ -128,7 +132,7 @@ backgrounded process. The Integrator stays in the loop for the judgment.
                    ▸ each subagent launcher's CONTENTS (paste straight in)
 
  4  launch — ALL at once (run_in_background):
-       ├─ Agent call × N ───────────────────────────────────────►  Claude subagents
+       ├─ Agent call × N (zero in a no-subagents run) ──────────►  Claude subagents
        │                                                               │
        └─ parallax (bg) ─► ┌── relay ──► codex ───────┐                │
                            ├── relay ──► grok-build   │                │
@@ -160,11 +164,15 @@ backgrounded process. The Integrator stays in the loop for the judgment.
 ## `prism-launch` subcommands
 
 ```
-  scaffold  [--n N] [--preset TYPE] [--packet PATH]
+  scaffold  [--n N] [--m M] [--preset TYPE] [--packet PATH] [--out PATH]
+            [--no-subagents [--partial-user-quote "<words>"]]
               └ print a fill-in dispatch skeleton (the Prism-Mode: full / Prism-N / Prism-M
                 roster contract + records in canonical order; effort is CLI-derived, never authored).
                 --preset review|design|diagnosis|compare|research|decision|writing
-                pre-fills eight lenses by task type (N=1).
+                pre-fills eight lenses by task type (N=1). --m M adds M gpt-pro records.
+                --out writes a prepare-ready file (needs --preset + --packet). --no-subagents
+                emits the external-only shape (Prism-Mode: partial + Variant: no-subagents,
+                7 parallax at N, zero subagents); with --out add --partial-user-quote.
 
   prepare   --dispatch <file>     (or --config <json>)  [--expect-n N] [--expect-m M]
               └ validate, render every launcher from templates, write the manifest,
@@ -173,8 +181,12 @@ backgrounded process. The Integrator stays in the loop for the judgment.
                 fail-closed floor check (every standard tier + subagents at N, gpt-pro at
                 Prism-M, aborting on a missing/off-count tier); a reduced roster needs
                 Prism-Mode: partial + a verbatim Partial-User-Quote (recorded in manifest
-                .shape). --config stays lenient. CLI --expect-n/-m still work and override
-                the contract's N/M.
+                .shape). The "drop only the Claude subagent tier, keep the parallax fan"
+                case is the recognized Prism-Mode: partial + Variant: no-subagents shape
+                (carries Prism-N/Prism-M; floor-checks 7 parallax at N + 0 subagents;
+                scaffold --no-subagents emits it). --config stays lenient. CLI --expect-n/-m
+                override the contract's N/M on full/unchecked runs only — ignored on any
+                partial run (incl. Variant: no-subagents), which floor-check off their own Prism-N/M.
 
   parallax  <manifest>            [--dry-run] [--only <peer>]
               └ fan out all relay calls as ONE backgrounded process; --dry-run shows

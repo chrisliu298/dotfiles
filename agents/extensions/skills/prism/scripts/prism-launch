@@ -118,7 +118,7 @@ dispatch_to_config() {
   local file="$1" line t key val lineno=0
   DP_packet=""; DP_px=""; DP_sa=""; DP_gp=""; DP_refs=""
   DP_includes=""; DP_inc_base=""; DP_inc_from=""; DP_inc_tree=""
-  DP_mode=""; DP_n=""; DP_m=""; DP_quote=""
+  DP_mode=""; DP_n=""; DP_m=""; DP_quote=""; DP_variant=""
   DP_type=""; DP_to=""; DP_name=""; DP_lens=""; DP_desc=""; DP_posture=""; DP_in=0; DP_seen=""
 
   while IFS= read -r line || [ -n "$line" ]; do
@@ -167,6 +167,12 @@ dispatch_to_config() {
         # Recorded into the manifest (audit trail) for a Prism-Mode: partial run.
         [ -z "$DP_quote" ] || die "prepare: --dispatch has more than one Partial-User-Quote line"
         DP_quote="$val" ;;
+      Variant)
+        # A recognized, floor-checked reduced shape on the partial path (currently only
+        # 'no-subagents'). Unlike a bare partial (records ARE the shape), a Variant carries
+        # Prism-N/Prism-M and prepare floor-checks the kept tiers — see the partial branch below.
+        [ -z "$DP_variant" ] || die "prepare: --dispatch has more than one Variant line"
+        DP_variant="$val" ;;
       Type)
         # Accept the hyphenated/underscore product spelling as an alias for the record
         # token. Unlike the --config lens-list KEY (where a mis-spelled "gpt-pro" key is
@@ -191,7 +197,7 @@ dispatch_to_config() {
           Lens-Desc) DP_desc="$val" ;;
           Posture)   DP_posture="$val" ;;
         esac ;;
-      *) die "prepare: --dispatch line $lineno: unknown key '$key' (valid: Shared-Packet, Prism-Mode, Prism-N, Prism-M, Partial-User-Quote, Reference, Include, Include-Base, Include-From, Include-Tree, Type, To, Name, Lens, Lens-Desc, Posture)" ;;
+      *) die "prepare: --dispatch line $lineno: unknown key '$key' (valid: Shared-Packet, Prism-Mode, Prism-N, Prism-M, Partial-User-Quote, Variant, Reference, Include, Include-Base, Include-From, Include-Tree, Type, To, Name, Lens, Lens-Desc, Posture)" ;;
     esac
   done < "$file"
   dp_flush
@@ -226,10 +232,28 @@ To run a REDUCED roster you must have an EXPLICIT user request, declared as:
       # Prism-M to 0 so the floor check always asserts gptpro==0 (a stray gptpro record
       # in a full run with no Prism-M is then caught, not silently unchecked).
       [ -n "$DP_m" ] || DP_m=0
+      [ -z "$DP_variant" ] || die "prepare: 'Variant:' is only valid with 'Prism-Mode: partial' (it is a recognized reduced shape, not a full roster)."
       [ -z "$DP_quote" ] || die "prepare: 'Prism-Mode: full' must not set Partial-User-Quote (that key authorizes a Prism-Mode: partial run only)." ;;
     partial)
-      [ -z "$DP_n$DP_m" ] || die "prepare: 'Prism-Mode: partial' must not set Prism-N/Prism-M (a partial shape is asymmetric — there is no single floor N to assert; the records ARE the shape). Remove them."
-      [ -n "$(dp_trim "$DP_quote")" ] || die "prepare: 'Prism-Mode: partial' requires a non-empty 'Partial-User-Quote:' — the user's verbatim words authorizing the reduced roster. A partial prism without an explicit user request is a defect; if the user did not ask for it, run the full roster instead." ;;
+      if [ -n "$DP_variant" ]; then
+        # Recognized, floor-checked reduced shape. Only 'no-subagents' is defined: drop
+        # the Claude subagent tier, keep every parallax tier at N (+ gpt-pro at M). It
+        # carries Prism-N (required, >=1) + Prism-M (optional) so prepare can assert the
+        # kept-tier coverage the mode exists to guarantee — the one partial exception to
+        # "no Prism-N/Prism-M". Still a reduced roster, so the quote is still required.
+        [ "$DP_variant" = "no-subagents" ] || die "prepare: unknown Variant '$DP_variant' (only 'no-subagents' is defined)."
+        case "$DP_n" in
+          '')        die "prepare: 'Variant: no-subagents' requires a 'Prism-N: <N>' line (>=1) — the per-tier count the parallax floor check asserts." ;;
+          *[!0-9]*)  die "prepare: Prism-N must be a non-negative integer, got: $DP_n" ;;
+        esac
+        [ "$DP_n" -ge 1 ] 2>/dev/null || die "prepare: 'Variant: no-subagents' requires Prism-N >= 1. (N=0 with no subagents IS the gpt-pro-only shape — use 'Prism-Mode: full', 'Prism-N: 0', 'Prism-M: >=1' instead.)"
+        case "$DP_m" in *[!0-9]*) die "prepare: Prism-M must be a non-negative integer, got: $DP_m" ;; esac
+        [ -n "$DP_m" ] || DP_m=0
+        [ -n "$(dp_trim "$DP_quote")" ] || die "prepare: 'Variant: no-subagents' requires a non-empty 'Partial-User-Quote:' — it drops the Claude subagent tier, an explicit user-authorized reduced roster."
+      else
+        [ -z "$DP_n$DP_m" ] || die "prepare: 'Prism-Mode: partial' must not set Prism-N/Prism-M (a partial shape is asymmetric — there is no single floor N to assert; the records ARE the shape). Remove them, or declare a recognized 'Variant:' (e.g. no-subagents) that carries them."
+        [ -n "$(dp_trim "$DP_quote")" ] || die "prepare: 'Prism-Mode: partial' requires a non-empty 'Partial-User-Quote:' — the user's verbatim words authorizing the reduced roster. A partial prism without an explicit user request is a defect; if the user did not ask for it, run the full roster instead."
+      fi ;;
     *) die "prepare: Prism-Mode must be 'full' or 'partial', got: $DP_mode" ;;
   esac
 
@@ -258,8 +282,9 @@ To run a REDUCED roster you must have an EXPLICIT user request, declared as:
       else null end')
   # Shape contract → config .shape (carried through to cmd_prepare's floor check and
   # then into the manifest for audit). Numbers tonumber'd; the quote stays a string.
-  shapej=$(jq -n --arg mode "$DP_mode" --arg n "$DP_n" --arg m "$DP_m" --arg q "$DP_quote" '
+  shapej=$(jq -n --arg mode "$DP_mode" --arg variant "$DP_variant" --arg n "$DP_n" --arg m "$DP_m" --arg q "$DP_quote" '
     {mode:$mode}
+    + (if $variant != "" then {variant:$variant} else {} end)
     + (if $n != "" then {n:($n|tonumber)} else {} end)
     + (if $m != "" then {m:($m|tonumber)} else {} end)
     + (if $q != "" then {partial_user_quote:$q} else {} end)')
@@ -605,11 +630,22 @@ Add a top-level '## Context' heading (a '## ' line, not '###' or bare prose) and
   # Grounding injection above may already have run — that is the same content a
   # successful prepare writes, not a corrupting side effect). Integers parse via
   # tonumber so "08" is accepted; empty CLI values are rejected at flag parse.
-  local shape_mode shape_n shape_m shape_quote eff_n eff_m
+  local shape_mode shape_variant shape_n shape_m shape_quote eff_n eff_m
   shape_mode=$(jq -r '.shape.mode // ""' "$config")
+  shape_variant=$(jq -r '.shape.variant // ""' "$config")
   shape_n=$(jq -r 'if (.shape.n == null) then "" else (.shape.n|tostring) end' "$config")
   shape_m=$(jq -r 'if (.shape.m == null) then "" else (.shape.m|tostring) end' "$config")
   shape_quote=$(jq -r '.shape.partial_user_quote // ""' "$config")
+  # The no-subagents variant always carries a gpt-pro count: the --dispatch parser defaults
+  # an omitted Prism-M to 0, but a hand-authored --config .shape may omit .m — normalize it to
+  # 0 here so the variant floor check always asserts gpt-pro (else a stray gptpro record slips
+  # through unchecked) and the manifest records m:0 rather than null.
+  [ "$shape_variant" = "no-subagents" ] && [ -z "$shape_m" ] && shape_m=0
+  # A leftover scaffold FILL placeholder quote is not a real authorization — reject it
+  # (mirrors prepare's rejection of leftover FILL lens text; covers --dispatch and --config).
+  case "$shape_quote" in
+    *FILL*) die "prepare: Partial-User-Quote is still the scaffold FILL placeholder — replace it with the user's verbatim words authorizing the reduced roster (e.g. \"no subagents\")." ;;
+  esac
   # Fail-closed validation of an author-supplied .shape. The --dispatch parser already
   # validated its own output, but a hand-authored --config .shape reaches here unchecked
   # — so validate here too (single backstop, both paths): mode is full|partial, full has
@@ -620,15 +656,19 @@ Add a top-level '## Context' heading (a '## ' line, not '###' or bare prose) and
       .shape as $s
       | ($s | type == "object")
       and ( ( $s.mode == "full"
+              and ($s.variant == null)
               and ($s.n | type == "number") and ($s.n | floor == .) and ($s.n >= 0)
               and ( ($s.m == null) or (($s.m | type == "number") and ($s.m | floor == .) and ($s.m >= 0)) )
               and ($s.partial_user_quote == null) )
           or ( $s.mode == "partial"
-              and ($s.n == null) and ($s.m == null)
+              and ( ( ($s.variant == null) and ($s.n == null) and ($s.m == null) )
+                    or ( $s.variant == "no-subagents"
+                         and ($s.n | type == "number") and ($s.n | floor == .) and ($s.n >= 1)
+                         and ( ($s.m == null) or (($s.m | type == "number") and ($s.m | floor == .) and ($s.m >= 0)) ) ) )
               and ($s.partial_user_quote | type == "string")
               and ($s.partial_user_quote | test("[^[:space:]]")) ) )
     ' "$config" >/dev/null 2>&1 \
-      || die "prepare: malformed .shape in config — must be {\"mode\":\"full\",\"n\":<int>=0[,\"m\":<int>=0]} (no partial_user_quote) OR {\"mode\":\"partial\",\"partial_user_quote\":\"<non-blank>\"} (no n/m). Got: $(jq -c '.shape' "$config" 2>/dev/null)"
+      || die "prepare: malformed .shape in config — must be {\"mode\":\"full\",\"n\":<int>=0[,\"m\":<int>=0]} (no partial_user_quote) OR {\"mode\":\"partial\",\"partial_user_quote\":\"<non-blank>\"} (no n/m) OR {\"mode\":\"partial\",\"variant\":\"no-subagents\",\"n\":<int>=1[,\"m\":<int>=0],\"partial_user_quote\":\"<non-blank>\"}. Got: $(jq -c '.shape' "$config" 2>/dev/null)"
   fi
   # Effective floor N/M: CLI --expect-n overrides; else the contract's full N/M.
   eff_n="$expect_n"; eff_m="$expect_m"
@@ -671,22 +711,56 @@ This is a PARTIAL prism. Either complete the roster — every standard tier at N
     fi
   fi
 
+  # No-subagents variant floor check (Prism-Mode: partial + Variant: no-subagents):
+  # the recognized "external-only" shape — drop ONLY the Claude subagent tier, keep
+  # every parallax tier at N (+ gpt-pro at M). Unlike a bare partial it IS floor-checked,
+  # so the cross-model coverage the mode promises is enforced, not assumed. It asserts
+  # zero subagents (the defining constraint) instead of subagents at N.
+  local variant_ran=false
+  if [ "$shape_mode" = "partial" ] && [ "$shape_variant" = "no-subagents" ]; then
+    variant_ran=true
+    local variant_err
+    variant_err=$(echo "$manifest_json" | jq -r \
+        --arg en "$shape_n" --argjson ord "$ord_json" --arg em "$shape_m" '
+      def emit($label; $got; $want):
+        if $got != $want then "  \($label): expected \($want), got \($got)" else empty end;
+      ($en | tonumber) as $enn
+      | .counts as $c
+      | ($c.by_peer // {}) as $bp
+      | [ emit("subagents (forbidden in a no-subagents run)"; ($c.subagents // 0); 0),
+          ( $ord[] as $p | emit($p; ($bp[$p] // 0); $enn) ),
+          ( (($bp | keys) - $ord)[] as $x | "  \($x): unexpected non-standard peer" ),
+          ( if $em != "" then emit("gptpro"; ($c.gptpro // 0); ($em | tonumber)) else empty end )
+        ]
+      | .[]')
+    if [ -n "$variant_err" ]; then
+      die "prepare: no-subagents floor check failed (expected 0 subagents, every parallax tier at N=$shape_n${shape_m:+, gpt-pro at M=$shape_m}):
+$variant_err
+A no-subagents run keeps ALL parallax tiers at N and drops only the Claude subagent slot. Emit it with 'prism-launch scaffold --no-subagents --n $shape_n'${shape_m:+ --m $shape_m}."
+    fi
+  fi
+
   # Resolve the shape recorded into the manifest (audit trail). validated_roster is true
   # ONLY when a floor check actually ran and passed. A partial records null N/M (the
   # shape is asymmetric — the records are the shape), never the CLI override value.
   local validated eff_mode man_n man_m
-  validated=false; [ "$floor_ran" = true ] && validated=true
+  validated=false; { [ "$floor_ran" = true ] || [ "$variant_ran" = true ]; } && validated=true
   eff_mode="$shape_mode"
   [ -n "$eff_mode" ] || { if [ -n "$eff_n" ]; then eff_mode="full"; else eff_mode="unchecked"; fi; }
   man_n="$eff_n"; man_m="$eff_m"
-  if [ "$eff_mode" = "partial" ]; then man_n=""; man_m=""; fi
+  # A bare partial blanks N/M (the records ARE the shape); a floor-checked Variant keeps
+  # them (they drove the check and document the kept-tier count for synthesis).
+  if [ "$eff_mode" = "partial" ]; then
+    if [ "$variant_ran" = true ]; then man_n="$shape_n"; man_m="$shape_m"; else man_n=""; man_m=""; fi
+  fi
   manifest_json=$(echo "$manifest_json" | jq \
-      --arg mode "$eff_mode" --arg n "$man_n" --arg m "$man_m" \
+      --arg mode "$eff_mode" --arg variant "$shape_variant" --arg n "$man_n" --arg m "$man_m" \
       --arg quote "$shape_quote" --argjson ord "$ord_json" --argjson validated "$validated" '
     (.counts.by_peer // {}) as $bp
     | ([ $ord[] | select((($bp[.]) // 0) == 0) ]
        + (if ((.counts.subagents // 0) == 0) then ["subagents"] else [] end)) as $excluded
     | . + {shape: ({mode: $mode, validated_roster: $validated}
+        + (if $variant != "" then {variant: $variant} else {} end)
         + (if $n != "" then {n: ($n|tonumber)} else {n: null} end)
         + (if $m != "" then {m: ($m|tonumber)} else {m: null} end)
         + (if $quote != "" then {partial_user_quote: $quote} else {partial_user_quote: null} end)
@@ -695,7 +769,12 @@ This is a PARTIAL prism. Either complete the roster — every standard tier at N
 
   # A partial run is the double-confirm point: surface the dropped tiers + the cited
   # user authorization loudly, and stamp both into the manifest above for the audit trail.
-  if [ "$eff_mode" = "partial" ]; then
+  if [ "$eff_mode" = "partial" ] && [ "$shape_variant" = "no-subagents" ]; then
+    # A recognized, floor-checked principled shape — not a suspicious drop, so no ⚠.
+    # The quote is still recorded + cited (it IS a user-authorized tier exclusion).
+    echo "prism-launch: no-subagents run — Claude subagent tier excluded by user request; all parallax tiers kept at N=$shape_n${shape_m:+, gpt-pro at M=$shape_m} (floor-checked)." >&2
+    echo "prism-launch:   authorized by: \"$shape_quote\"  (recorded in manifest .shape — cite in synthesis; self is the lone Claude perspective)." >&2
+  elif [ "$eff_mode" = "partial" ]; then
     local excl_list; excl_list=$(echo "$manifest_json" | jq -r '.shape.excluded_tiers | join(", ")')
     echo "prism-launch: ⚠ PARTIAL prism — tier(s) dropped (parallax peers and/or the Claude subagent slot): ${excl_list:-none}" >&2
     echo "prism-launch:   authorized by explicit user request: \"$shape_quote\"" >&2
@@ -1168,7 +1247,11 @@ $(jq -n --arg to "$to" --arg name "$name" --arg status "$status" --arg res "$res
   echo "prism-parallax: $succeeded/$n succeeded, $failed failed"
   jq -r '.results[] | "  " + (if .status=="done" then "done " else "error" end) + " " + .to + "  " + .name + "  " + (.res // ("(no response; see " + .log + ")"))' "$result"
   echo "result: $result"
-  echo "REMINDER: Claude subagents are dispatched separately via the Agent tool; this result covers parallax only." >&2
+  if [ "$(jq -r '.counts.subagents // 0' "$manifest")" -gt 0 ] 2>/dev/null; then
+    echo "REMINDER: Claude subagents are dispatched separately via the Agent tool; this result covers parallax only." >&2
+  else
+    echo "note: no Claude subagents in this run (external-only); this result covers the full dispatched standard roster (gpt-pro lenses, if any, collected separately)." >&2
+  fi
 
   [ "$failed" -eq 0 ]
 }
@@ -1239,7 +1322,7 @@ scaffold_gptpro_records() {
 }
 
 cmd_scaffold() {
-  local n=1 m=0 packet="" preset="" out=""
+  local n=1 m=0 packet="" preset="" out="" no_sub=0 pq=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --n)      [ $# -ge 2 ] || die "scaffold: --n requires a value";      n="$2";      shift 2 ;;
@@ -1247,6 +1330,8 @@ cmd_scaffold() {
       --packet) [ $# -ge 2 ] || die "scaffold: --packet requires a value"; packet="$2"; shift 2 ;;
       --preset) [ $# -ge 2 ] || die "scaffold: --preset requires a value"; preset="$2"; shift 2 ;;
       --out)    [ $# -ge 2 ] || die "scaffold: --out requires a value";    out="$2";    shift 2 ;;
+      --no-subagents|--no-subagent) no_sub=1; shift ;;
+      --partial-user-quote) [ $# -ge 2 ] || die "scaffold: --partial-user-quote requires a value"; pq="$2"; shift 2 ;;
       -*) die "scaffold: unknown flag: $1 (effort is fixed — Codex xhigh, Grok Build high — there is no --effort)" ;;
       *)  die "scaffold: unexpected argument: $1" ;;
     esac
@@ -1256,8 +1341,11 @@ cmd_scaffold() {
   # N=0 is the gpt-pro-only shape (drop all standard tiers) — legal only with M>=1,
   # mirroring prepare's `Prism-Mode: full` + `Prism-N: 0` rule. N>=1 keeps the full roster.
   if [ "$n" -lt 1 ]; then
+    [ "$no_sub" -eq 0 ] || die "scaffold: --no-subagents needs --n >= 1 (it drops only the Claude subagent tier and keeps the parallax fan). --n 0 with no subagents IS the gpt-pro-only shape — use plain 'scaffold --n 0 --m >=1' instead."
     [ "$m" -ge 1 ] || die "scaffold: --n 0 is the gpt-pro-only shape and needs --m >= 1 (no standard tiers AND no gpt-pro is not a Prism run). Use --n >= 1, or add --m."
   fi
+  # --partial-user-quote only authorizes a no-subagents (reduced) roster; a full roster takes no quote.
+  [ -z "$pq" ] || [ "$no_sub" -eq 1 ] || die "scaffold: --partial-user-quote is only meaningful with --no-subagents (it authorizes the reduced roster). A full roster takes no quote — drop it, or add --no-subagents."
   command -v jq >/dev/null 2>&1 || die "scaffold: jq not found in PATH (needed to read the peer registry + lens catalog)"
   # --out writes a prepare-READY dispatch directly (no Write/Edit by the agent → no
   # wasted Read). It is therefore restricted to the zero-FILL case: --preset (a complete
@@ -1268,7 +1356,12 @@ cmd_scaffold() {
     case "$out" in /*) ;; *) die "scaffold: --out path must be absolute: $out" ;; esac
     [ -n "$preset" ] || die "scaffold: --out requires --preset (a FILL skeleton written to a file would force a wasted Read to edit it — author custom lenses with the Write tool instead)"
     [ -n "$packet" ] || die "scaffold: --out requires --packet <real path> so the Shared-Packet line is prepare-ready (not the /tmp/prism-<id>.md placeholder)"
+    [ "$no_sub" -eq 0 ] || [ -n "$pq" ] || die "scaffold: --out --no-subagents requires --partial-user-quote \"<the user's exact words>\" (a FILL quote would force a wasted Read to edit it)"
   fi
+  # The roster-contract header: a no-subagents run is a recognized partial Variant carrying
+  # the user's authorization quote; everything else is the full-roster contract.
+  local quote_val
+  if [ -n "$pq" ]; then quote_val="\"$pq\""; else quote_val='"FILL — the user'"'"'s exact words authorizing no subagents (e.g. no subagents)"'; fi
   # Effort is fixed and CLI-derived (Codex xhigh, Grok Build high) — never authored in the dispatch.
   [ -n "$packet" ] || packet="/tmp/prism-<id>.md"
 
@@ -1289,23 +1382,45 @@ cmd_scaffold() {
     # die()s above already fired to stderr; only the dispatch body is routed here.
     {
       printf 'Shared-Packet: %s\n' "$packet"
-      printf 'Prism-Mode: full\nPrism-N: 1\nPrism-M: %s\n\n' "$m"
-      printf '# Preset "%s": eight lenses pre-filled in canonical tier order (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$preset"
-      printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
-      printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
-      printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
-      printf '# Edit any Lens / Lens-Desc to taste; write the Shared-Packet file before prepare.\n\n'
+      if [ "$no_sub" -eq 1 ]; then
+        printf 'Prism-Mode: partial\nVariant: no-subagents\nPrism-N: 1\nPrism-M: %s\nPartial-User-Quote: %s\n\n' "$m" "$quote_val"
+        printf '# No-subagents run: the Claude subagent tier is dropped; all %s parallax tiers are kept\n' "$npeers"
+        printf '# at N (floor-checked). The preset'"'"'s heaviest (subagent-slot) lens is moved onto Codex\n'
+        printf '# (xhigh) so adversarial/hard-reasoning coverage is not lost — re-check it fits.\n'
+        printf '# self (the orchestrator) is the lone Claude perspective; n/total = %sN + M + self.\n\n' "$npeers"
+      else
+        printf 'Prism-Mode: full\nPrism-N: 1\nPrism-M: %s\n\n' "$m"
+        printf '# Preset "%s": eight lenses pre-filled in canonical tier order (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$preset"
+        printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
+        printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
+        printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
+        printf '# Edit any Lens / Lens-Desc to taste; write the Shared-Packet file before prepare.\n\n'
+      fi
       scaffold_include_hint
       # Slot 1 → subagent; slots 2.. → parallax peers in canonical registry order.
       # After `set -- $names`, $1 is the subagent lens and $2..$N the parallax lenses;
       # ${!idx} indirectly reads the positional param numbered by $idx (2,3,…).
-      printf 'Type: subagent\nLens: %s\nLens-Desc: %s\n\n' "$1" "$(lens_desc_for "$1")"
-      local idx=2 peer
-      while IFS= read -r peer; do
-        [ -n "$peer" ] || continue
-        printf 'Type: parallax\nTo: %s\nLens: %s\nLens-Desc: %s\n\n' "$peer" "${!idx}" "$(lens_desc_for "${!idx}")"
-        idx=$((idx + 1))
-      done <<< "$peers"
+      local idx peer pk=0
+      if [ "$no_sub" -eq 1 ]; then
+        # No subagent record. The preset has npeers+1 lenses ordered heaviest-first ($1 is
+        # the subagent-slot lens); we have npeers peers (peer 1 = Codex, the strongest, xhigh).
+        # Map 1:1 in order — peer1(codex)←$1 (the heaviest), peer2←$2, … peerK←$K — which puts
+        # the heaviest lens on Codex AND drops only the *lightest* lens ($npeers+1). (Dropping a
+        # mid lens would shed more reasoning weight + a more-distinct axis family.)
+        while IFS= read -r peer; do
+          [ -n "$peer" ] || continue
+          pk=$((pk + 1)); idx=$pk
+          printf 'Type: parallax\nTo: %s\nLens: %s\nLens-Desc: %s\n\n' "$peer" "${!idx}" "$(lens_desc_for "${!idx}")"
+        done <<< "$peers"
+      else
+        printf 'Type: subagent\nLens: %s\nLens-Desc: %s\n\n' "$1" "$(lens_desc_for "$1")"
+        idx=2
+        while IFS= read -r peer; do
+          [ -n "$peer" ] || continue
+          printf 'Type: parallax\nTo: %s\nLens: %s\nLens-Desc: %s\n\n' "$peer" "${!idx}" "$(lens_desc_for "${!idx}")"
+          idx=$((idx + 1))
+        done <<< "$peers"
+      fi
       scaffold_gptpro_records "$m"
     } > "${out:-/dev/stdout}"
     [ -n "$out" ] && echo "prism-launch: wrote prepare-ready dispatch → $out (write the packet $packet, then: prism-launch prepare --dispatch $out)" >&2
@@ -1314,20 +1429,33 @@ cmd_scaffold() {
   [ -z "$out" ] || die "scaffold: --out reached the FILL path — this should be unreachable (--out requires --preset). File a bug."
 
   printf 'Shared-Packet: %s\n' "$packet"
-  printf 'Prism-Mode: full\nPrism-N: %s\nPrism-M: %s\n\n' "$n" "$m"
-  printf '# Symmetric scaffold: N=%s of each of the eight models (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$n"
-  printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
-  printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
-  printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
-  printf '# Replace every "FILL" Lens / Lens-Desc (prepare rejects any leftover FILL).\n'
-  printf '# Order is the canonical tier order — put your heaviest-reasoning (e.g. Adversarial)\n'
-  printf '# lens on a subagent or codex. Write the Shared-Packet file before running prepare.\n'
-  printf '# Tip: --preset review|design|diagnosis|compare|research|decision|writing pre-fills lenses (N=1).\n\n'
+  if [ "$no_sub" -eq 1 ]; then
+    printf 'Prism-Mode: partial\nVariant: no-subagents\nPrism-N: %s\nPrism-M: %s\nPartial-User-Quote: %s\n\n' "$n" "$m" "$quote_val"
+    printf '# No-subagents scaffold: N=%s of each of the %s PARALLAX tiers; the Claude subagent tier\n' "$n" "$npeers"
+    printf '# is dropped (zero Agent calls). prepare floor-checks all %s parallax tiers at N — a\n' "$npeers"
+    printf '# recognized, user-authorized reduced shape (Partial-User-Quote required, NOT a loud ⚠).\n'
+    printf '# self (the orchestrator) is the lone Claude perspective; n/total = %sN + M + self.\n' "$npeers"
+    printf '# Replace every "FILL" Lens / Lens-Desc (and the FILL quote). Put your heaviest-reasoning\n'
+    printf '# (e.g. Adversarial) lens on codex (xhigh). Write the Shared-Packet file before prepare.\n\n'
+  else
+    printf 'Prism-Mode: full\nPrism-N: %s\nPrism-M: %s\n\n' "$n" "$m"
+    printf '# Symmetric scaffold: N=%s of each of the eight models (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$n"
+    printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
+    printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
+    printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
+    printf '# (For the common "drop only Claude subagents" case use: scaffold --no-subagents.)\n'
+    printf '# Replace every "FILL" Lens / Lens-Desc (prepare rejects any leftover FILL).\n'
+    printf '# Order is the canonical tier order — put your heaviest-reasoning (e.g. Adversarial)\n'
+    printf '# lens on a subagent or codex. Write the Shared-Packet file before running prepare.\n'
+    printf '# Tip: --preset review|design|diagnosis|compare|research|decision|writing pre-fills lenses (N=1).\n\n'
+  fi
   scaffold_include_hint
   local k i=0 peer
-  k=1; while [ "$k" -le "$n" ]; do
-    i=$((i + 1)); printf 'Type: subagent\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$i"; k=$((k + 1))
-  done
+  if [ "$no_sub" -eq 0 ]; then
+    k=1; while [ "$k" -le "$n" ]; do
+      i=$((i + 1)); printf 'Type: subagent\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$i"; k=$((k + 1))
+    done
+  fi
   while IFS= read -r peer; do
     [ -n "$peer" ] || continue
     k=1; while [ "$k" -le "$n" ]; do
@@ -1664,6 +1792,7 @@ prism-launch — Prism dispatch launcher (parallax fan-out + dispatch prep)
 
 Usage:  (all subcommands require `jq` in PATH)
   prism-launch scaffold [--n <N>] [--m <M>] [--preset <type>] [--packet <path>] [--out <path>]  # dispatch skeleton
+  prism-launch scaffold --no-subagents [--n <N>] [--m <M>] [--preset <type>] [--partial-user-quote <text>]  # parallax-only (drop Claude subagent tier)
   prism-launch prepare  --dispatch <dispatch-file>  [--expect-n <N> [--expect-m <M>]]   # default: line-oriented control file
   prism-launch prepare  --config   <config.json>    [--expect-n <N> [--expect-m <M>]]   # escape hatch: raw JSON (one of the two)
   prism-launch parallax <manifest.json> [--dry-run]
@@ -1685,6 +1814,13 @@ scaffold:  emit a ready-to-fill dispatch skeleton for the symmetric default (N o
            Research-Grounded postures — no hand-writing the gptpro format); --n 0 --m <M>
            scaffolds a gpt-pro-only run (legal only with M >= 1). The record Type also
            accepts the gpt-pro/gpt_pro spellings as aliases.
+           --no-subagents drops ONLY the Claude subagent tier (zero Agent calls) and keeps
+           the full parallax fan at N (+ gpt-pro at M): emits Prism-Mode: partial / Variant:
+           no-subagents / Prism-N / Prism-M / Partial-User-Quote, which prepare FLOOR-CHECKS
+           (all parallax tiers at N, zero subagents) — a recognized reduced shape, not a loud
+           ⚠ PARTIAL. Needs --n >= 1 (--n 0 with no subagents is the gpt-pro-only shape). With
+           --out, pass --partial-user-quote "<the user's words>" so the file is zero-FILL. With
+           --preset, the heaviest (subagent-slot) lens moves onto Codex (xhigh).
 prepare:   validate the dispatch/config, render all launchers from templates, write a manifest;
            inject the canonical ## Constraints, ## How to answer, and ## Grounding external facts
            into the shared packet if absent (so you author the packet with just Full Question +
@@ -1695,8 +1831,12 @@ prepare:   validate the dispatch/config, render all launchers from templates, wr
            Prism-N runs a default fail-closed floor check (every standard tier + subagents at N,
            gpt-pro at Prism-M); a PARTIAL roster needs Prism-Mode: partial + a verbatim
            Partial-User-Quote (the user's explicit authorization, recorded in the manifest).
-           --config stays lenient (escape hatch). CLI --expect-n N / --expect-m M still work and
-           OVERRIDE the contract's N/M (advanced/back-compat). See the prism SKILL.md.
+           --config stays lenient (escape hatch). CLI --expect-n N / --expect-m M OVERRIDE the
+           contract's N/M on full/unchecked runs (advanced/back-compat); they are IGNORED on any
+           partial run (incl. Variant: no-subagents), which floor-checks off its own Prism-N/M.
+           No-subagents: Prism-Mode: partial + Variant: no-subagents (or scaffold --no-subagents)
+           keeps the 7 parallax tiers at N and drops the Claude subagent tier (zero Agent calls);
+           prepare floor-checks it and prints a calm note, not ⚠ PARTIAL. See the prism SKILL.md.
 parallax:  fan out every relay call as ONE backgrounded process, wait for all, write a structured
            result. Run with run_in_background: true. --only <name> retries a single failed peer.
            Relay peers only — gpt-pro lenses are NOT in the parallax fan.
@@ -1713,6 +1853,9 @@ clean:     remove every temp artifact for a run (/tmp/prism-<id>*). Refuses to d
 Dispatch records (line-oriented; see prism SKILL.md):
   Prism-Mode: full | partial   # REQUIRED (top-level). full → Prism-N: <N> (+ optional Prism-M: <M>);
                                # partial → Partial-User-Quote: "<the user's exact words>" (no Prism-N/M).
+  Variant: no-subagents        # optional, partial only: the recognized "drop the Claude subagent
+                               # tier, keep all parallax at N" shape. Carries Prism-N (>=1) + optional
+                               # Prism-M + Partial-User-Quote; prepare floor-checks the kept tiers.
   Type: parallax | subagent | gptpro
   - parallax: To/Lens/Lens-Desc required, Name optional (relay peer; effort is CLI-derived, never authored).
   - subagent: Lens/Lens-Desc only (Claude, Agent-tool).
