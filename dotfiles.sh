@@ -485,7 +485,11 @@ lint_skills() {
         hits=1
     done
     (( hits )) && warn "fix per agents/extensions/references/universal-skill-authoring.md, or scope the skill claude-only"
-    lint_docmaint   # its status propagates: fatal for `./dotfiles.sh lint`, advisory in a full run
+    # docmaint + agentdocs statuses propagate: fatal for `./dotfiles.sh lint`, advisory in a full run
+    local _dm=0 _ad=0
+    lint_docmaint  || _dm=$?
+    lint_agentdocs || _ad=$?
+    return $(( _dm || _ad ))
 }
 
 # ── docmaint drift-guard ─────────────────────────────────────────
@@ -510,6 +514,39 @@ lint_docmaint() {
             rc=1
         fi
         prev="$norm"; prev_name="$path"
+    done
+    return "$rc"
+}
+
+# ── agent-doc drift-guard ────────────────────────────────────────
+# The three global instruction files (claude/CLAUDE.md, codex/AGENTS.md, grok/AGENTS.md)
+# MUST stay aligned, differing only in whitelisted per-agent deltas: the H1, Claude's
+# <important> wrappers, Claude's `run_in_background` phrasing of "Concurrent subagents",
+# and Codex's `update_plan` bullet. Normalize those away and compare the rest; catch a
+# silent edit landing in one copy but not the others. (Adopt single-source generation only
+# if this drifts often — see the root CLAUDE.md/AGENTS.md "Maintaining Docs" note.)
+lint_agentdocs() {
+    local -a docs=(
+        "agents/claude/CLAUDE.md"
+        "agents/codex/AGENTS.md"
+        "agents/grok/AGENTS.md"
+    )
+    local f norm prev="" prev_name="" rc=0
+    for f in "${docs[@]}"; do
+        if [[ ! -f "$ROOT/$f" ]]; then warn "agentdocs: missing copy $f"; rc=1; continue; fi
+        norm=$(sed \
+                -e '1d' \
+                -e '/^<important/d' \
+                -e '/^<\/important>/d' \
+                -e '/update_plan/d' \
+                -e 's/Launch in background ([^)]*)/Spawn them asynchronously/' \
+                -e 's/CLAUDE\.md/AGENTS.md/g' \
+                "$ROOT/$f" | grep -v '^[[:space:]]*$' | shasum | cut -d' ' -f1)
+        if [[ -n "$prev" && "$norm" != "$prev" ]]; then
+            warn "agentdocs: $f drifted from $prev_name (the three must match except whitelisted per-agent deltas) — re-sync them"
+            rc=1
+        fi
+        prev="$norm"; prev_name="$f"
     done
     return "$rc"
 }

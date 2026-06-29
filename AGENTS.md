@@ -99,7 +99,7 @@ MCP servers and Claude plugins are wired the same way, via the `MCP_SERVERS` and
 ## Maintaining Docs
 
 - **Sync root docs**: keep root `CLAUDE.md` and root `AGENTS.md` aligned — same facts and section order, diverging only in the H1, the project-level pointer, and Claude's `<important>` wrappers.
-- **Sync global instructions**: `agents/claude/CLAUDE.md`, `agents/codex/AGENTS.md`, and `agents/grok/AGENTS.md` share working principles (compatibility diffs only — e.g. Codex's `update_plan`, Claude's `<important>` wrappers) — update all three when changing any.
+- **Sync global instructions**: `agents/claude/CLAUDE.md`, `agents/codex/AGENTS.md`, and `agents/grok/AGENTS.md` share working principles (compatibility diffs only — e.g. Codex's `update_plan`, Claude's `<important>` wrappers) — update all three when changing any. `./dotfiles.sh lint` enforces this: it normalizes the whitelisted deltas and flags any other drift between the three.
 - **Update docs**: after structural changes (adding, removing, or renaming files/directories, skills, or configs), check whether `README.md`, `CLAUDE.md`, or `AGENTS.md` reference the affected paths and update them.
 
 ## Not Backed Up
