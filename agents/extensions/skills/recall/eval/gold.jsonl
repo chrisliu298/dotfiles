@@ -1,0 +1,25 @@
+# recall eval gold-set — one JSON object per line (lines starting with # are comments).
+# Fields: id, query (natural recall phrasing), expect (answer-distinct keywords; a hit counts as
+# correct if its indexed text contains ANY of them), negative (true ⇒ should NOT match anything),
+# note. Keywords are deliberately NOT query terms, so a match means the hit holds the real answer,
+# not just lexical overlap. Labels are real decisions established in THIS repo's past sessions
+# (see the project memory). Environment-specific: only meaningful on a machine with this history.
+{"id": "glm-529", "query": "what did we decide about the GLM failures in prism", "expect": ["overload", "z.ai", "529", "transient"], "note": "GLM failures = z.ai overload 529, server-side not config"}
+{"id": "kimi-peer", "query": "remember when we added kimi as a relay and prism peer", "expect": ["moonshot", "256k", "multimodal-but-denied", "8th"], "note": "Kimi K2.7 added as relay peer + 8th prism tier"}
+{"id": "goalloop-auto", "query": "what was the goal-loop auto mode gating again", "expect": ["oracle", "unattended", "fail-closed", "RED-gated"], "note": "goal-loop --auto = oracle-RED-gated auto-accept only"}
+{"id": "mimo-endpoint", "query": "the mimo api endpoint we switched to", "expect": ["xiaomimimo", "pay-per-token", "region-scoped"], "note": "MiMo now uses api.xiaomimimo.com pay-per-token"}
+{"id": "relay-disallow", "query": "how did we handle tool restrictions for deepseek and mimo in relay", "expect": ["multimodal", "disallowedtools", "text-only", "headless-only"], "note": "relay/ds-mm deny multimodal Reads + headless-only plan/ask tools"}
+{"id": "prism-nosub", "query": "the prism mode that drops claude subagents", "expect": ["external-only", "variant", "7n"], "note": "prism no-subagents (external-only) mode"}
+{"id": "dfs-sync", "query": "what is our rule for syncing the other machines after a push", "expect": ["macmini", "l40s", "ff-only", "propagate"], "note": "after push run dfs to propagate to peers"}
+{"id": "copy-not-regen", "query": "our convention about copying files instead of recreating them", "expect": ["cp", "mv", "scratch", "curl"], "note": "copy/move files, don't regenerate from scratch"}
+{"id": "chrome-not-helium", "query": "which browser does claude-in-chrome attach to", "expect": ["helium"], "note": "Claude-in-Chrome connects to Chrome, not Helium"}
+{"id": "path-zshenv", "query": "where do we set PATH for the shell", "expect": ["zshenv", "hooks", "symlinks"], "note": "PATH via .zshenv not symlinks or hooks"}
+{"id": "disable-updater", "query": "how do we turn off the claude code auto updater", "expect": ["zshenv", "settings.json", "env"], "note": "disable auto-update via .zshenv not settings.json env"}
+{"id": "manual-skill-state", "query": "how is the enabled set of manual skills stored and propagated", "expect": ["declarative", "committed", "manual-skills.enabled"], "note": "manual-skill state = committed declarative set"}
+{"id": "peer-consumers", "query": "what all gets touched when adding a new model peer", "expect": ["peers.json", "sweep", "launchers", "templates"], "note": "adding a peer touches many consumers, not just peers.json"}
+{"id": "no-broad-kill", "query": "the rule about destructive cleanup on shared remote hosts", "expect": ["tmux kill-server", "pkill", "killall", "unique name"], "note": "never run broad/destructive cleanup on shared hosts"}
+{"id": "neg-revenue", "query": "the quarterly sales revenue forecast we reviewed", "expect": [], "negative": true, "note": "never discussed in a dotfiles repo"}
+{"id": "neg-sourdough", "query": "how do we make the sourdough bread starter", "expect": [], "negative": true, "note": "off-topic"}
+{"id": "neg-flight", "query": "my flight booking confirmation number from last trip", "expect": [], "negative": true, "note": "off-topic"}
+{"id": "neg-photosynthesis", "query": "the light-dependent reactions of photosynthesis steps", "expect": [], "negative": true, "note": "off-topic"}
+{"id": "neg-k8s-ingress", "query": "the kubernetes ingress controller TLS termination config", "expect": [], "negative": true, "note": "not part of this repo"}

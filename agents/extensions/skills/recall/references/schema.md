@@ -43,18 +43,27 @@ re-rank the returned top-k.
 
 ## Confidence gates (the safety surface)
 
-`search` returns one of three statuses; the agent branches on it:
+The gates key on **matched-term count + query coverage**, NOT raw score: BM25 scores are
+unnormalized (they run ~10-40 on a real corpus), so a score floor is useless — `eval/gold.jsonl`
+showed nonsense queries clearing any fixed floor while a multi-term hit's *coverage* cleanly
+separated signal from noise. Thresholds (`CAND_MIN_COVERAGE` 0.4, `CONFIDENT_COVERAGE` 0.6,
+`CONFIDENT_MARGIN` 1.15) are calibrated against that gold-set. `search` returns one of three
+statuses; the agent branches on it:
 
-- **`confident`** (exit 0) — top score ≥ `MIN_SCORE` (0.8), covers ≥half the query terms, **and**
-  beats #2 by ≥`CONFIDENT_MARGIN` (1.25×). Safe to silently load the top hit.
-- **`ambiguous`** (exit 11) — matches exist but no clear winner (tight top-1/top-2 band). The agent
-  shows 2–3 candidates and asks; it must **not** silent-pick.
-- **`no_match`** (exit 13) — nothing cleared the floor (or no content terms after boilerplate strip).
-  The agent escalates once (`--max-files 0`, every past session) then says so — **never fabricates**.
+- **`confident`** (exit 0) — a multi-term query, top covers ≥60% of the terms, leads the best
+  *distinct* runner-up by ≥1.15×, and the top is a **user** turn (an assistant-role top is capped to
+  ambiguous). Safe to silently load.
+- **`ambiguous`** (exit 11) — a real candidate but not clearly the answer (a 1-term query, an
+  assistant-role top, or coverage/lead below the confident bar). The agent shows 2–3 candidates and
+  asks; it must **not** silent-pick.
+- **`no_match`** (exit 13) — nothing covered the query (no hit, or a multi-term query matching <2
+  distinct terms / <40% coverage — incidental overlap), or no content terms after boilerplate strip.
+  The agent escalates (`--max-files 0`, then `--all`) then says so — **never fabricates**.
 
-These gates, plus the one-line confirmation, are what carry the highest design risk: silently acting
-on a wrong match. A wider scan (`--max-files 0`) or `--all` (include relay/headless) is the recovery
-lever when the default recency window misses.
+These gates, plus the one-line confirmation, carry the highest design risk: silently acting on a
+wrong match. The margin is only a weak tiebreak (at corpus scale there is almost always a
+near-scoring runner-up), so coverage + the user-turn requirement do the real gating. Re-run
+`eval/run_eval.py` after any threshold change — it fails closed on a single false-confident.
 
 ## Latency & scope
 

@@ -55,8 +55,14 @@ DEFAULT_MAX_FILES = 150
 # BM25 params + the confidence gates. The gates are the load-bearing safety surface: they decide
 # `confident` (silent-load OK) vs `ambiguous` (ask) vs `no_match` (don't fabricate).
 BM25_K1, BM25_B = 1.5, 0.75
-MIN_SCORE = 0.8                    # below this top score ⇒ no_match (nothing matched well enough)
-CONFIDENT_MARGIN = 1.25            # top must beat #2 by this ratio to silent-load (else ambiguous)
+# Gate thresholds (calibrated on eval/gold.jsonl). Raw BM25 score is UNNORMALIZED — scores run
+# ~10-40 on a real corpus — so it is NOT a usable floor; the real signal is how many distinct query
+# terms matched and what fraction of the query they cover. The top/2nd margin is only a weak
+# tiebreak (at corpus scale there is almost always a near-scoring runner-up), so it nudges confident,
+# never gates no_match.
+CAND_MIN_COVERAGE = 0.4            # multi-term hit below this (or <2 matched terms) is incidental ⇒ no_match
+CONFIDENT_COVERAGE = 0.6           # a confident silent-load must cover at least this much of the query
+CONFIDENT_MARGIN = 1.15            # …and lead the best DISTINCT runner-up by at least this ratio
 USER_BOOST = 1.6                   # a user-authored turn is what "what did *we* decide" wants
 CUE_BOOST = 1.25                   # a decision/correction-shaped turn
 PHRASE_BOOST = 1.4                 # the normalized query appears verbatim
@@ -482,19 +488,50 @@ def dedupe(scored, limit):
 
 
 def classify(top, second_score, n_terms):
-    """confident | ambiguous | no_match from the score floor + a real coverage gate + the top/2nd
-    margin. `second_score` is the best DISTINCT competitor from the FULL ranked list (not the
-    post-dedupe/post-`k` slice), so a `--k 1` call or a deduped near-tie can't silently widen it."""
-    if not top or top.score < MIN_SCORE or top.coverage == 0:
+    """confident | ambiguous | no_match — gated on matched-term count + query coverage (raw BM25
+    score is unnormalized and not a usable floor; thresholds calibrated on eval/gold.jsonl).
+    `second_score` is the best DISTINCT competitor from the FULL ranked list (not the post-dedupe/
+    `--k` slice), so a `--k 1` call or a deduped near-tie can't widen the margin.
+
+      - no hit / nothing covered          → no_match
+      - 1-term query                      → at most ambiguous (a lone lexical term is too thin to
+                                             silent-load; surface it, ask)
+      - multi-term, <2 matched OR <40% cov → no_match (incidental overlap — don't fabricate; this is
+                                             what rejects off-topic queries that share one stray word)
+      - ≥60% cov AND clear lead           → confident; else ambiguous
+    (an assistant-role top is additionally capped at ambiguous by the caller.)"""
+    if not top or top.coverage == 0:
+        return "no_match"
+    if n_terms <= 1:
+        return "ambiguous"
+    if top.matched < 2 or top.coverage < CAND_MIN_COVERAGE:
         return "no_match"
     margin_ok = (second_score <= 0.0) or (top.score >= CONFIDENT_MARGIN * second_score)
-    if n_terms <= 1:
-        # one substantive term: confident only on a clear margin — no lone common-term silent-load
-        return "confident" if margin_ok else "ambiguous"
-    # multi-term: require ≥half the terms OR ≥2 distinct terms matched (the gate the old
-    # `coverage > 0` clause silently disabled — a 1-of-5-term match used to pass as confident)
-    cov_ok = top.coverage >= 0.5 or top.matched >= 2
-    return "confident" if (margin_ok and cov_ok) else "ambiguous"
+    if top.coverage >= CONFIDENT_COVERAGE and margin_ok:
+        return "confident"
+    return "ambiguous"
+
+
+def run_query(docs, q, k):
+    """Core retrieval shared by `search` and the eval harness: a query + a prebuilt corpus →
+    (status, ordered hit Docs, query terms). Build the corpus ONCE and call this per query to score
+    many queries cheaply. Margin is judged against the best DISTINCT competitor in the FULL ranked
+    list (not the post-dedupe/`--k` slice), so a k=1 call or a deduped near-tie can't widen it; an
+    assistant-role top is capped at ambiguous so a past agent proposal is never silent-loaded."""
+    cleaned, terms = normalize_query(q)
+    if not terms:
+        return "no_match", [], terms
+    scored = bm25_rank(docs, terms, cleaned)
+    hits = dedupe(scored, k)
+    if not hits:
+        return "no_match", [], terms
+    top = hits[0]
+    top_key = (top.session, top.text[:80].lower())
+    second_score = next((d.score for d in scored if (d.session, d.text[:80].lower()) != top_key), 0.0)
+    status = classify(top, second_score, len(set(terms)))
+    if status == "confident" and top.role != "user":
+        status = "ambiguous"
+    return status, hits, terms
 
 
 def gist_of(d: Doc) -> str:
@@ -526,32 +563,21 @@ def doc_json(d: Doc, rank: int, status: str) -> dict:
 
 # ---------------------------------------------------------------------------- commands
 def cmd_search(args):
-    cleaned, terms = normalize_query(args.q)
     exclude = None if args.include_current else current_session_id()
     docs, stats = build_corpus(args.cwd, include_all=args.all, exclude_session=exclude,
                                since_secs=parse_duration(args.since), max_files=args.max_files)
+    status, hits, terms = run_query(docs, args.q, args.k)
     if not terms:
         print(json.dumps({"status": "no_match", "query": redact(args.q), "cwd": args.cwd,
                           "reason": "no content terms left after stripping recall boilerplate — "
                                     "pass a more specific topic", "stats": stats,
                           "candidates": []}, indent=2))
         return 13
-    scored = bm25_rank(docs, terms, cleaned)
-    hits = dedupe(scored, args.k)
     if not hits:
         print(json.dumps({"status": "no_match", "query": redact(args.q), "cwd": args.cwd,
                           "stats": stats, "candidates": []}, indent=2))
         return 13
     top = hits[0]
-    # Margin is judged against the best DISTINCT competitor in the FULL ranked list, not hits[1]
-    # (which `--k`/dedupe may have dropped or shifted) — closes the k=1 / deduped-tie margin bypass.
-    top_key = (top.session, top.text[:80].lower())
-    second_score = next((d.score for d in scored if (d.session, d.text[:80].lower()) != top_key), 0.0)
-    status = classify(top, second_score, len(set(terms)))
-    # Never silent-load a past AGENT turn as established fact — it may be a proposal the user
-    # rejected. Cap an assistant-role top at ambiguous so the user must confirm.
-    if status == "confident" and top.role != "user":
-        status = "ambiguous"
     out = {
         "status": status,
         "query": redact(args.q),
