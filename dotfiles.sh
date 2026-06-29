@@ -45,6 +45,9 @@ SKILLS=(
     # goal-loop: default review backend is prism (claude-only); built on the Skill/AskUserQuestion
     # tooling. Off-Claude it only degrades to external/local/none, so keep it claude-only.
     "goal-loop|./agents/extensions/skills/goal-loop|claude"
+    # recall: claude-only; searches THIS project's past Claude transcripts (~/.claude/projects) for
+    # an earlier user statement. The store is Claude-specific, so it has no meaning on Codex/Grok.
+    "recall|./agents/extensions/skills/recall|claude"
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex,grok"
     "humanizer|blader/humanizer|claude,codex,grok"
     "pdf|anthropics/skills/skills/pdf|claude"

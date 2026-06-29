@@ -24,7 +24,7 @@ Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via
 
 Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
-> GLM, Kimi, DeepSeek, and MiMo are all reached **through** Claude Code as the harness (each is a `claude` session pointed at that model's endpoint) via the `glm`/`km`/`ds`/`mm` aliases (see `shell/.functions`), so they inherit the Claude column directly (no separate skill dir). **Grok** is a relay/prism dispatch target (no interactive alias) with its own `~/.grok/skills/` mirror of the Codex set — so its column equals Code**x**. The Claude-only orchestration skills (relay, prism, goal-loop, keep-warm, crons, skill-creator) stay off Codex/Grok; relay and prism are additionally guarded so a dispatched peer can't trigger them.
+> GLM, Kimi, DeepSeek, and MiMo are all reached **through** Claude Code as the harness (each is a `claude` session pointed at that model's endpoint) via the `glm`/`km`/`ds`/`mm` aliases (see `shell/.functions`), so they inherit the Claude column directly (no separate skill dir). **Grok** is a relay/prism dispatch target (no interactive alias) with its own `~/.grok/skills/` mirror of the Codex set — so its column equals Code**x**. The Claude-only orchestration skills (relay, prism, goal-loop, keep-warm, crons, skill-creator) — plus recall, which reads Claude's own transcript store — stay off Codex/Grok; relay and prism are additionally guarded so a dispatched peer can't trigger them.
 
 **Enabled** (✓ auto-installed):
 
@@ -46,7 +46,7 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | pdf                     | ✓ | ✓ | ✓ | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex/Grok) — PDF read/edit |
 | prism                   | ✓ | — | — | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to Codex + Grok + GLM + Kimi + DeepSeek + MiMo via relay) |
 | push                    | ✓ | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
-| rehydrate               | ✓ | ✓ | ✓ | local — Recover post-compaction detail from the raw session transcript |
+| recall                  | ✓ | — | — | local — Search this project's past Claude sessions for an earlier user statement/decision (Claude-only; lexical BM25 over the transcript store) |
 | relay                   | ✓ | — | — | local — Cross-agent relay from Claude to Codex/Grok/GLM/Kimi/DeepSeek/MiMo (Claude-only caller) |
 | skill-creator           | ✓ | — | — | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
 | todo                    | ✓ | ✓ | ✓ | local — TODO.md tracking across sessions |

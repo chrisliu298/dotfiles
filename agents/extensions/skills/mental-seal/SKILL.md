@@ -146,5 +146,5 @@ Each one inverts a specific cautionary source:
 - **Don't trust a stale seal.** On resume, reconcile before relying. If the work has outgrown it, `needs_review`, don't obey.
 - **Don't spam the litany.** Recite it at set / conflict / discharge. Between those, the seal works silently through the Do-Confirm check.
 - **Don't churn the anchor.** Install it once per project (Setup); never add or remove it on set/discharge — that dirties tracked, `dfs`-synced docs and collides with concurrent sessions.
-- **After a compaction, re-read rather than trust memory.** If context was summarized and you've lost the priority, search up to the project root for `SEAL.md` and re-read before acting; the `rehydrate` skill can recover other dropped detail.
+- **After a compaction, re-read rather than trust memory.** If context was summarized and you've lost the priority, search up to the project root for `SEAL.md` and re-read before acting.
 - **Don't place it outside a project root.** If there's no clear project, ask where the seal belongs before writing anything.
