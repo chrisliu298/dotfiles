@@ -37,7 +37,7 @@ Behavioral defaults for how to work. Under ambiguity, decide and proceed; escala
 ### Agent Coordination
 
 - **Concurrent subagents**: Use subagents for parallelizable or isolated work. Spawn them asynchronously, continue local work while they run, and wait for all before final synthesis or when blocked.
-- **Orchestrator role**: Give each agent a bounded task with clear ownership and expected output; the lead owns synthesis and the final change.
+- **Orchestrator role**: Give each agent a bounded task with clear ownership and expected output; the lead owns planning, ambiguity, synthesis, and the final change. Reclaim a delegated task when it outgrows its scope, stalls, or hits unanticipated ambiguity; for judgment-bearing work, verify the result against the raw artifacts the agent returns, not its summary — the failure that matters mimics success.
 - **Self-review**: For non-trivial changes, run independent subagent reviews — 2 for risky/broad changes. Skip for trivial edits.
 - **Redundancy vs. division**: Redundant reviewers for diverse judgment on one question; parallel subtasks for partitioned work. Don't conflate them.
 
