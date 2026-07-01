@@ -311,7 +311,7 @@ Grok Build + Grok Composer are **two dispatched tiers** but **one lineage** for 
 
 ### Manifest count caveat
 
-`8N+M` is the orchestrator-level dispatched count. The manifest's `counts.dispatched_total` is the **standard-tier subtotal only** (parallax + subagents — `= 8N` on a full symmetric run, the actual record count on a partial); gpt-pro is tracked separately in `counts.gptpro` (`prism-launch` does not dispatch gpt-pro — the orchestrator does). So on a full run a `grep` of `dispatched_total` yields `8N`, not `8N+M` — add `counts.gptpro` for the full figure.
+`8N+M` is the orchestrator-level dispatched count. The manifest's `counts.dispatched_total` is the **standard-tier subtotal only** (parallax + subagents — `= 8N` on a full symmetric run, the actual record count on a partial); gpt-pro is tracked separately in `counts."gpt-pro"` (`prism-launch` does not dispatch gpt-pro — the orchestrator does). So on a full run a `grep` of `dispatched_total` yields `8N`, not `8N+M` — add `counts."gpt-pro"` for the full figure.
 
 ### gpt-pro lane (architecture + recovery)
 

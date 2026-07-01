@@ -397,17 +397,17 @@ expect_err "scaffold --out rejects a relative path" "$LAUNCH" scaffold --preset 
 echo "== scaffold --m / --n 0: gpt-pro-shape-aware (F3/F6) =="
 SCM=$("$LAUNCH" scaffold --n 1 --m 2)
 printf '%s\n' "$SCM" | grep -q '^Prism-M: 2' && ok "scaffold --m sets Prism-M" || bad "scaffold --m Prism-M"
-[ "$(printf '%s\n' "$SCM" | grep -c '^Type: gptpro')" = "2" ] && ok "scaffold --m 2 emits 2 gptpro records" || bad "scaffold --m gptpro count"
+[ "$(printf '%s\n' "$SCM" | grep -c '^Type: gpt-pro')" = "2" ] && ok "scaffold --m 2 emits 2 gpt-pro records" || bad "scaffold --m gpt-pro count"
 { printf '%s\n' "$SCM" | grep -q '^Posture: deep-reasoning' && printf '%s\n' "$SCM" | grep -q '^Posture: research-grounded'; } && ok "scaffold --m emits canonical postures" || bad "scaffold --m postures"
-# M>2: the default gptpro lens names must stay distinct (suffixed), or prepare's duplicate-lens check bounces
-SCM3LENS=$("$LAUNCH" scaffold --n 1 --m 3 | awk '/^Type: gptpro/{g=1;next} g&&/^Lens:/{print;g=0}')
-{ [ "$(printf '%s\n' "$SCM3LENS" | wc -l | tr -d ' ')" = "3" ] && [ "$(printf '%s\n' "$SCM3LENS" | sort -u | wc -l | tr -d ' ')" = "3" ] && printf '%s\n' "$SCM3LENS" | grep -q 'Deep-Reasoning-3'; } && ok "scaffold --m 3 gptpro lens names stay distinct (suffix at M>2)" || bad "scaffold --m 3 distinct names"
-# gpt-pro-only: --n 0 --m M emits no standard records, only gptpro
+# M>2: the default gpt-pro lens names must stay distinct (suffixed), or prepare's duplicate-lens check bounces
+SCM3LENS=$("$LAUNCH" scaffold --n 1 --m 3 | awk '/^Type: gpt-pro/{g=1;next} g&&/^Lens:/{print;g=0}')
+{ [ "$(printf '%s\n' "$SCM3LENS" | wc -l | tr -d ' ')" = "3" ] && [ "$(printf '%s\n' "$SCM3LENS" | sort -u | wc -l | tr -d ' ')" = "3" ] && printf '%s\n' "$SCM3LENS" | grep -q 'Deep-Reasoning-3'; } && ok "scaffold --m 3 gpt-pro lens names stay distinct (suffix at M>2)" || bad "scaffold --m 3 distinct names"
+# gpt-pro-only: --n 0 --m M emits no standard records, only gpt-pro
 SC0=$("$LAUNCH" scaffold --n 0 --m 1)
 { printf '%s\n' "$SC0" | grep -q '^Prism-N: 0' \
   && [ "$(printf '%s\n' "$SC0" | grep -c '^Type: parallax')" = "0" ] \
   && [ "$(printf '%s\n' "$SC0" | grep -c '^Type: subagent')" = "0" ] \
-  && [ "$(printf '%s\n' "$SC0" | grep -c '^Type: gptpro')" = "1" ]; } \
+  && [ "$(printf '%s\n' "$SC0" | grep -c '^Type: gpt-pro')" = "1" ]; } \
   && ok "scaffold --n 0 --m 1 = gpt-pro-only (no standard records)" || bad "scaffold --n 0 shape"
 expect_err "scaffold --n 0 without --m is rejected (gpt-pro-only needs M>=1)" "$LAUNCH" scaffold --n 0
 expect_err "scaffold --m rejects a non-integer" "$LAUNCH" scaffold --m x
@@ -415,7 +415,7 @@ expect_err "scaffold --m rejects a non-integer" "$LAUNCH" scaffold --m x
 SCMPKT="$TMP/prism-scm.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$SCMPKT"
 SCMOUT="$TMP/scm.dispatch"
 "$LAUNCH" scaffold --preset review --m 1 --packet "$SCMPKT" --out "$SCMOUT" 2>/dev/null
-{ [ "$(grep -c FILL "$SCMOUT")" = "0" ] && [ "$(grep -c '^Type: gptpro' "$SCMOUT")" = "1" ]; } && ok "scaffold --preset --m stays zero-FILL with a gptpro record" || bad "scaffold preset --m"
+{ [ "$(grep -c FILL "$SCMOUT")" = "0" ] && [ "$(grep -c '^Type: gpt-pro' "$SCMOUT")" = "1" ]; } && ok "scaffold --preset --m stays zero-FILL with a gpt-pro record" || bad "scaffold preset --m"
 expect_ok "scaffold --preset --m round-trips through prepare" "$LAUNCH" prepare --dispatch "$SCMOUT"
 # a gpt-pro-only scaffold (--n 0 --m, default postures are valid lenses) round-trips through prepare
 SC0PKT="$TMP/prism-sc0.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$SC0PKT"
@@ -499,11 +499,11 @@ ROUT=$("$LAUNCH" results "$MPP" 2>&1); rc=$?
 rm -f /tmp/prism-pp-result.json
 "$LAUNCH" results "$MPP" >/dev/null 2>&1; rc=$?; [ "$rc" -eq 2 ] && ok "results exits 2 (pending) when the parallax result file is absent" || bad "results missing-result exit (got $rc, want 2)"
 printf '{"id":"prism-nores","shared_packet":"/tmp/prism-nores.md"}' > /tmp/prism-nores-manifest.json
-expect_err "results errors on a manifest with no parallax/gptpro/subagent entries" "$LAUNCH" results /tmp/prism-nores-manifest.json
+expect_err "results errors on a manifest with no parallax/gpt-pro/subagent entries" "$LAUNCH" results /tmp/prism-nores-manifest.json
 "$LAUNCH" clean pp >/dev/null; rm -f /tmp/prism-nores*
 # #3b: a subagents-only manifest has no file-backed lanes — results is a clean no-op (exit 0)
 SOMAN="$TMP/prism-subonly-manifest.json"
-printf '{"id":"prism-subonly","shared_packet":"%s","subagents":[{"lens":"Simplicity"}],"parallax":[],"gptpro":[],"counts":{"subagents":1,"parallax_total":0,"gptpro":0}}' "$TMP/prism-subonly.md" > "$SOMAN"
+printf '{"id":"prism-subonly","shared_packet":"%s","subagents":[{"lens":"Simplicity"}],"parallax":[],"gpt-pro":[],"counts":{"subagents":1,"parallax_total":0,"gpt-pro":0}}' "$TMP/prism-subonly.md" > "$SOMAN"
 SOUT=$("$LAUNCH" results "$SOMAN" 2>&1); rc=$?
 { [ "$rc" -eq 0 ] && printf '%s\n' "$SOUT" | grep -q 'subagents-only'; } && ok "results: subagents-only manifest is a clean no-op (exit 0)" || bad "results subagents-only (got $rc)"
 
@@ -588,7 +588,7 @@ touch "$TMP/prism-stale-digest.md"
 "$LAUNCH" prepare --dispatch "$TMP/stale.dispatch" >/dev/null 2>&1
 [ ! -e "$TMP/prism-stale-digest.md" ] && ok "re-prepare clears a stale -digest.md" || bad "stale -digest.md not cleared on re-prepare"
 
-echo "== gptpro: compose-in-prepare (config .references is authoritative) =="
+echo "== gpt-pro: compose-in-prepare (config .references is authoritative) =="
 GPK="$TMP/prism-gp.md"; printf '## Full Question\nFuse the thing.\n\n## Context\nSome context.\n' > "$GPK"
 REF1="$TMP/ref-one.md";  printf 'REF-ONE-CONTENT-MARKER\nl2\n' > "$REF1"
 REF2="$TMP/ref-two.txt"; printf 'REF-TWO-CONTENT-MARKER\n'     > "$REF2"
@@ -597,134 +597,149 @@ jq -n --arg p "$GPK" --arg r1 "$REF1" --arg r2 "$REF2" \
   '{shared_packet:$p, references:[$r1,$r2],
     parallax:[{to:"codex",name:"adv",effort:"medium",lens:"Adversarial",lens_desc:"attack it"}],
     subagents:[{lens:"Simplicity",lens_desc:"fewest parts"}],
-    gptpro:[{lens:"Deep-Reasoning",lens_desc:"reason deeply",posture:"deep-reasoning"}]}' > "$GCFG"
+    "gpt-pro":[{lens:"Deep-Reasoning",lens_desc:"reason deeply",posture:"deep-reasoning"}]}' > "$GCFG"
 GOUT=$("$LAUNCH" prepare --config "$GCFG" 2>/dev/null)
 GMAN="$TMP/prism-gp-manifest.json"
-[ -f "$GMAN" ] && ok "gptpro: manifest written" || bad "gptpro: manifest written"
-[ "$(jq -r '.counts.gptpro' "$GMAN" 2>/dev/null)" = "1" ] && ok "gptpro: counts.gptpro = 1" || bad "gptpro count"
-[ "$(jq -r '.counts.dispatched_total' "$GMAN" 2>/dev/null)" = "2" ] && ok "gptpro: dispatched_total excludes gpt-pro (subagent+parallax=2)" || bad "gptpro dispatched_total"
-[ "$(jq -r '.gptpro[0].slug' "$GMAN" 2>/dev/null)" = "deep-reasoning" ] && ok "gptpro: lens slugified" || bad "gptpro slug"
-[ "$(jq -r '.gptpro[0].posture' "$GMAN" 2>/dev/null)" = "deep-reasoning" ] && ok "gptpro: posture carried" || bad "gptpro posture"
-GLAUNCH=$(jq -r '.gptpro[0].launcher' "$GMAN")
-[ -f "$GLAUNCH" ] && ok "gptpro: launcher composed" || bad "gptpro launcher composed"
-head -1 "$GLAUNCH" | grep -q '^CRITICAL:' && ok "gptpro: launcher starts with CRITICAL guard" || bad "gptpro CRITICAL"
-! grep -q '{{' "$GLAUNCH" && ok "gptpro: no surviving {{slots}}" || bad "gptpro slots"
-grep -q 'Deep-Reasoning' "$GLAUNCH" && ok "gptpro: lens name substituted" || bad "gptpro lens sub"
-grep -q 'Fuse the thing.' "$GLAUNCH" && ok "gptpro: frozen packet inlined verbatim" || bad "gptpro packet inlined"
-{ grep -q 'REF-ONE-CONTENT-MARKER' "$GLAUNCH" && grep -q 'REF-TWO-CONTENT-MARKER' "$GLAUNCH"; } && ok "gptpro: reference CONTENTS inlined (not paths)" || bad "gptpro refs inlined"
-grep -qF "### $REF1" "$GLAUNCH" && ok "gptpro: each ref under its ### path header" || bad "gptpro ref header"
-{ grep -q 'Grounding external facts' "$GLAUNCH" && grep -q '## Calibration' "$GLAUNCH"; } && ok "gptpro: grounding (via packet) + calibration present" || bad "gptpro grounding/calibration"
+[ -f "$GMAN" ] && ok "gpt-pro: manifest written" || bad "gpt-pro: manifest written"
+[ "$(jq -r '.counts."gpt-pro"' "$GMAN" 2>/dev/null)" = "1" ] && ok "gpt-pro: counts.gpt-pro = 1" || bad "gpt-pro count"
+[ "$(jq -r '.counts.dispatched_total' "$GMAN" 2>/dev/null)" = "2" ] && ok "gpt-pro: dispatched_total excludes gpt-pro (subagent+parallax=2)" || bad "gpt-pro dispatched_total"
+[ "$(jq -r '."gpt-pro"[0].slug' "$GMAN" 2>/dev/null)" = "deep-reasoning" ] && ok "gpt-pro: lens slugified" || bad "gpt-pro slug"
+[ "$(jq -r '."gpt-pro"[0].posture' "$GMAN" 2>/dev/null)" = "deep-reasoning" ] && ok "gpt-pro: posture carried" || bad "gpt-pro posture"
+GLAUNCH=$(jq -r '."gpt-pro"[0].launcher' "$GMAN")
+[ -f "$GLAUNCH" ] && ok "gpt-pro: launcher composed" || bad "gpt-pro launcher composed"
+head -1 "$GLAUNCH" | grep -q '^CRITICAL:' && ok "gpt-pro: launcher starts with CRITICAL guard" || bad "gpt-pro CRITICAL"
+! grep -q '{{' "$GLAUNCH" && ok "gpt-pro: no surviving {{slots}}" || bad "gpt-pro slots"
+grep -q 'Deep-Reasoning' "$GLAUNCH" && ok "gpt-pro: lens name substituted" || bad "gpt-pro lens sub"
+grep -q 'Fuse the thing.' "$GLAUNCH" && ok "gpt-pro: frozen packet inlined verbatim" || bad "gpt-pro packet inlined"
+{ grep -q 'REF-ONE-CONTENT-MARKER' "$GLAUNCH" && grep -q 'REF-TWO-CONTENT-MARKER' "$GLAUNCH"; } && ok "gpt-pro: reference CONTENTS inlined (not paths)" || bad "gpt-pro refs inlined"
+grep -qF "### $REF1" "$GLAUNCH" && ok "gpt-pro: each ref under its ### path header" || bad "gpt-pro ref header"
+{ grep -q 'Grounding external facts' "$GLAUNCH" && grep -q '## Calibration' "$GLAUNCH"; } && ok "gpt-pro: grounding (via packet) + calibration present" || bad "gpt-pro grounding/calibration"
 [ "$(grep -c '^## Grounding external facts' "$GPK")" = "1" ] && ok "grounding: injected once into the shared packet (reaches all agents)" || bad "grounding packet count != 1"
-[ "$(grep -c '^## Grounding external facts' "$GLAUNCH")" = "1" ] && ok "gptpro: grounding inherited from packet exactly once (no double)" || bad "gptpro grounding count != 1"
-echo "$GOUT" | grep -q 'gptpro=1' && ok "gptpro: dispatch shape shows gptpro=1" || bad "gptpro dispatch shape"
-echo "$GOUT" | grep -q 'one per gpt-pro lens' && ok "gptpro: notification count includes gpt-pro" || bad "gptpro notif count"
-echo "$GOUT" | grep -qF "gpt-pro < $GLAUNCH" && ok "gptpro: prints the exact backgrounded launch command" || bad "gptpro launch line"
+[ "$(grep -c '^## Grounding external facts' "$GLAUNCH")" = "1" ] && ok "gpt-pro: grounding inherited from packet exactly once (no double)" || bad "gpt-pro grounding count != 1"
+echo "$GOUT" | grep -q 'gpt-pro=1' && ok "gpt-pro: dispatch shape shows gpt-pro=1" || bad "gpt-pro dispatch shape"
+echo "$GOUT" | grep -q 'one per gpt-pro lens' && ok "gpt-pro: notification count includes gpt-pro" || bad "gpt-pro notif count"
+echo "$GOUT" | grep -qF "gpt-pro < $GLAUNCH" && ok "gpt-pro: prints the exact backgrounded launch command" || bad "gpt-pro launch line"
 # the printed launch command records the exit code to a .exit sidecar so results can tell failed from pending
-echo "$GOUT" | grep -qF 'printf %s "$?" >' && echo "$GOUT" | grep -q '\.exit' && ok "gptpro: launch line records the exit code to a .exit sidecar" || bad "gptpro exit-sentinel print"
+echo "$GOUT" | grep -qF 'printf %s "$?" >' && echo "$GOUT" | grep -q '\.exit' && ok "gpt-pro: launch line records the exit code to a .exit sidecar" || bad "gpt-pro exit-sentinel print"
 
-echo "== gptpro: --dispatch front-end + Reference keys + packet fallback =="
+echo "== gpt-pro: --dispatch front-end + Reference keys + packet fallback =="
 GPKB="$TMP/prism-gpb.md"
 printf '## Full Question\nq\n\n## Context\nc\n\n### Reference Materials\n- %s\n' "$REF1" > "$GPKB"
 GDISP="$TMP/gpb.dispatch"
-printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gptpro\nLens: Falsification\nLens-Desc: try to break it\n' "$GPKB" > "$GDISP"
-expect_ok "gptpro: --dispatch with packet ### Reference Materials fallback" "$LAUNCH" prepare --dispatch "$GDISP"
+printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gpt-pro\nLens: Falsification\nLens-Desc: try to break it\n' "$GPKB" > "$GDISP"
+expect_ok "gpt-pro: --dispatch with packet ### Reference Materials fallback" "$LAUNCH" prepare --dispatch "$GDISP"
 GMANB="$TMP/prism-gpb-manifest.json"
-GLB=$(jq -r '.gptpro[0].launcher' "$GMANB")
-grep -q 'REF-ONE-CONTENT-MARKER' "$GLB" && ok "gptpro: packet ### Reference Materials list resolved + inlined" || bad "gptpro packet-list fallback"
+GLB=$(jq -r '."gpt-pro"[0].launcher' "$GMANB")
+grep -q 'REF-ONE-CONTENT-MARKER' "$GLB" && ok "gpt-pro: packet ### Reference Materials list resolved + inlined" || bad "gpt-pro packet-list fallback"
 # explicit Reference: keys win and may include a 'none' opt-out (own packet -> own manifest)
 GPKB2="$TMP/prism-gpb2.md"
 printf '## Full Question\nq\n\n## Context\nc\n\n### Reference Materials\n- %s\n' "$REF1" > "$GPKB2"
 GDISP2="$TMP/gpb2.dispatch"
-printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\nReference: none\n\nType: gptpro\nLens: Falsification\nLens-Desc: d\n' "$GPKB2" > "$GDISP2"
-expect_ok "gptpro: 'Reference: none' inlines only the packet" "$LAUNCH" prepare --dispatch "$GDISP2"
-GLB2=$(jq -r '.gptpro[0].launcher' "$TMP/prism-gpb2-manifest.json")
-! grep -q 'REF-ONE-CONTENT-MARKER' "$GLB2" && ok "gptpro: 'Reference: none' skips the packet list (no refs inlined)" || bad "gptpro Reference none"
+printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\nReference: none\n\nType: gpt-pro\nLens: Falsification\nLens-Desc: d\n' "$GPKB2" > "$GDISP2"
+expect_ok "gpt-pro: 'Reference: none' inlines only the packet" "$LAUNCH" prepare --dispatch "$GDISP2"
+GLB2=$(jq -r '."gpt-pro"[0].launcher' "$TMP/prism-gpb2-manifest.json")
+! grep -q 'REF-ONE-CONTENT-MARKER' "$GLB2" && ok "gpt-pro: 'Reference: none' skips the packet list (no refs inlined)" || bad "gpt-pro Reference none"
 
-echo "== gptpro: fail-closed validation =="
-# gptpro lens but NO reference source at all -> NOT a bounce: a self-contained packet is
+echo "== gpt-pro: fail-closed validation =="
+# gpt-pro lens but NO reference source at all -> NOT a bounce: a self-contained packet is
 # valid gpt-pro input, so prepare defaults to packet-only and WARNS loudly (F2). The hard
 # error is reserved for an explicitly DECLARED bad reference (the cases below).
 GPKN="$TMP/prism-gpn.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$GPKN"
-GDN="$TMP/gpn.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gptpro\nLens: X\nLens-Desc: y\n' "$GPKN" > "$GDN"
+GDN="$TMP/gpn.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gpt-pro\nLens: X\nLens-Desc: y\n' "$GPKN" > "$GDN"
 GNERR=$("$LAUNCH" prepare --dispatch "$GDN" 2>&1); GNRC=$?
-[ "$GNRC" -eq 0 ] && ok "gptpro: no reference source -> packet-only default, not a bounce" || bad "gptpro no-ref default exit (got $GNRC)"
-printf '%s\n' "$GNERR" | grep -q 'shared packet ONLY' && ok "gptpro: no-reference run warns loudly (packet-only)" || bad "gptpro no-ref warning"
-GLN=$(jq -r '.gptpro[0].launcher' "$TMP/prism-gpn-manifest.json" 2>/dev/null)
-{ [ -f "$GLN" ] && grep -q '^## Full Question' "$GLN" && ! grep -q '^### .*ref-one' "$GLN"; } && ok "gptpro: packet-only launcher composed (packet inlined, no refs)" || bad "gptpro no-ref launcher"
+[ "$GNRC" -eq 0 ] && ok "gpt-pro: no reference source -> packet-only default, not a bounce" || bad "gpt-pro no-ref default exit (got $GNRC)"
+printf '%s\n' "$GNERR" | grep -q 'shared packet ONLY' && ok "gpt-pro: no-reference run warns loudly (packet-only)" || bad "gpt-pro no-ref warning"
+GLN=$(jq -r '."gpt-pro"[0].launcher' "$TMP/prism-gpn-manifest.json" 2>/dev/null)
+{ [ -f "$GLN" ] && grep -q '^## Full Question' "$GLN" && ! grep -q '^### .*ref-one' "$GLN"; } && ok "gpt-pro: packet-only launcher composed (packet inlined, no refs)" || bad "gpt-pro no-ref launcher"
 # review fix: a packet-only launcher must NOT carry a dangling "Inlined reference materials" heading
-! grep -q 'Inlined reference materials' "$GLN" && ok "gptpro: packet-only launcher omits the dangling reference heading" || bad "gptpro packet-only dangling heading"
+! grep -q 'Inlined reference materials' "$GLN" && ok "gpt-pro: packet-only launcher omits the dangling reference heading" || bad "gpt-pro packet-only dangling heading"
 # review fix: a ### Reference Materials heading with NO valid absolute bullets (empty / all-relative)
 # must also default to packet-only AND warn — never silently (the old elif branch was silent).
 GPKE="$TMP/prism-gpe.md"; printf '## Full Question\nq\n\n## Context\nc\n\n### Reference Materials\n\n- relative/not-absolute.md\n' > "$GPKE"
-GDE2="$TMP/gpe2.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gptpro\nLens: Z\nLens-Desc: y\n' "$GPKE" > "$GDE2"
+GDE2="$TMP/gpe2.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gpt-pro\nLens: Z\nLens-Desc: y\n' "$GPKE" > "$GDE2"
 GEERR=$("$LAUNCH" prepare --dispatch "$GDE2" 2>&1); GERC=$?
-[ "$GERC" -eq 0 ] && ok "gptpro: empty/malformed ### Reference Materials -> packet-only (not a bounce)" || bad "gptpro empty-RM exit (got $GERC)"
-printf '%s\n' "$GEERR" | grep -q 'NO reference files resolved' && ok "gptpro: empty/malformed ### Reference Materials WARNS (no silent packet-only)" || bad "gptpro empty-RM warning"
+[ "$GERC" -eq 0 ] && ok "gpt-pro: empty/malformed ### Reference Materials -> packet-only (not a bounce)" || bad "gpt-pro empty-RM exit (got $GERC)"
+printf '%s\n' "$GEERR" | grep -q 'NO reference files resolved' && ok "gpt-pro: empty/malformed ### Reference Materials WARNS (no silent packet-only)" || bad "gpt-pro empty-RM warning"
 # directory reference
-GCD="$TMP/gpd.json"; jq -n --arg p "$GPKN" --arg d "$TMP" '{shared_packet:$p,references:[$d],parallax:[],subagents:[],gptpro:[{lens:"X",lens_desc:"y"}]}' > "$GCD"
-expect_err "gptpro: a directory Reference -> fail-closed" "$LAUNCH" prepare --config "$GCD"
+GCD="$TMP/gpd.json"; jq -n --arg p "$GPKN" --arg d "$TMP" '{shared_packet:$p,references:[$d],parallax:[],subagents:[],"gpt-pro":[{lens:"X",lens_desc:"y"}]}' > "$GCD"
+expect_err "gpt-pro: a directory Reference -> fail-closed" "$LAUNCH" prepare --config "$GCD"
 # missing reference
-GCM="$TMP/gpm.json"; jq -n --arg p "$GPKN" --arg m "$TMP/does-not-exist.md" '{shared_packet:$p,references:[$m],parallax:[],subagents:[],gptpro:[{lens:"X",lens_desc:"y"}]}' > "$GCM"
-expect_err "gptpro: a missing Reference -> fail-closed" "$LAUNCH" prepare --config "$GCM"
+GCM="$TMP/gpm.json"; jq -n --arg p "$GPKN" --arg m "$TMP/does-not-exist.md" '{shared_packet:$p,references:[$m],parallax:[],subagents:[],"gpt-pro":[{lens:"X",lens_desc:"y"}]}' > "$GCM"
+expect_err "gpt-pro: a missing Reference -> fail-closed" "$LAUNCH" prepare --config "$GCM"
 # relative reference
-GCR="$TMP/gpr.json"; jq -n --arg p "$GPKN" '{shared_packet:$p,references:["relative/ref.md"],parallax:[],subagents:[],gptpro:[{lens:"X",lens_desc:"y"}]}' > "$GCR"
-expect_err "gptpro: a relative Reference -> fail-closed" "$LAUNCH" prepare --config "$GCR"
+GCR="$TMP/gpr.json"; jq -n --arg p "$GPKN" '{shared_packet:$p,references:["relative/ref.md"],parallax:[],subagents:[],"gpt-pro":[{lens:"X",lens_desc:"y"}]}' > "$GCR"
+expect_err "gpt-pro: a relative Reference -> fail-closed" "$LAUNCH" prepare --config "$GCR"
 # whitespace in reference path
-GCW="$TMP/gpw.json"; jq -n --arg p "$GPKN" --arg w "$TMP/has space.md" '{shared_packet:$p,references:[$w],parallax:[],subagents:[],gptpro:[{lens:"X",lens_desc:"y"}]}' > "$GCW"
-expect_err "gptpro: a whitespace Reference path -> fail-closed" "$LAUNCH" prepare --config "$GCW"
+GCW="$TMP/gpw.json"; jq -n --arg p "$GPKN" --arg w "$TMP/has space.md" '{shared_packet:$p,references:[$w],parallax:[],subagents:[],"gpt-pro":[{lens:"X",lens_desc:"y"}]}' > "$GCW"
+expect_err "gpt-pro: a whitespace Reference path -> fail-closed" "$LAUNCH" prepare --config "$GCW"
 # oversize reference (> 1MB cap)
 BIGREF="$TMP/big.ref"; head -c 1100000 /dev/zero | tr '\0' 'x' > "$BIGREF"
-GCB="$TMP/gpbig.json"; jq -n --arg p "$GPKN" --arg b "$BIGREF" '{shared_packet:$p,references:[$b],parallax:[],subagents:[],gptpro:[{lens:"X",lens_desc:"y"}]}' > "$GCB"
-expect_err "gptpro: an over-1MB Reference -> fail-closed before launch" "$LAUNCH" prepare --config "$GCB"
-# To/Name/Effort on a gptpro dispatch record
-GDE="$TMP/gpe.dispatch"; printf 'Shared-Packet: %s\nReference: none\n\nType: gptpro\nEffort: x\nLens: X\nLens-Desc: y\n' "$GPKB" > "$GDE"
-expect_err "gptpro: rejects an authored Effort line (no longer authored)" "$LAUNCH" prepare --dispatch "$GDE"
+GCB="$TMP/gpbig.json"; jq -n --arg p "$GPKN" --arg b "$BIGREF" '{shared_packet:$p,references:[$b],parallax:[],subagents:[],"gpt-pro":[{lens:"X",lens_desc:"y"}]}' > "$GCB"
+expect_err "gpt-pro: an over-1MB Reference -> fail-closed before launch" "$LAUNCH" prepare --config "$GCB"
+# To/Name/Effort on a gpt-pro dispatch record
+GDE="$TMP/gpe.dispatch"; printf 'Shared-Packet: %s\nReference: none\n\nType: gpt-pro\nEffort: x\nLens: X\nLens-Desc: y\n' "$GPKB" > "$GDE"
+expect_err "gpt-pro: rejects an authored Effort line (no longer authored)" "$LAUNCH" prepare --dispatch "$GDE"
 # bad posture
-GCP="$TMP/gpp.json"; jq -n --arg p "$GPKB" '{shared_packet:$p,references:[],parallax:[],subagents:[],gptpro:[{lens:"X",lens_desc:"y",posture:"wrong"}]}' > "$GCP"
-expect_err "gptpro: rejects an invalid posture" "$LAUNCH" prepare --config "$GCP"
-# duplicate lens across the run (subagent + gptpro share a name)
-GCDUP="$TMP/gpdup.json"; jq -n --arg p "$GPKB" '{shared_packet:$p,references:[],parallax:[],subagents:[{lens:"Same",lens_desc:"d"}],gptpro:[{lens:"Same",lens_desc:"d"}]}' > "$GCDUP"
-expect_err "gptpro: rejects a lens name shared with a subagent" "$LAUNCH" prepare --config "$GCDUP"
-# the hyphenated/underscore product spelling as a dispatch Type token is NORMALIZED to the
-# canonical "gptpro" (an agentic-usability alias). Safe because the Type VALUE is explicit and
-# already hard-fails on the unrecognized — aliasing it cannot silently drop a lane (unlike the
-# --config lens-list KEY below, which must still fail closed). Otherwise-valid dispatch so the
-# only thing under test is the spelling.
+GCP="$TMP/gpp.json"; jq -n --arg p "$GPKB" '{shared_packet:$p,references:[],parallax:[],subagents:[],"gpt-pro":[{lens:"X",lens_desc:"y",posture:"wrong"}]}' > "$GCP"
+expect_err "gpt-pro: rejects an invalid posture" "$LAUNCH" prepare --config "$GCP"
+# duplicate lens across the run (subagent + gpt-pro share a name)
+GCDUP="$TMP/gpdup.json"; jq -n --arg p "$GPKB" '{shared_packet:$p,references:[],parallax:[],subagents:[{lens:"Same",lens_desc:"d"}],"gpt-pro":[{lens:"Same",lens_desc:"d"}]}' > "$GCDUP"
+expect_err "gpt-pro: rejects a lens name shared with a subagent" "$LAUNCH" prepare --config "$GCDUP"
+# One canonical dispatch Type spelling: the hyphenated 'gpt-pro'. The hyphen-less 'gptpro'
+# and underscore 'gpt_pro' spellings are REJECTED with a hint (not silently normalized), so
+# the record Type matches its 'gpt-pro' lens-list key exactly. Otherwise-valid dispatch so
+# the only thing under test is the spelling.
 GHYP="$TMP/gpt-hyphen.dispatch"
 printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gpt-pro\nLens: X\nLens-Desc: y\n' "$GPKB" > "$GHYP"
-expect_ok "gptpro: accepts 'Type: gpt-pro' (hyphenated) as an alias for 'gptpro'" "$LAUNCH" prepare --dispatch "$GHYP"
-[ "$(jq -r '.counts.gptpro' "$GMANB" 2>/dev/null)" = "1" ] && ok "gptpro: 'Type: gpt-pro' normalized into a gptpro record" || bad "gptpro alias normalization (hyphen)"
+expect_ok "gpt-pro: accepts the canonical 'Type: gpt-pro' (hyphenated)" "$LAUNCH" prepare --dispatch "$GHYP"
+[ "$(jq -r '.counts."gpt-pro"' "$GMANB" 2>/dev/null)" = "1" ] && ok "gpt-pro: 'Type: gpt-pro' produces a gpt-pro record" || bad "gpt-pro record from canonical Type"
+GHL="$TMP/gpt-hyphenless.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gptpro\nLens: X\nLens-Desc: y\n' "$GPKB" > "$GHL"
+expect_err "gpt-pro: rejects the hyphen-less 'Type: gptpro' (no longer an alias)" "$LAUNCH" prepare --dispatch "$GHL"
+# Pin the DEDICATED rejection branch, not just non-zero exit: the hint text lives only in the
+# gptpro|gpt_pro) case, so this fails if that case is deleted (the generic *) branch also dies).
+# Capture first — prepare exits non-zero, so a `prepare | grep` pipeline would mask the match under pipefail.
+GHLERR=$("$LAUNCH" prepare --dispatch "$GHL" 2>&1)
+printf '%s\n' "$GHLERR" | grep -qF "spelled 'gpt-pro' (hyphenated)" \
+  && ok "gpt-pro: 'Type: gptpro' rejection carries the migration hint" || bad "gpt-pro gptpro hint text"
 GUND="$TMP/gpt-under.dispatch"
 printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\n\nType: gpt_pro\nLens: X\nLens-Desc: y\n' "$GPKB" > "$GUND"
-expect_ok "gptpro: accepts 'Type: gpt_pro' (underscore) as an alias for 'gptpro'" "$LAUNCH" prepare --dispatch "$GUND"
-# the lenient --config raw-JSON path must ALSO fail-closed on a misspelled lens-list key:
-# a "gpt-pro"/"gpt_pro" key is silently ignored, so a mixed run (parallax present) would
-# otherwise pass the zero-records guard and drop the whole gpt-pro lane with no error.
+expect_err "gpt-pro: rejects the underscore 'Type: gpt_pro' (no longer an alias)" "$LAUNCH" prepare --dispatch "$GUND"
+GUNDERR=$("$LAUNCH" prepare --dispatch "$GUND" 2>&1)
+printf '%s\n' "$GUNDERR" | grep -qF "spelled 'gpt-pro' (hyphenated)" \
+  && ok "gpt-pro: 'Type: gpt_pro' rejection carries the migration hint" || bad "gpt-pro gpt_pro hint text"
+# The lenient --config raw-JSON path fail-closes on a MISSPELLED lens-list key: a hyphen-less
+# "gptpro" / underscore "gpt_pro" key is silently ignored, so a mixed run (parallax present)
+# would otherwise pass the zero-records guard and drop the whole gpt-pro lane with no error.
+# The canonical hyphenated "gpt-pro" key is accepted.
+GCKEYOK="$TMP/gp-goodkey.json"
+jq -n --arg p "$GPKN" '{shared_packet:$p,references:[],parallax:[],subagents:[],"gpt-pro":[{lens:"X",lens_desc:"y"}]}' > "$GCKEYOK"
+expect_ok "gpt-pro: --config accepts the canonical 'gpt-pro' lens-list key" "$LAUNCH" prepare --config "$GCKEYOK"
 GCKEY="$TMP/gp-badkey.json"
-jq -n --arg p "$GPKN" '{shared_packet:$p,references:[],parallax:[{to:"codex",name:"adv",lens:"Adversarial",lens_desc:"attack it"}],subagents:[],"gpt-pro":[{lens:"X",lens_desc:"y"}]}' > "$GCKEY"
-expect_err "gptpro: --config rejects a 'gpt-pro' lens-list key (would silently drop the lane)" "$LAUNCH" prepare --config "$GCKEY"
+jq -n --arg p "$GPKN" '{shared_packet:$p,references:[],parallax:[{to:"codex",name:"adv",lens:"Adversarial",lens_desc:"attack it"}],subagents:[],"gptpro":[{lens:"X",lens_desc:"y"}]}' > "$GCKEY"
+expect_err "gpt-pro: --config rejects a hyphen-less 'gptpro' lens-list key (would silently drop the lane)" "$LAUNCH" prepare --config "$GCKEY"
 GCKEY2="$TMP/gp-badkey2.json"
 jq -n --arg p "$GPKN" '{shared_packet:$p,references:[],parallax:[{to:"codex",name:"adv",lens:"Adversarial",lens_desc:"attack it"}],subagents:[],"gpt_pro":[{lens:"X",lens_desc:"y"}]}' > "$GCKEY2"
-expect_err "gptpro: --config rejects a 'gpt_pro' lens-list key (would silently drop the lane)" "$LAUNCH" prepare --config "$GCKEY2"
+expect_err "gpt-pro: --config rejects an underscore 'gpt_pro' lens-list key (would silently drop the lane)" "$LAUNCH" prepare --config "$GCKEY2"
 
-echo "== gptpro: gptpro-only run + results/digest/clean lanes =="
+echo "== gpt-pro: gpt-pro-only run + results/digest/clean lanes =="
 GPKO="$TMP/prism-gpo.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$GPKO"
-GCO="$TMP/gpo.json"; jq -n --arg p "$GPKO" '{shared_packet:$p,references:[],parallax:[],subagents:[],gptpro:[{lens:"Deep",lens_desc:"d"}]}' > "$GCO"
-expect_ok "gptpro: a gptpro-only run prepares (no parallax/subagents)" "$LAUNCH" prepare --config "$GCO"
+GCO="$TMP/gpo.json"; jq -n --arg p "$GPKO" '{shared_packet:$p,references:[],parallax:[],subagents:[],"gpt-pro":[{lens:"Deep",lens_desc:"d"}]}' > "$GCO"
+expect_ok "gpt-pro: a gpt-pro-only run prepares (no parallax/subagents)" "$LAUNCH" prepare --config "$GCO"
 GMANO="$TMP/prism-gpo-manifest.json"
-GRES=$(jq -r '.gptpro[0].res' "$GMANO"); GLOG=$(jq -r '.gptpro[0].log' "$GMANO")
+GRES=$(jq -r '."gpt-pro"[0].res' "$GMANO"); GLOG=$(jq -r '."gpt-pro"[0].log' "$GMANO")
 # pending: no .res.md yet, a .log with a run_id -> results surfaces it, exits non-zero
 printf 'gpt-pro: run_id=ask-20260618-abc transport=ssh mode=submit\n' > "$GLOG"
-expect_err "gptpro: results exits non-zero while a lens is pending" "$LAUNCH" results "$GMANO"
-"$LAUNCH" results "$GMANO" >/dev/null 2>&1; rc=$?; [ "$rc" -eq 2 ] && ok "gptpro: results exits exactly 2 (pending, not failure) while a lens is pending" || bad "results pending exit code (got $rc, want 2)"
+expect_err "gpt-pro: results exits non-zero while a lens is pending" "$LAUNCH" results "$GMANO"
+"$LAUNCH" results "$GMANO" >/dev/null 2>&1; rc=$?; [ "$rc" -eq 2 ] && ok "gpt-pro: results exits exactly 2 (pending, not failure) while a lens is pending" || bad "results pending exit code (got $rc, want 2)"
 # results exits non-zero while pending, so capture first (pipefail would mask the grep)
 RUNOUT=$("$LAUNCH" results "$GMANO" 2>/dev/null || true)
-printf '%s\n' "$RUNOUT" | grep -q 'run_id=ask-20260618-abc' && ok "gptpro: results surfaces the pending run_id for reattach" || bad "gptpro results run_id"
+printf '%s\n' "$RUNOUT" | grep -q 'run_id=ask-20260618-abc' && ok "gpt-pro: results surfaces the pending run_id for reattach" || bad "gpt-pro results run_id"
 # #2: a recorded .exit (the launch wrapper) with an empty .res.md = finished-but-FAILED,
 # not 'pending' — results must report [FAILED] and exit 1, never passive pending (2).
 GEXIT="${GRES%.res.md}.exit"; printf '124\n' > "$GEXIT"
 GFOUT=$("$LAUNCH" results "$GMANO" 2>&1); rc=$?
-{ [ "$rc" -eq 1 ] && printf '%s\n' "$GFOUT" | grep -q 'FAILED'; } && ok "gptpro: a recorded non-zero .exit with no .res.md reports FAILED, exit 1 (not pending)" || bad "gptpro exit-sentinel results (got $rc)"
+{ [ "$rc" -eq 1 ] && printf '%s\n' "$GFOUT" | grep -q 'FAILED'; } && ok "gpt-pro: a recorded non-zero .exit with no .res.md reports FAILED, exit 1 (not pending)" || bad "gpt-pro exit-sentinel results (got $rc)"
 rm -f "$GEXIT"
 # completed: .res.md present -> results exits 0, digest extracts the block tagged gpt-pro
 cat > "$GRES" <<'RES'
@@ -734,32 +749,32 @@ Body of the gpt-pro answer.
 - Position: GPTPRO-DIGEST-MARKER
 - Changes if: none
 RES
-expect_ok "gptpro: results exits 0 once the lens .res.md is present" "$LAUNCH" results "$GMANO"
+expect_ok "gpt-pro: results exits 0 once the lens .res.md is present" "$LAUNCH" results "$GMANO"
 "$LAUNCH" digest "$GMANO" >/dev/null 2>&1
 GDGO="$TMP/prism-gpo-digest.md"
-grep -q 'GPTPRO-DIGEST-MARKER' "$GDGO" && ok "gptpro: digest extracts the gpt-pro ## Digest block" || bad "gptpro digest extract"
-grep -q 'lineage: gpt-pro' "$GDGO" && ok "gptpro: digest tags the gpt-pro lineage" || bad "gptpro digest lineage"
-# phantom-parallax guard: a stale/unrelated result.json must NOT add phantom peers to a gptpro-only digest
+grep -q 'GPTPRO-DIGEST-MARKER' "$GDGO" && ok "gpt-pro: digest extracts the gpt-pro ## Digest block" || bad "gpt-pro digest extract"
+grep -q 'lineage: gpt-pro' "$GDGO" && ok "gpt-pro: digest tags the gpt-pro lineage" || bad "gpt-pro digest lineage"
+# phantom-parallax guard: a stale/unrelated result.json must NOT add phantom peers to a gpt-pro-only digest
 printf '{"id":"prism-gpo","expected":1,"succeeded":1,"failed":0,"results":[{"to":"codex","name":"prism-ghost","status":"done","res":"/tmp/ghost.res.md","log":"/tmp/g.log"}]}' > "$TMP/prism-gpo-result.json"
 "$LAUNCH" digest "$GMANO" >/dev/null 2>&1
-{ ! grep -q 'prism-ghost' "$GDGO" && ! grep -q 'lineage: codex' "$GDGO"; } && ok "gptpro: gptpro-only digest ignores a stale result.json (no phantom peers)" || bad "gptpro digest phantom peers"
-grep -q 'GPTPRO-DIGEST-MARKER' "$GDGO" && ok "gptpro: gptpro-only digest still emits the gpt-pro lens despite a stale result.json" || bad "gptpro digest dropped gpt-pro lane"
+{ ! grep -q 'prism-ghost' "$GDGO" && ! grep -q 'lineage: codex' "$GDGO"; } && ok "gpt-pro: gpt-pro-only digest ignores a stale result.json (no phantom peers)" || bad "gpt-pro digest phantom peers"
+grep -q 'GPTPRO-DIGEST-MARKER' "$GDGO" && ok "gpt-pro: gpt-pro-only digest still emits the gpt-pro lens despite a stale result.json" || bad "gpt-pro digest dropped gpt-pro lane"
 rm -f "$TMP/prism-gpo-result.json"
 # clean guard: a .log with a run_id but NO .res.md is a possibly-live worker -> refuse.
 # clean only operates on /tmp/prism-* (its safety prefix), so use a real /tmp run here.
 GPKC=/tmp/prism-gpcg.md; printf '## Full Question\nq\n\n## Context\nc\n' > "$GPKC"
-GCC="$TMP/gpc.json"; jq -n --arg p "$GPKC" '{shared_packet:$p,references:[],parallax:[],subagents:[],gptpro:[{lens:"Deep",lens_desc:"d"}]}' > "$GCC"
+GCC="$TMP/gpc.json"; jq -n --arg p "$GPKC" '{shared_packet:$p,references:[],parallax:[],subagents:[],"gpt-pro":[{lens:"Deep",lens_desc:"d"}]}' > "$GCC"
 "$LAUNCH" prepare --config "$GCC" >/dev/null 2>&1
-GLOGC=$(jq -r '.gptpro[0].log' /tmp/prism-gpcg-manifest.json)
+GLOGC=$(jq -r '."gpt-pro"[0].log' /tmp/prism-gpcg-manifest.json)
 printf 'gpt-pro: run_id=ask-live-xyz transport=ssh\n' > "$GLOGC"
-expect_err "gptpro: clean refuses a possibly-live run (run_id, no .res.md)" "$LAUNCH" clean /tmp/prism-gpcg.md
-expect_ok "gptpro: clean --force overrides the live-run guard" "$LAUNCH" clean /tmp/prism-gpcg.md --force
+expect_err "gpt-pro: clean refuses a possibly-live run (run_id, no .res.md)" "$LAUNCH" clean /tmp/prism-gpcg.md
+expect_ok "gpt-pro: clean --force overrides the live-run guard" "$LAUNCH" clean /tmp/prism-gpcg.md --force
 # a completed lens (.res.md present) is safe to clean without --force (re-create packet first)
 printf '## Full Question\nq\n\n## Context\nc\n' > "$GPKC"
 "$LAUNCH" prepare --config "$GCC" >/dev/null 2>&1
-GLOGC=$(jq -r '.gptpro[0].log' /tmp/prism-gpcg-manifest.json); GRESC=$(jq -r '.gptpro[0].res' /tmp/prism-gpcg-manifest.json)
+GLOGC=$(jq -r '."gpt-pro"[0].log' /tmp/prism-gpcg-manifest.json); GRESC=$(jq -r '."gpt-pro"[0].res' /tmp/prism-gpcg-manifest.json)
 printf 'gpt-pro: run_id=ask-done-xyz transport=ssh\n' > "$GLOGC"; printf 'answer\n' > "$GRESC"
-expect_ok "gptpro: clean allows a completed run (run_id + non-empty .res.md)" "$LAUNCH" clean /tmp/prism-gpcg.md
+expect_ok "gpt-pro: clean allows a completed run (run_id + non-empty .res.md)" "$LAUNCH" clean /tmp/prism-gpcg.md
 rm -f /tmp/prism-gpcg*
 
 echo "== subcommand --help =="
@@ -832,11 +847,11 @@ expect_err "contract: Prism-Mode: full without Prism-N is rejected" "$LAUNCH" pr
 GPKO="$TMP/prism-gponly.md"; make_packet "$GPKO"
 GPO="$TMP/prism-gponly.dispatch"
 { printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 1\nReference: none\n\n' "$GPKO"
-  printf 'Type: gptpro\nLens: Deep-Reasoning\nLens-Desc: d\n\n'; } > "$GPO"
+  printf 'Type: gpt-pro\nLens: Deep-Reasoning\nLens-Desc: d\n\n'; } > "$GPO"
 expect_ok  "contract: gpt-pro-only (full N=0 M=1) passes"  "$LAUNCH" prepare --dispatch "$GPO"
 GPO0="$TMP/prism-gponly0.dispatch"
 { printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nPrism-M: 0\nReference: none\n\n' "$GPKO"
-  printf 'Type: gptpro\nLens: Deep-Reasoning\nLens-Desc: d\n\n'; } > "$GPO0"
+  printf 'Type: gpt-pro\nLens: Deep-Reasoning\nLens-Desc: d\n\n'; } > "$GPO0"
 expect_err "contract: full N=0 with M=0 is rejected (gpt-pro-only needs M>=1)" "$LAUNCH" prepare --dispatch "$GPO0"
 
 # --config escape hatch stays lenient (no contract required); manifest shape = unchecked.
@@ -888,7 +903,7 @@ HP4="$TMP/prism-h4.md"; make_packet "$HP4"
 expect_ok "#4: full dispatch omitting Prism-M still prepares" "$LAUNCH" prepare --dispatch "$TMP/h4.dispatch"
 [ "$(jq -r '.shape.m' "$TMP/prism-h4-manifest.json" 2>/dev/null)" = "0" ] && ok "#4: omitted Prism-M defaults to 0 (gpt-pro pinned, not unchecked)" || bad "#4 M defaults to 0"
 HP4B="$TMP/prism-h4b.md"; make_packet "$HP4B"
-{ printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nReference: none\n\n' "$HP4B"; printf 'Type: gptpro\nLens: Deep\nLens-Desc: d\n\n'; } > "$TMP/h4b.dispatch"
+{ printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 0\nReference: none\n\n' "$HP4B"; printf 'Type: gpt-pro\nLens: Deep\nLens-Desc: d\n\n'; } > "$TMP/h4b.dispatch"
 expect_err "#4: full N=0 omitting Prism-M is rejected (defaults to 0, needs M>=1)" "$LAUNCH" prepare --dispatch "$TMP/h4b.dispatch"
 
 # #5 — parallax rejects an empty/malformed .shape, not only a missing one.
@@ -1083,14 +1098,14 @@ PKI7="$TMP/inc7.md"; make_packet "$PKI7"
 { inc_dispatch "$PKI7" <<EOF
 Include: $INCD/a.md
 
-Type: gptpro
+Type: gpt-pro
 Lens: Deep
 Lens-Desc: d
 Posture: deep-reasoning
 EOF
 } > "$TMP/inc7.dispatch"
 expect_ok "Include: prepares with a gpt-pro lens" "$LAUNCH" prepare --dispatch "$TMP/inc7.dispatch"
-grep -q 'alpha contents' "$TMP/inc7-gptpro-deep.md" \
+grep -q 'alpha contents' "$TMP/inc7-gpt-pro-deep.md" \
   && ok "Include: gpt-pro launcher inlines the included file contents" || bad "Include: gpt-pro launcher missing inlined contents"
 
 # 8b) stale-region cleanup: an Include: run then a no-Include run on the SAME packet
@@ -1207,11 +1222,11 @@ expect_ok "no-subagents N=2 floor check passes (14 parallax)" "$LAUNCH" prepare 
 [ "$(jq -r '.counts.parallax_total' "$TMP/nsn2-manifest.json" 2>/dev/null)" = "14" ] && ok "no-subagents N=2 manifest parallax_total=14" || bad "N=2 parallax_total"
 [ "$(jq -r '.shape.n' "$TMP/nsn2-manifest.json" 2>/dev/null)" = "2" ] && ok "no-subagents N=2 shape.n=2" || bad "N=2 shape.n"
 
-# M=1 happy path: gpt-pro asserted; manifest counts.gptpro=1 + shape.m=1
+# M=1 happy path: gpt-pro asserted; manifest counts."gpt-pro"=1 + shape.m=1
 PKM1="$TMP/nsm1.md"; make_packet "$PKM1"; NSM1="$TMP/nsm1.dispatch"
 "$LAUNCH" scaffold --no-subagents --preset review --m 1 --packet "$PKM1" --out "$NSM1" --partial-user-quote "no subagents" >/dev/null 2>&1
 expect_ok "no-subagents --m 1 prepares" "$LAUNCH" prepare --dispatch "$NSM1"
-[ "$(jq -r '.counts.gptpro' "$TMP/nsm1-manifest.json" 2>/dev/null)" = "1" ] && ok "no-subagents M=1 manifest gptpro=1" || bad "M=1 gptpro"
+[ "$(jq -r '.counts."gpt-pro"' "$TMP/nsm1-manifest.json" 2>/dev/null)" = "1" ] && ok "no-subagents M=1 manifest gpt-pro=1" || bad "M=1 gpt-pro"
 [ "$(jq -r '.shape.m' "$TMP/nsm1-manifest.json" 2>/dev/null)" = "1" ] && ok "no-subagents M=1 shape.m=1" || bad "M=1 shape.m"
 
 # M=1 declared but zero gpt-pro records → variant floor check fails
@@ -1257,7 +1272,7 @@ expect_err "--config rejects variant on mode:full (schema)" "$LAUNCH" prepare --
 PKCG="$TMP/nscg.md"; make_packet "$PKCG"; CFGNSG="$TMP/cfgnsg.json"
 jq -n --arg p "$PKCG" '{shared_packet:$p,
   parallax:[ ["codex","grok-build","grok-composer","glm","kimi","deepseek","mimo"][] | {to:., name:("ng-"+.), lens:("L-"+.), lens_desc:"d"} ],
-  subagents:[], gptpro:[{lens:"G", lens_desc:"d"}],
+  subagents:[], "gpt-pro":[{lens:"G", lens_desc:"d"}],
   shape:{mode:"partial", variant:"no-subagents", n:1, partial_user_quote:"x"}}' > "$CFGNSG"
 expect_err "--config no-subagents omitted m + stray gpt-pro caught by floor check" "$LAUNCH" prepare --config "$CFGNSG"
 

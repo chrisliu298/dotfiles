@@ -92,22 +92,23 @@ dp_flush() {
   local obj
   case "$DP_type" in
     parallax)
-      [ -z "$DP_posture" ] || die "prepare: --dispatch parallax record must not set Posture (that key is gptpro-only)"
+      [ -z "$DP_posture" ] || die "prepare: --dispatch parallax record must not set Posture (that key is gpt-pro-only)"
       obj=$(jq -n --arg to "$DP_to" --arg name "$DP_name" \
                   --arg lens "$DP_lens" --arg desc "$DP_desc" '
         ($lens | ascii_downcase | gsub("[^a-z0-9]+"; "-") | gsub("(^-|-$)"; "")) as $auto
         | {to:$to, lens:$lens, lens_desc:$desc, name:(if $name != "" then $name else $auto end)}')
       DP_px="$DP_px$obj"$'\n' ;;
     subagent)
-      [ -z "$DP_to$DP_name$DP_posture" ] || die "prepare: --dispatch subagent record must not set To/Name/Posture (those are parallax/gptpro-only; did you mean a different Type?)"
+      [ -z "$DP_to$DP_name$DP_posture" ] || die "prepare: --dispatch subagent record must not set To/Name/Posture (those are parallax/gpt-pro-only; did you mean a different Type?)"
       obj=$(jq -n --arg lens "$DP_lens" --arg desc "$DP_desc" '{lens:$lens, lens_desc:$desc}')
       DP_sa="$DP_sa$obj"$'\n' ;;
-    gptpro)
-      [ -z "$DP_to$DP_name" ] || die "prepare: --dispatch gptpro record must not set To/Name (gpt-pro is orchestrator-direct with no peer; only Lens, Lens-Desc, and optional Posture)"
+    gpt-pro)
+      [ -z "$DP_to$DP_name" ] || die "prepare: --dispatch gpt-pro record must not set To/Name (gpt-pro is orchestrator-direct with no peer; only Lens, Lens-Desc, and optional Posture)"
       obj=$(jq -n --arg lens "$DP_lens" --arg desc "$DP_desc" --arg posture "$DP_posture" \
         '{lens:$lens, lens_desc:$desc} + (if $posture != "" then {posture:$posture} else {} end)')
       DP_gp="$DP_gp$obj"$'\n' ;;
-    *) die "prepare: --dispatch record has invalid or missing Type '$DP_type' (must be 'parallax', 'subagent', or 'gptpro')" ;;
+    gptpro|gpt_pro) die "prepare: --dispatch Type '$DP_type' is not accepted — the deep-model record type is spelled 'gpt-pro' (hyphenated). Change 'Type: $DP_type' to 'Type: gpt-pro'." ;;
+    *) die "prepare: --dispatch record has invalid or missing Type '$DP_type' (must be 'parallax', 'subagent', or 'gpt-pro')" ;;
   esac
   DP_type=""; DP_to=""; DP_name=""; DP_lens=""; DP_desc=""; DP_posture=""; DP_in=0
 }
@@ -135,7 +136,7 @@ dispatch_to_config() {
         [ -z "$DP_packet" ] || die "prepare: --dispatch has more than one Shared-Packet line"
         DP_packet="$val" ;;
       Reference)
-        # Top-level, repeatable: the authoritative inlining list for gptpro lenses.
+        # Top-level, repeatable: the authoritative inlining list for gpt-pro lenses.
         # `Reference: none` (sole entry) is an explicit opt-out (inline only the packet).
         DP_refs="$DP_refs$val"$'\n' ;;
       Include)
@@ -174,16 +175,12 @@ dispatch_to_config() {
         [ -z "$DP_variant" ] || die "prepare: --dispatch has more than one Variant line"
         DP_variant="$val" ;;
       Type)
-        # Accept the hyphenated/underscore product spelling as an alias for the record
-        # token. Unlike the --config lens-list KEY (where a mis-spelled "gpt-pro" key is
-        # silently ignored and drops the whole lane, so it must fail closed), the dispatch
-        # Type VALUE is explicit and already hard-fails on anything unrecognized — so
-        # normalizing gpt-pro/gpt_pro → gptpro just removes a pointless re-prepare cycle.
+        # Stored verbatim; validated in dp_flush. The deep-model record has exactly one
+        # accepted spelling — the hyphenated 'gpt-pro', matching its 'gpt-pro' lens-list
+        # key. The hyphen-less 'gptpro' and underscore 'gpt_pro' spellings are rejected
+        # there with a hint (not silently normalized) so there is one canonical form.
         dp_flush; DP_in=1; DP_seen=""
-        case "$val" in
-          gpt-pro|gpt_pro) DP_type="gptpro" ;;
-          *)               DP_type="$val" ;;
-        esac ;;
+        DP_type="$val" ;;
       Effort)
         die "prepare: --dispatch line $lineno: 'Effort:' is no longer authored — prism-launch sets effort per peer from the registry (Codex xhigh, Grok Build high). Remove the line." ;;
       To|Name|Lens|Lens-Desc|Posture)
@@ -229,7 +226,7 @@ To run a REDUCED roster you must have an EXPLICIT user request, declared as:
       esac
       case "$DP_m" in *[!0-9]*) die "prepare: Prism-M must be a non-negative integer, got: $DP_m" ;; esac
       # A full run's gpt-pro count is part of the declared shape: default an omitted
-      # Prism-M to 0 so the floor check always asserts gptpro==0 (a stray gptpro record
+      # Prism-M to 0 so the floor check always asserts gpt-pro==0 (a stray gpt-pro record
       # in a full run with no Prism-M is then caught, not silently unchecked).
       [ -n "$DP_m" ] || DP_m=0
       [ -z "$DP_variant" ] || die "prepare: 'Variant:' is only valid with 'Prism-Mode: partial' (it is a recognized reduced shape, not a full roster)."
@@ -289,7 +286,7 @@ To run a REDUCED roster you must have an EXPLICIT user request, declared as:
     + (if $m != "" then {m:($m|tonumber)} else {} end)
     + (if $q != "" then {partial_user_quote:$q} else {} end)')
   cfg=$(jq -n --arg p "$DP_packet" --argjson px "$pxj" --argjson sa "$saj" --argjson gp "$gpj" --argjson ref "$refj" --argjson inc "$incj" --argjson shape "$shapej" \
-        '{shared_packet:$p, parallax:$px, subagents:$sa, gptpro:$gp, shape:$shape}
+        '{shared_packet:$p, parallax:$px, subagents:$sa, "gpt-pro":$gp, shape:$shape}
          + (if $ref != null then {references:$ref} else {} end)
          + (if $inc != null then {includes:$inc} else {} end)')
   gen="${DP_packet%.md}-config.normalized.json"
@@ -457,7 +454,7 @@ Add a top-level '## Context' heading (a '## ' line, not '###' or bare prose) and
     # Per-file cap is the gpt-pro 1 MB reality; total cap is 1 MB when a gpt-pro lens
     # will inline the set, else a looser sanity bound (path tiers read selectively).
     inc_total_cap=5000000
-    [ "$(jq '.gptpro|length' "$config")" -gt 0 ] && inc_total_cap=1000000
+    [ "$(jq '."gpt-pro"|length' "$config")" -gt 0 ] && inc_total_cap=1000000
     inc_args=(resolve --base "$inc_base" --json --max-bytes 1000000 --max-total "$inc_total_cap")
     while IFS= read -r x; do [ -n "$x" ] && inc_args+=(--from "$x"); done < <(jq -r '.includes.from[]?' "$config")
     while IFS= read -r x; do [ -n "$x" ] && inc_args+=(--tree "$x"); done < <(jq -r '.includes.tree[]?' "$config")
@@ -516,18 +513,18 @@ Add a top-level '## Context' heading (a '## ' line, not '###' or bare prose) and
     (.shared_packet) as $pkt
     | (.parallax // []) as $px
     | (.subagents // []) as $sa
-    | (.gptpro // []) as $gp
+    | (."gpt-pro" // []) as $gp
     | ($px | type) as $pxt | (if $pxt != "array" then bad("parallax must be an array") else . end)
     | ($sa | type) as $sat | (if $sat != "array" then bad("subagents must be an array") else . end)
-    | ($gp | type) as $gpt | (if $gpt != "array" then bad("gptpro must be an array") else . end)
-    # Fail-closed on the one mis-spelling that silently loses data. The gpt-pro lens
-    # list key is the hyphen-less "gptpro" (read as $gp above). On the lenient --config
-    # raw-JSON path a hand-authored "gpt-pro"/"gpt_pro" key is otherwise silently ignored,
-    # dropping the ENTIRE gpt-pro lane with no error on a mixed run (the zero-records guard
-    # below only fires when ALL lanes are empty). The --dispatch compiler only ever emits
-    # "gptpro", so this never fires on that path — it guards the raw-JSON escape hatch.
-    | (if has("gpt-pro") then bad("config key \"gpt-pro\" is invalid — the gpt-pro lens list key is the hyphen-less \"gptpro\"; the hyphenated key is silently ignored and would drop the entire gpt-pro lane.") else . end)
-    | (if has("gpt_pro") then bad("config key \"gpt_pro\" is invalid — the gpt-pro lens list key is the hyphen-less \"gptpro\"; the underscore key is silently ignored and would drop the entire gpt-pro lane.") else . end)
+    | ($gp | type) as $gpt | (if $gpt != "array" then bad("gpt-pro must be an array") else . end)
+    # Fail-closed on the mis-spellings that silently lose data. The gpt-pro lens list key
+    # is the hyphenated "gpt-pro" (read as $gp above). On the lenient --config raw-JSON path
+    # a hand-authored "gptpro"/"gpt_pro" key is otherwise silently ignored, dropping the
+    # ENTIRE gpt-pro lane with no error on a mixed run (the zero-records guard below only
+    # fires when ALL lanes are empty). The --dispatch compiler only ever emits "gpt-pro",
+    # so this never fires on that path — it guards the raw-JSON escape hatch.
+    | (if has("gptpro") then bad("config key \"gptpro\" is invalid — the gpt-pro lens list key is the hyphenated \"gpt-pro\"; the hyphen-less key is silently ignored and would drop the entire gpt-pro lane.") else . end)
+    | (if has("gpt_pro") then bad("config key \"gpt_pro\" is invalid — the gpt-pro lens list key is the hyphenated \"gpt-pro\"; the underscore key is silently ignored and would drop the entire gpt-pro lane.") else . end)
 
     # Validate + normalize parallax entries against the peer registry.
     | ($peers | keys) as $valid_peers
@@ -568,20 +565,20 @@ Add a top-level '## Context' heading (a '## ' line, not '###' or bare prose) and
         | { lens: $lens, lens_desc: $desc, slug: $slug, launcher: ($base + "-launcher-subagent-" + $slug + ".md") }
       )) as $san
 
-    # Validate + normalize gptpro entries (lens-only, optional posture; slug → filenames).
+    # Validate + normalize gpt-pro entries (lens-only, optional posture; slug → filenames).
     # gpt-pro is orchestrator-direct: no peer, no effort, its own launcher/res/log lane.
     | ($gp | map(
-        (.lens | chktext("gptpro .lens")) as $lens
-        | (.lens_desc | chktext("gptpro .lens_desc")) as $desc
+        (.lens | chktext("gpt-pro .lens")) as $lens
+        | (.lens_desc | chktext("gpt-pro .lens_desc")) as $desc
         | (.posture // null) as $posture
         | (if ($posture != null) and ((($posture == "deep-reasoning") or ($posture == "research-grounded")) | not)
-             then bad("gptpro .posture must be \"deep-reasoning\" or \"research-grounded\", got: " + ($posture|tostring)) else . end)
+             then bad("gpt-pro .posture must be \"deep-reasoning\" or \"research-grounded\", got: " + ($posture|tostring)) else . end)
         | ($lens | ascii_downcase | gsub("[^a-z0-9]+"; "-") | gsub("(^-|-$)"; "")) as $slug
-        | (if $slug == "" then bad("gptpro .lens must contain at least one [a-z0-9] character to form a launcher filename: " + $lens) else . end)
+        | (if $slug == "" then bad("gpt-pro .lens must contain at least one [a-z0-9] character to form a launcher filename: " + $lens) else . end)
         | { lens: $lens, lens_desc: $desc, slug: $slug, posture: $posture,
-            launcher: ($base + "-gptpro-" + $slug + ".md"),
-            res:      ($base + "-gptpro-" + $slug + ".res.md"),
-            log:      ($base + "-gptpro-" + $slug + ".log") }
+            launcher: ($base + "-gpt-pro-" + $slug + ".md"),
+            res:      ($base + "-gpt-pro-" + $slug + ".res.md"),
+            log:      ($base + "-gpt-pro-" + $slug + ".log") }
       )) as $gpn
 
     # All lens names across the whole run must be distinct (redundancy guard).
@@ -592,10 +589,10 @@ Add a top-level '## Context' heading (a '## ' line, not '###' or bare prose) and
     | ($san | map(.slug)) as $saslugs
     | (if ($saslugs|length) != ($saslugs|unique|length) then bad("two subagent lenses slugify to the same launcher filename; make the lens names more distinct") else . end)
     | ($gpn | map(.slug)) as $gpslugs
-    | (if ($gpslugs|length) != ($gpslugs|unique|length) then bad("two gptpro lenses slugify to the same launcher filename; make the lens names more distinct") else . end)
+    | (if ($gpslugs|length) != ($gpslugs|unique|length) then bad("two gpt-pro lenses slugify to the same launcher filename; make the lens names more distinct") else . end)
 
     # Fail-closed: a dispatch with no records at all is the N=0/M=0 no-op — not a Prism run.
-    | (if (($pxn|length) + ($san|length) + ($gpn|length)) == 0 then bad("dispatch has zero records (no parallax, subagent, or gptpro) — that is not a Prism run. Add agents, or for gpt-pro-only add gptpro records (prism 0 M needs M >= 1).") else . end)
+    | (if (($pxn|length) + ($san|length) + ($gpn|length)) == 0 then bad("dispatch has zero records (no parallax, subagent, or gpt-pro) — that is not a Prism run. Add agents, or for gpt-pro-only add gpt-pro records (prism 0 M needs M >= 1).") else . end)
 
     # Per-peer counts derived from the dispatch, not a hardcoded peer list.
     | ($pxn | group_by(.to) | map({key: .[0].to, value: length}) | from_entries) as $by_peer
@@ -608,12 +605,12 @@ Add a top-level '## Context' heading (a '## ' line, not '###' or bare prose) and
           subagents: ($san|length),
           by_peer: $by_peer,
           parallax_total: ($pxn|length),
-          gptpro: ($gpn|length),
+          "gpt-pro": ($gpn|length),
           dispatched_total: (($san|length) + ($pxn|length))
         },
         parallax: $pxn,
         subagents: $san,
-        gptpro: $gpn
+        "gpt-pro": $gpn
       }
   ' "$config") || die "prepare: validation failed (see message above)"
 
@@ -638,7 +635,7 @@ Add a top-level '## Context' heading (a '## ' line, not '###' or bare prose) and
   shape_quote=$(jq -r '.shape.partial_user_quote // ""' "$config")
   # The no-subagents variant always carries a gpt-pro count: the --dispatch parser defaults
   # an omitted Prism-M to 0, but a hand-authored --config .shape may omit .m — normalize it to
-  # 0 here so the variant floor check always asserts gpt-pro (else a stray gptpro record slips
+  # 0 here so the variant floor check always asserts gpt-pro (else a stray gpt-pro record slips
   # through unchecked) and the manifest records m:0 rather than null.
   [ "$shape_variant" = "no-subagents" ] && [ -z "$shape_m" ] && shape_m=0
   # A leftover scaffold FILL placeholder quote is not a real authorization — reject it
@@ -701,7 +698,7 @@ Add a top-level '## Context' heading (a '## ' line, not '###' or bare prose) and
       | [ emit("subagents"; ($c.subagents // 0); $enn),
           ( $ord[] as $p | emit($p; ($bp[$p] // 0); $enn) ),
           ( (($bp | keys) - $ord)[] as $x | "  \($x): unexpected non-standard peer in a full-roster run" ),
-          ( if $em != "" then emit("gptpro"; ($c.gptpro // 0); ($em | tonumber)) else empty end )
+          ( if $em != "" then emit("gpt-pro"; ($c."gpt-pro" // 0); ($em | tonumber)) else empty end )
         ]
       | .[]')
     if [ -n "$floor_err" ]; then
@@ -730,7 +727,7 @@ This is a PARTIAL prism. Either complete the roster — every standard tier at N
       | [ emit("subagents (forbidden in a no-subagents run)"; ($c.subagents // 0); 0),
           ( $ord[] as $p | emit($p; ($bp[$p] // 0); $enn) ),
           ( (($bp | keys) - $ord)[] as $x | "  \($x): unexpected non-standard peer" ),
-          ( if $em != "" then emit("gptpro"; ($c.gptpro // 0); ($em | tonumber)) else empty end )
+          ( if $em != "" then emit("gpt-pro"; ($c."gpt-pro" // 0); ($em | tonumber)) else empty end )
         ]
       | .[]')
     if [ -n "$variant_err" ]; then
@@ -847,13 +844,13 @@ A no-subagents run keeps ALL parallax tiers at N and drops only the Claude subag
   # and instruction-inversion-guard-dropping risk). prism-launch composes and
   # collects; it never reimplements gpt-pro's transport/run-id/recovery/semaphore —
   # the orchestrator still fires each `gpt-pro < launcher` call (see the summary).
-  local ngp; ngp=$(echo "$manifest_json" | jq '.gptpro | length')
+  local ngp; ngp=$(echo "$manifest_json" | jq '."gpt-pro" | length')
   if [ "$ngp" -gt 0 ]; then
-    local GPTPRO_MAX_BYTES=1000000
-    local gtmpl="$TEMPLATES_DIR/launcher-gptpro.tmpl"
-    local gcalib="$TEMPLATES_DIR/shared-gptpro-calibration.md"
-    [ -f "$gtmpl" ]   || die "prepare: gptpro launcher template missing: $gtmpl"
-    [ -f "$gcalib" ]  || die "prepare: gptpro calibration template missing: $gcalib"
+    local GPT_PRO_MAX_BYTES=1000000
+    local gtmpl="$TEMPLATES_DIR/launcher-gpt-pro.tmpl"
+    local gcalib="$TEMPLATES_DIR/shared-gpt-pro-calibration.md"
+    [ -f "$gtmpl" ]   || die "prepare: gpt-pro launcher template missing: $gtmpl"
+    [ -f "$gcalib" ]  || die "prepare: gpt-pro calibration template missing: $gcalib"
     # Grounding is NOT appended here — it is already in the embedded shared packet
     # (injected for every tier above), so gpt-pro inherits it. Only calibration is
     # gpt-pro-specific.
@@ -896,14 +893,14 @@ A no-subagents run keeps ALL parallax tiers at N and drops only the Claude subag
     local r
     while IFS= read -r r; do
       [ -n "$r" ] || continue
-      case "$r" in /*) ;; *) die "prepare: gptpro Reference must be an absolute path: $r" ;; esac
-      case "$r" in *[[:space:]]*|*'*'*|*'?'*|*'['*) die "prepare: gptpro Reference path must not contain whitespace or glob characters: $r" ;; esac
-      [ -e "$r" ] || die "prepare: gptpro Reference not found: $r"
-      [ -d "$r" ] && die "prepare: gptpro Reference is a directory, not a file: $r — list explicit files (gpt-pro cannot be given a directory to inline)."
-      [ -f "$r" ] || die "prepare: gptpro Reference is not a regular file: $r"
-      [ -r "$r" ] || die "prepare: gptpro Reference is not readable: $r"
+      case "$r" in /*) ;; *) die "prepare: gpt-pro Reference must be an absolute path: $r" ;; esac
+      case "$r" in *[[:space:]]*|*'*'*|*'?'*|*'['*) die "prepare: gpt-pro Reference path must not contain whitespace or glob characters: $r" ;; esac
+      [ -e "$r" ] || die "prepare: gpt-pro Reference not found: $r"
+      [ -d "$r" ] && die "prepare: gpt-pro Reference is a directory, not a file: $r — list explicit files (gpt-pro cannot be given a directory to inline)."
+      [ -f "$r" ] || die "prepare: gpt-pro Reference is not a regular file: $r"
+      [ -r "$r" ] || die "prepare: gpt-pro Reference is not readable: $r"
       local rb; rb=$(wc -c < "$r" | tr -d ' ')
-      [ "$rb" -le "$GPTPRO_MAX_BYTES" ] || die "prepare: gptpro Reference is ${rb} bytes, over the ${GPTPRO_MAX_BYTES}-byte cap on its own: $r — excerpt/shrink it for the whole run (all agents), not just gpt-pro."
+      [ "$rb" -le "$GPT_PRO_MAX_BYTES" ] || die "prepare: gpt-pro Reference is ${rb} bytes, over the ${GPT_PRO_MAX_BYTES}-byte cap on its own: $r — excerpt/shrink it for the whole run (all agents), not just gpt-pro."
     done <<EOF
 $refs
 EOF
@@ -934,16 +931,16 @@ EOF
     # with cat so a large packet/ref never sits in one shell variable.
     local gtpl; gtpl=$(cat "$gtmpl")
     local gn gi=0 glens gdesc glauncher ghdr gfirst gb
-    gn=$(echo "$manifest_json" | jq '.gptpro | length')
+    gn=$(echo "$manifest_json" | jq '."gpt-pro" | length')
     while [ "$gi" -lt "$gn" ]; do
-      glens=$(echo "$manifest_json"     | jq -r ".gptpro[$gi].lens")
-      gdesc=$(echo "$manifest_json"     | jq -r ".gptpro[$gi].lens_desc")
-      glauncher=$(echo "$manifest_json" | jq -r ".gptpro[$gi].launcher")
+      glens=$(echo "$manifest_json"     | jq -r ".\"gpt-pro\"[$gi].lens")
+      gdesc=$(echo "$manifest_json"     | jq -r ".\"gpt-pro\"[$gi].lens_desc")
+      glauncher=$(echo "$manifest_json" | jq -r ".\"gpt-pro\"[$gi].launcher")
       ghdr="${gtpl//\{\{LENS_NAME\}\}/$glens}"
       ghdr="${ghdr//\{\{LENS_DESC\}\}/$gdesc}"
-      case "$ghdr" in *'{{'*) die "prepare: unreplaced {{slot}} in rendered gptpro launcher for $glens" ;; esac
+      case "$ghdr" in *'{{'*) die "prepare: unreplaced {{slot}} in rendered gpt-pro launcher for $glens" ;; esac
       gfirst=$(printf '%s\n' "$ghdr" | head -1)
-      case "$gfirst" in CRITICAL:*) ;; *) die "prepare: rendered gptpro launcher does not start with the anti-recursion CRITICAL line" ;; esac
+      case "$gfirst" in CRITICAL:*) ;; *) die "prepare: rendered gpt-pro launcher does not start with the anti-recursion CRITICAL line" ;; esac
       {
         printf '%s\n' "$ghdr"
         cat "$packet"
@@ -962,7 +959,7 @@ EOF
         printf '\n'; cat "$gcalib"
       } > "$glauncher"
       gb=$(wc -c < "$glauncher" | tr -d ' ')
-      [ "$gb" -le "$GPTPRO_MAX_BYTES" ] || die "prepare: composed gptpro launcher for '$glens' is ${gb} bytes (cap ${GPTPRO_MAX_BYTES}) — shrink the shared packet or reference list for the whole run (all agents), not just gpt-pro. Launcher: $glauncher"
+      [ "$gb" -le "$GPT_PRO_MAX_BYTES" ] || die "prepare: composed gpt-pro launcher for '$glens' is ${gb} bytes (cap ${GPT_PRO_MAX_BYTES}) — shrink the shared packet or reference list for the whole run (all agents), not just gpt-pro. Launcher: $glauncher"
       gi=$((gi + 1))
     done
   fi
@@ -982,7 +979,7 @@ EOF
     | join(" ")')
 
   echo "prism-launch: run '$run_id' prepared — all checks passed."
-  echo "dispatch shape: subagents=$nsub ${peershape:-(no parallax)}$([ "$ngp" -gt 0 ] && echo " gptpro=$ngp")"
+  echo "dispatch shape: subagents=$nsub ${peershape:-(no parallax)}$([ "$ngp" -gt 0 ] && echo " gpt-pro=$ngp")"
   local ptot nnotif; ptot=$(echo "$manifest_json" | jq '.counts.parallax_total'); nnotif=$nsub
   [ "$ptot" -gt 0 ] && nnotif=$((nnotif + 1))
   nnotif=$((nnotif + ngp))
@@ -1000,7 +997,7 @@ EOF
     echo "design, NOT one batched command: each lens streams back and recovers independently."
     echo "Fire each YOURSELF as a backgrounded Bash call"
     echo "(run_in_background: true, timeout: 7260000; each is its own completion notification):"
-    echo "$manifest_json" | jq -r '.gptpro[] | "  gpt-pro < \(.launcher) > \(.res) 2> \(.log); printf %s \"$?\" > \((.res|rtrimstr(".res.md")) + ".exit")"'
+    echo "$manifest_json" | jq -r '."gpt-pro"[] | "  gpt-pro < \(.launcher) > \(.res) 2> \(.log); printf %s \"$?\" > \((.res|rtrimstr(".res.md")) + ".exit")"'
     echo "(The trailing 'printf … > .exit' records the exit code so 'results' can tell a finished-"
     echo "but-failed lens from one still running — copy the whole line.) On a non-zero exit, follow"
     echo "gpt-pro-relay's recovery table (124/255 reattach with the literal run-id from the task"
@@ -1301,10 +1298,10 @@ scaffold_include_hint() {
 
 # Emit M gpt-pro dispatch records with canonical default postures/names (Deep-Reasoning,
 # Research-Grounded, then suffixed for M>2) so a scaffold with --m is prepare-ready without
-# the author hand-writing the Type: gptpro / Posture: format from SKILL.md. Real names (not
+# the author hand-writing the Type: gpt-pro / Posture: format from SKILL.md. Real names (not
 # FILL) keep a --preset --out scaffold zero-FILL; the author edits lenses/postures to taste.
 # With no Include:, prepare defaults gpt-pro to packet-only (warns) — no Reference: line needed.
-scaffold_gptpro_records() {
+scaffold_gpt_pro_records() {
   local count="$1" gi=1 gname gpost gdesc
   [ "$count" -ge 1 ] 2>/dev/null || return 0
   printf '# gpt-pro lens(es): orchestrator-direct, M=%s (NOT a relay peer / not in the parallax fan).\n' "$count"
@@ -1316,7 +1313,7 @@ scaffold_gptpro_records() {
       gpost="research-grounded"; gname="Research-Grounded"; gdesc="weigh research-grounded judgment over live sources"
     fi
     [ "$gi" -gt 2 ] && gname="${gname}-${gi}"
-    printf 'Type: gptpro\nLens: %s\nLens-Desc: %s\nPosture: %s\n\n' "$gname" "$gdesc" "$gpost"
+    printf 'Type: gpt-pro\nLens: %s\nLens-Desc: %s\nPosture: %s\n\n' "$gname" "$gdesc" "$gpost"
     gi=$((gi + 1))
   done
 }
@@ -1421,7 +1418,7 @@ cmd_scaffold() {
           idx=$((idx + 1))
         done <<< "$peers"
       fi
-      scaffold_gptpro_records "$m"
+      scaffold_gpt_pro_records "$m"
     } > "${out:-/dev/stdout}"
     [ -n "$out" ] && echo "prism-launch: wrote prepare-ready dispatch → $out (write the packet $packet, then: prism-launch prepare --dispatch $out)" >&2
     return 0
@@ -1462,7 +1459,7 @@ cmd_scaffold() {
       i=$((i + 1)); printf 'Type: parallax\nTo: %s\nLens: FILL-%s\nLens-Desc: FILL\n\n' "$peer" "$i"; k=$((k + 1))
     done
   done <<< "$peers"
-  scaffold_gptpro_records "$m"
+  scaffold_gpt_pro_records "$m"
 }
 
 # ── clean ────────────────────────────────────────────────────────────────────
@@ -1496,14 +1493,14 @@ cmd_clean() {
   case "$base" in /tmp/prism-?*) ;; *) die "clean: refusing to remove '$base*' — only a specific /tmp/prism-<id>* is allowed" ;; esac
   case "${base#/tmp/prism-}" in */*) die "clean: run id must not contain '/': $target" ;; esac
 
-  # gpt-pro live-worker guard: a <base>-gptpro-<slug>.log that recorded a run_id but
+  # gpt-pro live-worker guard: a <base>-gpt-pro-<slug>.log that recorded a run_id but
   # whose .res.md is still absent/empty is a possibly-live detached macmini worker.
   # Deleting its log/res abandons the worker (unrecoverable) and invites a
   # double-submit on a later run. Refuse unless --force (which lists the run-ids so
   # the operator owns the abandonment). gpt-pro itself owns the recovery; we only guard.
   if [ "$force" = false ]; then
     local glog grun gres live=""
-    for glog in "$base"-gptpro-*.log; do
+    for glog in "$base"-gpt-pro-*.log; do
       [ -f "$glog" ] || continue
       # CONTRACT: this prefix mirrors the gpt-pro wrapper's stderr namespace —
       # gpt-pro-relay/scripts/gpt-pro prints "gpt-pro: run_id=<id> ...". Drift on either
@@ -1547,14 +1544,14 @@ cmd_results() {
   base="${packet%.md}"; result="${base}-result.json"
   id=$(jq -r '.id // "?"' "$manifest")
   ptot=$(jq -r '.counts.parallax_total // (.parallax|length) // 0' "$manifest")
-  gtot=$(jq -r '.counts.gptpro // (.gptpro|length) // 0' "$manifest")
+  gtot=$(jq -r '.counts."gpt-pro" // (."gpt-pro"|length) // 0' "$manifest")
   stot=$(jq -r '.counts.subagents // (.subagents|length) // 0' "$manifest")
   echo "prism-launch: results for '$id'"
   # Subagents-only run (an authorized partial): there are no file-backed lanes to
   # collect — subagent outputs live in the orchestrator's conversation. Report and
   # exit 0 rather than dying (prepare accepts this shape, so results must too).
   if [ "$ptot" -eq 0 ] && [ "$gtot" -eq 0 ]; then
-    [ "$stot" -gt 0 ] || die "results: manifest has no parallax, gptpro, or subagent entries"
+    [ "$stot" -gt 0 ] || die "results: manifest has no parallax, gpt-pro, or subagent entries"
     echo "subagents-only run: $stot Claude subagent(s) — outputs are in THIS conversation"
     echo "(Agent-tool results), not in any file. Nothing for 'results' to collect; ready to"
     echo "synthesize once every subagent completion notification has arrived."
@@ -1599,11 +1596,11 @@ cmd_results() {
   if [ "$gtot" -gt 0 ]; then
     echo "gpt-pro:"
     local gi=0 gn glens gres glog grun gexit gec
-    gn=$(jq '.gptpro | length' "$manifest")
+    gn=$(jq '."gpt-pro" | length' "$manifest")
     while [ "$gi" -lt "$gn" ]; do
-      glens=$(jq -r ".gptpro[$gi].lens" "$manifest")
-      gres=$(jq -r ".gptpro[$gi].res" "$manifest")
-      glog=$(jq -r ".gptpro[$gi].log" "$manifest")
+      glens=$(jq -r ".\"gpt-pro\"[$gi].lens" "$manifest")
+      gres=$(jq -r ".\"gpt-pro\"[$gi].res" "$manifest")
+      glog=$(jq -r ".\"gpt-pro\"[$gi].log" "$manifest")
       gexit="${gres%.res.md}.exit"
       # CONTRACT: prefix mirrors gpt-pro-relay/scripts/gpt-pro's stderr namespace (see clean's note).
       grun=$(sed -n 's/^gpt-pro: run_id=\([^ ]*\).*/\1/p' "$glog" 2>/dev/null | tail -1)
@@ -1697,12 +1694,12 @@ cmd_digest() {
   base="${packet%.md}"; result="${base}-result.json"
   id=$(jq -r '.id // "?"' "$manifest")
   ptotm=$(jq -r '.counts.parallax_total // (.parallax|length) // 0' "$manifest")
-  gtot=$(jq -r '.counts.gptpro // (.gptpro|length) // 0' "$manifest")
+  gtot=$(jq -r '.counts."gpt-pro" // (."gpt-pro"|length) // 0' "$manifest")
   has_counts=$(jq 'has("counts")' "$manifest")
   if [ -s "$result" ] && jq -e '(.results | type) == "array"' "$result" >/dev/null 2>&1; then result_ok=1; fi
   # Process the parallax lane only when this run actually has parallax peers (ptotm>0)
   # OR the manifest is a legacy/hand-written one with no counts block (then trust
-  # result.json). A real gptpro-only manifest has counts with parallax_total=0, so a
+  # result.json). A real gpt-pro-only manifest has counts with parallax_total=0, so a
   # stale/unrelated result.json never renders phantom parallax peers.
   if [ "$result_ok" -eq 1 ] && { [ "$ptotm" -gt 0 ] || [ "$has_counts" = "false" ]; }; then process_px=1; fi
   # If the manifest declares parallax peers but the fan hasn't written a valid
@@ -1711,7 +1708,7 @@ cmd_digest() {
     [ -f "$result" ] && die "digest: result file is empty or malformed: $result" \
                      || die "digest: no result file yet ($result) — has the parallax fan finished?"
   fi
-  [ "$process_px" -eq 1 ] || [ "$gtot" -gt 0 ] || die "digest: no parallax result to digest and no gptpro entries — nothing to digest"
+  [ "$process_px" -eq 1 ] || [ "$gtot" -gt 0 ] || die "digest: no parallax result to digest and no gpt-pro entries — nothing to digest"
   [ -n "$out" ] || out="${base}-digest.md"
 
   local total=0 extracted=0 warns=0 block
@@ -1721,7 +1718,7 @@ cmd_digest() {
     printf '# Deep-read a full .res.md when its digest dissents, looks weak, or is the tie-breaker.\n\n'
 
     # Parallax lane (relay peers) — from result.json. Gated on process_px so a
-    # gptpro-only run with a stale result.json never renders phantom peers.
+    # gpt-pro-only run with a stale result.json never renders phantom peers.
     if [ "$process_px" -eq 1 ]; then
       local n i to name res status lineage
       n=$(jq '.results | length' "$result")
@@ -1753,10 +1750,10 @@ cmd_digest() {
     # GPT-Pro lane (orchestrator-direct) — from each lens's .res.md (own lineage).
     if [ "$gtot" -gt 0 ]; then
       local gi=0 gn glens gres
-      gn=$(jq '.gptpro | length' "$manifest")
+      gn=$(jq '."gpt-pro" | length' "$manifest")
       while [ "$gi" -lt "$gn" ]; do
-        glens=$(jq -r ".gptpro[$gi].lens" "$manifest")
-        gres=$(jq -r ".gptpro[$gi].res" "$manifest")
+        glens=$(jq -r ".\"gpt-pro\"[$gi].lens" "$manifest")
+        gres=$(jq -r ".\"gpt-pro\"[$gi].res" "$manifest")
         total=$((total + 1))
         printf '## gpt-pro · %s  (lineage: gpt-pro)\n' "$glens"
         if [ ! -s "$gres" ]; then
@@ -1810,10 +1807,10 @@ scaffold:  emit a ready-to-fill dispatch skeleton for the symmetric default (N o
            --preset <review|design|diagnosis|compare|research|decision|writing> pre-fills eight
            lenses by task type (N=1). --out <path> writes a prepare-READY dispatch directly
            (requires --preset + --packet, i.e. zero FILLs) so the agent skips Write/Edit
-           entirely. --m <M> emits M ready Type: gptpro records (canonical Deep-Reasoning /
-           Research-Grounded postures — no hand-writing the gptpro format); --n 0 --m <M>
-           scaffolds a gpt-pro-only run (legal only with M >= 1). The record Type also
-           accepts the gpt-pro/gpt_pro spellings as aliases.
+           entirely. --m <M> emits M ready Type: gpt-pro records (canonical Deep-Reasoning /
+           Research-Grounded postures — no hand-writing the gpt-pro format); --n 0 --m <M>
+           scaffolds a gpt-pro-only run (legal only with M >= 1). The record Type has one
+           accepted spelling, the hyphenated 'gpt-pro'; 'gptpro'/'gpt_pro' are rejected.
            --no-subagents drops ONLY the Claude subagent tier (zero Agent calls) and keeps
            the full parallax fan at N (+ gpt-pro at M): emits Prism-Mode: partial / Variant:
            no-subagents / Prism-N / Prism-M / Partial-User-Quote, which prepare FLOOR-CHECKS
@@ -1856,17 +1853,17 @@ Dispatch records (line-oriented; see prism SKILL.md):
   Variant: no-subagents        # optional, partial only: the recognized "drop the Claude subagent
                                # tier, keep all parallax at N" shape. Carries Prism-N (>=1) + optional
                                # Prism-M + Partial-User-Quote; prepare floor-checks the kept tiers.
-  Type: parallax | subagent | gptpro
+  Type: parallax | subagent | gpt-pro
   - parallax: To/Lens/Lens-Desc required, Name optional (relay peer; effort is CLI-derived, never authored).
   - subagent: Lens/Lens-Desc only (Claude, Agent-tool).
-  - gptpro:   Lens/Lens-Desc required, optional Posture (deep-reasoning|research-grounded).
+  - gpt-pro:   Lens/Lens-Desc required, optional Posture (deep-reasoning|research-grounded).
               Orchestrator-direct — you fire each `gpt-pro < launcher` call prepare prints.
   Include: <spec>         # repeatable, top-level: the ergonomic file front door. prepare resolves
                           # specs via filectx → generates the packet's ### Reference Materials (path
                           # tiers read them) AND the gpt-pro inline list. Specs: /abs, @base-relative,
                           # or single-level glob. Include-Base: <dir> (default cwd), Include-From: <list>,
                           # Include-Tree: <dir> (recursive, capped). Mutually exclusive with Reference:.
-  Reference: <abs-path>   # repeatable, top-level: the legacy explicit gptpro inline list;
+  Reference: <abs-path>   # repeatable, top-level: the legacy explicit gpt-pro inline list;
                           # defaults to the packet's `### Reference Materials`; `none` = packet only.
                           # With NO Reference:/Include: and no valid bullets, gpt-pro defaults to
                           # packet-only with a loud warning (not an abort) — a self-contained run is fine.
