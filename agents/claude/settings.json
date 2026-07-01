@@ -26,5 +26,9 @@
   "skipAutoPermissionPrompt": true,
   "permissions": {
     "defaultMode": "bypassPermissions"
-  }
+  },
+  "deniedMcpServers": [
+    { "serverName": "claude.ai Google Drive" },
+    { "serverName": "claude.ai Google Calendar" }
+  ]
 }

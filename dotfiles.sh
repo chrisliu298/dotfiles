@@ -72,7 +72,6 @@ MANUAL_ENABLED_FILE="$ROOT/agents/extensions/manual-skills.enabled"
 
 MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: claude,codex or omit for both)
     "chrome-devtools|npx|chrome-devtools-mcp@latest --autoConnect --channel stable --no-usage-statistics|codex"
-    "codex|codex|mcp-server|codex"
 )
 
 # name|marketplace — Claude plugins installed + enabled at user scope (claude-only)
