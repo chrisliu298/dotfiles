@@ -53,7 +53,7 @@
     "transport": "claude-env",
     "base": "https://api.deepseek.com/anthropic",
     "key_env": "DEEPSEEK_API_KEY_INT",
-    "model": "deepseek-v4-pro",
+    "model": "deepseek-v4-pro[1m]",
     "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max" },
     "template": "costar"
   },

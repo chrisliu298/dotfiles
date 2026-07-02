@@ -301,6 +301,12 @@ xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex ex
 # consumer; if you change a model id, endpoint, or key var, update peers.json too
 # (and vice versa). See relay SKILL.md "Peer registry".
 
+# Haiku / small-fast (background) tier → deepseek-v4-flash: 3x cheaper miss
+# ($0.14 vs $0.435 /MTok) at no cost to the main agent. main/opus/sonnet/subagent
+# stay on deepseek-v4-pro[1m] — the [1m] pins the 1M context window (accepted by
+# the endpoint, verified 2026-07-02; flash is 1M-native so takes no suffix).
+# Matches DeepSeek's official Claude Code setup
+# (api-docs.deepseek.com/quick_start/agent_integrations/claude_code).
 _deepseek(){
     [[ -n "${DEEPSEEK_API_KEY_INT:-}" ]] || { echo 'DEEPSEEK_API_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }
     # Drop relay scripts dir from PATH so DeepSeek sessions can't shell out to relay.
@@ -314,12 +320,12 @@ _deepseek(){
         PATH="$_ds_path" \
         ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic \
         ANTHROPIC_AUTH_TOKEN="$DEEPSEEK_API_KEY_INT" \
-        ANTHROPIC_MODEL=deepseek-v4-pro \
-        ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-v4-pro \
-        ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4-pro \
-        ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-pro \
-        ANTHROPIC_SMALL_FAST_MODEL=deepseek-v4-pro \
-        CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-pro \
+        ANTHROPIC_MODEL=deepseek-v4-pro[1m] \
+        ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-v4-pro[1m] \
+        ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4-pro[1m] \
+        ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-flash \
+        ANTHROPIC_SMALL_FAST_MODEL=deepseek-v4-flash \
+        CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-pro[1m] \
         "$(command -v claude)" --disallowedTools "$_ds_deny" "$@"
 }
 ds(){   CLAUDE_CODE_EFFORT_LEVEL=max  _deepseek --dangerously-skip-permissions "$@"; }
@@ -340,6 +346,8 @@ dshl(){ (( $# )) || { echo 'Usage: dshl "<prompt>"'; return 1; }; CLAUDE_CODE_EF
 # needed (the endpoint rejects the `[1m]` suffix); model IDs keep their dots (the
 # endpoint rejects `mimo-v2-5-pro`). Authenticates with Bearer ANTHROPIC_AUTH_TOKEN.
 # Requires MIMO_API_KEY_INT in env (see ~/.zshenv.local).
+# Haiku / small-fast (background) tier → the cheaper mimo-v2.5 (¥1 vs ¥3 /MTok
+# miss); main/opus/sonnet/subagent stay on mimo-v2.5-pro.
 _mimo(){
     [[ -n "${MIMO_API_KEY_INT:-}" ]] || { echo 'MIMO_API_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }
     # Drop relay scripts dir from PATH so MiMo sessions can't shell out to relay.
@@ -356,8 +364,8 @@ _mimo(){
         ANTHROPIC_MODEL=mimo-v2.5-pro \
         ANTHROPIC_DEFAULT_OPUS_MODEL=mimo-v2.5-pro \
         ANTHROPIC_DEFAULT_SONNET_MODEL=mimo-v2.5-pro \
-        ANTHROPIC_DEFAULT_HAIKU_MODEL=mimo-v2.5-pro \
-        ANTHROPIC_SMALL_FAST_MODEL=mimo-v2.5-pro \
+        ANTHROPIC_DEFAULT_HAIKU_MODEL=mimo-v2.5 \
+        ANTHROPIC_SMALL_FAST_MODEL=mimo-v2.5 \
         CLAUDE_CODE_SUBAGENT_MODEL=mimo-v2.5-pro \
         "$(command -v claude)" --disallowedTools "$_mm_deny" "$@"
 }
@@ -373,7 +381,8 @@ mmhl(){ (( $# )) || { echo 'Usage: mmhl "<prompt>"'; return 1; }; _mimo -p --dan
 # using the Claude subscription. glm-5.2 supports a graded reasoning_effort
 # (max/xhigh/high/medium/low/minimal/none, default max); we pin max here — the
 # same level the relay/prism registry pins (peers.json extra_env). Model id keeps
-# its dot and takes no `[1m]` suffix (that's MiMo-only). Requires GLM_PLAN_KEY_INT in
+# its dot and takes no `[1m]` suffix (that selector is DeepSeek-specific; GLM-5.2
+# serves its native context directly). Requires GLM_PLAN_KEY_INT in
 # env (see ~/.zshenv.local).
 _glm(){
     [[ -n "${GLM_PLAN_KEY_INT:-}" ]] || { echo 'GLM_PLAN_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }
