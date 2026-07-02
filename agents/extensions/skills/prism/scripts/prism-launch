@@ -451,11 +451,11 @@ Add a top-level '## Context' heading (a '## ' line, not '###' or bare prose) and
     inc_base=$(jq -r '.includes.base // ""' "$config")
     [ -n "$inc_base" ] || inc_base="$PWD"
     case "$inc_base" in /*) ;; *) inc_base="$PWD/$inc_base" ;; esac
-    # Per-file cap is the gpt-pro 1 MB reality; total cap is 1 MB when a gpt-pro lens
-    # will inline the set, else a looser sanity bound (path tiers read selectively).
+    # Per-file cap is the gpt-pro 5 MB reality. Total cap is a uniform 5 MB: when a
+    # gpt-pro lens inlines the whole set it must fit gpt-pro's 5 MB submission cap, and
+    # that also serves as the looser sanity bound for path tiers (read selectively).
     inc_total_cap=5000000
-    [ "$(jq '."gpt-pro"|length' "$config")" -gt 0 ] && inc_total_cap=1000000
-    inc_args=(resolve --base "$inc_base" --json --max-bytes 1000000 --max-total "$inc_total_cap")
+    inc_args=(resolve --base "$inc_base" --json --max-bytes 5000000 --max-total "$inc_total_cap")
     while IFS= read -r x; do [ -n "$x" ] && inc_args+=(--from "$x"); done < <(jq -r '.includes.from[]?' "$config")
     while IFS= read -r x; do [ -n "$x" ] && inc_args+=(--tree "$x"); done < <(jq -r '.includes.tree[]?' "$config")
     inc_args+=(--)
@@ -846,7 +846,7 @@ A no-subagents run keeps ALL parallax tiers at N and drops only the Claude subag
   # the orchestrator still fires each `gpt-pro < launcher` call (see the summary).
   local ngp; ngp=$(echo "$manifest_json" | jq '."gpt-pro" | length')
   if [ "$ngp" -gt 0 ]; then
-    local GPT_PRO_MAX_BYTES=1000000
+    local GPT_PRO_MAX_BYTES=5000000
     local gtmpl="$TEMPLATES_DIR/launcher-gpt-pro.tmpl"
     local gcalib="$TEMPLATES_DIR/shared-gpt-pro-calibration.md"
     [ -f "$gtmpl" ]   || die "prepare: gpt-pro launcher template missing: $gtmpl"

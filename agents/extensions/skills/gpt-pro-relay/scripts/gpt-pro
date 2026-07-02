@@ -25,7 +25,7 @@ HOST=macmini
 RELAY_BIN=gpt-pro-relay
 RELAY_VENV=/Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro-relay
 SSH_OPTS=(-S none -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
-MAX_BYTES=1000000   # engine's 1 MB submission cap
+MAX_BYTES=5000000   # engine's 5 MB submission cap
 
 # Local file inclusion: GPT-Pro can't read local files, so -f/--file (and friends)
 # inline them via the shared `filectx` helper (sibling script). Resolve it robustly
@@ -59,7 +59,7 @@ Options:
   --max-wait <sec>      Caller-side poll deadline (default 7200 = 120 min).
   --dry-run             Resolve files + run-id, report the composed size, then exit. No quota used.
 
-Files are validated, secret-scanned, and capped (1 MB composed) BEFORE submit — no quota
+Files are validated, secret-scanned, and capped (5 MB composed) BEFORE submit — no quota
 burned on rejection. Put only your question on stdin; pass files with -f instead of hand-cat.
 
 Output: response on stdout; run-id + diagnostics + engine JSONL on stderr.

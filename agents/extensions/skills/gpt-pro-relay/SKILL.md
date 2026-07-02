@@ -33,7 +33,7 @@ detail; this is the shape:
    anything local to you (codebase, shell, this conversation). Don't hand-`cat` files
    into the prompt: pass each one with **`-f <path>`** (repeatable; globs and
    `@base-relative` paths ok; whole dirs via `--include-tree`) and `gpt-pro` inlines
-   them for you — validated, secret-scanned, and capped (1 MB composed) **before**
+   them for you — validated, secret-scanned, and capped (5 MB composed) **before**
    submit, no quota burned on rejection. The file on stdin then holds just your
    question (plus any prior decisions only you know). GPT-Pro *can* search the public
    web, so for external facts include the grounding directive — see "Grounding external
@@ -106,7 +106,7 @@ through its own browser/search tool — so don't attach public docs it can fetch
 what to look up (see "Grounding external facts"). The rule: private-local context comes in via
 `-f` (or paste); public-external facts are searched for.
 
-Err toward more context, not less — the 1 MB submission cap is generous, and a run that
+Err toward more context, not less — the 5 MB submission cap is generous, and a run that
 fails for missing context still burns 5–20 min. Put the **question** in a file (the **Write
 tool** sidesteps `$`/backtick/heredoc mangling) and attach **files** with `-f`:
 
@@ -225,7 +225,7 @@ Chrome stays alive between runs (no per-call launch cost after the first) — an
 
 ## If it fails
 
-The wrapper's **exit code** is the agent's decision key — every code maps to one action. Empty prompts, oversized prompts (>1 MB), and malformed run-ids are caught *before* any submission (exit 2 — no quota burned).
+The wrapper's **exit code** is the agent's decision key — every code maps to one action. Empty prompts, oversized prompts (>5 MB), and malformed run-ids are caught *before* any submission (exit 2 — no quota burned).
 
 | exit | meaning | do next |
 |---|---|---|

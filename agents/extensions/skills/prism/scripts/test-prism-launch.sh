@@ -672,10 +672,10 @@ expect_err "gpt-pro: a relative Reference -> fail-closed" "$LAUNCH" prepare --co
 # whitespace in reference path
 GCW="$TMP/gpw.json"; jq -n --arg p "$GPKN" --arg w "$TMP/has space.md" '{shared_packet:$p,references:[$w],parallax:[],subagents:[],"gpt-pro":[{lens:"X",lens_desc:"y"}]}' > "$GCW"
 expect_err "gpt-pro: a whitespace Reference path -> fail-closed" "$LAUNCH" prepare --config "$GCW"
-# oversize reference (> 1MB cap)
-BIGREF="$TMP/big.ref"; head -c 1100000 /dev/zero | tr '\0' 'x' > "$BIGREF"
+# oversize reference (> 5MB cap)
+BIGREF="$TMP/big.ref"; head -c 5100000 /dev/zero | tr '\0' 'x' > "$BIGREF"
 GCB="$TMP/gpbig.json"; jq -n --arg p "$GPKN" --arg b "$BIGREF" '{shared_packet:$p,references:[$b],parallax:[],subagents:[],"gpt-pro":[{lens:"X",lens_desc:"y"}]}' > "$GCB"
-expect_err "gpt-pro: an over-1MB Reference -> fail-closed before launch" "$LAUNCH" prepare --config "$GCB"
+expect_err "gpt-pro: an over-5MB Reference -> fail-closed before launch" "$LAUNCH" prepare --config "$GCB"
 # To/Name/Effort on a gpt-pro dispatch record
 GDE="$TMP/gpe.dispatch"; printf 'Shared-Packet: %s\nReference: none\n\nType: gpt-pro\nEffort: x\nLens: X\nLens-Desc: y\n' "$GPKB" > "$GDE"
 expect_err "gpt-pro: rejects an authored Effort line (no longer authored)" "$LAUNCH" prepare --dispatch "$GDE"
