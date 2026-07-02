@@ -36,15 +36,15 @@ If a bare `relay` ever returns "command not found" (a sandboxed/non-zsh/reset-en
 
 | Peer | When to pick | How to invoke |
 |---|---|---|
-| **Codex** (default) | Code review, security review, refactoring, agentic coding. GPT-5.5 lineage. Two effort tiers (`medium`/`xhigh`). | `relay call --name ...` (no `--to` needed) |
-| **Grok Build** | An independent xAI lineage (`grok-build`), xAI's agentic coding model. Runs via grok's own CLI in headless mode (not Anthropic-compatible). Effort `medium`/`high` (default `medium`). | `relay call --to grok-build --name ...` |
+| **Codex** (default) | Code review, security review, refactoring, agentic coding. GPT-5.5 lineage. Four effort tiers (`low`/`medium`/`high`/`xhigh`). | `relay call --name ...` (no `--to` needed) |
+| **Grok Build** | An independent xAI lineage (`grok-build`), xAI's agentic coding model. Runs via grok's own CLI in headless mode (not Anthropic-compatible). Three effort tiers (`low`/`medium`/`high`, default `medium`). | `relay call --to grok-build --name ...` |
 | **Grok Composer** | xAI's fast model (`grok-composer-2.5-fast`) — same lineage as Grok Build, lighter/cheaper. Use as a faster xAI option (not a distinct cross-vendor perspective). No effort knob. | `relay call --to grok-composer --name ...` |
 | **GLM** | An independent lineage (Zhipu/z.ai GLM-5.2), reached through z.ai's Anthropic-compatible endpoint. Use for another cross-vendor perspective. Pinned to `max` reasoning via the registry (like DeepSeek); ignores `--effort`. Text-only (no image input via relay). | `relay call --to glm --name ...` |
 | **Kimi** | An independent lineage (Moonshot Kimi K2.7-Code) via the **Kimi-for-Coding subscription plan** (`api.kimi.com/coding/`, auth via `ANTHROPIC_API_KEY`). Use for another cross-vendor perspective. Thinking pinned on via the registry (`CLAUDE_CODE_EFFORT_LEVEL=max`) — which selects K2.7-Code on the plan (thinking off would route to K2.6); ignores `--effort`. **Native WebFetch + WebSearch both work** (no Jina fallback needed). 256K context (vs 1M for DeepSeek/MiMo/GLM). Text-only (no image input via relay). | `relay call --to kimi --name ...` |
 | **DeepSeek** | Independent model family for true cross-vendor diversity, frontier reasoning, multi-step analysis. Open-weight V4-Pro (1.6T MoE). Always runs at `max` (DeepThink). Text-only (no image input via relay). | `relay call --to deepseek --name ...` |
 | **MiMo** | Another independent open-weight lineage (Xiaomi MiMo-V2.5-Pro, 1.02T MoE / 42B active, 1M context). Use for a further cross-vendor perspective. No effort knob. Text-only (no image input via relay). | `relay call --to mimo --name ...` |
 
-Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick Grok Build, GLM, Kimi, DeepSeek, or MiMo for a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax (Grok Composer is a faster xAI variant, not a distinct lineage from Grok Build). Of these, only Grok Build has an effort knob (`medium`/`high`); GLM, Kimi, DeepSeek, MiMo, and Grok Composer ignore `--effort`, so omit it for them. GLM requires `GLM_PLAN_KEY_INT` (a z.ai GLM Coding Plan key), Kimi requires `KIMI_PLAN_KEY_CN` (a Kimi-for-Coding key), DeepSeek requires `DEEPSEEK_API_KEY_INT`, and MiMo requires `MIMO_API_KEY_INT` (a MiMo pay-per-token API key) in the environment; Grok uses its own cached login (no key var).
+Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick Grok Build, GLM, Kimi, DeepSeek, or MiMo for a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax (Grok Composer is a faster xAI variant, not a distinct lineage from Grok Build). Of these, only Grok Build has an effort knob (`low`/`medium`/`high`); GLM, Kimi, DeepSeek, MiMo, and Grok Composer ignore `--effort`, so omit it for them. GLM requires `GLM_PLAN_KEY_INT` (a z.ai GLM Coding Plan key), Kimi requires `KIMI_PLAN_KEY_CN` (a Kimi-for-Coding key), DeepSeek requires `DEEPSEEK_API_KEY_INT`, and MiMo requires `MIMO_API_KEY_INT` (a MiMo pay-per-token API key) in the environment; Grok uses its own cached login (no key var).
 
 ### Peer registry
 
@@ -66,13 +66,14 @@ BODY
 
 ## Effort Levels
 
-`--effort` applies to Codex and Grok Build. Codex accepts `medium`/`xhigh`; Grok Build accepts `medium`/`high` (default `medium`). DeepSeek, GLM, and Kimi run with reasoning pinned on via the registry (DeepSeek via DeepThink; GLM via `reasoning_effort: max`; Kimi via `CLAUDE_CODE_EFFORT_LEVEL=max`, which selects K2.7-Code on the coding plan — thinking off would route to K2.6), and MiMo and Grok Composer have no effort knob. None of them takes a graded `--effort`, so the flag is silently ignored or omitted on those calls.
+`--effort` applies to Codex and Grok Build. Codex accepts `low`/`medium`/`high`/`xhigh`; Grok Build accepts `low`/`medium`/`high` (both default `medium`). These are **different vendors' scales, not a shared standard** — a level name means what each vendor defines, so `high` on Codex (OpenAI, [reasoning guide](https://developers.openai.com/api/docs/guides/reasoning)) and `high` on Grok Build (xAI, [reasoning docs](https://docs.x.ai/developers/model-capabilities/text/reasoning)) are not equivalent depths, and neither vendor guarantees a fixed token progression across levels. Pick the level from the model you're calling, not by analogy to the other. DeepSeek, GLM, and Kimi run with reasoning pinned on via the registry (DeepSeek via DeepThink; GLM via `reasoning_effort: max`; Kimi via `CLAUDE_CODE_EFFORT_LEVEL=max`, which selects K2.7-Code on the coding plan — thinking off would route to K2.6), and MiMo and Grok Composer have no effort knob. None of them takes a graded `--effort`, so the flag is silently ignored or omitted on those calls.
 
 | Level | When to use |
 |-------|-------------|
+| `low` | Codex and Grok Build. Quick, cheap turnarounds — simple lookups, small mechanical edits, sanity checks where deep reasoning isn't worth the latency. |
 | `medium` | **Default for Codex and Grok Build.** Balanced starting point for code review, tests, bug fixes, and most refactoring. |
+| `high` | Codex and Grok Build — the deeper reasoning tier (the top tier for Grok Build). Use for hard analysis where the extra latency is worth it. |
 | `xhigh` | Codex only. Hard architecture work, deep security review, or eval-bound tasks worth the extra latency. |
-| `high` | Grok Build only — its deeper reasoning tier. Use for hard analysis where the extra latency is worth it. |
 
 Before raising effort, improve the prompt first — add outcome-first success criteria, stop rules, verification steps, and completeness criteria.
 

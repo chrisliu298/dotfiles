@@ -689,7 +689,7 @@ Subcommands:
 
 Call options:
   --name <slug>      Call identifier
-  --effort <level>   Reasoning effort: codex (medium/xhigh), grok-build (medium/high).
+  --effort <level>   Reasoning effort: codex (low/medium/high/xhigh), grok-build (low/medium/high).
                      Ignored for grok-composer, glm, kimi, deepseek (always max), and mimo (no knob).
   --body-only        Strip frontmatter from response output
   --from <peer>      Override caller detection (normally claude)

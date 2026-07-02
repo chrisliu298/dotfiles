@@ -4,7 +4,7 @@
     "lineage": "codex",
     "transport": "codex",
     "model": "gpt-5.5",
-    "effort_values": ["medium", "xhigh"],
+    "effort_values": ["low", "medium", "high", "xhigh"],
     "default_effort": "medium",
     "template": "codex"
   },
@@ -13,7 +13,7 @@
     "lineage": "grok",
     "transport": "grok",
     "model": "grok-build",
-    "effort_values": ["medium", "high"],
+    "effort_values": ["low", "medium", "high"],
     "default_effort": "medium",
     "template": "costar"
   },
