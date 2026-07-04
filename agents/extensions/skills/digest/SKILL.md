@@ -25,7 +25,7 @@ Re-emit in this order (mirrors the Response Contract in CLAUDE.md / AGENTS.md):
 
 1. **Answer** — one line: the outcome, answer, or decision. Never buried.
 2. **Short version** the reader can act on without scrolling:
-   - Code / changes → a table, one row per file: `file · what changed · why · risk · how to check`.
+   - Code / changes → a Markdown table with real `|`-delimited columns, one row per file: `| File | What changed | Why | Risk | How to check |` (never a single column with `·`-joined fields).
    - Research / analysis → the key findings as tight bullets, most-important first.
 3. **Detail** — keep logs, long rationale, alternatives, and full citations below the short version; do not delete them. Add pull handles ("expand the X risk", "show the full diff"). If the detail runs past ~one screen, `Write` it to `~/.ai/reports/<timestamp>-<task-slug>.md` and leave only an index + path inline.
 

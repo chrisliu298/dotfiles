@@ -46,7 +46,7 @@ Behavioral defaults for how to work — on any task, code or not. Under ambiguit
 Use this for substantial final responses; skip it for trivial replies and direct questions.
 
 - **Answer first, self-contained.** Open with the outcome; the message must stand alone — the reader hasn't seen your reasoning or the conversation.
-- **Then a short version that's enough to act on.** ~7 bullets max, or for code changes a per-file table (`file · what changed · why · risk · how to check`). Don't flatten the real answer to fit.
+- **Then a short version that's enough to act on.** ~7 bullets max, or for code changes a per-file Markdown table with real `|`-delimited columns — `| File | What changed | Why | Risk | How to check |`, one row per file (never a single column with `·`-joined fields). Don't flatten the real answer to fit.
 - **Flag blockers, not doubt.** State verified results plainly; caveat only when it changes the reader's next move (failed check, answer-flipping assumption, or irreversible action you already took).
 - **Pull, don't push.** Keep logs and long rationale below the short version; if detail runs past ~one screen, write it to `~/.ai/reports/<timestamp>-<task-slug>.md` and show an index + path.
 - **Terminal-safe layout.** Layer with section order, not `<details>` folding; reserve HTML for browser- or GitHub-rendered output.
