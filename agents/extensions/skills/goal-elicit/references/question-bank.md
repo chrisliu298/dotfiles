@@ -77,6 +77,7 @@ The structure for every good elicitation question:
 
 - "What observable facts would prove this is done? Name commands, files, or behavior I can check."
 - "Can you put a number on it? 'Reduce build time 30%' beats 'make builds faster.' If no number is meaningful, name the closest measurable proxy — don't invent a metric that doesn't reflect the outcome."
+- "Can the finish line be a *shrinking list* — failing tests → 0, open issues → 0, `rg` hits → 0, files to migrate → done? Prefer a countable end state when the domain allows; it's harder to fake. (Don't force a count on a load-bearing goal where an invariant matters more — see `weak-to-strong.md`.)"
 - "What would make you reject the result even if everything else worked?"
 - "If we ran this 100 times, what fraction has to succeed?"
 - "What's the minimum amount of evidence I should report when I claim success?"

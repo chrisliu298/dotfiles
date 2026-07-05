@@ -86,6 +86,12 @@ for repair attempts:
 (`repair_budget` defaults to 3.) Round up for large artifacts; when unsure, err high — an over-tight
 `<N>` just ends the session early with a TIMEOUT report, which is recoverable.
 
+This TIMEOUT is an **evaluator/runaway backstop, not a success criterion** — it lives only in the
+`/goal` message, never in the artifact's `objective` or `done_when`. It is *not* the "arbitrary turn
+cap baked into the objective" that goal-authoring guidance warns against: the blind transcript
+evaluator has no other runaway signal, so keep it — do not move it into the contract, and do not
+delete it as a stray cap.
+
 ## Per-shape derivation
 
 `<TOP-LEVEL CHECK(S)>` must name what goal-drive **echoes at FINISH** (the goal-completion

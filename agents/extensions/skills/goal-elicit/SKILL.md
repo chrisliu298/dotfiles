@@ -91,6 +91,8 @@ When a forced-choice batch carries a recommended default on each question, give 
 
 Show the draft artifact in compressed form: objective, scope in/out, constraints, acceptance (at least one Gherkin, or per-item/per-phase acceptance for checklist/phased), `done_when` (each item mapped to evidence), risks, rollback. Ask the user to **approve, edit, or mark blocked** — not yes/no.
 
+If the draft still reads like *effort* rather than *proof* — an objective describing what to work on, or a `done_when` that isn't a checkable command/metric/state — consult `references/weak-to-strong.md` for whole-goal rewrites before finalizing.
+
 ### Phase 5 — Confirm (1 turn)
 
 After incorporating the user's edits, write the final artifact with `status: ready`. The final confirmation is *not* "are we good now?" It is:
@@ -222,6 +224,7 @@ If a goal artifact already exists in the working directory — `GOAL.md`, or `<i
 - `references/cynefin-triage.md` — Phase 0 decision tree with worked examples.
 - `references/question-bank.md` — worked questions per taxonomy category.
 - `references/anti-patterns.md` — failure-mode table with the prompt move that engineers each one out.
+- `references/weak-to-strong.md` — Phase 4 drafting aid: whole-goal weak→strong rewrites (proof-not-effort shape, queue-shaped + existing-verification habits).
 - `references/goal-guardrail.md` — the Phase 5 `/goal` execution message (Claude Code + Codex): emit templates for both, per-shape derivation, and caveats.
 
 Read the references when you need them — not all up front. Long-form material is there so the model loads it only when relevant.
