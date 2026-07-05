@@ -168,6 +168,29 @@ P2a="$TMP/p2a.md"; printf '## Full Question\nq\n\n## Context\nc\n\n## Constraint
 C2a="$TMP/c2a.json"; jq -n --arg p "$P2a" '{shared_packet:$p,parallax:[],subagents:[{lens:"Xa",lens_desc:"y"}]}' > "$C2a"
 expect_err "rejects a ## Constraints section missing the anti-recursion guard" "$LAUNCH" prepare --config "$C2a"
 
+# dispatch-only keys mistakenly written into the packet BODY are inert → fail-closed.
+# Include: in the packet (the common misplacement) attaches no files silently.
+P2i="$TMP/p2i.md"; printf '## Full Question\nq\n\n## Context\nc\nInclude: /etc/hostname\n' > "$P2i"
+C2i="$TMP/c2i.json"; jq -n --arg p "$P2i" '{shared_packet:$p,parallax:[],subagents:[{lens:"Xi",lens_desc:"y"}]}' > "$C2i"
+expect_err "rejects a stray Include: in the packet body (inert, belongs in dispatch)" "$LAUNCH" prepare --config "$C2i"
+# actionable message names the misplaced line + where it belongs
+F2ERR=$("$LAUNCH" prepare --config "$C2i" 2>&1 || true)
+printf '%s\n' "$F2ERR" | grep -q 'belong in the .dispatch file\|belongs in\|dispatch-only key' && ok "stray-key error is actionable" || bad "stray-key error not actionable"
+# the bounce happens BEFORE any packet mutation (no canonical blocks injected)
+grep -q '^## Constraints' "$P2i" && bad "packet was mutated despite the stray-key bounce" || ok "stray-key bounce leaves the packet unmutated"
+# other dispatch-only keys (Shared-Packet:/Prism-Mode:) are caught too
+P2p="$TMP/p2p.md"; printf '## Full Question\nq\n\n## Context\nc\nPrism-Mode: full\n' > "$P2p"
+C2p="$TMP/c2p.json"; jq -n --arg p "$P2p" '{shared_packet:$p,parallax:[],subagents:[{lens:"Xp",lens_desc:"y"}]}' > "$C2p"
+expect_err "rejects a stray Prism-Mode: in the packet body" "$LAUNCH" prepare --config "$C2p"
+# fence-aware: a packet whose QUESTION is about prism may quote these keys in a code block
+P2f="$TMP/p2f.md"; printf '## Full Question\nHow does the dispatch format work?\n\n## Context\nExample:\n```\nInclude: /some/file.md\nPrism-Mode: full\n```\ndone\n' > "$P2f"
+C2f="$TMP/c2f.json"; jq -n --arg p "$P2f" '{shared_packet:$p,parallax:[],subagents:[{lens:"Xf",lens_desc:"y"}]}' > "$C2f"
+expect_ok "allows dispatch keys quoted inside a fenced code block (prism-about-prism packet)" "$LAUNCH" prepare --config "$C2f"
+# fence-aware for tilde (~~~) fences too — a common inner-fence pattern when the outer block is ```
+P2t="$TMP/p2t.md"; printf '## Full Question\nHow does prism work?\n\n## Context\nExample:\n~~~\nInclude: /some/file.md\nPrism-Mode: full\n~~~\ndone\n' > "$P2t"
+C2t="$TMP/c2t.json"; jq -n --arg p "$P2t" '{shared_packet:$p,parallax:[],subagents:[{lens:"Xt",lens_desc:"y"}]}' > "$C2t"
+expect_ok "allows dispatch keys quoted inside a tilde-fenced code block" "$LAUNCH" prepare --config "$C2t"
+
 # relative shared_packet
 C3="$TMP/c3.json"; jq -n '{shared_packet:"relative/path.md",parallax:[],subagents:[]}' > "$C3"
 expect_err "rejects relative shared_packet path" "$LAUNCH" prepare --config "$C3"
@@ -1015,8 +1038,14 @@ grep -q 'PRISM-INCLUDE-START' "$PKI" \
 [ "$(jq -r '.references|length' "$TMP/inc1-config.normalized.json")" = "2" ] \
   && ok "Include: sets config.references to the resolved set" || bad "Include: references not set"
 
-# 2) re-run idempotency: exactly one managed region
-"$LAUNCH" prepare --dispatch "$TMP/inc1.dispatch" >/dev/null 2>&1
+# 2) re-run idempotency: the re-run must SUCCEED and leave exactly one managed region.
+# The success assertion is load-bearing: it pins that the stray-key packet-body guard does
+# NOT false-positive on the packet's OWN injected canonical blocks + generated PRISM-INCLUDE
+# region (whose bullets are `- /path` and whose sentinels start `<!--`, never line-leading
+# flagged keys). The guard scans the pre-clear packet on every re-run, so this is its only
+# regression test — a future managed-region format change that emitted a line-leading key
+# would silently break every Include: re-run without it.
+expect_ok "Include: re-run on a managed-region+canonical-block packet still prepares (stray-key guard no false-positive)" "$LAUNCH" prepare --dispatch "$TMP/inc1.dispatch"
 [ "$(grep -c 'PRISM-INCLUDE-START' "$PKI")" = "1" ] \
   && ok "Include: re-run leaves exactly one managed region (idempotent)" || bad "Include: duplicate region on re-run"
 

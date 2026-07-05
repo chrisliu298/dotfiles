@@ -366,6 +366,27 @@ Context is load-bearing author content (prepare cannot synthesize it, unlike Con
 
   <shared evidence; nest ALL domain content here as ### subsections — do NOT leave it under ## Full Question or outside any section>
 Add a top-level '## Context' heading (a '## ' line, not '###' or bare prose) and re-run."
+  # Dispatch-only keys mistakenly written into the packet BODY are silently inert:
+  # `Include:` here attaches NO files (filectx only resolves specs from the dispatch),
+  # and `Shared-Packet:`/`Prism-Mode:`/`Prism-N:` etc. set NO shape — the run proceeds
+  # with references missing and no error, the exact failure this guard catches. Scan
+  # BEFORE any mutation (managed-region clear / canonical-block injection) so a bounce
+  # leaves the packet untouched. Fence-aware (``` and ~~~): a packet whose QUESTION is
+  # about prism itself may legitimately quote these keys inside a fenced code block —
+  # those are skipped; only a bare line-leading key (the misplacement fingerprint) bounces.
+  # The toggle is a simple ```/~~~ counter, not a CommonMark parser: an unclosed fence
+  # can hide a later stray key (a fail-OPEN that just degrades to the pre-guard status
+  # quo, never a false bounce), and an indented key (`  Include:`) is column-0-anchored
+  # by design (the misplacement fingerprint), so it is intentionally not matched.
+  local stray_keys
+  stray_keys=$(awk '
+    /^[[:space:]]*(```|~~~)/ { fence = !fence; next }
+    !fence && /^(Include|Include-Base|Include-From|Include-Tree|Shared-Packet|Prism-Mode|Prism-N|Prism-M|Variant|Partial-User-Quote):/ {
+      printf "  line %d: %s\n", NR, $0
+    }' "$packet")
+  [ -z "$stray_keys" ] || die "prepare: the packet ($packet) has dispatch-only key(s) in its body:
+$stray_keys
+These belong in the .dispatch file (the one you pass to 'prepare --dispatch'), NOT the packet — here they are inert (they attach no files and set no shape, so the run would silently proceed with references missing). Move every 'Include:' / 'Include-*' / 'Shared-Packet:' / 'Prism-*' / 'Variant:' / 'Partial-User-Quote:' line out of the packet and into the dispatch, then re-run. (If a key is genuine packet prose — e.g. the question is about prism itself — put it inside a \`\`\` code fence.)"
   # Clear any prism-managed Include region up front (UNCONDITIONAL), so a packet
   # reused across a mode switch (an Include: run, then a Reference:/no-ref run on the
   # SAME packet file) cannot leave an orphaned ### Reference Materials region that
