@@ -1,12 +1,13 @@
 ---
 description: |
-  Recall an earlier statement from THIS project's PAST Claude sessions — an undocumented decision,
-  preference, constraint, or fact the user now refers back to — by lexically searching all prior
-  session transcripts for this cwd, loading the best match into your working context, and printing
-  ONE confirmation line (date + session + gist) so a wrong match is caught before you act. Trigger on
-  "/recall" or natural references to a prior shared statement you're expected to remember: "what did
-  we decide about X", "the approach/decision we agreed on", "like I said / as I mentioned earlier",
-  "remember when we…", "what was my preference for…", "didn't we already settle X". Do NOT trigger on
+  Recall a detail from THIS project's PAST Claude sessions — a fact, value, name, decision,
+  preference, or constraint the user now refers back to but that was never written into docs or
+  code — by lexically searching all prior session transcripts for this cwd, loading the best match
+  into your working context, and printing ONE confirmation line (date + session + gist) so a wrong
+  match is caught before you act. Trigger on "/recall" or natural references to something stated in a
+  prior session you're expected to remember: "what did we say about X", "the value we used for X",
+  "like I said / as I mentioned earlier", "remember when we…", "what was my preference
+  for…", "didn't we already settle X". Do NOT trigger on
   ordinary past-tense narration that carries its own content ("earlier I ran the tests"), git/docs/code
   lookup, broad "catch me up" summaries, curated cross-session facts (memory), or task state (todo).
   Treat any recalled item as evidence, not current truth — re-verify before acting.
@@ -16,11 +17,11 @@ allowed-tools: Bash, Read
 
 # Recall
 
-You often refer back to something established in an **earlier conversation** — "use the retry cap we
-agreed on", "like I said about the auth flow" — that was never written into docs or code. The
-decision is gone from your context but the **raw transcript is still on disk**. This skill searches
-this project's past Claude sessions for that statement, loads it into your working context, and
-prints one confirmation line so the user can catch a wrong match before you act on it.
+You often refer back to something stated in an **earlier conversation** — "the rate limit we landed
+on", "the port that server runs on", "use the retry cap we agreed on" — that was never written into
+docs or code. The detail is gone from your context but the **raw transcript is still on disk**. This
+skill searches this project's past Claude sessions for that statement, loads it into your working
+context, and prints one confirmation line so the user can catch a wrong match before you act on it.
 
 The mechanism is a bundled script. **You never read the raw JSONL yourself** — this project's
 transcript store is hundreds of MB; re-reading it would overflow your window. The script does the
@@ -31,8 +32,8 @@ you a small ranked list; you integrate the top hit and keep working.
 
 - The user invokes `/recall`, or refers in natural language to a prior shared statement they expect
   you to remember (the trigger phrases in the description).
-- You're about to act and realize the right behavior depends on a decision/preference the user made
-  in an earlier session that isn't in the repo.
+- You're about to act and realize the right behavior depends on a detail — a value, name, decision,
+  or preference — the user stated in an earlier session that isn't in the repo.
 
 Skip it when: the fact is **a curated cross-session note** (use **memory**) or **durable task state**
 (use **todo** / `TODO.md`); the answer is in the repo/git/docs (read those); or the user is just
@@ -50,7 +51,7 @@ RECALL=~/dotfiles/agents/extensions/skills/recall/scripts/recall.py
    for *prior* sessions (the current session is excluded from the search by default).
 
 2. **Search.** Build a query from the user's topic (strip the recall boilerplate yourself —
-   "what did we decide about" — and pass the substantive nouns; expand obvious synonyms):
+   "what did we say/decide about" — and pass the substantive nouns; expand obvious synonyms):
    ```bash
    uv run "$RECALL" search --cwd "$PWD" --q "auth retry cap" --k 5
    ```
@@ -69,9 +70,9 @@ RECALL=~/dotfiles/agents/extensions/skills/recall/scripts/recall.py
    ```
    Print **exactly the chosen candidate's `confirmation` line** — nothing more — then continue.
    **Window caveat:** the default scan is the recent window. If `stats.truncated` is true and you're
-   not certain — or the user's phrasing implies an *older* decision ("originally", "way back", "a
+   not certain — or the user's phrasing implies an *older* statement ("originally", "way back", "a
    while ago") — re-run with `--max-files 0` (full history) before trusting it: a recent near-match can
-   outrank the real older decision that was never scanned, and that wrong hit will NOT trigger the
+   outrank the real older statement that was never scanned, and that wrong hit will NOT trigger the
    `no_match` escalation on its own.
 
 4. **`ambiguous`** (no clear winner) → do **not** silently pick. Show the top 2–3 candidate gists +
@@ -85,7 +86,7 @@ RECALL=~/dotfiles/agents/extensions/skills/recall/scripts/recall.py
    uv run "$RECALL" search --cwd "$PWD" --q "auth retry cap" --max-files 0 --all   # last resort
    ```
    Still nothing → say so plainly and ask the user to remind you. **Never fabricate a recalled
-   decision.**
+   detail.**
 
 6. **Evidence, not current truth.** A recalled statement is what *was* true at a past turn; files,
    branches, and decisions may have changed since. Before acting on any recalled claim — especially
@@ -96,7 +97,7 @@ RECALL=~/dotfiles/agents/extensions/skills/recall/scripts/recall.py
    with refined terms or a wider scope (`--max-files 0`), and don't re-surface the rejected hit.
 
 8. **Optionally promote to memory (propose, don't auto-write).** After a *confirmed, durable* recall
-   (a standing decision/preference, not a one-off), you may offer: "want me to save this to memory so
+   (a standing decision, preference, or fact, not a one-off), you may offer: "want me to save this to memory so
    the next recall is instant?" Write a memory file **only if the user says yes** — never auto-write
    (it would bloat the curated store). See **memory**.
 
@@ -105,7 +106,7 @@ RECALL=~/dotfiles/agents/extensions/skills/recall/scripts/recall.py
 - **Attribution: user vs agent.** A `role: user` hit is something *you* (the user) said — phrased
   "you decided / you said". A `role: assistant` hit is the *agent's* past turn — the confirmation
   flags it "agent turn — unconfirmed by you". Never present a past agent proposal (which may have been
-  rejected, or wrong) as the user's established decision; prefer user-authored hits, and treat an
+  rejected, or wrong) as something the user established; prefer user-authored hits, and treat an
   assistant-only match as a lead to verify, not ground truth.
 - **Don't dump the search to the user.** Its visible effect is the one confirmation line + your next
   actions having continuity — not a results report. The JSON is for you.
@@ -114,7 +115,7 @@ RECALL=~/dotfiles/agents/extensions/skills/recall/scripts/recall.py
 - **Relay/headless noise is excluded by default** (only user-interactive sessions are searched). Pass
   `--all` to include relay/`claude -p` sessions if you're deliberately looking for one.
 - **No match means no match.** A `no_match` after escalation is a real answer — say it; do not invent
-  a plausible-sounding decision to fill the gap.
+  a plausible-sounding detail to fill the gap.
 
 ## How it works (pointers)
 
