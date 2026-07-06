@@ -38,6 +38,12 @@ alias us="uv sync"
 alias ua="uv add"
 
 # =============================================================================
+# Disk usage
+# =============================================================================
+# sz / szt are functions in shell/.functions (printed, sorted sizes + total).
+alias dua="gdu"          # interactive TUI to drill into disk usage (current dir)
+
+# =============================================================================
 # Git
 # =============================================================================
 alias glog="git log --oneline --graph --decorate --all"

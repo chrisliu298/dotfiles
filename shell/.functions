@@ -242,6 +242,25 @@ arxiv() {
 }
 
 # =============================================================================
+# Disk usage
+# =============================================================================
+
+# Size of every entry (files + dirs, incl. hidden) in a dir, largest first,
+# with a total. Usage: sz [path]   (defaults to the current dir)
+sz() {
+    local dir="${1:-.}"
+    du -sh -- "$dir"/*(DN) 2>/dev/null | sort -rh
+    printf '%s\n' '────────'
+    du -sh -- "$dir" 2>/dev/null | awk -v d="$dir" '{print $1"\ttotal ("d")"}'
+}
+
+# Same, but only the N biggest entries (default 10). Usage: szt [N] [path]
+szt() {
+    local n="${1:-10}" dir="${2:-.}"
+    du -sh -- "$dir"/*(DN) 2>/dev/null | sort -rh | head -n "$n"
+}
+
+# =============================================================================
 # Claude Code / Codex
 # =============================================================================
 
