@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code status line — Codex CLI palette (ANSI named colors only)
+# Claude Code status line — GitHub Light/Dark terminal palette (ANSI named colors only)
 # Model | project | branch* | 9m | $1.45 | +141/-25 | 5h 37% 2h41m | 7d 26% 4d3h | ctx 26% 38k/200k
 
 input=$(cat)
@@ -43,9 +43,9 @@ input=$(cat)
 #   ' "$usage_cache" 2>/dev/null)"
 # fi
 
-# ── Colors (Codex CLI — ANSI named colors only) ───────────────────
+# ── Colors (GitHub Light/Dark terminal palette — ANSI named colors only) ──
 reset='\033[0m'
-dim='\033[2m'
+muted='\033[90m'
 bold='\033[1m'
 cyan='\033[36m'                      # branding: project, worktree
 magenta='\033[35m'                   # accent: branch, links
@@ -174,19 +174,19 @@ rl_reset_fmt() {
 }
 
 # ── Build single-line output ──────────────────────────────────────
-sep="${dim} · ${reset}"
+sep="${muted} · ${reset}"
 parts=()
 
 # Session info
 if [ -n "$model" ]; then
-  model_seg="${dim}${model}"
+  model_seg="${muted}${model}"
   [ -n "$effort_level" ] && model_seg+=" ${effort_level}"
   parts+=("${model_seg}${reset}")
 fi
 [ -n "$project" ] && parts+=("${cyan}${project}${reset}")
 [ -n "$branch_segment" ] && parts+=("$branch_segment")
 [ -n "$wt_name" ] && parts+=("${cyan}[${wt_name}]${reset}")
-[ -n "$agent_name" ] && parts+=("${dim}${agent_name}${reset}")
+[ -n "$agent_name" ] && parts+=("${muted}${agent_name}${reset}")
 
 if [ -n "$vim_mode" ]; then
   if [ "$vim_mode" = "NORMAL" ]; then
@@ -208,23 +208,23 @@ if [ -n "$duration_ms" ] && [ "$duration_ms" != "0" ]; then
   else
     dur="${total_s}s"
   fi
-  [ "$total_s" -gt 0 ] && parts+=("${dim}${dur}${reset}")
+  [ "$total_s" -gt 0 ] && parts+=("${muted}${dur}${reset}")
 fi
 
 # Rate limits (text only, no bars)
 if [ -n "$rl_5h" ]; then
   rl5_pct="${rl_5h%.*}"
-  rl5_seg="${dim}5h ${rl5_pct:-0}%${reset}"
+  rl5_seg="${muted}5h ${rl5_pct:-0}%${reset}"
   rl5_reset=$(rl_reset_fmt "$rl_5h_reset")
-  [ -n "$rl5_reset" ] && rl5_seg+=" ${dim}${rl5_reset}${reset}"
+  [ -n "$rl5_reset" ] && rl5_seg+=" ${muted}${rl5_reset}${reset}"
   parts+=("$rl5_seg")
 fi
 
 if [ -n "$rl_7d" ]; then
   rl7_pct="${rl_7d%.*}"
-  rl7_seg="${dim}7d ${rl7_pct:-0}%${reset}"
+  rl7_seg="${muted}7d ${rl7_pct:-0}%${reset}"
   rl7_reset=$(rl_reset_fmt "$rl_7d_reset")
-  [ -n "$rl7_reset" ] && rl7_seg+=" ${dim}${rl7_reset}${reset}"
+  [ -n "$rl7_reset" ] && rl7_seg+=" ${muted}${rl7_reset}${reset}"
   parts+=("$rl7_seg")
 fi
 
@@ -233,7 +233,7 @@ pct="${used_pct%.*}"
 pct="${pct:-0}"
 (( pct > 100 )) && pct=100
 (( pct < 0 )) && pct=0
-ctx_seg="${dim}ctx ${pct}%"
+ctx_seg="${muted}ctx ${pct}%"
 if [ -n "$cur_input" ] && [ -n "$ctx_size" ] && [ "$ctx_size" -gt 0 ]; then
   cur_tok=$(( ${cur_input:-0} + ${cur_output:-0} + ${cur_cache_create:-0} + ${cur_cache_read:-0} ))
   ctx_seg+=" $(fmt_tokens "$cur_tok")/$(fmt_tokens "$ctx_size")"
@@ -243,7 +243,7 @@ parts+=("${ctx_seg}${reset}")
 # Cost
 if [ -n "$cost" ] && [ "$cost" != "0" ]; then
   cost_fmt=$(printf "%.2f" "$cost")
-  [ "$cost_fmt" != "0.00" ] && parts+=("${dim}\$${cost_fmt}${reset}")
+  [ "$cost_fmt" != "0.00" ] && parts+=("${muted}\$${cost_fmt}${reset}")
 fi
 
 # Lines changed
