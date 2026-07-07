@@ -11,6 +11,111 @@ disable_mouse_tracking() {
     printf '\e[?1000l\e[?1002l\e[?1003l\e[?1006l' >/dev/tty 2>/dev/null
 }
 
+theme() {
+    local mode="${1:-toggle}"
+    local ghostty_config="${GHOSTTY_CONFIG_FILE:-$HOME/.config/ghostty/config}"
+    local btop_config="${BTOP_CONFIG_FILE:-$HOME/.config/btop/btop.conf}"
+    local tmux_config="${TMUX_CONFIG_FILE:-$HOME/.config/tmux/tmux.conf}"
+    local ghostty_theme_dir="${GHOSTTY_THEME_DIR:-$HOME/.config/ghostty/themes}"
+    local btop_theme_dir="${BTOP_THEME_DIR:-$HOME/.config/btop/themes}"
+    local tmux_theme_dir="${TMUX_THEME_DIR:-$HOME/.config/tmux/themes}"
+    local tmux_theme_source_dir="${TMUX_THEME_SOURCE_DIR:-~/.config/tmux/themes}"
+    local ghostty_theme btop_theme tmux_theme
+
+    case "$mode" in
+        light)
+            ghostty_theme="GitHub Light"
+            btop_theme="github_light"
+            tmux_theme="github_light"
+            ;;
+        dark)
+            ghostty_theme="GitHub Dark"
+            btop_theme="github_dark"
+            tmux_theme="github_dark"
+            ;;
+        toggle)
+            if grep -q '^theme = GitHub Light$' "$ghostty_config" || grep -q '^color_theme = "github_light"$' "$btop_config" || grep -q 'tmux/themes/github_light\.conf$' "$tmux_config"; then
+                ghostty_theme="GitHub Dark"
+                btop_theme="github_dark"
+                tmux_theme="github_dark"
+            else
+                ghostty_theme="GitHub Light"
+                btop_theme="github_light"
+                tmux_theme="github_light"
+            fi
+            ;;
+        *)
+            printf 'Usage: theme [light|dark|toggle]\n' >&2
+            return 2
+            ;;
+    esac
+
+    [[ -f "$ghostty_config" ]] || { printf 'theme: missing Ghostty config: %s\n' "$ghostty_config" >&2; return 1; }
+    [[ -f "$btop_config" ]] || { printf 'theme: missing btop config: %s\n' "$btop_config" >&2; return 1; }
+    [[ -f "$tmux_config" ]] || { printf 'theme: missing tmux config: %s\n' "$tmux_config" >&2; return 1; }
+    [[ -f "${ghostty_theme_dir}/${ghostty_theme}" ]] || { printf 'theme: missing Ghostty theme: %s\n' "$ghostty_theme" >&2; return 1; }
+    [[ -f "${btop_theme_dir}/${btop_theme}.theme" ]] || { printf 'theme: missing btop theme: %s\n' "$btop_theme" >&2; return 1; }
+    [[ -f "${tmux_theme_dir}/${tmux_theme}.conf" ]] || { printf 'theme: missing tmux theme: %s\n' "$tmux_theme" >&2; return 1; }
+
+    local ghostty_tmp btop_tmp tmux_tmp ghostty_backup btop_backup tmux_backup
+    ghostty_tmp=$(mktemp "${ghostty_config}.tmp.XXXXXX") || return
+    btop_tmp=$(mktemp "${btop_config}.tmp.XXXXXX") || { rm -f "$ghostty_tmp"; return 1; }
+    tmux_tmp=$(mktemp "${tmux_config}.tmp.XXXXXX") || { rm -f "$ghostty_tmp" "$btop_tmp"; return 1; }
+    ghostty_backup=$(mktemp "${ghostty_config}.bak.XXXXXX") || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp"; return 1; }
+    btop_backup=$(mktemp "${btop_config}.bak.XXXXXX") || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$ghostty_backup"; return 1; }
+    tmux_backup=$(mktemp "${tmux_config}.bak.XXXXXX") || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$ghostty_backup" "$btop_backup"; return 1; }
+    cp -p "$ghostty_config" "$ghostty_backup" && cp -p "$btop_config" "$btop_backup" && cp -p "$tmux_config" "$tmux_backup" || {
+        rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$ghostty_backup" "$btop_backup" "$tmux_backup"
+        return 1
+    }
+
+    awk -v repl="theme = ${ghostty_theme}" '
+        /^theme = / { print repl; found = 1; next }
+        { print }
+        END { if (!found) exit 42 }
+    ' "$ghostty_config" > "$ghostty_tmp" || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$ghostty_backup" "$btop_backup" "$tmux_backup"; printf 'theme: Ghostty config has no theme line\n' >&2; return 1; }
+    awk -v repl="color_theme = \""$btop_theme"\"" '
+        /^color_theme = / { print repl; found = 1; next }
+        { print }
+        END { if (!found) exit 42 }
+    ' "$btop_config" > "$btop_tmp" || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$ghostty_backup" "$btop_backup" "$tmux_backup"; printf 'theme: btop config has no color_theme line\n' >&2; return 1; }
+    awk -v repl="source-file ${tmux_theme_source_dir}/${tmux_theme}.conf" '
+        /^source-file .*\/tmux\/themes\/github_(light|dark)\.conf$/ { print repl; found = 1; next }
+        { print }
+        END { if (!found) exit 42 }
+    ' "$tmux_config" > "$tmux_tmp" || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$ghostty_backup" "$btop_backup" "$tmux_backup"; printf 'theme: tmux config has no GitHub theme source line\n' >&2; return 1; }
+
+    if ! mv "$ghostty_tmp" "$ghostty_config" || ! mv "$btop_tmp" "$btop_config" || ! mv "$tmux_tmp" "$tmux_config"; then
+        cp -p "$ghostty_backup" "$ghostty_config" 2>/dev/null
+        cp -p "$btop_backup" "$btop_config" 2>/dev/null
+        cp -p "$tmux_backup" "$tmux_config" 2>/dev/null
+        rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$ghostty_backup" "$btop_backup" "$tmux_backup"
+        return 1
+    fi
+
+    if command -v ghostty >/dev/null 2>&1; then
+        if ! ghostty +validate-config >/dev/null; then
+            cp -p "$ghostty_backup" "$ghostty_config" 2>/dev/null
+            cp -p "$btop_backup" "$btop_config" 2>/dev/null
+            cp -p "$tmux_backup" "$tmux_config" 2>/dev/null
+            rm -f "$ghostty_backup" "$btop_backup" "$tmux_backup"
+            return 1
+        fi
+    fi
+    rm -f "$ghostty_backup" "$btop_backup" "$tmux_backup"
+    if command -v tmux >/dev/null 2>&1 && [[ -n "${TMUX:-}" ]]; then
+        tmux source-file "$tmux_config" || return
+    fi
+    printf 'Theme: %s\n' "$mode"
+    printf '  Ghostty: %s\n' "$ghostty_theme"
+    printf '  btop:    %s\n' "$btop_theme"
+    printf '  tmux:    %s\n' "$tmux_theme"
+}
+
+ghostty-theme() {
+    theme "$@"
+}
+
 
 # =============================================================================
 # macOS

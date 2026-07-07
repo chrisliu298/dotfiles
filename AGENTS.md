@@ -42,7 +42,7 @@ dotfiles/
 - **Platform detection**: `IS_MACOS` set in `shell/.zshenv`, gates macOS-only code
 - **Python**: use `uv` for virtual environments (`sv`, `us`, `ua`, `upi` aliases)
 - **Prompt**: Starship (custom GitHub Dark gradient palette, config in `.config/starship/`)
-- **Themes**: Ghostty (GitHub Dark), btop (GitHub Dark)
+- **Themes**: Ghostty, btop, and tmux (GitHub Light/Dark, toggled with `theme`)
 
 ## Editing Skills
 

@@ -6,10 +6,10 @@ Terminal application configs.
 
 | App | Config | Notes |
 |-----|--------|-------|
-| Ghostty | [chrisliu298/ghostty-config](https://github.com/chrisliu298/ghostty-config) (separate repo) | Berkeley Mono font, GitHub Dark theme |
+| Ghostty | `ghostty/config` | Berkeley Mono font, GitHub Light/Dark themes |
 | Neovim | `nvim/init.lua` | Minimal, no plugins |
-| tmux | `tmux/tmux.conf` | Prefix: `C-a`, vi mode, mouse enabled |
-| btop | `btop/btop.conf` | GitHub Dark theme, braille graphs |
+| tmux | `tmux/tmux.conf` | Prefix: `C-a`, vi mode, mouse enabled, GitHub Light/Dark themes |
+| btop | `btop/btop.conf` | GitHub Light/Dark themes, braille graphs |
 
 ## Tmux Keybindings
 
