@@ -80,8 +80,12 @@ theme() {
     printf '%s\n' "$new_mode" > "$mode_file.tmp" && mv "$mode_file.tmp" "$mode_file" || return 1
 
     # Live reloads (each tool where possible; btop needs a restart).
-    if command -v tmux >/dev/null 2>&1 && [[ -n "${TMUX:-}" ]]; then
-        tmux source-file "${TMUX_CONFIG_FILE:-$HOME/.config/tmux/tmux.conf}" || return
+    # Reload the running tmux server (all clients), whether or not this shell is
+    # attached — mirrors the `prefix + r` binding, so switching from a non-tmux
+    # shell no longer needs a manual reload. Only fires if a server is up (never
+    # spawns one); a reload hiccup doesn't fail the switch.
+    if command -v tmux >/dev/null 2>&1 && tmux has-session 2>/dev/null; then
+        tmux source-file "${TMUX_CONFIG_FILE:-$HOME/.config/tmux/tmux.conf}" >/dev/null 2>&1 || true
     fi
     if [[ "${IS_MACOS:-0}" == 1 ]]; then
         if command -v osascript >/dev/null 2>&1; then
