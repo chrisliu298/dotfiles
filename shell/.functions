@@ -20,28 +20,32 @@ theme() {
     local btop_theme_dir="${BTOP_THEME_DIR:-$HOME/.config/btop/themes}"
     local tmux_theme_dir="${TMUX_THEME_DIR:-$HOME/.config/tmux/themes}"
     local tmux_theme_source_dir="${TMUX_THEME_SOURCE_DIR:-~/.config/tmux/themes}"
-    local ghostty_theme btop_theme tmux_theme
+    local ghostty_theme btop_theme tmux_theme system_theme
 
     case "$mode" in
         light)
             ghostty_theme="GitHub Light"
             btop_theme="github_light"
             tmux_theme="github_light"
+            system_theme="Light"
             ;;
         dark)
             ghostty_theme="GitHub Dark"
             btop_theme="github_dark"
             tmux_theme="github_dark"
+            system_theme="Dark"
             ;;
         toggle)
             if grep -q '^theme = GitHub Light$' "$ghostty_config" || grep -q '^color_theme = "github_light"$' "$btop_config" || grep -q 'tmux/themes/github_light\.conf$' "$tmux_config"; then
                 ghostty_theme="GitHub Dark"
                 btop_theme="github_dark"
                 tmux_theme="github_dark"
+                system_theme="Dark"
             else
                 ghostty_theme="GitHub Light"
                 btop_theme="github_light"
                 tmux_theme="github_light"
+                system_theme="Light"
             fi
             ;;
         *)
@@ -106,7 +110,16 @@ theme() {
     if command -v tmux >/dev/null 2>&1 && [[ -n "${TMUX:-}" ]]; then
         tmux source-file "$tmux_config" || return
     fi
+    if [[ "${IS_MACOS:-0}" == 1 ]]; then
+        if command -v osascript >/dev/null 2>&1; then
+            osascript -e "tell application \"System Events\" to tell appearance preferences to set dark mode to $([[ "$system_theme" == "Dark" ]] && printf true || printf false)" >/dev/null || {
+                printf 'theme: failed to switch macOS appearance to %s\n' "$system_theme" >&2
+                return 1
+            }
+        fi
+    fi
     printf 'Theme: %s\n' "$mode"
+    [[ "${IS_MACOS:-0}" == 1 ]] && printf '  macOS:   %s\n' "$system_theme"
     printf '  Ghostty: %s\n' "$ghostty_theme"
     printf '  btop:    %s\n' "$btop_theme"
     printf '  tmux:    %s\n' "$tmux_theme"
