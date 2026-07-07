@@ -42,7 +42,7 @@ dotfiles/
 - **Platform detection**: `IS_MACOS` set in `shell/.zshenv`, gates macOS-only code
 - **Python**: use `uv` for virtual environments (`sv`, `us`, `ua`, `upi` aliases)
 - **Prompt**: Starship (Catppuccin Latte/GitHub Dark palettes, config in `.config/starship/`)
-- **Themes**: Ghostty and Starship (Catppuccin Latte/GitHub Dark), btop, and tmux (GitHub Light/Dark), toggled with `theme`
+- **Themes**: Ghostty, Starship, btop, and tmux (Catppuccin Latte/GitHub Light ↔ GitHub Dark), toggled with `theme light|dark|toggle|status`. The active choice is **host-local** — a single `mode` file under `~/.local/state/dotfiles-theme/` (never tracked, so switching never dirties git); definitions stay in-repo. `shell/theme-apply` materializes each tool's live config from `mode` (Ghostty/tmux via optional `config-file`/`source-file -q` includes; btop/Starship as generated files, since neither supports includes), and `dotfiles.sh` seeds/re-applies it per host.
 
 ## Editing Skills
 
@@ -104,4 +104,4 @@ MCP servers and Claude plugins are wired the same way, via the `MCP_SERVERS` and
 
 ## Not Backed Up
 
-OAuth tokens, command history, local settings, per-project data, and cache files. API keys live in `~/.zshenv.local` (not in the repo, so `dfs` never carries them) — after adding a new `export *_API_KEY=` or `*_PLAN_KEY=` locally, run `synckeys` (a `shell/.functions` helper, not a `dotfiles.sh` subcommand) — dry-run first, then `synckeys apply` — to propagate it to the other machines.
+OAuth tokens, command history, local settings, the host-local active theme (`~/.local/state/dotfiles-theme/`, so each machine keeps its own light/dark), per-project data, and cache files. API keys live in `~/.zshenv.local` (not in the repo, so `dfs` never carries them) — after adding a new `export *_API_KEY=` or `*_PLAN_KEY=` locally, run `synckeys` (a `shell/.functions` helper, not a `dotfiles.sh` subcommand) — dry-run first, then `synckeys apply` — to propagate it to the other machines.

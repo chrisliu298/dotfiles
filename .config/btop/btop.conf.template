@@ -1,4 +1,8 @@
 #? Config file for btop v.1.4.6
+#? TEMPLATE — the live ~/.config/btop/btop.conf is generated from this by
+#? `theme`/`dotfiles.sh` (color_theme rewritten per active mode). btop has no
+#? config include, so its whole config is host-local (outside git) to avoid
+#? dirtying the tree. Edit durable btop settings HERE, not in the live file.
 
 #* Name of a btop++/bpytop/bashtop formatted ".theme" file, "Default" and "TTY" for builtin themes.
 #* Themes should be placed in "../share/btop/themes" relative to binary or "$HOME/.config/btop/themes"
@@ -230,4 +234,7 @@ show_battery_watts = true
 log_level = "WARNING"
 
 #* Automatically save current settings to config file on exit.
-save_config_on_exit = true
+#* Off: the live config is generated from this template, so btop must not
+#* rewrite it on exit (that would drift the active theme and, historically,
+#* dirty git). Change durable settings in this template instead.
+save_config_on_exit = false

@@ -10,8 +10,13 @@ LINKS=(
     "shell/.functions:.functions"
     "shell/.zshenv:.zshenv"
     "shell/.zshrc:.zshrc"
+    "shell/theme-apply:.local/bin/theme-apply"
     ".config/starship:.config/starship"
-    ".config/btop:.config/btop"
+    # btop has no config include and rewrites its own config, so its live
+    # ~/.config/btop/btop.conf is host-local (generated, outside git). Only the
+    # tracked themes/ and the template are symlinked in; see setup_theme_state.
+    ".config/btop/themes:.config/btop/themes"
+    ".config/btop/btop.conf.template:.config/btop/btop.conf.template"
     ".config/fastfetch:.config/fastfetch"
     ".config/nvim:.config/nvim"
     ".config/tmux:.config/tmux"
@@ -204,6 +209,41 @@ _ensure_source() {
 }
 
 # ── Install functions ────────────────────────────────────────────
+
+# Host-local active theme, decoupled from git. The choice lives in a single
+# mode file under XDG state; theme-apply materializes the four tools' live config
+# from it (ghostty/tmux via optional includes; btop/Starship as generated files).
+# MUST run before install_links: it converts a legacy whole-dir btop symlink into
+# a real dir so the per-file btop links below don't rm -rf through the symlink
+# into the repo. Idempotent and safe to re-run on every host.
+setup_theme_state() {
+    local state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme"
+    local mode_file="$state_dir/mode" mode
+
+    # Convert a legacy `~/.config/btop -> repo` whole-dir symlink into a real dir.
+    if [[ -L "$HOME/.config/btop" ]]; then
+        rm "$HOME/.config/btop"
+        log "unlink legacy ~/.config/btop symlink (now host-local)"
+    fi
+    mkdir -p "$HOME/.config/btop" "$state_dir"
+
+    # Seed the mode once (default dark); respect a value captured during migration.
+    if [[ -f "$mode_file" ]]; then
+        mode="$(cat "$mode_file")"
+        [[ "$mode" == light || "$mode" == dark ]] || mode="dark"
+    else
+        mode="dark"
+        printf '%s\n' "$mode" > "$mode_file"
+        log "seed theme state: mode=$mode (run 'theme light' to switch)"
+    fi
+
+    # Materialize live config from the repo templates (symlinks may not exist yet).
+    BTOP_TEMPLATE="$ROOT/.config/btop/btop.conf.template" \
+    STARSHIP_TEMPLATE="$ROOT/.config/starship/starship.toml" \
+        "$ROOT/shell/theme-apply" "$mode" \
+        && log "apply theme: $mode" \
+        || warn "theme-apply failed for mode=$mode"
+}
 
 install_links() {
     local entry
@@ -593,6 +633,7 @@ main() {
     local _plugins_pid=$!
 
     # Foreground: local-only sections
+    section "Theme"; setup_theme_state
     section "Links";  install_links
 
     wait "$_fetch_pid" 2>/dev/null || true

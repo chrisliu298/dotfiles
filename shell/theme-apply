@@ -1,0 +1,74 @@
+#!/usr/bin/env sh
+# theme-apply — materialize host-local theme config from the active mode.
+#
+# Single source of truth for turning a light/dark choice into live config,
+# shared by the `theme` shell function and dotfiles.sh so the two never drift.
+# Writes ONLY host-local files (XDG state dir + the real ~/.config/btop/btop.conf)
+# — never a git-tracked file — so switching themes can never dirty the tree.
+#
+# Usage: theme-apply <light|dark>
+#
+# Derived outputs (all outside git):
+#   $STATE_DIR/ghostty.conf   one line, pulled in by ghostty `config-file = ?…`
+#   $STATE_DIR/tmux.conf      one line, pulled in by tmux `source-file -q …`
+#   $STATE_DIR/starship.toml  full config (STARSHIP_CONFIG target), palette applied
+#   ~/.config/btop/btop.conf  full config, generated from the tracked template
+#
+# Theme *definitions* stay tracked: ghostty/tmux theme files, btop themes/,
+# and the starship [palettes.*] tables inside the template.
+set -eu
+
+mode=${1:?usage: theme-apply <light|dark>}
+
+# Template paths are overridable so dotfiles.sh can generate straight from the
+# repo before the ~/.config symlinks exist (see setup_theme_state).
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme"
+btop_template="${BTOP_TEMPLATE:-$HOME/.config/btop/btop.conf.template}"
+starship_template="${STARSHIP_TEMPLATE:-$HOME/.config/starship/starship.toml}"
+btop_live="${BTOP_LIVE:-$HOME/.config/btop/btop.conf}"
+
+case "$mode" in
+    light) ghostty_theme="Catppuccin Latte"; btop_theme="github_light"; tmux_theme="github_light"; starship_palette="catppuccin_latte" ;;
+    dark)  ghostty_theme="GitHub Dark";       btop_theme="github_dark";  tmux_theme="github_dark";  starship_palette="github_dark" ;;
+    *) printf 'theme-apply: invalid mode: %s (want light|dark)\n' "$mode" >&2; exit 2 ;;
+esac
+
+mkdir -p "$STATE_DIR"
+
+# ghostty + tmux: tiny override fragments consumed via optional includes.
+printf 'theme = %s\n' "$ghostty_theme" > "$STATE_DIR/ghostty.conf.tmp"
+mv "$STATE_DIR/ghostty.conf.tmp" "$STATE_DIR/ghostty.conf"
+
+printf 'source-file ~/.config/tmux/themes/%s.conf\n' "$tmux_theme" > "$STATE_DIR/tmux.conf.tmp"
+mv "$STATE_DIR/tmux.conf.tmp" "$STATE_DIR/tmux.conf"
+
+# btop: no include mechanism — regenerate the whole live config from the tracked
+# template with color_theme rewritten. The live file is host-local (real file in
+# a real ~/.config/btop dir), so this write never reaches git.
+if [ -f "$btop_template" ]; then
+    awk -v repl="color_theme = \"$btop_theme\"" '
+        /^color_theme = / { print repl; found = 1; next }
+        { print }
+        END { if (!found) exit 42 }
+    ' "$btop_template" > "$btop_live.tmp" || {
+        rm -f "$btop_live.tmp"
+        printf 'theme-apply: btop template has no color_theme line\n' >&2
+        exit 1
+    }
+    mv "$btop_live.tmp" "$btop_live"
+fi
+
+# starship: no include mechanism — regenerate the STARSHIP_CONFIG target from the
+# tracked template with the palette rewritten. Palettes stay defined in the template.
+if [ -f "$starship_template" ]; then
+    awk -v repl="palette = '$starship_palette'" '
+        /^palette = / { print repl; found = 1; next }
+        { print }
+        END { if (!found) exit 42 }
+    ' "$starship_template" > "$STATE_DIR/starship.toml.tmp" || {
+        rm -f "$STATE_DIR/starship.toml.tmp"
+        printf 'theme-apply: starship template has no palette line\n' >&2
+        exit 1
+    }
+    mv "$STATE_DIR/starship.toml.tmp" "$STATE_DIR/starship.toml"
+fi

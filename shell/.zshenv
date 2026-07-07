@@ -12,7 +12,11 @@ export DISABLE_MAGIC_FUNCTIONS=true
 export COLORTERM=truecolor
 
 # Starship prompt config
-export STARSHIP_CONFIG="$HOME/.config/starship/starship.toml"
+# Host-local generated Starship config (active palette applied by `theme`;
+# outside git). Generated from the tracked ~/.config/starship/starship.toml
+# template by `theme`/dotfiles.sh; before the first seed Starship falls back to
+# its built-in defaults, so run ./dotfiles.sh once after a fresh clone.
+export STARSHIP_CONFIG="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme/starship.toml"
 
 # =============================================================================
 # PATH

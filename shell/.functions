@@ -13,129 +13,75 @@ disable_mouse_tracking() {
 
 theme() {
     local mode="${1:-toggle}"
+    local state_dir="${DOTFILES_THEME_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme}"
+    local mode_file="$state_dir/mode"
+    local apply="${DOTFILES_THEME_APPLY:-$HOME/.local/bin/theme-apply}"
     local ghostty_config="${GHOSTTY_CONFIG_FILE:-$HOME/.config/ghostty/config}"
-    local btop_config="${BTOP_CONFIG_FILE:-$HOME/.config/btop/btop.conf}"
-    local tmux_config="${TMUX_CONFIG_FILE:-$HOME/.config/tmux/tmux.conf}"
-    local starship_config="${STARSHIP_CONFIG_FILE:-$HOME/.config/starship/starship.toml}"
+    local starship_state="$state_dir/starship.toml"
     local ghostty_theme_dir="${GHOSTTY_THEME_DIR:-$HOME/.config/ghostty/themes}"
     local btop_theme_dir="${BTOP_THEME_DIR:-$HOME/.config/btop/themes}"
     local tmux_theme_dir="${TMUX_THEME_DIR:-$HOME/.config/tmux/themes}"
-    local tmux_theme_source_dir="${TMUX_THEME_SOURCE_DIR:-~/.config/tmux/themes}"
-    local ghostty_theme btop_theme tmux_theme starship_palette system_theme
+    local starship_template="${STARSHIP_TEMPLATE:-$HOME/.config/starship/starship.toml}"
+    local ghostty_theme btop_theme tmux_theme starship_palette system_theme new_mode
 
-    [[ -f "$ghostty_config" ]] || { printf 'theme: missing Ghostty config: %s\n' "$ghostty_config" >&2; return 1; }
-    [[ -f "$btop_config" ]] || { printf 'theme: missing btop config: %s\n' "$btop_config" >&2; return 1; }
-    [[ -f "$tmux_config" ]] || { printf 'theme: missing tmux config: %s\n' "$tmux_config" >&2; return 1; }
-    [[ -f "$starship_config" ]] || { printf 'theme: missing Starship config: %s\n' "$starship_config" >&2; return 1; }
+    [[ -x "$apply" ]] || { printf 'theme: missing theme-apply helper: %s (run ./dotfiles.sh)\n' "$apply" >&2; return 1; }
 
     case "$mode" in
-        light)
-            ghostty_theme="Catppuccin Latte"
-            btop_theme="github_light"
-            tmux_theme="github_light"
-            starship_palette="catppuccin_latte"
-            system_theme="Light"
-            ;;
-        dark)
-            ghostty_theme="GitHub Dark"
-            btop_theme="github_dark"
-            tmux_theme="github_dark"
-            starship_palette="github_dark"
-            system_theme="Dark"
+        light|dark)
+            new_mode="$mode"
             ;;
         toggle)
-            if grep -q '^theme = \(Catppuccin Latte\|GitHub Light\)$' "$ghostty_config" || grep -q '^color_theme = "github_light"$' "$btop_config" || grep -q 'tmux/themes/github_light\.conf$' "$tmux_config" || grep -q "^palette = 'catppuccin_latte'$" "$starship_config"; then
-                ghostty_theme="GitHub Dark"
-                btop_theme="github_dark"
-                tmux_theme="github_dark"
-                starship_palette="github_dark"
-                system_theme="Dark"
-            else
-                ghostty_theme="Catppuccin Latte"
-                btop_theme="github_light"
-                tmux_theme="github_light"
-                starship_palette="catppuccin_latte"
-                system_theme="Light"
-            fi
+            # Single source of truth: the host-local mode file (default dark).
+            if [[ "$(cat "$mode_file" 2>/dev/null)" == light ]]; then new_mode="dark"; else new_mode="light"; fi
+            ;;
+        status)
+            printf 'Theme: %s\n' "$(cat "$mode_file" 2>/dev/null || printf '(unset, defaults to dark)')"
+            return 0
             ;;
         *)
-            printf 'Usage: theme [light|dark|toggle]\n' >&2
+            printf 'Usage: theme [light|dark|toggle|status]\n' >&2
             return 2
             ;;
     esac
 
+    case "$new_mode" in
+        light) ghostty_theme="Catppuccin Latte"; btop_theme="github_light"; tmux_theme="github_light"; starship_palette="catppuccin_latte"; system_theme="Light" ;;
+        dark)  ghostty_theme="GitHub Dark";       btop_theme="github_dark";  tmux_theme="github_dark";  starship_palette="github_dark";      system_theme="Dark"  ;;
+    esac
+
+    # Validate tracked theme *definitions* exist before switching.
     [[ -f "${ghostty_theme_dir}/${ghostty_theme}" ]] || { printf 'theme: missing Ghostty theme: %s\n' "$ghostty_theme" >&2; return 1; }
     [[ -f "${btop_theme_dir}/${btop_theme}.theme" ]] || { printf 'theme: missing btop theme: %s\n' "$btop_theme" >&2; return 1; }
     [[ -f "${tmux_theme_dir}/${tmux_theme}.conf" ]] || { printf 'theme: missing tmux theme: %s\n' "$tmux_theme" >&2; return 1; }
-    grep -q "^\\[palettes\\.${starship_palette}\\]$" "$starship_config" || { printf 'theme: missing Starship palette: %s\n' "$starship_palette" >&2; return 1; }
+    grep -q "^\\[palettes\\.${starship_palette}\\]$" "$starship_template" || { printf 'theme: missing Starship palette: %s\n' "$starship_palette" >&2; return 1; }
 
-    local ghostty_tmp btop_tmp tmux_tmp starship_tmp ghostty_backup btop_backup tmux_backup starship_backup
-    ghostty_tmp=$(mktemp "${ghostty_config}.tmp.XXXXXX") || return
-    btop_tmp=$(mktemp "${btop_config}.tmp.XXXXXX") || { rm -f "$ghostty_tmp"; return 1; }
-    tmux_tmp=$(mktemp "${tmux_config}.tmp.XXXXXX") || { rm -f "$ghostty_tmp" "$btop_tmp"; return 1; }
-    starship_tmp=$(mktemp "${starship_config}.tmp.XXXXXX") || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp"; return 1; }
-    ghostty_backup=$(mktemp "${ghostty_config}.bak.XXXXXX") || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$starship_tmp"; return 1; }
-    btop_backup=$(mktemp "${btop_config}.bak.XXXXXX") || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$starship_tmp" "$ghostty_backup"; return 1; }
-    tmux_backup=$(mktemp "${tmux_config}.bak.XXXXXX") || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$starship_tmp" "$ghostty_backup" "$btop_backup"; return 1; }
-    starship_backup=$(mktemp "${starship_config}.bak.XXXXXX") || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$starship_tmp" "$ghostty_backup" "$btop_backup" "$tmux_backup"; return 1; }
-    cp -p "$ghostty_config" "$ghostty_backup" && cp -p "$btop_config" "$btop_backup" && cp -p "$tmux_config" "$tmux_backup" && cp -p "$starship_config" "$starship_backup" || {
-        rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$starship_tmp" "$ghostty_backup" "$btop_backup" "$tmux_backup" "$starship_backup"
-        return 1
-    }
+    # Preserve the previous mode so a failed switch rolls back cleanly. All writes
+    # land in host-local files (state dir + real ~/.config/btop/btop.conf), never git.
+    local prev_mode; prev_mode="$(cat "$mode_file" 2>/dev/null || true)"
 
-    awk -v repl="theme = ${ghostty_theme}" '
-        /^theme = / { print repl; found = 1; next }
-        { print }
-        END { if (!found) exit 42 }
-    ' "$ghostty_config" > "$ghostty_tmp" || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$starship_tmp" "$ghostty_backup" "$btop_backup" "$tmux_backup" "$starship_backup"; printf 'theme: Ghostty config has no theme line\n' >&2; return 1; }
-    awk -v repl="color_theme = \""$btop_theme"\"" '
-        /^color_theme = / { print repl; found = 1; next }
-        { print }
-        END { if (!found) exit 42 }
-    ' "$btop_config" > "$btop_tmp" || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$starship_tmp" "$ghostty_backup" "$btop_backup" "$tmux_backup" "$starship_backup"; printf 'theme: btop config has no color_theme line\n' >&2; return 1; }
-    awk -v repl="source-file ${tmux_theme_source_dir}/${tmux_theme}.conf" '
-        /^source-file .*\/tmux\/themes\/github_(light|dark)\.conf$/ { print repl; found = 1; next }
-        { print }
-        END { if (!found) exit 42 }
-    ' "$tmux_config" > "$tmux_tmp" || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$starship_tmp" "$ghostty_backup" "$btop_backup" "$tmux_backup" "$starship_backup"; printf 'theme: tmux config has no GitHub theme source line\n' >&2; return 1; }
-    awk -v repl="palette = '"$starship_palette"'" '
-        /^palette = / { print repl; found = 1; next }
-        { print }
-        END { if (!found) exit 42 }
-    ' "$starship_config" > "$starship_tmp" || { rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$starship_tmp" "$ghostty_backup" "$btop_backup" "$tmux_backup" "$starship_backup"; printf 'theme: Starship config has no palette line\n' >&2; return 1; }
+    mkdir -p "$state_dir" || return 1
+    "$apply" "$new_mode" || { printf 'theme: failed to materialize %s config\n' "$new_mode" >&2; [[ -n "$prev_mode" ]] && "$apply" "$prev_mode" >/dev/null 2>&1; return 1; }
 
-    if ! mv "$ghostty_tmp" "$ghostty_config" || ! mv "$btop_tmp" "$btop_config" || ! mv "$tmux_tmp" "$tmux_config" || ! mv "$starship_tmp" "$starship_config"; then
-        cp -p "$ghostty_backup" "$ghostty_config" 2>/dev/null
-        cp -p "$btop_backup" "$btop_config" 2>/dev/null
-        cp -p "$tmux_backup" "$tmux_config" 2>/dev/null
-        cp -p "$starship_backup" "$starship_config" 2>/dev/null
-        rm -f "$ghostty_tmp" "$btop_tmp" "$tmux_tmp" "$starship_tmp" "$ghostty_backup" "$btop_backup" "$tmux_backup" "$starship_backup"
-        return 1
-    fi
-
+    # Validate the generated configs; roll back to the previous mode on failure.
+    local rollback=0
     if command -v ghostty >/dev/null 2>&1; then
-        if ! ghostty +validate-config >/dev/null; then
-            cp -p "$ghostty_backup" "$ghostty_config" 2>/dev/null
-            cp -p "$btop_backup" "$btop_config" 2>/dev/null
-            cp -p "$tmux_backup" "$tmux_config" 2>/dev/null
-            cp -p "$starship_backup" "$starship_config" 2>/dev/null
-            rm -f "$ghostty_backup" "$btop_backup" "$tmux_backup" "$starship_backup"
-            return 1
-        fi
+        ghostty +validate-config >/dev/null || rollback=1
     fi
-    if command -v starship >/dev/null 2>&1; then
-        if ! STARSHIP_CONFIG="$starship_config" starship explain >/dev/null; then
-            cp -p "$ghostty_backup" "$ghostty_config" 2>/dev/null
-            cp -p "$btop_backup" "$btop_config" 2>/dev/null
-            cp -p "$tmux_backup" "$tmux_config" 2>/dev/null
-            cp -p "$starship_backup" "$starship_config" 2>/dev/null
-            rm -f "$ghostty_backup" "$btop_backup" "$tmux_backup" "$starship_backup"
-            return 1
-        fi
+    if (( ! rollback )) && command -v starship >/dev/null 2>&1; then
+        STARSHIP_CONFIG="$starship_state" starship explain >/dev/null || rollback=1
     fi
-    rm -f "$ghostty_backup" "$btop_backup" "$tmux_backup" "$starship_backup"
+    if (( rollback )); then
+        printf 'theme: generated config failed validation — rolling back\n' >&2
+        [[ -n "$prev_mode" ]] && "$apply" "$prev_mode" >/dev/null 2>&1
+        return 1
+    fi
+
+    # Commit the choice only after everything validated.
+    printf '%s\n' "$new_mode" > "$mode_file.tmp" && mv "$mode_file.tmp" "$mode_file" || return 1
+
+    # Live reloads (each tool where possible; btop needs a restart).
     if command -v tmux >/dev/null 2>&1 && [[ -n "${TMUX:-}" ]]; then
-        tmux source-file "$tmux_config" || return
+        tmux source-file "${TMUX_CONFIG_FILE:-$HOME/.config/tmux/tmux.conf}" || return
     fi
     if [[ "${IS_MACOS:-0}" == 1 ]]; then
         if command -v osascript >/dev/null 2>&1; then
@@ -145,10 +91,10 @@ theme() {
             }
         fi
     fi
-    printf 'Theme: %s\n' "$mode"
+    printf 'Theme: %s\n' "$new_mode"
     [[ "${IS_MACOS:-0}" == 1 ]] && printf '  macOS:   %s\n' "$system_theme"
     printf '  Ghostty: %s\n' "$ghostty_theme"
-    printf '  btop:    %s\n' "$btop_theme"
+    printf '  btop:    %s (restart btop to apply)\n' "$btop_theme"
     printf '  tmux:    %s\n' "$tmux_theme"
     printf '  Prompt:  %s\n' "$starship_palette"
 }
