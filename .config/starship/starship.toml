@@ -161,3 +161,15 @@ gh_cyan = "#39c5cf"      # language runtimes — secondary info
 gh_purple = "#bc8cff"    # infrastructure, vim replace
 gh_muted = "#8b949e"     # user@host — present but quiet
 gh_dimmed = "#6e7681"    # time, cmd_duration — ambient
+
+# Catppuccin Latte palette
+# Same semantic roles as github_dark, mapped onto the Latte color family.
+[palettes.catppuccin_latte]
+gh_red = "#d20f39"       # root user, errors, prompt error
+gh_green = "#40a02b"     # git clean, prompt ok
+gh_yellow = "#df8e1d"    # git dirty/state, vim visual
+gh_blue = "#1e66f5"      # directory — primary navigation
+gh_cyan = "#179299"      # language runtimes — secondary info
+gh_purple = "#8839ef"    # infrastructure, vim replace
+gh_muted = "#6c6f85"     # user@host — present but quiet
+gh_dimmed = "#8c8fa1"    # time, cmd_duration — ambient

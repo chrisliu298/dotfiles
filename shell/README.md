@@ -21,13 +21,13 @@ Load order: `.zshenv` → `.zshrc` (sources `.aliases` and `.functions`).
 
 See `.aliases` and `.functions` for the full list. Highlights:
 
-- **Shell**: `ez` (reload), `o` (open), `b` (btop), `theme [light|dark|toggle]` (terminal + macOS theme)
+- **Shell**: `ez` (reload), `o` (open), `b` (btop), `theme [light|dark|toggle]` (terminal + prompt + macOS theme)
 - **Tmux**: `t`, `ta`, `tl`, `tn`, `tk`, `to` (new/attach to `$PWD` name), `tka` (kill all)
 - **Python/uv**: `sv` (source venv), `us` (sync), `ua` (add)
 - **Claude Code**: `c` (auto-accept), `cc` (continue), `cr` (resume), `cpu` (/push), `cl`/`cm`/`ch`/`cx`/`cmx` (low/medium/high/xhigh/max effort)
 - **Codex**: `x` (default=medium), `xn`/`xl`/`xm`/`xh`/`xx` (none/low/medium/high/xhigh reasoning), `xc` (resume --last)
 - **Homebrew**: `bi`/`bu`/`bic` (install/uninstall/cask), `bupd`/`bupg` (update/upgrade)
-- **Functions**: `dfs` (pull + install + sync remote), `theme [light|dark|toggle]` (Ghostty + btop + tmux + macOS), `synckeys` (propagate `~/.zshenv.local` API/plan keys to peers; dry-run by default, `synckeys apply` to write), `rename_device`
+- **Functions**: `dfs` (pull + install + sync remote), `theme [light|dark|toggle]` (Ghostty + Starship + btop + tmux + macOS), `synckeys` (propagate `~/.zshenv.local` API/plan keys to peers; dry-run by default, `synckeys apply` to write), `rename_device`
 
 ### Reasoning-effort tiers
 

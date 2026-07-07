@@ -41,8 +41,8 @@ dotfiles/
 - **Modern tools**: `fd` → find, `rg` → grep, `delta` → diff, `zoxide` → z (installed via Zinit, macOS ARM)
 - **Platform detection**: `IS_MACOS` set in `shell/.zshenv`, gates macOS-only code
 - **Python**: use `uv` for virtual environments (`sv`, `us`, `ua`, `upi` aliases)
-- **Prompt**: Starship (custom GitHub Dark gradient palette, config in `.config/starship/`)
-- **Themes**: Ghostty, btop, and tmux (GitHub Light/Dark, toggled with `theme`)
+- **Prompt**: Starship (Catppuccin Latte/GitHub Dark palettes, config in `.config/starship/`)
+- **Themes**: Ghostty and Starship (Catppuccin Latte/GitHub Dark), btop, and tmux (GitHub Light/Dark), toggled with `theme`
 
 <important if="you are editing or creating skills">
 

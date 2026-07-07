@@ -6,17 +6,16 @@ For the full list of configuration options, see the [Ghostty config reference](h
 
 ## Setup
 
-Clone this repo and symlink to the config directory:
+Run the dotfiles installer from the repo root:
 
 ```bash
-git clone https://github.com/chrisliu298/ghostty-config.git
-ln -sf "$(pwd)/ghostty-config/config" ~/.config/ghostty/config
-ln -sf "$(pwd)/ghostty-config/themes" ~/.config/ghostty/themes
+./dotfiles.sh
 ```
 
-Or copy the files directly:
+It symlinks this directory to `~/.config/ghostty`, including `config` and `themes/`.
+
+Or symlink this config directory directly:
 
 ```bash
-cp config ~/.config/ghostty/config
-cp -r themes ~/.config/ghostty/themes/
+ln -sfn "$(pwd)/.config/ghostty" ~/.config/ghostty
 ```
