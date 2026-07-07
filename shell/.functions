@@ -87,6 +87,20 @@ theme() {
     if command -v tmux >/dev/null 2>&1 && tmux has-session 2>/dev/null; then
         tmux source-file "${TMUX_CONFIG_FILE:-$HOME/.config/tmux/tmux.conf}" >/dev/null 2>&1 || true
     fi
+    # Reload the running Ghostty app (all windows) so the new theme takes effect
+    # without pressing super+shift+, by hand — the same reload_config action.
+    # Ghostty reloads config on SIGUSR2 (since 1.2); any OTHER signal crashes it,
+    # so match the exact app binary and only ever send USR2. pgrep/pkill can't see
+    # the launchd-spawned GUI app on macOS, so find it via ps + kill. No match
+    # (Ghostty not running) is a silent no-op; a reload hiccup never fails the switch.
+    if [[ "${IS_MACOS:-0}" == 1 ]]; then
+        # zsh runs the last pipeline stage in the current shell, so keep _gpid
+        # local — otherwise the loop var leaks into the interactive namespace.
+        local _gpid
+        ps -Axo pid=,comm= 2>/dev/null \
+            | awk '/\/Ghostty\.app\/Contents\/MacOS\/ghostty$/ { print $1 }' \
+            | while read -r _gpid; do kill -USR2 "$_gpid" 2>/dev/null || true; done
+    fi
     if [[ "${IS_MACOS:-0}" == 1 ]]; then
         if command -v osascript >/dev/null 2>&1; then
             osascript -e "tell application \"System Events\" to tell appearance preferences to set dark mode to $([[ "$system_theme" == "Dark" ]] && printf true || printf false)" >/dev/null || {
