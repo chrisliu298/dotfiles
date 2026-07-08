@@ -346,11 +346,13 @@ install_skills() {
     local dir expected
     for dir in "$HOME/.claude/skills" "$HOME/.codex/skills" "$HOME/.grok/skills" "$HOME/.pi/agent/skills"; do
         [[ -d "$dir" ]] || continue
+        # Exact-path match (not substring) so a $HOME containing an agent
+        # token can't misclassify a dir and skip its prune set.
         case "$dir" in
-            *claude*)    expected="$claude_expected" ;;
-            *codex*)     expected="$codex_expected"  ;;
-            *grok*)      expected="$grok_expected"   ;;
-            *.pi/agent*) expected="$pi_expected"     ;;
+            "$HOME/.claude/skills")   expected="$claude_expected" ;;
+            "$HOME/.codex/skills")    expected="$codex_expected"  ;;
+            "$HOME/.grok/skills")     expected="$grok_expected"   ;;
+            "$HOME/.pi/agent/skills") expected="$pi_expected"     ;;
         esac
         for entry in "$dir"/*; do
             [[ -L "$entry" ]] || continue

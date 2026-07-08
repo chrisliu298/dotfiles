@@ -17,7 +17,7 @@ Single source of truth: own skills live in `agents/extensions/skills/`; communit
 - Grok   → `~/.grok/skills/` (relay/prism dispatch target; mirrors the Codex set)
 - Pi     → `~/.pi/agent/skills/` (standalone harness; mirrors the Codex/Grok set)
 
-Each `SKILL.md` works across all four agents. Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex, Grok, and Pi. Per-agent scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., relay and prism are claude-only).
+A shared/universal `SKILL.md` is written to work across all four agents; agent-specific scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., relay and prism are claude-only, so they never reach Codex/Grok/Pi). Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex, Grok, and Pi.
 
 **Pi also has native extensions.** Beyond the shared skills, Pi loads Pi-native npm/git extensions declared as a `packages` array in the tracked `agents/pi/settings.json` and auto-installed on first launch (materialized under untracked `~/.pi/agent/npm/`). The current set adds subagents, web search/fetch, a browser tool, plan mode (`pi --plan`), cross-session memory, LSP/AST code intel, and a context-window saver — all community-authored (mostly `nicobailon`), so vet before bumping. Manage with `pi install <source>` / `pi remove <source>` (edits the same `packages` array) and `pi update --extensions`. These extensions bundle their own skills too (e.g. `ast-grep`, `lsp-navigation`), which Pi discovers alongside the shared set.
 
