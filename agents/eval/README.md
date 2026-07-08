@@ -67,4 +67,4 @@ compare. The relay-peer legs are scripted; the Claude leg and the judge need Cla
 First used (2026-07) to clear an aggressive de-format + prune + four-file unification of the global
 doc: 8 model lineages × {current, pruned} + repeats, blind-judged — aggregate parity (pruned ≥
 current), so the pruned/unified doc was adopted. The `lint_agentdocs` guard in `dotfiles.sh` now just
-asserts the four files are byte-identical.
+asserts the four files are identical below the H1 (each file keeps its own `# CLAUDE.md`/`# AGENTS.md` title).

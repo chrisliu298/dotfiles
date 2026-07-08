@@ -576,11 +576,11 @@ lint_docmaint() {
 
 # ── agent-doc identity-guard ─────────────────────────────────────
 # The four global instruction files (claude/CLAUDE.md, codex/AGENTS.md, grok/AGENTS.md,
-# pi/AGENTS.md) are one canonical text copied verbatim to all four paths — byte-identical,
-# no per-agent deltas (a de-formatted, agent-read doc; effectiveness parity verified by the
-# instruction-following harness in agents/eval/). Assert that identity; any diff means one
-# copy was edited without propagating. To change them: edit one, copy to the other three,
-# commit together.
+# pi/AGENTS.md) are one canonical, agent-read text copied to all four paths. They are
+# identical BELOW the H1 (line 1), which only names each file (# CLAUDE.md vs # AGENTS.md) —
+# the sole per-file delta; effectiveness parity verified by the harness in agents/eval/.
+# Assert body identity; any diff means one copy was edited without propagating. To change
+# them: edit one, copy to the other three (keeping each H1), commit together.
 lint_agentdocs() {
     local -a docs=(
         "agents/claude/CLAUDE.md"
@@ -592,8 +592,8 @@ lint_agentdocs() {
     if [[ ! -f "$ROOT/$ref" ]]; then warn "agentdocs: missing canonical $ref"; return 1; fi
     for f in "${docs[@]:1}"; do
         if [[ ! -f "$ROOT/$f" ]]; then warn "agentdocs: missing copy $f"; rc=1; continue; fi
-        if ! diff -q "$ROOT/$ref" "$ROOT/$f" >/dev/null 2>&1; then
-            warn "agentdocs: $f differs from $ref (the four must be byte-identical) — re-copy the canonical text"
+        if ! diff -q <(tail -n +2 "$ROOT/$ref") <(tail -n +2 "$ROOT/$f") >/dev/null 2>&1; then
+            warn "agentdocs: $f differs from $ref below the H1 (bodies must be identical) — re-copy the canonical text"
             rc=1
         fi
     done
