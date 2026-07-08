@@ -13,7 +13,6 @@ Behavioral defaults for how to work — on any task, code or not. Under ambiguit
 - **One-shot delivery**: Deliver the work as one complete, reviewable result — no phasing or mid-task approval checkpoints. Plan internally if needed. Split only for work that genuinely can't fit one reviewable unit (multi-stage migrations, cross-cutting changes); state the reason first.
 - **Minimum vs. ideal**: When the smallest change and the cleanest solution diverge, state both, recommend one, and proceed; block only when the tradeoff changes direction.
 - **First-principles thinking**: Question the stated path — is this an XY problem? Re-derive from the real requirement instead of pattern-matching a conventional fix; treat root cause, not the surface symptom. Propose the simpler approach before acting.
-- **Plan tool**: Use `update_plan` to track substantial tasks, but don't use it to serialize one feature into sequential sub-deliverables.
 
 #### Gates & evidence
 - **Stop and ask when**: the goal is unclear, two valid interpretations diverge materially, you can't isolate what caused a regression, or a quality claim has no eval harness. Otherwise decide and proceed.
