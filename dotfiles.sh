@@ -53,6 +53,10 @@ SKILLS=(
     # recall: claude-only; searches THIS project's past Claude transcripts (~/.claude/projects) for
     # an earlier user statement. The store is Claude-specific, so it has no meaning on Codex/Grok.
     "recall|./agents/extensions/skills/recall|claude"
+    # codex-first: claude-only routing skill — delegates hands-on work to `codex exec` while Claude
+    # specs + reviews; a Codex/Grok session self-delegating to Codex is meaningless. MANUAL (below),
+    # so it's off until `./dotfiles.sh enable codex-first`. The explicit entry overrides the wildcard.
+    "codex-first|./agents/extensions/skills/codex-first|claude"
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex,grok"
     "humanizer|blader/humanizer|claude,codex,grok"
     "pdf|anthropics/skills/skills/pdf|claude"
@@ -63,6 +67,7 @@ SKILLS=(
 # Skills not auto-installed (opt-in). Toggle with: ./dotfiles.sh enable/disable <name>.
 MANUAL_SKILLS=(
     autoresearch
+    codex-first
     deslop
     interviewer
     prompt-engineer
