@@ -16,7 +16,7 @@ Single source of truth: own skills live in `agents/extensions/skills/`; communit
 - Codex  → `~/.codex/skills/`
 - Grok   → `~/.grok/skills/` (relay/prism dispatch target; mirrors the Codex set)
 
-Pi (`~/.pi/agent/`) is wired for config and shell launchers only. Add Pi skill loading deliberately after testing harness compatibility; do not assume the C/X/G skill matrix applies to Pi.
+Pi (`~/.pi/agent/`) does not receive the shared C/X/G repo skills — do not assume that skill matrix applies to it. Instead it uses Pi-native npm/git extensions, declared as a `packages` array in the tracked `agents/pi/settings.json` and auto-installed on first launch (materialized under untracked `~/.pi/agent/npm/`). The current set adds subagents, web search/fetch, a browser tool, plan mode (`pi --plan`), cross-session memory, LSP/AST code intel, and a context-window saver — all community-authored (mostly `nicobailon`), so vet before bumping. Manage with `pi install <source>` / `pi remove <source>` (edits the same `packages` array) and `pi update --extensions`. Add Pi skill loading deliberately after testing harness compatibility.
 
 Each `SKILL.md` works across all three agents. Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex and Grok. Per-agent scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., relay and prism are claude-only).
 
