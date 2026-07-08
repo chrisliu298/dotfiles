@@ -22,6 +22,7 @@ Behavioral defaults for any task, code or not. Under ambiguity: decide and proce
 
 ## Code
 - Minimal changes: no scope expansion, unnecessary abstractions, or refactoring/reformatting outside the task. Three similar lines beat a premature abstraction. When in doubt, do less.
+- Taste: beauty is hard to define, but ugliness isn't — chaotic, redundant, convoluted, inconsistent. If your own draft reads that way, rework it; consistency with the surrounding style is what makes code read as clean.
 - Surgical cleanup: remove only the imports/variables/functions your change orphaned. Don't delete pre-existing dead code — mention it.
 - Don't regenerate: copy/move existing files (cp/mv) and edit in place; fetch remote content with curl/wget. Never recreate from scratch.
 - Workspace hygiene: keep scratch files out of the repo (use /tmp); delete temporary outputs before handoff.
