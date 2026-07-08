@@ -300,7 +300,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
 | Peer | Model | Lineage | Effort | Notes |
 |---|---|---|---|---|
 | `codex` | GPT-5.5 | OpenAI | `xhigh` | agentic code-review strength |
-| `grok-build` | Grok Build | xAI | `high` | independent of Anthropic/OpenAI |
+| `grok-build` | Grok 4.5 | xAI | `high` | independent of Anthropic/OpenAI |
 | `grok-composer` | Composer 2.5 fast | xAI (same as grok-build) | — | fast variant; quick xAI take |
 | `glm` | GLM-5.2 | Zhipu / z.ai (Anthropic-compatible endpoint) | pinned `max` | `reasoning_effort: max`, like DeepSeek |
 | `kimi` | Kimi K2.7-Code | Moonshot (Kimi-for-Coding plan, `api.kimi.com/coding/`) | thinking pinned | `CLAUDE_CODE_EFFORT_LEVEL=max` selects K2.7-Code; ignores `--effort` |

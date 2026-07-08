@@ -12,7 +12,7 @@
     "order": 2,
     "lineage": "grok",
     "transport": "grok",
-    "model": "grok-build",
+    "model": "grok-4.5",
     "effort_values": ["low", "medium", "high"],
     "default_effort": "medium",
     "template": "costar"
