@@ -42,7 +42,7 @@ dotfiles/
 - **Platform detection**: `IS_MACOS` set in `shell/.zshenv`, gates macOS-only code
 - **Python**: use `uv` for virtual environments (`sv`, `us`, `ua`, `upi` aliases)
 - **Prompt**: Starship (Catppuccin Latte/GitHub Dark palettes, config in `.config/starship/`)
-- **Themes**: Ghostty, Starship, btop, and tmux (Catppuccin Latte/GitHub Light ↔ GitHub Dark), toggled with `theme light|dark|toggle|status`. The active choice is **host-local** — a single `mode` file under `~/.local/state/dotfiles-theme/` (never tracked, so switching never dirties git); definitions stay in-repo. `shell/theme-apply` materializes each tool's live config from `mode` (Ghostty/tmux via optional `config-file`/`source-file -q` includes; btop/Starship as generated files, since neither supports includes), and `dotfiles.sh` seeds/re-applies it per host.
+- **Themes**: Ghostty, Starship, btop, and tmux (Catppuccin Latte/GitHub Light ↔ GitHub Dark), toggled with `theme light|dark|toggle|status`; use `theme --all <mode>` to apply the same mode on this host plus macmini and l40s. The active choice is **host-local** — a single `mode` file under `~/.local/state/dotfiles-theme/` (never tracked, so switching never dirties git); definitions stay in-repo. `shell/theme-apply` materializes each tool's live config from `mode` (Ghostty/tmux via optional `config-file`/`source-file -q` includes; btop/Starship as generated files, since neither supports includes), and `dotfiles.sh` seeds/re-applies it per host.
 
 <important if="you are editing or creating skills">
 

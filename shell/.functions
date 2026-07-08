@@ -11,7 +11,21 @@ disable_mouse_tracking() {
     printf '\e[?1000l\e[?1002l\e[?1003l\e[?1006l' >/dev/tty 2>/dev/null
 }
 
-theme() {
+_theme_resolve_mode() {
+    local mode="${1:-toggle}"
+    local state_dir="${DOTFILES_THEME_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme}"
+    local mode_file="$state_dir/mode"
+    case "$mode" in
+        light|dark) printf '%s\n' "$mode" ;;
+        toggle)
+            # Single source of truth: the host-local mode file (default dark).
+            if [[ "$(cat "$mode_file" 2>/dev/null)" == light ]]; then printf 'dark\n'; else printf 'light\n'; fi
+            ;;
+        *) return 2 ;;
+    esac
+}
+
+_theme_local() {
     local mode="${1:-toggle}"
     local state_dir="${DOTFILES_THEME_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme}"
     local mode_file="$state_dir/mode"
@@ -31,15 +45,14 @@ theme() {
             new_mode="$mode"
             ;;
         toggle)
-            # Single source of truth: the host-local mode file (default dark).
-            if [[ "$(cat "$mode_file" 2>/dev/null)" == light ]]; then new_mode="dark"; else new_mode="light"; fi
+            new_mode="$(_theme_resolve_mode toggle)"
             ;;
         status)
             printf 'Theme: %s\n' "$(cat "$mode_file" 2>/dev/null || printf '(unset, defaults to dark)')"
             return 0
             ;;
         *)
-            printf 'Usage: theme [light|dark|toggle|status]\n' >&2
+            printf 'Usage: theme [light|dark|toggle|status] | theme --all|-a <light|dark|toggle|status>\n' >&2
             return 2
             ;;
     esac
@@ -115,6 +128,129 @@ theme() {
     printf '  btop:    %s (restart btop to apply)\n' "$btop_theme"
     printf '  tmux:    %s\n' "$tmux_theme"
     printf '  Prompt:  %s\n' "$starship_palette"
+}
+
+theme() {
+    local all=false mode="" arg
+    for arg in "$@"; do
+        case "$arg" in
+            --all|-a) all=true ;;
+            light|dark|toggle|status)
+                if [[ -n "$mode" ]]; then
+                    printf 'Usage: theme [light|dark|toggle|status] | theme --all|-a <light|dark|toggle|status>\n' >&2
+                    return 2
+                fi
+                mode="$arg"
+                ;;
+            *)
+                printf 'Usage: theme [light|dark|toggle|status] | theme --all|-a <light|dark|toggle|status>\n' >&2
+                return 2
+                ;;
+        esac
+    done
+    if [[ "$all" == true && -z "$mode" ]]; then
+        printf 'Usage: theme [light|dark|toggle|status] | theme --all|-a <light|dark|toggle|status>\n' >&2
+        return 2
+    fi
+    mode="${mode:-toggle}"
+
+    if [[ "$all" != true ]]; then
+        _theme_local "$mode"
+        return $?
+    fi
+
+    local _c=$'\033[1;36m' _g=$'\033[32m' _r=$'\033[31m' _d=$'\033[2m' _0=$'\033[0m'
+    local peers=(macmini:macmini l40s:lambda-scalar)
+    local self_host self_host_l peer peer_alias peer_host hosts=()
+    self_host=$(hostname -s 2>/dev/null)
+    self_host_l=${self_host:l}
+    for peer in "${peers[@]}"; do
+        peer_alias=${peer%%:*}
+        peer_host=${peer#*:}
+        [[ "$self_host_l" == "${peer_alias:l}" || "$self_host_l" == "${peer_host:l}" ]] && continue
+        hosts+=("$peer_alias")
+    done
+
+    if [[ "$mode" == status ]]; then
+        printf '\n  %stheme%s  %sstatus everywhere%s\n\n' "$_c" "$_0" "$_d" "$_0"
+        printf '  %slocal%s\n' "$_c" "$_0"
+        _theme_local status | sed 's/^/     /'
+        local h status_rc=0 status_log
+        for h in "${hosts[@]}"; do
+            printf '\n  %s%s%s\n' "$_c" "$h" "$_0"
+            status_log=$(mktemp) || return 1
+            command ssh -o ConnectTimeout=10 -o BatchMode=yes "$h" \
+                    "zsh -lc 'source ~/dotfiles/shell/.functions && theme status'" > "$status_log" 2>&1
+            if (( $? )); then
+                status_rc=1
+            fi
+            sed 's/^/     /' "$status_log"
+            rm -f "$status_log"
+        done
+        printf '\n'
+        return $status_rc
+    fi
+
+    local new_mode
+    new_mode="$(_theme_resolve_mode "$mode")" || {
+        printf 'Usage: theme [light|dark|toggle|status] | theme --all|-a <light|dark|toggle|status>\n' >&2
+        return 2
+    }
+
+    printf '\n  %stheme%s  %sapply %s everywhere%s\n\n' "$_c" "$_0" "$_d" "$new_mode" "$_0"
+    printf '  %slocal%s\n' "$_c" "$_0"
+    local local_log local_rc
+    local_log=$(mktemp) || return 1
+    _theme_local "$new_mode" > "$local_log" 2>&1
+    local_rc=$?
+    sed 's/^/     /' "$local_log"
+    rm -f "$local_log"
+    if (( local_rc )); then
+        printf '\n  %s✗ local theme failed; remotes skipped%s\n\n' "$_r" "$_0"
+        return 1
+    fi
+
+    local tmpdir h failed_hosts=() pids=() pid
+    tmpdir=$(mktemp -d) || return 1
+    local _was_monitor=0
+    [[ -o monitor ]] && { _was_monitor=1; set +m; }
+    for h in "${hosts[@]}"; do
+        command ssh -o ConnectTimeout=10 -o BatchMode=yes "$h" \
+            "zsh -lc 'source ~/dotfiles/shell/.functions && theme $new_mode'" \
+            > "$tmpdir/$h.log" 2>&1 &
+        pids+=($!)
+    done
+    for pid in "${pids[@]}"; do
+        wait "$pid"
+    done
+    (( _was_monitor )) && set -m
+
+    if (( ${#hosts[@]} )); then
+        printf '\n  %sRemotes%s ' "$_c" "$_0"
+        for h in "${hosts[@]}"; do
+            if grep -q "^Theme: ${new_mode}$" "$tmpdir/$h.log"; then
+                printf ' %s✓%s %s' "$_g" "$_0" "$h"
+            else
+                printf ' %s✗%s %s' "$_r" "$_0" "$h"
+                failed_hosts+=("$h")
+            fi
+        done
+        printf '\n'
+        if (( ${#failed_hosts[@]} )); then
+            printf '\n'
+            for h in "${failed_hosts[@]}"; do
+                printf '  %s%s:%s\n' "$_d" "$h" "$_0"
+                sed "s/^/     ${_d}│${_0} /" "$tmpdir/$h.log"
+            done
+        fi
+    fi
+    rm -rf "$tmpdir"
+
+    if (( ${#failed_hosts[@]} )); then
+        printf '\n  %s✗ %d remote theme update(s) failed%s\n\n' "$_r" "${#failed_hosts[@]}" "$_0"
+        return ${#failed_hosts[@]}
+    fi
+    printf '\n  %s✓ theme applied everywhere%s\n\n' "$_g" "$_0"
 }
 
 ghostty-theme() {
