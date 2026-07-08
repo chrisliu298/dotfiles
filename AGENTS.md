@@ -23,7 +23,7 @@ dotfiles/
 ```
 
 - `.config/ghostty`: Ghostty/cmux terminal config — tracked in-repo (not fetched from the standalone `chrisliu298/ghostty-config` repo), symlinked like the rest of `.config/`.
-- `agents/extensions/skills/` is the single source of truth for repo-owned skills; `dotfiles.sh` symlinks each into the agent dirs the `SKILLS` table selects (most to Claude/Codex/Grok; some are Claude-only). Pi is configured separately and does not receive shared skills yet.
+- `agents/extensions/skills/` is the single source of truth for repo-owned skills; `dotfiles.sh` symlinks each into the agent dirs the `SKILLS` table selects (most to Claude/Codex/Grok/Pi; some are Claude-only). Pi (`~/.pi/agent/skills/`) mirrors the Codex/Grok set and additionally loads its own native npm extensions declared in `agents/pi/settings.json`.
 - `.claude/skills/` holds project-local skills available only when working in this repo.
 
 ## Build, Test, and Development Commands
@@ -47,13 +47,13 @@ dotfiles/
 
 ## Editing Skills
 
-Never edit in `~/.claude/skills/`, `~/.codex/skills/`, or `~/.grok/skills/` — those are symlinks. Check `agents/extensions/README.md` for source.
+Never edit in `~/.claude/skills/`, `~/.codex/skills/`, `~/.grok/skills/`, or `~/.pi/agent/skills/` — those are symlinks. Check `agents/extensions/README.md` for source.
 
 - **Own skills** (`agents/extensions/skills/`): edit in this repo — the single source of truth.
 - **Third-party skills** (cloned from GitHub): edit in the source repo or fork.
 - **Best practices**: read `agents/extensions/references/skill-best-practices.md` before creating or improving skills.
 - **Description length**: every skill's `description` frontmatter must stay under 1024 characters — trim it before committing.
-- **Universal (C/X/G — Claude/Codex/Grok) skills**: read `agents/extensions/references/universal-skill-authoring.md` before editing a skill shared across all three agents — keep the body harness-agnostic (no `$ARGUMENTS`, no bare `AskUserQuestion`/`Skill()`, capability-not-runtime degradation). Pi is not in this skill set yet. `./dotfiles.sh` warns on the mechanical violations; `./dotfiles.sh lint` runs the check on demand.
+- **Universal (C/X/G — Claude/Codex/Grok) skills**: read `agents/extensions/references/universal-skill-authoring.md` before editing a skill shared across all these agents — keep the body harness-agnostic (no `$ARGUMENTS`, no bare `AskUserQuestion`/`Skill()`, capability-not-runtime degradation). Pi now consumes this same shared set (mirroring the Codex/Grok column), so the harness-agnostic rules apply to it too. `./dotfiles.sh` warns on the mechanical violations; `./dotfiles.sh lint` runs the check on demand.
 - **Verify vendor guidance**: before updating skills with vendor/model guidance, check against official current docs — don't preserve stale model names or deprecated API parameters.
 - **Validate referenced paths**: when skill docs reference installed or symlinked paths, verify they exist after `./dotfiles.sh`.
 

@@ -33,13 +33,14 @@ LINKS=(
 # name|source|agents — name * = auto-discover subdirs with SKILL.md
 # source: ./path (local) or owner/repo[/subpath] (GitHub)
 SKILLS=(
-    # grok mirrors the Codex set (it dispatches as a relay/prism target), including
-    # side-effecting skills like gpt-pro-relay/push — those are allowed. Only the
-    # claude-only entries below (relay, prism, keep-warm, crons, goal-loop, skill-creator) are left off
-    # grok; relay and prism are additionally blocked from being triggered (RELAY_PEER
-    # guard + PATH scrub of both script dirs + the GROK_CLAUDE_*_ENABLED=false compat
-    # suite set in .zshenv and the relay grok transport).
-    "*|./agents/extensions/skills|claude,codex,grok"
+    # grok and pi both mirror the Codex set (grok dispatches as a relay/prism target;
+    # pi is a standalone harness that reads ~/.pi/agent/skills/), including side-effecting
+    # skills like gpt-pro-relay/push — those are allowed. Only the claude-only entries below
+    # (relay, prism, keep-warm, crons, goal-loop, recall, codex-first, skill-creator) are left
+    # off grok/pi; relay and prism are additionally blocked from being triggered on grok
+    # (RELAY_PEER guard + PATH scrub of both script dirs + the GROK_CLAUDE_*_ENABLED=false
+    # compat suite set in .zshenv and the relay grok transport).
+    "*|./agents/extensions/skills|claude,codex,grok,pi"
     # Relay: claude-only caller; targets Codex, Grok, GLM, Kimi, DeepSeek, and MiMo via the script
     "relay|./agents/extensions/skills/relay|claude"
     # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup)
@@ -59,11 +60,11 @@ SKILLS=(
     # specs + reviews; a Codex/Grok session self-delegating to Codex is meaningless. MANUAL (below),
     # so it's off until `./dotfiles.sh enable codex-first`. The explicit entry overrides the wildcard.
     "codex-first|./agents/extensions/skills/codex-first|claude"
-    "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex,grok"
-    "humanizer|blader/humanizer|claude,codex,grok"
+    "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex,grok,pi"
+    "humanizer|blader/humanizer|claude,codex,grok,pi"
     "pdf|anthropics/skills/skills/pdf|claude"
     "skill-creator|anthropics/skills/skills/skill-creator|claude"
-    "pdf|openai/skills/skills/.curated/pdf|codex,grok"
+    "pdf|openai/skills/skills/.curated/pdf|codex,grok,pi"
 )
 
 # Skills not auto-installed (opt-in). Toggle with: ./dotfiles.sh enable/disable <name>.
@@ -295,14 +296,14 @@ _fetch_skills_repos() {
 }
 
 install_skills() {
-    mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills" "$HOME/.grok/skills"
+    mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills" "$HOME/.grok/skills" "$HOME/.pi/agent/skills"
     local explicit_names=$'\n'
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name _ _ <<< "$entry"
         [[ "$name" != "*" ]] && explicit_names+="$name"$'\n'
     done
 
-    local claude_expected="" codex_expected="" grok_expected=""
+    local claude_expected="" codex_expected="" grok_expected="" pi_expected=""
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name source agents <<< "$entry"
         local base_dir; base_dir=$(_resolve_source "$source")
@@ -337,17 +338,19 @@ install_skills() {
             [[ "$agents" == *claude* ]] && { ensure_symlink "$spath" "$HOME/.claude/skills/$sname"; claude_expected+="$sname"$'\n'; }
             [[ "$agents" == *codex* ]]  && { ensure_symlink "$spath" "$HOME/.codex/skills/$sname";  codex_expected+="$sname"$'\n'; }
             [[ "$agents" == *grok* ]]   && { ensure_symlink "$spath" "$HOME/.grok/skills/$sname";   grok_expected+="$sname"$'\n'; }
+            [[ "$agents" == *pi* ]]     && { ensure_symlink "$spath" "$HOME/.pi/agent/skills/$sname"; pi_expected+="$sname"$'\n'; }
         done
     done
 
     # Clean stale skill symlinks
     local dir expected
-    for dir in "$HOME/.claude/skills" "$HOME/.codex/skills" "$HOME/.grok/skills"; do
+    for dir in "$HOME/.claude/skills" "$HOME/.codex/skills" "$HOME/.grok/skills" "$HOME/.pi/agent/skills"; do
         [[ -d "$dir" ]] || continue
         case "$dir" in
-            *claude*) expected="$claude_expected" ;;
-            *codex*)  expected="$codex_expected"  ;;
-            *grok*)   expected="$grok_expected"   ;;
+            *claude*)    expected="$claude_expected" ;;
+            *codex*)     expected="$codex_expected"  ;;
+            *grok*)      expected="$grok_expected"   ;;
+            *.pi/agent*) expected="$pi_expected"     ;;
         esac
         for entry in "$dir"/*; do
             [[ -L "$entry" ]] || continue
@@ -462,6 +465,7 @@ cmd_enable() {
         [[ "$agents" == *claude* ]] && ensure_symlink "$base_dir" "$HOME/.claude/skills/$name"
         [[ "$agents" == *codex* ]]  && ensure_symlink "$base_dir" "$HOME/.codex/skills/$name"
         [[ "$agents" == *grok* ]]   && ensure_symlink "$base_dir" "$HOME/.grok/skills/$name"
+        [[ "$agents" == *pi* ]]     && ensure_symlink "$base_dir" "$HOME/.pi/agent/skills/$name"
         found=true
     done
     # Fall back to wildcard discovery
@@ -475,6 +479,7 @@ cmd_enable() {
             [[ "$agents" == *claude* ]] && ensure_symlink "$skill_dir" "$HOME/.claude/skills/$name"
             [[ "$agents" == *codex* ]]  && ensure_symlink "$skill_dir" "$HOME/.codex/skills/$name"
             [[ "$agents" == *grok* ]]   && ensure_symlink "$skill_dir" "$HOME/.grok/skills/$name"
+            [[ "$agents" == *pi* ]]     && ensure_symlink "$skill_dir" "$HOME/.pi/agent/skills/$name"
             found=true
         done
     fi
@@ -487,7 +492,7 @@ cmd_disable() {
     local name="${1:?usage: dotfiles.sh disable <name>}"
     _is_manual "$name" || warn "'$name' is not a manual skill — next run will re-create it"
     local removed=false
-    for dir in "$HOME/.claude/skills/$name" "$HOME/.codex/skills/$name" "$HOME/.grok/skills/$name"; do
+    for dir in "$HOME/.claude/skills/$name" "$HOME/.codex/skills/$name" "$HOME/.grok/skills/$name" "$HOME/.pi/agent/skills/$name"; do
         [[ -L "$dir" ]] && { rm "$dir"; log "removed ${dir/#$HOME/~}"; removed=true; }
     done
     if _is_manual "$name"; then
@@ -502,7 +507,7 @@ cmd_skills() {
     local m
     for m in "${MANUAL_SKILLS[@]}"; do
         local status="${_DIM}off${_RST}"
-        [[ -L "$HOME/.claude/skills/$m" || -L "$HOME/.codex/skills/$m" || -L "$HOME/.grok/skills/$m" ]] && status="on "
+        [[ -L "$HOME/.claude/skills/$m" || -L "$HOME/.codex/skills/$m" || -L "$HOME/.grok/skills/$m" || -L "$HOME/.pi/agent/skills/$m" ]] && status="on "
         printf '    %-22s %s\n' "$m" "$status"
     done
     printf '\n'
