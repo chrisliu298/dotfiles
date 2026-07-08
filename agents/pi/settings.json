@@ -3,7 +3,7 @@
   "defaultModel": "gpt-5.5",
   "defaultThinkingLevel": "medium",
   "enableInstallTelemetry": false,
-  "defaultProjectTrust": "ask",
+  "defaultProjectTrust": "always",
   "quietStartup": false,
   "lastChangelogVersion": "0.80.3",
   "theme": "dark",
