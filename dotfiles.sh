@@ -574,34 +574,28 @@ lint_docmaint() {
     return "$rc"
 }
 
-# ── agent-doc drift-guard ────────────────────────────────────────
-# The three global instruction files (claude/CLAUDE.md, codex/AGENTS.md, grok/AGENTS.md)
-# MUST stay aligned, differing only in whitelisted per-agent deltas: the H1, Claude's
-# <important> wrappers, and Claude's `run_in_background` phrasing of "Concurrent subagents".
-# Normalize those away and compare the rest; catch a
-# silent edit landing in one copy but not the others. (Adopt single-source generation only
-# if this drifts often — see the root CLAUDE.md/AGENTS.md "Maintaining Docs" note.)
+# ── agent-doc identity-guard ─────────────────────────────────────
+# The four global instruction files (claude/CLAUDE.md, codex/AGENTS.md, grok/AGENTS.md,
+# pi/AGENTS.md) are one canonical text copied verbatim to all four paths — byte-identical,
+# no per-agent deltas (a de-formatted, agent-read doc; effectiveness parity verified by the
+# instruction-following harness in agents/eval/). Assert that identity; any diff means one
+# copy was edited without propagating. To change them: edit one, copy to the other three,
+# commit together.
 lint_agentdocs() {
     local -a docs=(
         "agents/claude/CLAUDE.md"
         "agents/codex/AGENTS.md"
         "agents/grok/AGENTS.md"
+        "agents/pi/AGENTS.md"
     )
-    local f norm prev="" prev_name="" rc=0
-    for f in "${docs[@]}"; do
+    local ref="${docs[0]}" f rc=0
+    if [[ ! -f "$ROOT/$ref" ]]; then warn "agentdocs: missing canonical $ref"; return 1; fi
+    for f in "${docs[@]:1}"; do
         if [[ ! -f "$ROOT/$f" ]]; then warn "agentdocs: missing copy $f"; rc=1; continue; fi
-        norm=$(sed \
-                -e '1d' \
-                -e '/^<important/d' \
-                -e '/^<\/important>/d' \
-                -e 's/Launch in background ([^)]*)/Spawn them asynchronously/' \
-                -e 's/CLAUDE\.md/AGENTS.md/g' \
-                "$ROOT/$f" | grep -v '^[[:space:]]*$' | shasum | cut -d' ' -f1)
-        if [[ -n "$prev" && "$norm" != "$prev" ]]; then
-            warn "agentdocs: $f drifted from $prev_name (the three must match except whitelisted per-agent deltas) — re-sync them"
+        if ! diff -q "$ROOT/$ref" "$ROOT/$f" >/dev/null 2>&1; then
+            warn "agentdocs: $f differs from $ref (the four must be byte-identical) — re-copy the canonical text"
             rc=1
         fi
-        prev="$norm"; prev_name="$f"
     done
     return "$rc"
 }

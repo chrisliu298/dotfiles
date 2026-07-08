@@ -19,12 +19,14 @@ dotfiles/
     ├── codex/               # Codex (~/.codex/) — AGENTS.md
     ├── grok/                # Grok Build (~/.grok/) — AGENTS.md (relay/prism dispatch target)
     ├── pi/                  # Pi (~/.pi/agent/) — AGENTS.md, settings.json
+    ├── eval/                # Instruction-following harness for the shared agent doc (prompts, rubric, runner scripts)
     └── extensions/skills/   # Repo-owned skill sources (one SKILL.md each), wired by the SKILLS table
 ```
 
 - `.config/ghostty`: Ghostty/cmux terminal config — tracked in-repo (not fetched from the standalone `chrisliu298/ghostty-config` repo), symlinked like the rest of `.config/`.
 - `agents/extensions/skills/` is the single source of truth for repo-owned skills; `dotfiles.sh` symlinks each into the agent dirs the `SKILLS` table selects (most to Claude/Codex/Grok/Pi; some are Claude-only). Pi (`~/.pi/agent/skills/`) mirrors the Codex/Grok set and additionally loads its own native npm extensions declared in `agents/pi/settings.json`.
 - `.claude/skills/` holds project-local skills available only when working in this repo.
+- The four global instruction files (`agents/claude/CLAUDE.md` + `agents/{codex,grok,pi}/AGENTS.md`) are one canonical, agent-read text copied **byte-identical** to all four paths — no per-agent deltas. Edit one, copy to the other three; `./dotfiles.sh lint` asserts the identity. Behavior parity across models when the text changes is checked by the harness in `agents/eval/`.
 
 ## Build, Test, and Development Commands
 
@@ -100,7 +102,7 @@ MCP servers and Claude plugins are wired the same way, via the `MCP_SERVERS` and
 ## Maintaining Docs
 
 - **Sync root docs**: keep root `CLAUDE.md` and root `AGENTS.md` aligned — same facts and section order, diverging only in the H1, the project-level pointer, and Claude's `<important>` wrappers.
-- **Sync global instructions**: `agents/claude/CLAUDE.md`, `agents/codex/AGENTS.md`, and `agents/grok/AGENTS.md` share working principles (compatibility diffs only — e.g. Claude's `<important>` wrappers) — update all three when changing any. `./dotfiles.sh lint` enforces this: it normalizes the whitelisted deltas and flags any other drift between the three.
+- **Sync global instructions**: the four global instruction files (`agents/claude/CLAUDE.md` + `agents/{codex,grok,pi}/AGENTS.md`) are one canonical, agent-read text, **byte-identical** across all four (no per-agent deltas). Edit one, copy to the other three, commit together. `./dotfiles.sh lint` asserts the identity and fails on any diff. When the text changes, check behavior parity across models with the harness in `agents/eval/`.
 - **Update docs**: after structural changes (adding, removing, or renaming files/directories, skills, or configs), check whether `README.md`, `CLAUDE.md`, or `AGENTS.md` reference the affected paths and update them.
 
 ## Not Backed Up
