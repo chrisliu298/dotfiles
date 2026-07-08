@@ -1,0 +1,10 @@
+{
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
+  "defaultThinkingLevel": "medium",
+  "enableInstallTelemetry": false,
+  "defaultProjectTrust": "ask",
+  "quietStartup": false,
+  "lastChangelogVersion": "0.80.3",
+  "theme": "dark"
+}

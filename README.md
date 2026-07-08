@@ -23,6 +23,7 @@ dotfiles/
     ├── claude/              # Claude Code config (CLAUDE.md, settings, hooks)
     ├── codex/               # Codex config (AGENTS.md)
     ├── grok/                # Grok Build config (AGENTS.md)
+    ├── pi/                  # Pi config (AGENTS.md, settings)
     └── extensions/          # Local AI agent extensions
 ```
 

@@ -18,11 +18,12 @@ dotfiles/
     ├── claude/              # Claude Code (~/.claude/) — CLAUDE.md, settings.json (copied), keybindings, statusline
     ├── codex/               # Codex (~/.codex/) — AGENTS.md
     ├── grok/                # Grok Build (~/.grok/) — AGENTS.md (relay/prism dispatch target)
+    ├── pi/                  # Pi (~/.pi/agent/) — AGENTS.md, settings.json
     └── extensions/skills/   # Repo-owned skill sources (one SKILL.md each), wired by the SKILLS table
 ```
 
 - `.config/ghostty`: Ghostty/cmux terminal config — tracked in-repo (not fetched from the standalone `chrisliu298/ghostty-config` repo), symlinked like the rest of `.config/`.
-- `agents/extensions/skills/` is the single source of truth for repo-owned skills; `dotfiles.sh` symlinks each into the agent dirs the `SKILLS` table selects (most to all three; some are Claude-only).
+- `agents/extensions/skills/` is the single source of truth for repo-owned skills; `dotfiles.sh` symlinks each into the agent dirs the `SKILLS` table selects (most to Claude/Codex/Grok; some are Claude-only). Pi is configured separately and does not receive shared skills yet.
 - `.claude/skills/` holds project-local skills available only when working in this repo.
 
 ## Build, Test, and Development Commands
@@ -52,7 +53,7 @@ Never edit in `~/.claude/skills/`, `~/.codex/skills/`, or `~/.grok/skills/` — 
 - **Third-party skills** (cloned from GitHub): edit in the source repo or fork.
 - **Best practices**: read `agents/extensions/references/skill-best-practices.md` before creating or improving skills.
 - **Description length**: every skill's `description` frontmatter must stay under 1024 characters — trim it before committing.
-- **Universal (C/X/G — Claude/Codex/Grok) skills**: read `agents/extensions/references/universal-skill-authoring.md` before editing a skill shared across all three agents — keep the body harness-agnostic (no `$ARGUMENTS`, no bare `AskUserQuestion`/`Skill()`, capability-not-runtime degradation). `./dotfiles.sh` warns on the mechanical violations; `./dotfiles.sh lint` runs the check on demand.
+- **Universal (C/X/G — Claude/Codex/Grok) skills**: read `agents/extensions/references/universal-skill-authoring.md` before editing a skill shared across all three agents — keep the body harness-agnostic (no `$ARGUMENTS`, no bare `AskUserQuestion`/`Skill()`, capability-not-runtime degradation). Pi is not in this skill set yet. `./dotfiles.sh` warns on the mechanical violations; `./dotfiles.sh lint` runs the check on demand.
 - **Verify vendor guidance**: before updating skills with vendor/model guidance, check against official current docs — don't preserve stale model names or deprecated API parameters.
 - **Validate referenced paths**: when skill docs reference installed or symlinked paths, verify they exist after `./dotfiles.sh`.
 
@@ -99,7 +100,7 @@ MCP servers and Claude plugins are wired the same way, via the `MCP_SERVERS` and
 ## Maintaining Docs
 
 - **Sync root docs**: keep root `CLAUDE.md` and root `AGENTS.md` aligned — same facts and section order, diverging only in the H1, the project-level pointer, and Claude's `<important>` wrappers.
-- **Sync global instructions**: `agents/claude/CLAUDE.md`, `agents/codex/AGENTS.md`, and `agents/grok/AGENTS.md` share working principles (compatibility diffs only — e.g. Codex's `update_plan`, Claude's `<important>` wrappers) — update all three when changing any. `./dotfiles.sh lint` enforces this: it normalizes the whitelisted deltas and flags any other drift between the three.
+- **Sync global instructions**: `agents/claude/CLAUDE.md`, `agents/codex/AGENTS.md`, and `agents/grok/AGENTS.md` share working principles (compatibility diffs only — e.g. Claude's `<important>` wrappers) — update all three when changing any. `./dotfiles.sh lint` enforces this: it normalizes the whitelisted deltas and flags any other drift between the three.
 - **Update docs**: after structural changes (adding, removing, or renaming files/directories, skills, or configs), check whether `README.md`, `CLAUDE.md`, or `AGENTS.md` reference the affected paths and update them.
 
 ## Not Backed Up

@@ -26,6 +26,8 @@ LINKS=(
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
     "agents/codex/AGENTS.md:.codex/AGENTS.md"
     "agents/grok/AGENTS.md:.grok/AGENTS.md"
+    "agents/pi/AGENTS.md:.pi/agent/AGENTS.md"
+    "agents/pi/settings.json:.pi/agent/settings.json"
 )
 
 # name|source|agents — name * = auto-discover subdirs with SKILL.md
@@ -568,8 +570,8 @@ lint_docmaint() {
 # ── agent-doc drift-guard ────────────────────────────────────────
 # The three global instruction files (claude/CLAUDE.md, codex/AGENTS.md, grok/AGENTS.md)
 # MUST stay aligned, differing only in whitelisted per-agent deltas: the H1, Claude's
-# <important> wrappers, Claude's `run_in_background` phrasing of "Concurrent subagents",
-# and Codex's `update_plan` bullet. Normalize those away and compare the rest; catch a
+# <important> wrappers, and Claude's `run_in_background` phrasing of "Concurrent subagents".
+# Normalize those away and compare the rest; catch a
 # silent edit landing in one copy but not the others. (Adopt single-source generation only
 # if this drifts often — see the root CLAUDE.md/AGENTS.md "Maintaining Docs" note.)
 lint_agentdocs() {
@@ -585,7 +587,6 @@ lint_agentdocs() {
                 -e '1d' \
                 -e '/^<important/d' \
                 -e '/^<\/important>/d' \
-                -e '/update_plan/d' \
                 -e 's/Launch in background ([^)]*)/Spawn them asynchronously/' \
                 -e 's/CLAUDE\.md/AGENTS.md/g' \
                 "$ROOT/$f" | grep -v '^[[:space:]]*$' | shasum | cut -d' ' -f1)

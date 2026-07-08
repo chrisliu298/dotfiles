@@ -507,7 +507,7 @@ szt() {
 }
 
 # =============================================================================
-# Claude Code / Codex
+# Claude Code / Codex / Pi
 # =============================================================================
 
 # Unset TMUX for Claude Code so Bun's getColorDepth() doesn't short-circuit
@@ -551,6 +551,51 @@ xc(){ _codex_resume_effort --last "$@"; }
 xr(){ _codex_resume_effort "$@"; }
 xu(){ npm install -g @openai/codex@latest "$@"; }
 xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.5 --config model_reasoning_effort=high "${*}"; }
+
+# Pi defaults to GPT-5.5 through the OpenAI Codex subscription provider. This
+# intentionally uses Pi's `openai-codex` OAuth token in ~/.pi/agent/auth.json,
+# not OPENAI_API_KEY / the API-key `openai` provider.
+_pi(){ env -u TMUX PI_TELEMETRY=0 PI_SKIP_VERSION_CHECK=1 COLORTERM=truecolor "$(command -v pi)" "$@"; }
+p(){ _pi --provider openai-codex --model gpt-5.5 "$@"; }
+pc(){ _pi --provider openai-codex --model gpt-5.5 --continue "$@"; }
+pr(){ _pi --resume "$@"; }
+phl(){ (( $# )) || { echo 'Usage: phl "<prompt>"'; return 1; }; _pi --provider openai-codex --model gpt-5.5 -p "${*}"; }
+
+_pi_glm(){
+    [[ -n "${GLM_PLAN_KEY_INT:-}" ]] || { echo 'GLM_PLAN_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }
+    ZAI_API_KEY="$GLM_PLAN_KEY_INT" _pi --provider zai --model glm-5.2 --thinking xhigh "$@"
+}
+pglm(){ _pi_glm "$@"; }
+pglmc(){ _pi_glm --continue "$@"; }
+pglmr(){ _pi_glm --resume "$@"; }
+pglmhl(){ (( $# )) || { echo 'Usage: pglmhl "<prompt>"'; return 1; }; _pi_glm -p "${*}"; }
+
+_pi_kimi(){
+    [[ -n "${KIMI_PLAN_KEY_CN:-}" ]] || { echo 'KIMI_PLAN_KEY_CN not set (see ~/.zshenv.local)' >&2; return 1; }
+    KIMI_API_KEY="$KIMI_PLAN_KEY_CN" _pi --provider kimi-coding --model kimi-for-coding --thinking xhigh "$@"
+}
+pkm(){ _pi_kimi "$@"; }
+pkmc(){ _pi_kimi --continue "$@"; }
+pkmr(){ _pi_kimi --resume "$@"; }
+pkmhl(){ (( $# )) || { echo 'Usage: pkmhl "<prompt>"'; return 1; }; _pi_kimi -p "${*}"; }
+
+_pi_deepseek(){
+    [[ -n "${DEEPSEEK_API_KEY_INT:-}" ]] || { echo 'DEEPSEEK_API_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }
+    DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY_INT" _pi --provider deepseek --model deepseek-v4-pro --thinking xhigh "$@"
+}
+pds(){ _pi_deepseek "$@"; }
+pdsc(){ _pi_deepseek --continue "$@"; }
+pdsr(){ _pi_deepseek --resume "$@"; }
+pdshl(){ (( $# )) || { echo 'Usage: pdshl "<prompt>"'; return 1; }; _pi_deepseek -p "${*}"; }
+
+_pi_mimo(){
+    [[ -n "${MIMO_API_KEY_INT:-}" ]] || { echo 'MIMO_API_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }
+    XIAOMI_API_KEY="$MIMO_API_KEY_INT" _pi --provider xiaomi --model mimo-v2.5-pro "$@"
+}
+pmm(){ _pi_mimo "$@"; }
+pmmc(){ _pi_mimo --continue "$@"; }
+pmmr(){ _pi_mimo --resume "$@"; }
+pmmhl(){ (( $# )) || { echo 'Usage: pmmhl "<prompt>"'; return 1; }; _pi_mimo -p "${*}"; }
 
 # =============================================================================
 # DeepSeek (via Claude Code, Anthropic-compatible endpoint)

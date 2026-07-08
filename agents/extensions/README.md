@@ -1,6 +1,6 @@
 # Extensions
 
-Agent extensions for Claude, Codex, and Grok. **Skills**, **MCP servers**, and a curated set of **plugins** are managed by `dotfiles.sh`.
+Agent extensions for Claude, Codex, and Grok. **Skills**, **MCP servers**, and a curated set of **plugins** are managed by `dotfiles.sh`. Pi is configured by this repo, but is not yet part of the shared skill/extension installer.
 
 | Type | What it does | Managed by |
 |------|--------------|------------|
@@ -15,6 +15,8 @@ Single source of truth: own skills live in `agents/extensions/skills/`; communit
 - Claude → `~/.claude/skills/`
 - Codex  → `~/.codex/skills/`
 - Grok   → `~/.grok/skills/` (relay/prism dispatch target; mirrors the Codex set)
+
+Pi (`~/.pi/agent/`) is wired for config and shell launchers only. Add Pi skill loading deliberately after testing harness compatibility; do not assume the C/X/G skill matrix applies to Pi.
 
 Each `SKILL.md` works across all three agents. Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex and Grok. Per-agent scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., relay and prism are claude-only).
 
