@@ -536,6 +536,7 @@ xm(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=medium
 xh(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=high "$@"; }
 xx(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=xhigh "$@"; }
 xmx(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=max "$@"; }
+xul(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=ultra "$@"; }
 _codex_resume_effort(){
     local resume_args=()
     if [[ "$1" == "--last" ]]; then
