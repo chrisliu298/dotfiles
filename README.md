@@ -24,14 +24,14 @@ dotfiles/
     ├── codex/               # Codex config (AGENTS.md)
     ├── grok/                # Grok Build config (AGENTS.md)
     ├── pi/                  # Pi config (AGENTS.md, settings)
-    └── extensions/          # Local AI agent extensions
+    └── skills/              # Repo-owned skill sources + authoring references
 ```
 
-See [`shell/`](shell/README.md), [`.config/`](.config/README.md), and [`agents/extensions/`](agents/extensions/README.md) for details.
+See [`shell/`](shell/README.md), [`.config/`](.config/README.md), and [`agents/skills/`](agents/skills/README.md) for details.
 
 ## Extensions
 
-33 extensions across local and upstream sources. See [`agents/extensions/README.md`](agents/extensions/README.md) for full catalog. 4 additional Obsidian-specific skills live in the vault's `_claude/skills/`.
+33 extensions across local and upstream sources. See [`agents/skills/README.md`](agents/skills/README.md) for full catalog. 4 additional Obsidian-specific skills live in the vault's `_claude/skills/`.
 
 | Action | Command |
 |--------|---------|
@@ -39,5 +39,5 @@ See [`shell/`](shell/README.md), [`.config/`](.config/README.md), and [`agents/e
 | List manual skills | `./dotfiles.sh skills` |
 | Enable a manual skill | `./dotfiles.sh enable <name>` (then commit + `dfs` to propagate) |
 | Disable a manual skill | `./dotfiles.sh disable <name>` (then commit + `dfs` to propagate) |
-| Add a local skill | Create `agents/extensions/skills/<name>/SKILL.md`, run `./dotfiles.sh` |
+| Add a local skill | Create `agents/skills/<name>/SKILL.md`, run `./dotfiles.sh` |
 | Add an upstream skill | Add `name\|owner/repo/subpath\|agents` to `SKILLS` table in `dotfiles.sh` |

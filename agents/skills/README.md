@@ -1,6 +1,6 @@
-# Extensions
+# Skills
 
-Agent extensions for Claude, Codex, Grok, and Pi. **Skills**, **MCP servers**, and a curated set of **plugins** are managed by `dotfiles.sh`. Pi receives the harness-agnostic skill set (mirroring the Codex/Grok column) plus its own native npm extensions (see the Pi note below).
+This directory (`agents/skills/`) is the single source of truth for repo-owned **skills**, their **authoring references** (`references/`), and the manual-enabled set (`manual-skills.enabled`) — no MCP or plugin config lives here. It doubles as the catalog for all agent extensions across Claude, Codex, Grok, and Pi: **skills**, **MCP servers**, and a curated set of **plugins** are all managed by `dotfiles.sh`, but only skills are stored under this path — MCP servers and plugins are defined by the `MCP_SERVERS` and `PLUGINS` tables in `dotfiles.sh`, not here. Pi receives the harness-agnostic skill set (mirroring the Codex/Grok column) plus its own native npm extensions (see the Pi note below).
 
 | Type | What it does | Managed by |
 |------|--------------|------------|
@@ -10,7 +10,7 @@ Agent extensions for Claude, Codex, Grok, and Pi. **Skills**, **MCP servers**, a
 
 ## Skills
 
-Single source of truth: own skills live in `agents/extensions/skills/`; community/third-party skills are cloned to `~/.cache/skills-src/`. Both are symlinked into per-agent skill dirs:
+Single source of truth: own skills live in `agents/skills/`; community/third-party skills are cloned to `~/.cache/skills-src/`. Both are symlinked into per-agent skill dirs:
 
 - Claude → `~/.claude/skills/`
 - Codex  → `~/.codex/skills/`

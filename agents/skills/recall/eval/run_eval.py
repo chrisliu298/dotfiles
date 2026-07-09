@@ -19,7 +19,7 @@ are trustworthy:
 A hit "is correct" iff its indexed text contains one of the gold item's answer-distinct `expect`
 keywords (which are deliberately not the query terms). Run from anywhere:
 
-  uv run agents/extensions/skills/recall/eval/run_eval.py --cwd /Users/you/dotfiles
+  uv run agents/skills/recall/eval/run_eval.py --cwd /Users/you/dotfiles
   uv run .../eval/run_eval.py --all -v        # include relay/headless sessions; per-query table
 
 Environment-specific: it reads ~/.claude/projects/<this cwd>, so it only means anything on a machine

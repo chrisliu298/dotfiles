@@ -43,7 +43,7 @@ something.
 ## Workflow
 
 ```bash
-RECALL=~/dotfiles/agents/extensions/skills/recall/scripts/recall.py
+RECALL=~/dotfiles/agents/skills/recall/scripts/recall.py
 ```
 
 1. **Live-context check first.** If the referenced thing was said **earlier in the current session**

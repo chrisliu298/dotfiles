@@ -19,7 +19,7 @@ Subcommands:
   doctor   diagnostics: encoded cwd, file counts, a sample of candidates      -> text
 
 Run with uv (zero deps, stdlib only):
-  uv run ~/dotfiles/agents/extensions/skills/recall/scripts/recall.py search --cwd "$PWD" --q "auth retry"
+  uv run ~/dotfiles/agents/skills/recall/scripts/recall.py search --cwd "$PWD" --q "auth retry"
 
 Retrieval is LEXICAL (BM25 over normalized events), not semantic — by design: it stays stdlib-only
 and its failure mode is a clean miss (-> ask the user) rather than a confident wrong match. The

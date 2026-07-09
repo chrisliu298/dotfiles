@@ -40,26 +40,26 @@ SKILLS=(
     # off grok/pi; relay and prism are additionally blocked from being triggered on grok
     # (RELAY_PEER guard + PATH scrub of both script dirs + the GROK_CLAUDE_*_ENABLED=false
     # compat suite set in .zshenv and the relay grok transport).
-    "*|./agents/extensions/skills|claude,codex,grok,pi"
+    "*|./agents/skills|claude,codex,grok,pi"
     # Relay: claude-only caller; targets Codex, Grok, GLM, Kimi, DeepSeek, and MiMo via the script
-    "relay|./agents/extensions/skills/relay|claude"
+    "relay|./agents/skills/relay|claude"
     # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup)
-    "keep-warm|./agents/extensions/skills/keep-warm|claude"
+    "keep-warm|./agents/skills/keep-warm|claude"
     # crons: claude-only durable manifest + re-arm for the recurring /loop + CronCreate fleet
     # (CronCreate/CronList/CronDelete are Claude-only); preparer-not-actuator, no docmaint freshness gate
-    "crons|./agents/extensions/skills/crons|claude"
+    "crons|./agents/skills/crons|claude"
     # prism: claude-only caller (dispatches parallax to Codex + Grok + GLM + Kimi + DeepSeek + MiMo via relay)
-    "prism|./agents/extensions/skills/prism|claude"
+    "prism|./agents/skills/prism|claude"
     # goal-loop: default review backend is prism (claude-only); built on the Skill/AskUserQuestion
     # tooling. Off-Claude it only degrades to external/local/none, so keep it claude-only.
-    "goal-loop|./agents/extensions/skills/goal-loop|claude"
+    "goal-loop|./agents/skills/goal-loop|claude"
     # recall: claude-only; searches THIS project's past Claude transcripts (~/.claude/projects) for
     # an earlier user statement. The store is Claude-specific, so it has no meaning on Codex/Grok.
-    "recall|./agents/extensions/skills/recall|claude"
+    "recall|./agents/skills/recall|claude"
     # codex-first: claude-only routing skill — delegates hands-on work to `codex exec` while Claude
     # specs + reviews; a Codex/Grok session self-delegating to Codex is meaningless. MANUAL (below),
     # so it's off until `./dotfiles.sh enable codex-first`. The explicit entry overrides the wildcard.
-    "codex-first|./agents/extensions/skills/codex-first|claude"
+    "codex-first|./agents/skills/codex-first|claude"
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex,grok,pi"
     "humanizer|blader/humanizer|claude,codex,grok,pi"
     "pdf|anthropics/skills/skills/pdf|claude"
@@ -81,7 +81,7 @@ MANUAL_SKILLS=(
 # ./dotfiles.sh run enforces it (symlink the listed, prune the rest), and
 # enable/disable rewrite it. Since dfs runs `git pull && ./dotfiles.sh` on each
 # peer, a commit + dfs propagates the set to every machine — no per-host toggling.
-MANUAL_ENABLED_FILE="$ROOT/agents/extensions/manual-skills.enabled"
+MANUAL_ENABLED_FILE="$ROOT/agents/skills/manual-skills.enabled"
 
 MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: claude,codex or omit for both)
     "chrome-devtools|npx|chrome-devtools-mcp@latest --autoConnect --channel stable --no-usage-statistics|codex"
@@ -521,7 +521,7 @@ cmd_skills() {
 # exempt (allowed-tools etc. are additive and ignored off-Claude). Conservative
 # by design — flags only the two unambiguous hazards; tool-name degradation
 # (AskUserQuestion/Skill) needs human review. See
-# agents/extensions/references/universal-skill-authoring.md.
+# agents/skills/references/universal-skill-authoring.md.
 lint_skills() {
     local claude_only=$'\n' entry ename _src agents
     for entry in "${SKILLS[@]}"; do
@@ -529,7 +529,7 @@ lint_skills() {
         [[ "$ename" != "*" && "$agents" == "claude" ]] && claude_only+="$ename"$'\n'
     done
     local d dname m hits=0
-    for d in "$ROOT"/agents/extensions/skills/*/; do
+    for d in "$ROOT"/agents/skills/*/; do
         d="${d%/}"; dname="${d##*/}"
         [[ -f "$d/SKILL.md" ]] || continue
         [[ "$claude_only" == *$'\n'"$dname"$'\n'* ]] && continue
@@ -540,7 +540,7 @@ lint_skills() {
         printf '%s\n' "$m" | sed 's/^/        /'
         hits=1
     done
-    (( hits )) && warn "fix per agents/extensions/references/universal-skill-authoring.md, or scope the skill claude-only"
+    (( hits )) && warn "fix per agents/skills/references/universal-skill-authoring.md, or scope the skill claude-only"
     # docmaint + agentdocs statuses propagate: fatal for `./dotfiles.sh lint`, advisory in a full run
     local _dm=0 _ad=0
     lint_docmaint  || _dm=$?
@@ -554,9 +554,9 @@ lint_skills() {
 # landing in one copy but not the others) and a DOC value that doesn't match its skill dir.
 lint_docmaint() {
     local -a copies=(
-        "todo:agents/extensions/skills/todo/scripts/docmaint.py"
-        "status:agents/extensions/skills/exec-status/scripts/docmaint.py"
-        "seal:agents/extensions/skills/mental-seal/scripts/docmaint.py"
+        "todo:agents/skills/todo/scripts/docmaint.py"
+        "status:agents/skills/exec-status/scripts/docmaint.py"
+        "seal:agents/skills/mental-seal/scripts/docmaint.py"
     )
     local entry want path norm prev="" prev_name="" doc rc=0
     for entry in "${copies[@]}"; do

@@ -606,7 +606,7 @@ pmmhl(){ (( $# )) || { echo 'Usage: pmmhl "<prompt>"'; return 1; }; _pi_mimo -p 
 # needed. Requires DEEPSEEK_API_KEY_INT in env (see ~/.zshenv.local).
 #
 # NOTE: _deepseek/_mimo/_glm/_kimi below duplicate the model id, endpoint, and
-# extras that also live in agents/extensions/skills/relay/peers.json — the
+# extras that also live in agents/skills/relay/peers.json — the
 # relay/prism source of truth. These interactive launchers are a separate
 # consumer; if you change a model id, endpoint, or key var, update peers.json too
 # (and vice versa). See relay SKILL.md "Peer registry".

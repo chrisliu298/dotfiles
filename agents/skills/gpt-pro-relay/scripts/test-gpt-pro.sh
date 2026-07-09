@@ -7,7 +7,7 @@
 # success, empty-body guard, submit-drop retry, transport backoff, terminal errors, the
 # 127→venv fallback, deadline phase-state (124 vs 255), plus the local blocking path.
 #
-# Run: bash agents/extensions/skills/gpt-pro-relay/scripts/test-gpt-pro.sh
+# Run: bash agents/skills/gpt-pro-relay/scripts/test-gpt-pro.sh
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
