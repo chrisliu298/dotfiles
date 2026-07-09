@@ -41,14 +41,14 @@ SKILLS=(
     # (RELAY_PEER guard + PATH scrub of both script dirs + the GROK_CLAUDE_*_ENABLED=false
     # compat suite set in .zshenv and the relay grok transport).
     "*|./agents/skills|claude,codex,grok,pi"
-    # Relay: claude-only caller; targets Codex, Grok, GLM, Kimi, DeepSeek, and MiMo via the script
+    # Relay: claude-only caller; targets GPT, Grok, GLM, Kimi, DeepSeek, and MiMo via the script
     "relay|./agents/skills/relay|claude"
     # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup)
     "keep-warm|./agents/skills/keep-warm|claude"
     # crons: claude-only durable manifest + re-arm for the recurring /loop + CronCreate fleet
     # (CronCreate/CronList/CronDelete are Claude-only); preparer-not-actuator, no docmaint freshness gate
     "crons|./agents/skills/crons|claude"
-    # prism: claude-only caller (dispatches parallax to Codex + Grok + GLM + Kimi + DeepSeek + MiMo via relay)
+    # prism: claude-only caller (dispatches parallax to GPT + Grok + GLM + Kimi + DeepSeek + MiMo via relay)
     "prism|./agents/skills/prism|claude"
     # goal-loop: default review backend is prism (claude-only); built on the Skill/AskUserQuestion
     # tooling. Off-Claude it only degrades to external/local/none, so keep it claude-only.

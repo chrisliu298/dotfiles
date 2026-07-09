@@ -1,6 +1,6 @@
 # GPT-5.6 Prompt Craft
 
-Help users write effective prompts for OpenAI GPT models — either from scratch or by refining existing prompts. Based on OpenAI's official GPT-5.6 prompt guidance. For Codex coding agents, see `references/codex.md` instead.
+Help users write effective prompts for OpenAI GPT models — either from scratch or by refining existing prompts. Based on OpenAI's official GPT-5.6 prompt guidance.
 
 ## Core philosophy: outcome-first
 
@@ -525,9 +525,7 @@ can increase overthinking, unnecessary searching, or output regressions.
 
 For coding agents, use the more detailed version below instead.
 
-#### Coding agent autonomy (non-Codex GPT agents)
-
-For Codex-specific agent patterns (starter prompt, preambles, tools), use `references/codex.md` instead.
+#### Coding agent autonomy (GPT agents)
 
 ```xml
 <autonomy_and_persistence>

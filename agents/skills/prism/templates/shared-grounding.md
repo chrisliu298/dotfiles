@@ -13,7 +13,7 @@ use Jina instead** via Bash:
 - search (needs `JINA_API_KEY`): `curl -s 'https://s.jina.ai/<URL-encoded query>' -H 'Accept: application/json' -H "Authorization: Bearer $JINA_API_KEY"`
 - fetch: `curl -s -X POST 'https://r.jina.ai/' -H 'Content-Type: application/json' -H 'Accept: application/json' ${JINA_API_KEY:+-H "Authorization: Bearer $JINA_API_KEY"} -d '{"url":"<url>"}'`
 
-**Codex, Grok, and gpt-pro** run their own harness with their own native web search/fetch — use those directly; the `WebSearch` / `WebFetch` and Jina details above are Claude-Code-only. Either way, what matters is that the fact is grounded in a live source.
+**GPT, Grok, and gpt-pro** run their own harness with their own native web search/fetch — use those directly; the `WebSearch` / `WebFetch` and Jina details above are Claude-Code-only. Either way, what matters is that the fact is grounded in a live source.
 
 When you search:
 - Corroborate each load-bearing fact across at least two independent sources (prefer

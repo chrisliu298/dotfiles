@@ -215,17 +215,17 @@ recover_codex_response() {
 
 # Auto-detect caller and peer from the skill directory this script lives in.
 # Caller is always Claude under the current one-direction protocol; the default
-# peer is Codex. Use --to grok-build, --to grok-composer, --to glm, --to kimi, --to deepseek, or --to mimo to route elsewhere.
-# Returns "from to" (e.g. "claude codex") or empty string if unknown.
+# peer is gpt. Use --to grok-build, --to grok-composer, --to glm, --to kimi, --to deepseek, or --to mimo to route elsewhere.
+# Returns "from to" (e.g. "claude gpt") or empty string if unknown.
 detect_peers() {
   local script_dir
   script_dir=$(cd "$(dirname "$0")/.." && pwd)
   case "$script_dir" in
-    */.claude/skills/* | */claude/skills/*) echo "claude codex" ;;
+    */.claude/skills/* | */claude/skills/*) echo "claude gpt" ;;
     *)
       # Fallback: only Claude Code is a supported caller.
       if [ "${CLAUDECODE:-}" = "1" ]; then
-        echo "claude codex"
+        echo "claude gpt"
       else
         echo ""
       fi
@@ -348,7 +348,7 @@ cmd_call() {
   local model
   model=$(jq -r '.model' <<<"$peer_json")
 
-  # Effort applies only to peers that declare effort_values (codex, grok-build). Validate it
+  # Effort applies only to peers that declare effort_values (gpt, grok-build). Validate it
   # for those; blank it for every other peer so it is neither emitted into the
   # request frontmatter nor passed to the peer (keeps cmd_req registry-driven too).
   if jq -e 'has("effort_values")' <<<"$peer_json" >/dev/null; then
@@ -689,11 +689,11 @@ Subcommands:
 
 Call options:
   --name <slug>      Call identifier
-  --effort <level>   Reasoning effort: codex (low/medium/high/xhigh), grok-build (low/medium/high).
+  --effort <level>   Reasoning effort: gpt (low/medium/high/xhigh/max/ultra), grok-build (low/medium/high).
                      Ignored for grok-composer, glm, kimi, deepseek (always max), and mimo (no knob).
   --body-only        Strip frontmatter from response output
   --from <peer>      Override caller detection (normally claude)
-  --to <peer>        Override peer detection (codex, grok-build, grok-composer, glm, kimi, deepseek, mimo; default codex)
+  --to <peer>        Override peer detection (gpt, grok-build, grok-composer, glm, kimi, deepseek, mimo; default gpt)
 USAGE
 }
 

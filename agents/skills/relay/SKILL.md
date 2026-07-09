@@ -2,11 +2,11 @@
 effort: medium
 name: relay
 description: |
-  The ONLY way to call Codex, Grok, GLM, Kimi, DeepSeek, or MiMo. Use whenever the
-  user wants to ask, delegate to, or get a second opinion from Codex, Grok, GLM,
+  The ONLY way to call GPT (a.k.a. Codex), Grok, GLM, Kimi, DeepSeek, or MiMo. Use whenever the
+  user wants to ask, delegate to, or get a second opinion from GPT, Grok, GLM,
   Kimi, DeepSeek, or MiMo. Do NOT run the codex, grok, glm, kimi (km), deepseek (ds), or
   mimo (mm) CLI directly — from the main agent or a subagent; always use this
-  skill's relay call command. Triggers on "ask/have/send to/get/delegate to codex" or
+  skill's relay call command. Triggers on "ask/have/send to/get/delegate to gpt/codex" or
   the same with "grok"/"glm"/"kimi"/"deepseek"/"mimo", "second opinion", "relay".
 allowed-tools: Read, Write, Bash(relay:*), Bash(find:*), Bash(printf:*)
 user-invocable: true
@@ -16,9 +16,9 @@ user-invocable: true
 
 **Claude-only.** If `ANTHROPIC_BASE_URL` contains `z.ai`, `kimi.com`, `deepseek`, or `xiaomimimo`, this skill is unavailable — stop and tell the user: "relay is Claude-only; a non-Claude session cannot orchestrate other models." The relay script also refuses at the shell layer.
 
-Call Codex, Grok, GLM, Kimi, DeepSeek, or MiMo like a function: one command generates the request, invokes the peer, and prints the response.
+Call GPT, Grok, GLM, Kimi, DeepSeek, or MiMo like a function: one command generates the request, invokes the peer, and prints the response.
 
-> **The peer is a full agent in the Claude Code harness — not a stateless API call.** Relay invokes each peer through its registered transport (GLM/Kimi/DeepSeek/MiMo via `claude -p` with the model weights swapped — GLM-5.2, Kimi-K2.7-Code, V4-Pro, MiMo-V2.5-Pro; Codex via `codex exec`; Grok via its own `grok` CLI), so the peer has your core tools — Bash, file read/write, Grep/Glob, subagents, multi-step agentic loops. It can see this repo, run commands, and verify its own work; delegate file I/O and shell work directly. Do **not** treat it as a one-shot completion that "can't see the codebase." Web tools (WebFetch/WebSearch) are registered on every peer and broadly work — Codex and both Grok tiers do both (verified 2026-06-06). Re-verified 2026-06-19 for the claude-env peers by having each invoke the tools: DeepSeek does both; MiMo has native WebFetch but no live WebSearch; GLM has native WebSearch but no WebFetch. **Both remaining native gaps are covered by verified Jina fallbacks, so every peer effectively has both fetch and search:** a missing WebFetch falls back to the keyless Jina Reader (`r.jina.ai`) — or, on GLM, its own MCP `web_reader` — and MiMo's missing WebSearch falls back to Jina Search (`s.jina.ai`, end-to-end verified 2026-06-19 once `JINA_API_KEY` was provisioned; see *Prompting Grok, GLM, Kimi, DeepSeek, and MiMo* for the MiMo instruction). **Kimi K2.7-Code** (via the Kimi-for-Coding plan, verified 2026-06-19) needs no Jina fallback at all: its native WebFetch **and** WebSearch both work (the web tools' thinking-off aux calls route to K2.6, which accepts them). The only constant difference from you is the model behind the harness.
+> **The peer is a full agent in the Claude Code harness — not a stateless API call.** Relay invokes each peer through its registered transport (GLM/Kimi/DeepSeek/MiMo via `claude -p` with the model weights swapped — GLM-5.2, Kimi-K2.7-Code, V4-Pro, MiMo-V2.5-Pro; GPT via `codex exec`; Grok via its own `grok` CLI), so the peer has your core tools — Bash, file read/write, Grep/Glob, subagents, multi-step agentic loops. It can see this repo, run commands, and verify its own work; delegate file I/O and shell work directly. Do **not** treat it as a one-shot completion that "can't see the codebase." Web tools (WebFetch/WebSearch) are registered on every peer and broadly work — GPT and both Grok tiers do both (verified 2026-06-06). Re-verified 2026-06-19 for the claude-env peers by having each invoke the tools: DeepSeek does both; MiMo has native WebFetch but no live WebSearch; GLM has native WebSearch but no WebFetch. **Both remaining native gaps are covered by verified Jina fallbacks, so every peer effectively has both fetch and search:** a missing WebFetch falls back to the keyless Jina Reader (`r.jina.ai`) — or, on GLM, its own MCP `web_reader` — and MiMo's missing WebSearch falls back to Jina Search (`s.jina.ai`, end-to-end verified 2026-06-19 once `JINA_API_KEY` was provisioned; see *Prompting Grok, GLM, Kimi, DeepSeek, and MiMo* for the MiMo instruction). **Kimi K2.7-Code** (via the Kimi-for-Coding plan, verified 2026-06-19) needs no Jina fallback at all: its native WebFetch **and** WebSearch both work (the web tools' thinking-off aux calls route to K2.6, which accepts them). The only constant difference from you is the model behind the harness.
 
 ```
 relay call --name <slug> [--to <peer>] [--effort <level>] [--body-only] <<'BODY'
@@ -26,17 +26,17 @@ task
 BODY
 ```
 
-`relay` is in PATH. The caller is always Claude (this is a Claude-only skill); the peer defaults to Codex. Pass `--to grok-build`, `--to grok-composer`, `--to glm`, `--to kimi`, `--to deepseek`, or `--to mimo` to route elsewhere.
+`relay` is in PATH. The caller is always Claude (this is a Claude-only skill); the peer defaults to GPT. Pass `--to grok-build`, `--to grok-composer`, `--to glm`, `--to kimi`, `--to deepseek`, or `--to mimo` to route elsewhere.
 
 If a bare `relay` ever returns "command not found" (a sandboxed/non-zsh/reset-env shell that didn't inherit the PATH entry), re-run the **identical** command with the absolute install path — `~/.claude/skills/relay/scripts/relay call …`. That is the whole recovery; do not reconstruct the call by hand.
 
-**All Codex, Grok, GLM, Kimi, DeepSeek, and MiMo interactions go through `relay call`.** Do not invoke `codex exec`, the `grok` CLI, or the `glm`/`km`/`ds`/`mm` aliases directly, do not spawn agents to run the codex, grok, or claude CLI for these purposes, and do not pass model flags (`-m`, `--model`) — the model and invocation method come from the peer registry (`peers.json`), not the call.
+**All GPT, Grok, GLM, Kimi, DeepSeek, and MiMo interactions go through `relay call`.** Do not invoke `codex exec`, the `grok` CLI, or the `glm`/`km`/`ds`/`mm` aliases directly, do not spawn agents to run the codex, grok, or claude CLI for these purposes, and do not pass model flags (`-m`, `--model`) — the model and invocation method come from the peer registry (`peers.json`), not the call.
 
 ## Peer selection
 
 | Peer | When to pick | How to invoke |
 |---|---|---|
-| **Codex** (default) | Code review, security review, refactoring, agentic coding. GPT-5.6 lineage. Four effort tiers (`low`/`medium`/`high`/`xhigh`). | `relay call --name ...` (no `--to` needed) |
+| **GPT** (default) | Code review, security review, refactoring, agentic coding. OpenAI lineage. Six effort tiers (`low`/`medium`/`high`/`xhigh`/`max`/`ultra`). | `relay call --name ...` (no `--to` needed) |
 | **Grok Build** | An independent xAI lineage (Grok 4.5, model id `grok-4.5`), xAI's agentic coding model. Runs via grok's own CLI in headless mode (not Anthropic-compatible). Three effort tiers (`low`/`medium`/`high`, default `medium`) — `high` is grok-4.5's ceiling (no `xhigh`). | `relay call --to grok-build --name ...` |
 | **Grok Composer** | xAI's fast model (`grok-composer-2.5-fast`) — same lineage as Grok Build, lighter/cheaper. Use as a faster xAI option (not a distinct cross-vendor perspective). No effort knob. | `relay call --to grok-composer --name ...` |
 | **GLM** | An independent lineage (Zhipu/z.ai GLM-5.2), reached through z.ai's Anthropic-compatible endpoint. Use for another cross-vendor perspective. Pinned to `max` reasoning via the registry (like DeepSeek); ignores `--effort`. Text-only (no image input via relay). | `relay call --to glm --name ...` |
@@ -44,11 +44,11 @@ If a bare `relay` ever returns "command not found" (a sandboxed/non-zsh/reset-en
 | **DeepSeek** | Independent model family for true cross-vendor diversity, frontier reasoning, multi-step analysis. Open-weight V4-Pro (1.6T MoE). Always runs at `max` (DeepThink). Text-only (no image input via relay). | `relay call --to deepseek --name ...` |
 | **MiMo** | Another independent open-weight lineage (Xiaomi MiMo-V2.5-Pro, 1.02T MoE / 42B active, 1M context). Use for a further cross-vendor perspective. No effort knob. Text-only (no image input via relay). | `relay call --to mimo --name ...` |
 
-Pick Codex by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick Grok Build, GLM, Kimi, DeepSeek, or MiMo for a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax (Grok Composer is a faster xAI variant, not a distinct lineage from Grok Build). Of these, only Grok Build has an effort knob (`low`/`medium`/`high`); GLM, Kimi, DeepSeek, MiMo, and Grok Composer ignore `--effort`, so omit it for them. GLM requires `GLM_PLAN_KEY_INT` (a z.ai GLM Coding Plan key), Kimi requires `KIMI_PLAN_KEY_CN` (a Kimi-for-Coding key), DeepSeek requires `DEEPSEEK_API_KEY_INT`, and MiMo requires `MIMO_API_KEY_INT` (a MiMo pay-per-token API key) in the environment; Grok uses its own cached login (no key var).
+Pick GPT by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick Grok Build, GLM, Kimi, DeepSeek, or MiMo for a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax (Grok Composer is a faster xAI variant, not a distinct lineage from Grok Build). Of these, only Grok Build has an effort knob (`low`/`medium`/`high`); GLM, Kimi, DeepSeek, MiMo, and Grok Composer ignore `--effort`, so omit it for them. GLM requires `GLM_PLAN_KEY_INT` (a z.ai GLM Coding Plan key), Kimi requires `KIMI_PLAN_KEY_CN` (a Kimi-for-Coding key), DeepSeek requires `DEEPSEEK_API_KEY_INT`, and MiMo requires `MIMO_API_KEY_INT` (a MiMo pay-per-token API key) in the environment; Grok uses its own cached login (no key var).
 
 ### Peer registry
 
-Every model-family fact — transport (`codex` CLI vs a generic `claude-env` Anthropic-compatible envelope), endpoint, key variable, model id, effort knob, per-peer extras, and launcher template style — lives once in `peers.json` next to the script. `relay` and `prism-launch` both read it, so **adding a peer that reuses an existing transport is one stanza** there, not edits across the script, the prism launcher, and the docs. Two of the per-peer keys are **prism-consumed, not relay-consumed**: `order` (the standard-tier dispatch/display position) and `lineage` (the synthesis-weighting group — the two Grok tiers share `"grok"`). `relay` ignores them, but `prism-launch` derives its tier order, `peershape` display, and digest lineage from them, so keep them on each standard-tier stanza (a peer with no `order` is simply not a Prism standard tier). The `claude-env` peers share one code path that differs only by registry data; Codex and Grok each have their own transport. Two deliberate exceptions stay in code, not data: a brand-new *transport* needs its own script branch (this is how `grok` was added — its own headless-CLI invocation), and a new `claude-env` peer should also get its endpoint added to the inbound Claude-only refusal at the top of the script (a one-line safety guard that must run before the registry is loaded). Grok needs no refusal entry — it sets no `ANTHROPIC_BASE_URL`, and the transport-agnostic `RELAY_PEER` guard already blocks a dispatched grok peer from recursing. The interactive `glm`/`km`/`ds`/`mm` launchers in `shell/.functions` are a separate consumer and still carry their own copy — keep them in sync.
+Every model-family fact — transport (`codex` CLI vs a generic `claude-env` Anthropic-compatible envelope), endpoint, key variable, model id, effort knob, per-peer extras, and launcher template style — lives once in `peers.json` next to the script. `relay` and `prism-launch` both read it, so **adding a peer that reuses an existing transport is one stanza** there, not edits across the script, the prism launcher, and the docs. Two of the per-peer keys are **prism-consumed, not relay-consumed**: `order` (the standard-tier dispatch/display position) and `lineage` (the synthesis-weighting group — the two Grok tiers share `"grok"`). `relay` ignores them, but `prism-launch` derives its tier order, `peershape` display, and digest lineage from them, so keep them on each standard-tier stanza (a peer with no `order` is simply not a Prism standard tier). The `claude-env` peers share one code path that differs only by registry data; GPT and Grok each have their own transport. Two deliberate exceptions stay in code, not data: a brand-new *transport* needs its own script branch (this is how `grok` was added — its own headless-CLI invocation), and a new `claude-env` peer should also get its endpoint added to the inbound Claude-only refusal at the top of the script (a one-line safety guard that must run before the registry is loaded). Grok needs no refusal entry — it sets no `ANTHROPIC_BASE_URL`, and the transport-agnostic `RELAY_PEER` guard already blocks a dispatched grok peer from recursing. The interactive `glm`/`km`/`ds`/`mm` launchers in `shell/.functions` are a separate consumer and still carry their own copy — keep them in sync.
 
 ### Common Mistakes
 - **Premature failure diagnosis**: If a relay call was launched with `run_in_background: true`, do not inspect `.relay` files or enter the failure flow until the background task's completion notification arrives. No notification means the peer is still running.
@@ -66,22 +66,24 @@ BODY
 
 ## Effort Levels
 
-`--effort` applies to Codex and Grok Build. Codex accepts `low`/`medium`/`high`/`xhigh`; Grok Build accepts `low`/`medium`/`high` (both default `medium`). These are **different vendors' scales, not a shared standard** — a level name means what each vendor defines, so `high` on Codex (OpenAI, [reasoning guide](https://developers.openai.com/api/docs/guides/reasoning)) and `high` on Grok Build (xAI, [reasoning docs](https://docs.x.ai/developers/model-capabilities/text/reasoning)) are not equivalent depths, and neither vendor guarantees a fixed token progression across levels. Pick the level from the model you're calling, not by analogy to the other. DeepSeek, GLM, and Kimi run with reasoning pinned on via the registry (DeepSeek via DeepThink; GLM via `reasoning_effort: max`; Kimi via `CLAUDE_CODE_EFFORT_LEVEL=max`, which selects K2.7-Code on the coding plan — thinking off would route to K2.6), and MiMo and Grok Composer have no effort knob. None of them takes a graded `--effort`, so the flag is silently ignored or omitted on those calls.
+`--effort` applies to GPT and Grok Build. GPT accepts `low`/`medium`/`high`/`xhigh`/`max`/`ultra` (the full gpt-5.6-sol range); Grok Build accepts `low`/`medium`/`high` (both default `medium`). These are **different vendors' scales, not a shared standard** — a level name means what each vendor defines, so `high` on GPT (OpenAI, [reasoning guide](https://developers.openai.com/api/docs/guides/reasoning)) and `high` on Grok Build (xAI, [reasoning docs](https://docs.x.ai/developers/model-capabilities/text/reasoning)) are not equivalent depths, and neither vendor guarantees a fixed token progression across levels. Pick the level from the model you're calling, not by analogy to the other. DeepSeek, GLM, and Kimi run with reasoning pinned on via the registry (DeepSeek via DeepThink; GLM via `reasoning_effort: max`; Kimi via `CLAUDE_CODE_EFFORT_LEVEL=max`, which selects K2.7-Code on the coding plan — thinking off would route to K2.6), and MiMo and Grok Composer have no effort knob. None of them takes a graded `--effort`, so the flag is silently ignored or omitted on those calls.
 
 | Level | When to use |
 |-------|-------------|
-| `low` | Codex and Grok Build. Quick, cheap turnarounds — simple lookups, small mechanical edits, sanity checks where deep reasoning isn't worth the latency. |
-| `medium` | **Default for Codex and Grok Build.** Balanced starting point for code review, tests, bug fixes, and most refactoring. |
-| `high` | Codex and Grok Build — the deeper reasoning tier (the top tier for Grok Build). Use for hard analysis where the extra latency is worth it. |
-| `xhigh` | Codex only. Hard architecture work, deep security review, or eval-bound tasks worth the extra latency. |
+| `low` | GPT and Grok Build. Quick, cheap turnarounds — simple lookups, small mechanical edits, sanity checks where deep reasoning isn't worth the latency. |
+| `medium` | **Default for GPT and Grok Build.** Balanced starting point for code review, tests, bug fixes, and most refactoring. |
+| `high` | GPT and Grok Build — the deeper reasoning tier (the top tier for Grok Build). Use for hard analysis where the extra latency is worth it. |
+| `xhigh` | GPT only. Hard architecture work, deep security review, or eval-bound tasks worth the extra latency. |
+| `max` | GPT only. Maximum reasoning depth for the hardest problems — more exploration and verification than `xhigh`. **Prism pins the GPT parallax tier here.** |
+| `ultra` | GPT only. Max reasoning **plus automatic task delegation** (spawns subagents inside the `codex exec` run) — the slowest tier; reach for it only when the task genuinely benefits from decomposition. |
 
 Before raising effort, improve the prompt first — add outcome-first success criteria, stop rules, verification steps, and completeness criteria.
 
-## Prompting Codex
+## Prompting GPT
 
-**Before composing the prompt body, read the prompt-engineer references** — `~/.claude/skills/prompt-engineer/references/gpt.md` for cross-cutting GPT-5.6 prompt patterns and `~/.claude/skills/prompt-engineer/references/codex.md` for Codex coding agent patterns. If those symlinks are unavailable, use the repo copies at `agents/skills/prompt-engineer/references/`. This is not optional — the guides contain model-specific patterns that materially affect output quality.
+**Before composing the prompt body, read the prompt-engineer reference** — `~/.claude/skills/prompt-engineer/references/gpt.md` for cross-cutting GPT-5.6 prompt patterns. If that symlink is unavailable, use the repo copy at `agents/skills/prompt-engineer/references/`. This is not optional — the guide contains model-specific patterns that materially affect output quality.
 
-Lead with the outcome, not the procedure. GPT-5.6 responds best to outcome-first prompts — state the goal, success criteria, and stop rules, then let Codex pick the path. Use XML scaffolding only when a specific failure mode needs it:
+Lead with the outcome, not the procedure. GPT-5.6 responds best to outcome-first prompts — state the goal, success criteria, and stop rules, then let GPT pick the path. Use XML scaffolding only when a specific failure mode needs it:
 
 - `<output_contract>` — when format precision matters
 - `<completeness_contract>` — when the task has discrete items that must all be covered
@@ -155,7 +157,7 @@ BODY
 
 For **judgment tasks** — analysis, review, design, research, second opinions — ask the peer to end its answer with a reasons-based calibration block, then act on it when the response returns. **Skip it for mechanical or code-changing calls** (run-a-command, apply-a-defined-change): there the trust signal is tests, diffs, and the `verify:` frontmatter, not a self-report. Don't ask for a number — verbalized confidence from these models is poorly calibrated (clusters at round numbers, skews overconfident), so a `%` or `High/Med/Low` manufactures false precision the orchestrator can't discount.
 
-Add to the prompt body — inside `<output_contract>` for Codex, `<response_format>` for Grok/GLM/Kimi/DeepSeek/MiMo:
+Add to the prompt body — inside `<output_contract>` for GPT, `<response_format>` for Grok/GLM/Kimi/DeepSeek/MiMo:
 
 ```text
 End with a ## Calibration block:
@@ -204,11 +206,11 @@ When you have independent subagent work alongside a relay call, **never block on
 
 **Background the Bash call**: Use `run_in_background: true` on the Bash tool so the relay call runs concurrently with your subagents. The platform sends a completion notification when the background task finishes — do not poll, do not inspect `.relay` files, and do not enter the failure diagnosis flow before that notification arrives.
 
-**Give it a generous timeout.** Relay peers are full agents and can run long (Codex `xhigh`, GLM at `max`, Kimi thinking, DeepSeek/MiMo DeepThink, Grok at `high` routinely take many minutes). A Bash-tool `timeout` that fires mid-run kills the peer and wastes every token it already spent — favor completion over a tight bound. Set `timeout: 3600000` (60 min) on the backgrounded Bash call; relay has no internal per-call cap, so this outer timeout is the only bound.
+**Give it a generous timeout.** Relay peers are full agents and can run long (GPT `max`, GLM at `max`, Kimi thinking, DeepSeek/MiMo DeepThink, Grok at `high` routinely take many minutes). A Bash-tool `timeout` that fires mid-run kills the peer and wastes every token it already spent — favor completion over a tight bound. Set `timeout: 3600000` (60 min) on the backgrounded Bash call; relay has no internal per-call cap, so this outer timeout is the only bound.
 
 **Rule: Launch relay calls and subagents concurrently. Never serialize independent work.**
 
-**Never wrap relay in a subagent.** If an Agent task calls `relay` with `run_in_background: true`, the subagent will complete before the peer (Codex, Grok, GLM, Kimi, DeepSeek, or MiMo) finishes, and the platform will kill the orphaned peer process. Always call `relay` from the main conversation. If a subagent must call relay (e.g., the skill was invoked before you could prevent it), the Bash call must run in foreground — omit `run_in_background` so the subagent blocks until the peer replies.
+**Never wrap relay in a subagent.** If an Agent task calls `relay` with `run_in_background: true`, the subagent will complete before the peer (GPT, Grok, GLM, Kimi, DeepSeek, or MiMo) finishes, and the platform will kill the orphaned peer process. Always call `relay` from the main conversation. If a subagent must call relay (e.g., the skill was invoked before you could prevent it), the Bash call must run in foreground — omit `run_in_background` so the subagent blocks until the peer replies.
 
 ## Prism / Parallax
 
@@ -216,10 +218,10 @@ When Relay is used as the Parallax transport inside Prism, the relay call receiv
 
 Launch each relay Bash call with `run_in_background: true` in the same parallel dispatch step as the local reviewer subagents. Do not wrap Relay itself in another subagent layer.
 
-If a Parallax relay call fails (after its background completion notification has arrived), treat it as a recoverable transport problem. Check the relay script's Bash output for the diagnosed cause, fix the invocation, and retry once before declaring that peer unavailable — never read the `.log` sidecar (full stderr, token-heavy). A failure of one peer (e.g., Codex) does not affect the others.
+If a Parallax relay call fails (after its background completion notification has arrived), treat it as a recoverable transport problem. Check the relay script's Bash output for the diagnosed cause, fix the invocation, and retry once before declaring that peer unavailable — never read the `.log` sidecar (full stderr, token-heavy). A failure of one peer (e.g., GPT) does not affect the others.
 
 ## Utility Commands
 
 `relay --help` and `relay --version` print usage and version info.
 
-`--to` accepts `codex` (default), `grok-build`, `grok-composer`, `glm`, `kimi`, `deepseek`, or `mimo`. There is no relay-to-Claude direction — Claude is the sole caller in this protocol.
+`--to` accepts `gpt` (default), `grok-build`, `grok-composer`, `glm`, `kimi`, `deepseek`, or `mimo`. There is no relay-to-Claude direction — Claude is the sole caller in this protocol.

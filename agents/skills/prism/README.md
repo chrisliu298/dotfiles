@@ -63,8 +63,8 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
 │  └──────────────┘                             │ one backgrounded fan-out          │
 │   same model →          ┌─────┬──────────┬─────────┼────────┬────┬────┐           │
 │   shared blind spots,   ▼     ▼          ▼         ▼        ▼    ▼    ▼           │
-│   so convergence here   Codex Grok-Build Grok-Comp GLM Kimi DeepSeek MiMo         │
-│   is DISCOUNTED        (GPT5.6) (xAI) (xAI fast) (z.ai) (Moon) (V4-Pro) (Xiaomi)  │
+│   so convergence here   GPT   Grok-Build Grok-Comp GLM Kimi DeepSeek MiMo         │
+│   is DISCOUNTED        (OpenAI) (xAI) (xAI fast) (z.ai) (Moon) (V4-Pro) (Xiaomi)  │
 │                         └─────┴──────────┴─────────┴────────┴────┴────┘           │
 │                              independent lineages → catch the blind spots the     │
 │                              others share → dissent here carries OUTSIZED weight  │
@@ -74,7 +74,7 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
 
 * **Subagents** are dispatched with the **Agent tool** (only Claude can).
 * **Parallax** peers are dispatched through **`relay`**, which runs each model in
-  the Claude Code harness (Codex via `codex exec`, Grok via its CLI, GLM/Kimi/DeepSeek/MiMo
+  the Claude Code harness (GPT via `codex exec`, Grok via its CLI, GLM/Kimi/DeepSeek/MiMo
   via `claude -p` with the weights swapped). A peer is a *full agent*, not an API call.
 
 ---
@@ -91,7 +91,7 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
              Nns (e.g. 1ns) = no-subagents: drop the Claude tier, keep 7 parallax at
              N → dispatched 7N+M, perspectives 7N+M+1. Same as "<q> no subagents".
 
-   No reasoning-effort knob — Codex always xhigh, Grok-Build always high.
+   No reasoning-effort knob — GPT always max, Grok-Build always high.
 
    prism Why does X happen?             → auto-sized (anchor: 1 of each)
    prism 2 Which architecture?          → 2 of each, no gpt-pro
@@ -134,7 +134,7 @@ backgrounded process. The Integrator stays in the loop for the judgment.
  4  launch — ALL at once (run_in_background):
        ├─ Agent call × N (zero in a no-subagents run) ──────────►  Claude subagents
        │                                                               │
-       └─ parallax (bg) ─► ┌── relay ──► codex ───────┐                │
+       └─ parallax (bg) ─► ┌── relay ──► gpt ─────────┐                │
                            ├── relay ──► grok-build   │                │
                            ├── relay ──► grok-composer├─► <id>-result.json
                            ├── relay ──► glm          │   + .relay/…res.md (×peer)
@@ -146,7 +146,7 @@ backgrounded process. The Integrator stays in the loop for the judgment.
        ~K notifications: one per subagent + one for the whole parallax batch
 
  6  results ───────────────►  prism-launch results <manifest>
-       ◄── [done ] codex   prism-correctness   /…/….res.md
+       ◄── [done ] gpt     prism-correctness   /…/….res.md
            [ERROR] mimo     prism-outsider      (failed — retry)
        └─ retry one peer:  parallax <manifest> --only mimo
 
@@ -231,11 +231,11 @@ dissent in seconds, then reads on only for the reasoning.
 
 ```
   Pick Option B (event-driven) · conf: Moderate · 4/6 agree · ⚠ DeepSeek+MiMo dissent
-  Claude ✓  Codex ✓  DeepSeek ⚠  MiMo ⚠   → 2 independent lineages dissent, same direction
+  Claude ✓  GPT ✓  DeepSeek ⚠  MiMo ⚠   → 2 independent lineages dissent, same direction
   Dissent — DeepSeek+MiMo: shared state needed for atomic txns; bounded by the spike gate.
   Why
   • Removes the shared-state bottleneck behind 3/5 recent incidents
-  • Migration is incremental, not big-bang (Codex confirmed)
+  • Migration is incremental, not big-bang (GPT confirmed)
   Do now: spike B's hot path → kill the A RFC → freeze schema
 ```
 
@@ -255,7 +255,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
   │   └── test-prism-launch.sh    no-network suite (fake-relay for dispatch)
   └── templates/
       ├── launcher-subagent.tmpl       Claude subagent prompt (plain markdown)
-      ├── launcher-relay-codex.tmpl    Codex / GPT  — <goal> style
+      ├── launcher-relay-codex.tmpl    GPT — <goal> style
       ├── launcher-relay-costar.tmpl   Grok/GLM/Kimi/DeepSeek/MiMo — CO-STAR XML
       ├── lens-catalog.json            single source: lens descriptions, axis
       │                                families, and --preset sets (scaffold reads it)
@@ -288,7 +288,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
   │                             the anti-recursion block is injected verbatim + the
   │                             RELAY_PEER guard refuses a nested launch.
   ├─ Read-only leaf agents ──── peers/subagents produce analysis only (one .res.md write).
-  └─ Effort (fixed, CLI-derived) ─ Codex xhigh · Grok-Build high, derived from peers.json — never authored.
+  └─ Effort (fixed, CLI-derived) ─ GPT max · Grok-Build high, derived from peers.json — never authored.
 ```
 
 ---
@@ -299,7 +299,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
 
 | Peer | Model | Lineage | Effort | Notes |
 |---|---|---|---|---|
-| `codex` | GPT-5.6 | OpenAI | `xhigh` | agentic code-review strength |
+| `gpt` | GPT | OpenAI | `max` | agentic code-review strength |
 | `grok-build` | Grok 4.5 | xAI | `high` | independent of Anthropic/OpenAI |
 | `grok-composer` | Composer 2.5 fast | xAI (same as grok-build) | — | fast variant; quick xAI take |
 | `glm` | GLM-5.2 | Zhipu / z.ai (Anthropic-compatible endpoint) | pinned `max` | `reasoning_effort: max`, like DeepSeek |

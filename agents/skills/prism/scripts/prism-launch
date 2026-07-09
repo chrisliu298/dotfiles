@@ -182,7 +182,7 @@ dispatch_to_config() {
         dp_flush; DP_in=1; DP_seen=""
         DP_type="$val" ;;
       Effort)
-        die "prepare: --dispatch line $lineno: 'Effort:' is no longer authored — prism-launch sets effort per peer from the registry (Codex xhigh, Grok Build high). Remove the line." ;;
+        die "prepare: --dispatch line $lineno: 'Effort:' is no longer authored — prism-launch sets effort per peer from the registry (GPT max, Grok Build high). Remove the line." ;;
       To|Name|Lens|Lens-Desc|Posture)
         [ "$DP_in" -eq 1 ] || die "prepare: --dispatch line $lineno: '$key' appears before any 'Type:' record"
         case " $DP_seen " in *" $key "*) die "prepare: --dispatch line $lineno: duplicate '$key' in one record" ;; esac
@@ -556,14 +556,16 @@ These belong in the .dispatch file (the one you pass to 'prepare --dispatch'), N
         | (if ($name|test("^[a-z0-9-]+$")|not) then bad("parallax .name must match [a-z0-9-]+, got: " + $name) else . end)
         | (.lens | chktext("parallax .lens")) as $lens
         | (.lens_desc | chktext("parallax .lens_desc")) as $desc
-        # Effort is fixed at the top tier and DERIVED from the registry — never authored.
-        # effort_values is ordered weakest→strongest, so the last element is the top tier
-        # (Codex → "xhigh", Grok Build → "high"); peers with no knob → no --effort.
-        # Do NOT use jq `max`: it is lexicographic ("high" < "medium"), which would
-        # silently pick the wrong tier. Any authored .effort (only reachable via the
-        # lenient --config path; --dispatch rejects it) is ignored — derivation wins.
+        # Effort is fixed and DERIVED from the registry — never authored. A peer may pin an
+        # explicit `prism_effort` (the tier Prism dispatches at, decoupled from the full
+        # `effort_values` range relay exposes); otherwise it falls back to `effort_values[-1]`,
+        # the top tier. GPT pins `prism_effort: "max"` while relay exposes up to `ultra`;
+        # Grok Build has no `prism_effort`, so it falls back to `effort_values[-1]` = "high".
+        # Peers with no knob → no --effort. Do NOT use jq `max`: it is lexicographic
+        # ("high" < "medium"), which would silently pick the wrong tier. Any authored .effort
+        # (only reachable via the lenient --config path; --dispatch rejects it) is ignored.
         | ($peer.effort_values) as $evals
-        | (if $evals != null then $evals[-1] else null end) as $effort
+        | ($peer.prism_effort // (if $evals != null then $evals[-1] else null end)) as $effort
         | {
             to: $to,
             name: ("prism-" + $name),
@@ -1197,7 +1199,7 @@ cmd_parallax() {
     launcher=$(jq -r ".parallax[$i].launcher" "$manifest")
     local log; log=$(jq -r ".parallax[$i].log" "$manifest")
 
-    # Build the relay command; pass --effort when the manifest carries one (codex, grok-build).
+    # Build the relay command; pass --effort when the manifest carries one (gpt, grok-build).
     set -- "$relay_bin" call --to "$to" --name "$name"
     [ -n "$effort" ] && set -- "$@" --effort "$effort"
     [ -n "$TIMEOUT_BIN" ] && set -- "$TIMEOUT_BIN" "$PEER_TIMEOUT" "$@"
@@ -1288,7 +1290,7 @@ lens_desc_for() {
 
 # Eight distinct lenses for a task-type preset, read from the catalog's .presets —
 # in canonical tier order (heaviest-reasoning first, so it lands on the subagent/
-# codex slots), each spread across distinct axis families. Returns 1 if unknown.
+# gpt slots), each spread across distinct axis families. Returns 1 if unknown.
 preset_lenses() {
   local out
   out=$(jq -r --arg t "$1" 'if (.presets | has($t)) then (.presets[$t] | join(" ")) else empty end' "$CATALOG_JSON" 2>/dev/null)
@@ -1297,7 +1299,7 @@ preset_lenses() {
 }
 
 # Emit a ready-to-fill dispatch skeleton for the symmetric default (N of every
-# model; Codex xhigh + Grok Build high are fixed). With --preset <task-type>, pre-fill eight lenses (N=1).
+# model; GPT max + Grok Build high are fixed). With --preset <task-type>, pre-fill eight lenses (N=1).
 # Otherwise replace each "FILL" Lens / Lens-Desc, then Write it as the dispatch
 # file. Removes the mechanical Type/To/order boilerplate.
 
@@ -1350,7 +1352,7 @@ cmd_scaffold() {
       --out)    [ $# -ge 2 ] || die "scaffold: --out requires a value";    out="$2";    shift 2 ;;
       --no-subagents|--no-subagent) no_sub=1; shift ;;
       --partial-user-quote) [ $# -ge 2 ] || die "scaffold: --partial-user-quote requires a value"; pq="$2"; shift 2 ;;
-      -*) die "scaffold: unknown flag: $1 (effort is fixed — Codex xhigh, Grok Build high — there is no --effort)" ;;
+      -*) die "scaffold: unknown flag: $1 (effort is fixed — GPT max, Grok Build high — there is no --effort)" ;;
       *)  die "scaffold: unexpected argument: $1" ;;
     esac
   done
@@ -1380,7 +1382,7 @@ cmd_scaffold() {
   # the user's authorization quote; everything else is the full-roster contract.
   local quote_val
   if [ -n "$pq" ]; then quote_val="\"$pq\""; else quote_val='"FILL — the user'"'"'s exact words authorizing no subagents (e.g. no subagents)"'; fi
-  # Effort is fixed and CLI-derived (Codex xhigh, Grok Build high) — never authored in the dispatch.
+  # Effort is fixed and CLI-derived (GPT max, Grok Build high) — never authored in the dispatch.
   [ -n "$packet" ] || packet="/tmp/prism-<id>.md"
 
   # Canonical tier order from the registry: a subagent slot first, then each standard
@@ -1403,12 +1405,12 @@ cmd_scaffold() {
       if [ "$no_sub" -eq 1 ]; then
         printf 'Prism-Mode: partial\nVariant: no-subagents\nPrism-N: 1\nPrism-M: %s\nPartial-User-Quote: %s\n\n' "$m" "$quote_val"
         printf '# No-subagents run: the Claude subagent tier is dropped; all %s parallax tiers are kept\n' "$npeers"
-        printf '# at N (floor-checked). The preset'"'"'s heaviest (subagent-slot) lens is moved onto Codex\n'
-        printf '# (xhigh) so adversarial/hard-reasoning coverage is not lost — re-check it fits.\n'
+        printf '# at N (floor-checked). The preset'"'"'s heaviest (subagent-slot) lens is moved onto GPT\n'
+        printf '# (max) so adversarial/hard-reasoning coverage is not lost — re-check it fits.\n'
         printf '# self (the orchestrator) is the lone Claude perspective; n/total = %sN + M + self.\n\n' "$npeers"
       else
         printf 'Prism-Mode: full\nPrism-N: 1\nPrism-M: %s\n\n' "$m"
-        printf '# Preset "%s": eight lenses pre-filled in canonical tier order (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$preset"
+        printf '# Preset "%s": eight lenses pre-filled in canonical tier order (GPT max, Grok Build high — CLI-derived at prepare).\n' "$preset"
         printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
         printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
         printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
@@ -1421,9 +1423,9 @@ cmd_scaffold() {
       local idx peer pk=0
       if [ "$no_sub" -eq 1 ]; then
         # No subagent record. The preset has npeers+1 lenses ordered heaviest-first ($1 is
-        # the subagent-slot lens); we have npeers peers (peer 1 = Codex, the strongest, xhigh).
-        # Map 1:1 in order — peer1(codex)←$1 (the heaviest), peer2←$2, … peerK←$K — which puts
-        # the heaviest lens on Codex AND drops only the *lightest* lens ($npeers+1). (Dropping a
+        # the subagent-slot lens); we have npeers peers (peer 1 = GPT, the strongest, max).
+        # Map 1:1 in order — peer1(gpt)←$1 (the heaviest), peer2←$2, … peerK←$K — which puts
+        # the heaviest lens on GPT AND drops only the *lightest* lens ($npeers+1). (Dropping a
         # mid lens would shed more reasoning weight + a more-distinct axis family.)
         while IFS= read -r peer; do
           [ -n "$peer" ] || continue
@@ -1454,17 +1456,17 @@ cmd_scaffold() {
     printf '# recognized, user-authorized reduced shape (Partial-User-Quote required, NOT a loud ⚠).\n'
     printf '# self (the orchestrator) is the lone Claude perspective; n/total = %sN + M + self.\n' "$npeers"
     printf '# Replace every "FILL" Lens / Lens-Desc (and the FILL quote). Put your heaviest-reasoning\n'
-    printf '# (e.g. Adversarial) lens on codex (xhigh). Write the Shared-Packet file before prepare.\n\n'
+    printf '# (e.g. Adversarial) lens on gpt (max). Write the Shared-Packet file before prepare.\n\n'
   else
     printf 'Prism-Mode: full\nPrism-N: %s\nPrism-M: %s\n\n' "$n" "$m"
-    printf '# Symmetric scaffold: N=%s of each of the eight models (Codex xhigh, Grok Build high — CLI-derived at prepare).\n' "$n"
+    printf '# Symmetric scaffold: N=%s of each of the eight models (GPT max, Grok Build high — CLI-derived at prepare).\n' "$n"
     printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
     printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
     printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
     printf '# (For the common "drop only Claude subagents" case use: scaffold --no-subagents.)\n'
     printf '# Replace every "FILL" Lens / Lens-Desc (prepare rejects any leftover FILL).\n'
     printf '# Order is the canonical tier order — put your heaviest-reasoning (e.g. Adversarial)\n'
-    printf '# lens on a subagent or codex. Write the Shared-Packet file before running prepare.\n'
+    printf '# lens on a subagent or gpt. Write the Shared-Packet file before running prepare.\n'
     printf '# Tip: --preset review|design|diagnosis|compare|research|decision|writing pre-fills lenses (N=1).\n\n'
   fi
   scaffold_include_hint
@@ -1821,7 +1823,7 @@ Usage:  (all subcommands require `jq` in PATH)
   prism-launch --help | --version  ·  prism-launch <subcommand> --help
 
 scaffold:  emit a ready-to-fill dispatch skeleton for the symmetric default (N of each of the
-           eight models; Codex xhigh + Grok Build high fixed). Emits the full-roster contract
+           eight models; GPT max + Grok Build high fixed). Emits the full-roster contract
            (Prism-Mode: full / Prism-N / Prism-M) for you. Prints to stdout as a copy-from
            template — author the dispatch with the Write tool (do NOT redirect stdout into the
            file and then edit it: a shell-made file forces a wasted Read). Replace each "FILL".
@@ -1838,7 +1840,7 @@ scaffold:  emit a ready-to-fill dispatch skeleton for the symmetric default (N o
            (all parallax tiers at N, zero subagents) — a recognized reduced shape, not a loud
            ⚠ PARTIAL. Needs --n >= 1 (--n 0 with no subagents is the gpt-pro-only shape). With
            --out, pass --partial-user-quote "<the user's words>" so the file is zero-FILL. With
-           --preset, the heaviest (subagent-slot) lens moves onto Codex (xhigh).
+           --preset, the heaviest (subagent-slot) lens moves onto GPT (max).
 prepare:   validate the dispatch/config, render all launchers from templates, write a manifest;
            inject the canonical ## Constraints, ## How to answer, and ## Grounding external facts
            into the shared packet if absent (so you author the packet with just Full Question +

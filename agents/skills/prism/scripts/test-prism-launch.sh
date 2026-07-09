@@ -41,7 +41,7 @@ cat > "$CFG" <<JSON
 {
   "shared_packet": "$PKT",
   "parallax": [
-    {"to":"codex","name":"temporal","effort":"medium","lens":"Temporal","lens_desc":"weigh clean extension"},
+    {"to":"gpt","name":"temporal","effort":"medium","lens":"Temporal","lens_desc":"weigh clean extension"},
     {"to":"deepseek","name":"first-principles","lens":"First-Principles","lens_desc":"reason from fundamentals"},
     {"to":"mimo","name":"outsider","lens":"Outsider","lens_desc":"weigh a newcomer view"}
   ],
@@ -56,27 +56,27 @@ expect_ok "prepare succeeds on a valid config" "$LAUNCH" prepare --config "$CFG"
 MAN="$TMP/prism-run1-manifest.json"
 [ -f "$MAN" ] && ok "manifest written" || bad "manifest written"
 [ "$(jq -r '.counts.subagents' "$MAN" 2>/dev/null)" = "2" ] && ok "subagent count = 2" || bad "subagent count = 2"
-[ "$(jq -r '.counts.by_peer.codex' "$MAN" 2>/dev/null)" = "1" ] && ok "codex count = 1" || bad "codex count = 1"
+[ "$(jq -r '.counts.by_peer.gpt' "$MAN" 2>/dev/null)" = "1" ] && ok "gpt count = 1" || bad "gpt count = 1"
 [ "$(jq -r '.counts.by_peer.deepseek' "$MAN" 2>/dev/null)" = "1" ] && ok "deepseek count = 1" || bad "deepseek count = 1"
 [ "$(jq -r '.counts.by_peer.mimo' "$MAN" 2>/dev/null)" = "1" ] && ok "mimo count = 1" || bad "mimo count = 1"
 [ "$(jq -r '.counts.dispatched_total' "$MAN" 2>/dev/null)" = "5" ] && ok "dispatched_total = 5" || bad "dispatched_total = 5"
 [ "$(jq -r '.parallax[0].name' "$MAN" 2>/dev/null)" = "prism-temporal" ] && ok "relay name prefixed with prism-" || bad "relay name prefixed with prism-"
 [ "$(jq -r '.parallax[1].effort' "$MAN" 2>/dev/null)" = "null" ] && ok "deepseek effort is null" || bad "deepseek effort is null"
-[ "$(jq -r '.parallax[0].effort' "$MAN" 2>/dev/null)" = "xhigh" ] && ok "codex effort derived xhigh (authored 'medium' in --config ignored)" || bad "codex effort derived xhigh"
-[ "$(jq -r '.parallax[0].template' "$MAN" 2>/dev/null)" = "codex" ] && ok "codex uses codex template (registry)" || bad "codex template = codex"
+[ "$(jq -r '.parallax[0].effort' "$MAN" 2>/dev/null)" = "max" ] && ok "gpt effort derived max (authored 'medium' in --config ignored)" || bad "gpt effort derived max"
+[ "$(jq -r '.parallax[0].template' "$MAN" 2>/dev/null)" = "codex" ] && ok "gpt uses codex template (registry)" || bad "gpt template = codex"
 [ "$(jq -r '.parallax[1].template' "$MAN" 2>/dev/null)" = "costar" ] && ok "deepseek uses shared costar template (registry)" || bad "deepseek template = costar"
 case "$(jq -r '.parallax[0].log' "$MAN" 2>/dev/null)" in *-out-prism-temporal.log) ok "manifest log path matches runtime (prism- prefixed)" ;; *) bad "manifest log path prism- prefixed" ;; esac
 
 echo "== prepare: launcher rendering =="
 CXL=$(jq -r '.parallax[0].launcher' "$MAN")
-[ -f "$CXL" ] && ok "codex launcher file rendered" || bad "codex launcher file rendered"
+[ -f "$CXL" ] && ok "gpt launcher file rendered" || bad "gpt launcher file rendered"
 head -1 "$CXL" | grep -q '^CRITICAL:' && ok "launcher starts with anti-recursion CRITICAL line" || bad "launcher CRITICAL line"
 ! grep -q '{{' "$CXL" && ok "no surviving {{slots}} in launcher" || bad "no surviving {{slots}}"
 grep -qF "$PKT" "$CXL" && ok "shared_packet path substituted into launcher" || bad "packet path substituted"
 grep -q 'Temporal' "$CXL" && ok "lens name substituted into launcher" || bad "lens name substituted"
 # Template-by-style: codex renders <goal>, costar peers render <objective>.
 DSL=$(jq -r '.parallax[1].launcher' "$MAN")
-grep -q '<goal>' "$CXL" && ok "codex launcher uses <goal> scaffolding" || bad "codex <goal> scaffolding"
+grep -q '<goal>' "$CXL" && ok "gpt launcher uses <goal> scaffolding" || bad "gpt <goal> scaffolding"
 grep -q '<objective>' "$DSL" && ok "costar launcher uses <objective> scaffolding" || bad "costar <objective> scaffolding"
 SAL=$(jq -r '.subagents[0].launcher' "$MAN")
 [ -f "$SAL" ] && ok "subagent launcher file rendered" || bad "subagent launcher file rendered"
@@ -85,7 +85,7 @@ echo "$SAL" | grep -q 'launcher-subagent-simplicity.md' && ok "subagent lens slu
 echo "== prepare + dry-run: a 3-peer subset (mixed-tier guard; legacy — not the N=1 default) =="
 PKT4="$TMP/prism-run4.md"; make_packet "$PKT4"
 CFG4="$TMP/run4-config.json"
-jq -n --arg p "$PKT4" '{shared_packet:$p,parallax:[{to:"codex",name:"a",effort:"medium",lens:"Adversarial",lens_desc:"d1"},{to:"deepseek",name:"b",lens:"Completeness",lens_desc:"d2"},{to:"mimo",name:"c",lens:"Consistency",lens_desc:"d3"}],subagents:[{lens:"Correctness",lens_desc:"d5"}]}' > "$CFG4"
+jq -n --arg p "$PKT4" '{shared_packet:$p,parallax:[{to:"gpt",name:"a",effort:"medium",lens:"Adversarial",lens_desc:"d1"},{to:"deepseek",name:"b",lens:"Completeness",lens_desc:"d2"},{to:"mimo",name:"c",lens:"Consistency",lens_desc:"d3"}],subagents:[{lens:"Correctness",lens_desc:"d5"}]}' > "$CFG4"
 expect_ok "prepare accepts all three parallax tiers together" "$LAUNCH" prepare --config "$CFG4"
 MAN4="$TMP/prism-run4-manifest.json"
 [ "$(jq -r '.counts.parallax_total' "$MAN4" 2>/dev/null)" = "3" ] && ok "three-tier counts: parallax_total=3" || bad "three-tier counts"
@@ -96,11 +96,11 @@ echo "== prepare: default seven-tier shape + canonical display order =="
 PKT5="$TMP/prism-run5.md"; make_packet "$PKT5"
 CFG5="$TMP/run5-config.json"
 # tiers deliberately scrambled in the config; the dispatch-shape display must still be canonical
-jq -n --arg p "$PKT5" '{shared_packet:$p,parallax:[{to:"mimo",name:"a",lens:"L1",lens_desc:"d"},{to:"codex",name:"b",effort:"medium",lens:"L2",lens_desc:"d"},{to:"kimi",name:"g",lens:"L8",lens_desc:"d"},{to:"glm",name:"f",lens:"L7",lens_desc:"d"},{to:"deepseek",name:"c",lens:"L3",lens_desc:"d"},{to:"grok-composer",name:"d",lens:"L4",lens_desc:"d"},{to:"grok-build",name:"e",effort:"high",lens:"L5",lens_desc:"d"}],subagents:[{lens:"L6",lens_desc:"d"}]}' > "$CFG5"
+jq -n --arg p "$PKT5" '{shared_packet:$p,parallax:[{to:"mimo",name:"a",lens:"L1",lens_desc:"d"},{to:"gpt",name:"b",effort:"medium",lens:"L2",lens_desc:"d"},{to:"kimi",name:"g",lens:"L8",lens_desc:"d"},{to:"glm",name:"f",lens:"L7",lens_desc:"d"},{to:"deepseek",name:"c",lens:"L3",lens_desc:"d"},{to:"grok-composer",name:"d",lens:"L4",lens_desc:"d"},{to:"grok-build",name:"e",effort:"high",lens:"L5",lens_desc:"d"}],subagents:[{lens:"L6",lens_desc:"d"}]}' > "$CFG5"
 OUT5=$("$LAUNCH" prepare --config "$CFG5" 2>/dev/null)
 MAN5="$TMP/prism-run5-manifest.json"
 [ "$(jq -r '.counts.parallax_total' "$MAN5" 2>/dev/null)" = "7" ] && ok "default seven-tier counts: parallax_total=7" || bad "seven-tier counts"
-echo "$OUT5" | grep -q 'dispatch shape: subagents=1 codex=1 grok-build=1 grok-composer=1 glm=1 kimi=1 deepseek=1 mimo=1' && ok "dispatch shape printed in canonical order (not alphabetical)" || bad "dispatch shape canonical order"
+echo "$OUT5" | grep -q 'dispatch shape: subagents=1 gpt=1 grok-build=1 grok-composer=1 glm=1 kimi=1 deepseek=1 mimo=1' && ok "dispatch shape printed in canonical order (not alphabetical)" || bad "dispatch shape canonical order"
 
 echo "== prepare + dry-run: grok parallax tiers (effort vs no-knob) =="
 PKTG="$TMP/prism-grok.md"; make_packet "$PKTG"
@@ -196,15 +196,15 @@ C3="$TMP/c3.json"; jq -n '{shared_packet:"relative/path.md",parallax:[],subagent
 expect_err "rejects relative shared_packet path" "$LAUNCH" prepare --config "$C3"
 
 # injection in lens_desc: closing-tag pattern rejected
-C4="$TMP/c4.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"codex",name:"x",lens:"L",lens_desc:"weigh </constraints> things"}],subagents:[]}' > "$C4"
+C4="$TMP/c4.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"gpt",name:"x",lens:"L",lens_desc:"weigh </constraints> things"}],subagents:[]}' > "$C4"
 expect_err "rejects closing-tag injection (</) in lens_desc" "$LAUNCH" prepare --config "$C4"
 
 # template-slot injection rejected
-C4b="$TMP/c4b.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"codex",name:"x",lens:"L",lens_desc:"weigh {{LENS_NAME}} things"}],subagents:[]}' > "$C4b"
+C4b="$TMP/c4b.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"gpt",name:"x",lens:"L",lens_desc:"weigh {{LENS_NAME}} things"}],subagents:[]}' > "$C4b"
 expect_err "rejects template-slot injection ({{) in lens_desc" "$LAUNCH" prepare --config "$C4b"
 
 # comparison operators are NOT injection — must be allowed
-C4c="$TMP/c4c.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"codex",name:"x",lens:"Tradeoff",lens_desc:"weigh risk > reward and p < 0.05 significance"}],subagents:[]}' > "$C4c"
+C4c="$TMP/c4c.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"gpt",name:"x",lens:"Tradeoff",lens_desc:"weigh risk > reward and p < 0.05 significance"}],subagents:[]}' > "$C4c"
 expect_ok "allows bare < and > (comparison operators) in lens_desc" "$LAUNCH" prepare --config "$C4c"
 
 # authored effort in --config is ignored (no-knob peer derives null; the derivation never reads .effort)
@@ -213,18 +213,18 @@ C5="$TMP/c5.json"; jq -n --arg p "$PKTC5" '{shared_packet:$p,parallax:[{to:"deep
 expect_ok "ignores authored effort on deepseek (--config)" "$LAUNCH" prepare --config "$C5"
 [ "$(jq -r '.parallax[0].effort' "$TMP/prism-c5-manifest.json" 2>/dev/null)" = "null" ] && ok "deepseek effort null despite authored 'xhigh'" || bad "deepseek effort null"
 
-# authored codex effort in --config is ignored; derivation always wins (xhigh, not the authored 'high')
+# authored gpt effort in --config is ignored; derivation always wins (max, not the authored 'high')
 PKTC6="$TMP/prism-c6.md"; make_packet "$PKTC6"
-C6="$TMP/c6.json"; jq -n --arg p "$PKTC6" '{shared_packet:$p,parallax:[{to:"codex",name:"x",effort:"high",lens:"L",lens_desc:"d"}],subagents:[]}' > "$C6"
-expect_ok "ignores authored codex effort (--config)" "$LAUNCH" prepare --config "$C6"
-[ "$(jq -r '.parallax[0].effort' "$TMP/prism-c6-manifest.json" 2>/dev/null)" = "xhigh" ] && ok "codex derives xhigh despite authored 'high'" || bad "codex derives xhigh"
+C6="$TMP/c6.json"; jq -n --arg p "$PKTC6" '{shared_packet:$p,parallax:[{to:"gpt",name:"x",effort:"high",lens:"L",lens_desc:"d"}],subagents:[]}' > "$C6"
+expect_ok "ignores authored gpt effort (--config)" "$LAUNCH" prepare --config "$C6"
+[ "$(jq -r '.parallax[0].effort' "$TMP/prism-c6-manifest.json" 2>/dev/null)" = "max" ] && ok "gpt derives max despite authored 'high'" || bad "gpt derives max"
 
 # duplicate lens across run
-C7="$TMP/c7.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"codex",name:"a",lens:"Same",lens_desc:"d"}],subagents:[{lens:"Same",lens_desc:"d"}]}' > "$C7"
+C7="$TMP/c7.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"gpt",name:"a",lens:"Same",lens_desc:"d"}],subagents:[{lens:"Same",lens_desc:"d"}]}' > "$C7"
 expect_err "rejects duplicate lens name across run" "$LAUNCH" prepare --config "$C7"
 
 # bad name slug (uppercase)
-C8="$TMP/c8.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"codex",name:"BadName",lens:"L",lens_desc:"d"}],subagents:[]}' > "$C8"
+C8="$TMP/c8.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"gpt",name:"BadName",lens:"L",lens_desc:"d"}],subagents:[]}' > "$C8"
 expect_err "rejects non-slug relay name" "$LAUNCH" prepare --config "$C8"
 
 # bad peer
@@ -232,12 +232,12 @@ C9="$TMP/c9.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"gemini
 expect_err "rejects unknown peer (gemini)" "$LAUNCH" prepare --config "$C9"
 
 # duplicate parallax name (distinct lenses) — collides the per-peer log
-C10="$TMP/c10.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"codex",name:"dup",lens:"A",lens_desc:"d"},{to:"deepseek",name:"dup",lens:"B",lens_desc:"d"}],subagents:[]}' > "$C10"
+C10="$TMP/c10.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"gpt",name:"dup",lens:"A",lens_desc:"d"},{to:"deepseek",name:"dup",lens:"B",lens_desc:"d"}],subagents:[]}' > "$C10"
 expect_err "rejects duplicate parallax name" "$LAUNCH" prepare --config "$C10"
 
 # shared_packet path with a space — breaks space-joined log indexing
 PSPACE="$TMP/has space.md"; make_packet "$PSPACE"
-C11="$TMP/c11.json"; jq -n --arg p "$PSPACE" '{shared_packet:$p,parallax:[{to:"codex",name:"x",lens:"L",lens_desc:"d"}],subagents:[]}' > "$C11"
+C11="$TMP/c11.json"; jq -n --arg p "$PSPACE" '{shared_packet:$p,parallax:[{to:"gpt",name:"x",lens:"L",lens_desc:"d"}],subagents:[]}' > "$C11"
 expect_err "rejects shared_packet path containing whitespace" "$LAUNCH" prepare --config "$C11"
 
 echo "== parallax: --dry-run (no network) =="
@@ -247,7 +247,7 @@ echo "== parallax: --dry-run (no network) =="
 DRY=$("$LAUNCH" parallax "$MAN" --dry-run 2>/dev/null)
 echo "$DRY" | grep -q 'DRY RUN' && ok "dry-run announces itself" || bad "dry-run announces itself"
 [ "$(echo "$DRY" | grep -c 'relay call --to')" = "3" ] && ok "dry-run lists exactly 3 relay calls" || bad "dry-run lists 3 relay calls"
-echo "$DRY" | grep -q 'relay call --to codex --name prism-temporal --effort xhigh' && ok "codex dry-run cmd has --effort xhigh (derived)" || bad "codex dry-run --effort"
+echo "$DRY" | grep -q 'relay call --to gpt --name prism-temporal --effort max' && ok "gpt dry-run cmd has --effort max (derived)" || bad "gpt dry-run --effort"
 echo "$DRY" | grep -q 'relay call --to deepseek --name prism-first-principles <' && ok "deepseek dry-run cmd has no --effort" || bad "deepseek dry-run no --effort"
 [ -f "$TMP/prism-run1-result.json" ] && bad "dry-run must NOT write a result file" || ok "dry-run writes no result file"
 
@@ -257,11 +257,11 @@ DISP="$TMP/prism-rund.dispatch"
 cat > "$DISP" <<DSP
 Shared-Packet: $PKTD
 Prism-Mode: partial
-Partial-User-Quote: "just codex, deepseek, and a claude subagent"
+Partial-User-Quote: "just gpt, deepseek, and a claude subagent"
 
 # a comment line, ignored
 Type: parallax
-To: codex
+To: gpt
 Name: adversarial
 Lens: Adversarial
 Lens-Desc: weigh the "strongest" attacks: braces {x} and < > are fine
@@ -281,7 +281,7 @@ MAND="$TMP/prism-rund-manifest.json"
 [ -f "$TMP/prism-rund-config.normalized.json" ] && ok "dispatch: normalized config written for audit" || bad "dispatch: normalized config written"
 jq -e '.parallax[0].lens == "Adversarial" and .subagents[0].lens == "Simplicity"' "$TMP/prism-rund-config.normalized.json" >/dev/null 2>&1 && ok "dispatch: normalized config has expected shape" || bad "dispatch: normalized config shape"
 [ "$(jq -r '.counts.dispatched_total' "$MAND" 2>/dev/null)" = "3" ] && ok "dispatch: dispatched_total = 3" || bad "dispatch: dispatched_total = 3"
-[ "$(jq -r '.parallax[0].effort' "$MAND" 2>/dev/null)" = "xhigh" ] && ok "dispatch: codex effort derived xhigh (none authored)" || bad "dispatch: codex effort derived xhigh"
+[ "$(jq -r '.parallax[0].effort' "$MAND" 2>/dev/null)" = "max" ] && ok "dispatch: gpt effort derived max (none authored)" || bad "dispatch: gpt effort derived max"
 [ "$(jq -r '.parallax[0].name' "$MAND" 2>/dev/null)" = "prism-adversarial" ] && ok "dispatch: explicit Name used" || bad "dispatch: explicit Name used"
 [ "$(jq -r '.parallax[1].name' "$MAND" 2>/dev/null)" = "prism-first-principles" ] && ok "dispatch: Name derived from Lens when omitted" || bad "dispatch: Name derived from Lens"
 [ "$(jq -r '.parallax[1].effort' "$MAND" 2>/dev/null)" = "null" ] && ok "dispatch: deepseek effort null" || bad "dispatch: deepseek effort null"
@@ -294,14 +294,14 @@ expect_err "rejects --config and --dispatch together" "$LAUNCH" prepare --config
 DNP="$TMP/dnp.dispatch"; printf 'Type: subagent\nLens: X\nLens-Desc: y\n' > "$DNP"
 expect_err "rejects dispatch missing Shared-Packet" "$LAUNCH" prepare --dispatch "$DNP"
 
-DUK="$TMP/duk.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nModel: codex\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DUK"
+DUK="$TMP/duk.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nModel: gpt\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DUK"
 expect_err "rejects dispatch unknown key" "$LAUNCH" prepare --dispatch "$DUK"
 
-DBT="$TMP/dbt.dispatch"; printf 'Shared-Packet: %s\n\nTo: codex\nType: parallax\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DBT"
+DBT="$TMP/dbt.dispatch"; printf 'Shared-Packet: %s\n\nTo: gpt\nType: parallax\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DBT"
 expect_err "rejects dispatch key before any Type record" "$LAUNCH" prepare --dispatch "$DBT"
 
 # Effort is no longer authored: the parser hard-rejects any Effort: line up front.
-DED="$TMP/ded.dispatch"; printf 'Shared-Packet: %s\n\nType: parallax\nTo: codex\nEffort: x\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DED"
+DED="$TMP/ded.dispatch"; printf 'Shared-Packet: %s\n\nType: parallax\nTo: gpt\nEffort: x\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DED"
 expect_err "rejects an authored Effort: line in a dispatch (parser-level)" "$LAUNCH" prepare --dispatch "$DED"
 
 DRP="$TMP/drp.dispatch"; printf 'Shared-Packet: relative/path.md\n\nType: subagent\nLens: X\nLens-Desc: y\n' > "$DRP"
@@ -313,11 +313,11 @@ expect_err "rejects subagent lens slug collision" "$LAUNCH" prepare --dispatch "
 
 echo "== prepare --dispatch: hardening from review (fail-closed + parity) =="
 # duplicate key within one record must fail closed (silent last-wins overwrite otherwise)
-DDK="$TMP/ddk.dispatch"; printf 'Shared-Packet: %s\n\nType: parallax\nTo: codex\nLens: A\nLens: B\nLens-Desc: d\n' "$PKTD" > "$DDK"
+DDK="$TMP/ddk.dispatch"; printf 'Shared-Packet: %s\n\nType: parallax\nTo: gpt\nLens: A\nLens: B\nLens-Desc: d\n' "$PKTD" > "$DDK"
 expect_err "rejects duplicate key within one record" "$LAUNCH" prepare --dispatch "$DDK"
 
 # parallax-only keys on a subagent record (silent wrong-dispatch otherwise)
-DST="$TMP/dst.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nTo: codex\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DST"
+DST="$TMP/dst.dispatch"; printf 'Shared-Packet: %s\n\nType: subagent\nTo: gpt\nLens: X\nLens-Desc: y\n' "$PKTD" > "$DST"
 expect_err "rejects To/Name on a subagent record" "$LAUNCH" prepare --dispatch "$DST"
 
 # all-whitespace Lens-Desc via dispatch (trim -> empty -> rejected)
@@ -341,10 +341,10 @@ echo "== prepare --dispatch: effort is CLI-derived, never authored =="
 # regression guard: it catches both the old default_effort fallback (would give medium)
 # and the lexicographic-max bug (would give grok-build medium, since "high" < "medium").
 PKTE="$TMP/prism-rune.md"; make_packet "$PKTE"
-DEF="$TMP/def.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "just codex and grok-build"\n\nType: parallax\nTo: codex\nLens: Adversarial\nLens-Desc: d\n\nType: parallax\nTo: grok-build\nLens: Structural\nLens-Desc: d\n' "$PKTE" > "$DEF"
+DEF="$TMP/def.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "just gpt and grok-build"\n\nType: parallax\nTo: gpt\nLens: Adversarial\nLens-Desc: d\n\nType: parallax\nTo: grok-build\nLens: Structural\nLens-Desc: d\n' "$PKTE" > "$DEF"
 expect_ok "prepare --dispatch with no Effort lines" "$LAUNCH" prepare --dispatch "$DEF"
 MANE="$TMP/prism-rune-manifest.json"
-[ "$(jq -r '.parallax[0].effort' "$MANE" 2>/dev/null)" = "xhigh" ] && ok "dispatch: codex derives xhigh from registry (none authored)" || bad "dispatch: codex derives xhigh"
+[ "$(jq -r '.parallax[0].effort' "$MANE" 2>/dev/null)" = "max" ] && ok "dispatch: gpt derives max from registry (none authored)" || bad "dispatch: gpt derives max"
 [ "$(jq -r '.parallax[1].effort' "$MANE" 2>/dev/null)" = "high" ] && ok "dispatch: grok-build derives high (NOT lexicographic medium)" || bad "dispatch: grok-build derives high"
 
 # subagents-only dispatch exercises the empty-parallax accumulator ([], not an error)
@@ -357,7 +357,7 @@ echo "== scaffold: symmetric dispatch skeleton =="
 SC=$("$LAUNCH" scaffold --n 1 --packet /tmp/prism-sc.md)
 [ "$(printf '%s\n' "$SC" | grep -c '^Type:')" = "8" ] && ok "scaffold --n 1 emits 8 records" || bad "scaffold n=1 record count"
 printf '%s\n' "$SC" | grep -q '^Shared-Packet: /tmp/prism-sc.md' && ok "scaffold honors --packet" || bad "scaffold --packet"
-printf '%s\n' "$SC" | grep -q '^To: codex' && printf '%s\n' "$SC" | grep -q '^To: mimo' && printf '%s\n' "$SC" | grep -q '^To: glm' && printf '%s\n' "$SC" | grep -q '^To: kimi' && ok "scaffold lists all seven parallax tiers" || bad "scaffold tiers"
+printf '%s\n' "$SC" | grep -q '^To: gpt' && printf '%s\n' "$SC" | grep -q '^To: mimo' && printf '%s\n' "$SC" | grep -q '^To: glm' && printf '%s\n' "$SC" | grep -q '^To: kimi' && ok "scaffold lists all seven parallax tiers" || bad "scaffold tiers"
 SCX=$("$LAUNCH" scaffold --n 2)
 [ "$(printf '%s\n' "$SCX" | grep -c '^Type:')" = "16" ] && ok "scaffold --n 2 emits 16 records" || bad "scaffold n=2 record count"
 # effort is CLI-derived, never authored — scaffold must emit ZERO Effort: lines
@@ -452,9 +452,9 @@ grep -q 'wait for 2 completion notification' "$TMP/ppnotif.out" && ok "prepare p
 
 echo "== parallax --only: single-peer retry targeting (dry-run) =="
 MPP=/tmp/prism-pp-manifest.json
-"$LAUNCH" parallax "$MPP" --only codex --dry-run 2>/dev/null | grep -q 'relay call --to codex --name prism-correctness' && ok "--only matches a peer by model" || bad "--only by model"
+"$LAUNCH" parallax "$MPP" --only gpt --dry-run 2>/dev/null | grep -q 'relay call --to gpt --name prism-correctness' && ok "--only matches a peer by model" || bad "--only by model"
 "$LAUNCH" parallax "$MPP" --only outsider --dry-run 2>/dev/null | grep -q 'relay call --to kimi --name prism-outsider' && ok "--only matches a peer by lens slug" || bad "--only by slug"
-"$LAUNCH" parallax "$MPP" --only prism-correctness --dry-run 2>/dev/null | grep -q 'relay call --to codex' && ok "--only matches a peer by relay name" || bad "--only by name"
+"$LAUNCH" parallax "$MPP" --only prism-correctness --dry-run 2>/dev/null | grep -q 'relay call --to gpt' && ok "--only matches a peer by relay name" || bad "--only by name"
 expect_err "--only refuses an unknown peer" "$LAUNCH" parallax "$MPP" --only nope --dry-run
 
 echo "== parallax --only: real (fake-relay) retry + merge, fail-closed =="
@@ -473,24 +473,24 @@ FAKE
 chmod +x "$FT/relay/scripts/relay"
 FL="$FT/prism/scripts/prism-launch"
 FPK="$TMP/prism-fakeonly.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$FPK"
-printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "just codex and deepseek"\n\nType: parallax\nTo: codex\nLens: Alpha\nLens-Desc: weigh a\n\nType: parallax\nTo: deepseek\nLens: Beta\nLens-Desc: weigh b\n' "$FPK" > "$TMP/fakeonly.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "just gpt and deepseek"\n\nType: parallax\nTo: gpt\nLens: Alpha\nLens-Desc: weigh a\n\nType: parallax\nTo: deepseek\nLens: Beta\nLens-Desc: weigh b\n' "$FPK" > "$TMP/fakeonly.dispatch"
 "$FL" prepare --dispatch "$TMP/fakeonly.dispatch" >/dev/null 2>&1
 FMAN="$TMP/prism-fakeonly-manifest.json"; FRES="$TMP/prism-fakeonly-result.json"
 "$FL" parallax "$FMAN" >/dev/null 2>&1
 { [ "$(jq '.results|length' "$FRES" 2>/dev/null)" = "2" ] && [ "$(jq '.succeeded' "$FRES" 2>/dev/null)" = "2" ]; } && ok "fake fan wrote a 2-peer result" || bad "fake fan result"
-"$FL" parallax "$FMAN" --only codex >/dev/null 2>&1
+"$FL" parallax "$FMAN" --only gpt >/dev/null 2>&1
 { [ "$(jq '.results|length' "$FRES")" = "2" ] && [ "$(jq '[.results[]|select(.name=="prism-alpha")]|length' "$FRES")" = "1" ]; } && ok "--only retry replaces one peer (no dup; count stays 2)" || bad "--only merge replace"
 # fail-closed: an EMPTY existing result + a MULTI-peer manifest must REFUSE a single-peer
 # rewrite (it would read as falsely complete) — re-run the whole fan instead.
-: > "$FRES"; expect_err "--only refuses a single-peer rewrite over an empty result (multi-peer manifest)" "$FL" parallax "$FMAN" --only codex
+: > "$FRES"; expect_err "--only refuses a single-peer rewrite over an empty result (multi-peer manifest)" "$FL" parallax "$FMAN" --only gpt
 # a MALFORMED existing result likewise refuses
-printf 'not json{' > "$FRES"; expect_err "--only refuses a single-peer rewrite over a malformed result (multi-peer manifest)" "$FL" parallax "$FMAN" --only codex
+printf 'not json{' > "$FRES"; expect_err "--only refuses a single-peer rewrite over a malformed result (multi-peer manifest)" "$FL" parallax "$FMAN" --only gpt
 # carve-out: a SINGLE-peer manifest may legitimately write a fresh result over an empty one
 FPK1="$TMP/prism-fake1.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$FPK1"
-printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "just codex"\n\nType: parallax\nTo: codex\nLens: Solo\nLens-Desc: weigh s\n' "$FPK1" > "$TMP/fake1.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "just gpt"\n\nType: parallax\nTo: gpt\nLens: Solo\nLens-Desc: weigh s\n' "$FPK1" > "$TMP/fake1.dispatch"
 "$FL" prepare --dispatch "$TMP/fake1.dispatch" >/dev/null 2>&1
 FMAN1="$TMP/prism-fake1-manifest.json"; FRES1="$TMP/prism-fake1-result.json"
-: > "$FRES1"; "$FL" parallax "$FMAN1" --only codex >/dev/null 2>&1
+: > "$FRES1"; "$FL" parallax "$FMAN1" --only gpt >/dev/null 2>&1
 { [ -s "$FRES1" ] && jq -e '(.results|type)=="array"' "$FRES1" >/dev/null 2>&1; } && ok "--only writes a fresh result over an empty one for a single-peer manifest" || bad "--only single-peer fresh write"
 
 echo "== results: structured view from result.json =="
@@ -536,7 +536,7 @@ DGMAN="$TMP/prism-dg-manifest.json"; DGRES="$TMP/prism-dg-result.json"; DGOUT="$
 RA="$TMP/dg-a.res.md"; RB="$TMP/dg-b.res.md"
 cat > "$RA" <<'RES'
 ---
-from: codex
+from: gpt
 ---
 Long analysis body here.
 More reasoning.
@@ -549,13 +549,13 @@ More reasoning.
 RES
 printf -- '---\nfrom: grok-composer\n---\nBody with no digest section at all.\n' > "$RB"
 printf '{"id":"prism-dg","shared_packet":"%s"}' "$DGP" > "$DGMAN"
-printf '{"id":"prism-dg","expected":3,"succeeded":2,"failed":1,"results":[{"to":"codex","name":"prism-alpha","status":"done","res":"%s","log":"/tmp/a.log"},{"to":"grok-composer","name":"prism-beta","status":"done","res":"%s","log":"/tmp/b.log"},{"to":"mimo","name":"prism-gamma","status":"error","res":null,"log":"/tmp/c.log"}]}' "$RA" "$RB" > "$DGRES"
+printf '{"id":"prism-dg","expected":3,"succeeded":2,"failed":1,"results":[{"to":"gpt","name":"prism-alpha","status":"done","res":"%s","log":"/tmp/a.log"},{"to":"grok-composer","name":"prism-beta","status":"done","res":"%s","log":"/tmp/b.log"},{"to":"mimo","name":"prism-gamma","status":"error","res":null,"log":"/tmp/c.log"}]}' "$RA" "$RB" > "$DGRES"
 expect_ok "digest succeeds on a finished run" "$LAUNCH" digest "$DGMAN"
 [ -f "$DGOUT" ] && ok "digest writes <id>-digest.md by default" || bad "digest output file"
 grep -q 'Position: pick option B' "$DGOUT" && ok "digest extracts the ## Digest block body" || bad "digest extracts block"
 ! grep -q 'Long analysis body here' "$DGOUT" && ok "digest omits the full answer body (compaction)" || bad "digest leaked full body"
 grep -q 'lineage: grok' "$DGOUT"  && ok "digest collapses grok-composer to the grok lineage" || bad "digest grok lineage"
-grep -q 'lineage: codex' "$DGOUT" && ok "digest tags the codex lineage" || bad "digest codex lineage"
+grep -q 'lineage: gpt' "$DGOUT" && ok "digest tags the gpt lineage" || bad "digest gpt lineage"
 grep -q 'block found'  "$DGOUT" && ok "digest flags a peer with no ## Digest block" || bad "digest missing-block note"
 grep -q 'peer failed'  "$DGOUT" && ok "digest flags a failed peer" || bad "digest failed-peer note"
 grep -qF "$RA" "$DGOUT" && ok "digest cites the full .res.md path for deep-reads" || bad "digest cites res path"
@@ -590,7 +590,7 @@ RP="$TMP/dh-percent.res.md"; printf '## Digest\n- Position: 100%% coverage with 
 printf '{"id":"prism-dh","shared_packet":"%s"}' "$DHP" > "$DHMAN"
 jq -n --arg rc "$RC" --arg rd "$RD" --arg rn "$RN" --arg rm "$RM" --arg rp "$RP" \
   '{id:"prism-dh",expected:5,succeeded:5,failed:0,results:[
-    {to:"codex",name:"prism-fenced",status:"done",res:$rc,log:"/tmp/x.log"},
+    {to:"gpt",name:"prism-fenced",status:"done",res:$rc,log:"/tmp/x.log"},
     {to:"deepseek",name:"prism-colon",status:"done",res:$rd,log:"/tmp/x.log"},
     {to:"mimo",name:"prism-nested",status:"done",res:$rn,log:"/tmp/x.log"},
     {to:"grok-composer",name:"prism-multi",status:"done",res:$rm,log:"/tmp/x.log"},
@@ -618,7 +618,7 @@ REF2="$TMP/ref-two.txt"; printf 'REF-TWO-CONTENT-MARKER\n'     > "$REF2"
 GCFG="$TMP/gp-config.json"
 jq -n --arg p "$GPK" --arg r1 "$REF1" --arg r2 "$REF2" \
   '{shared_packet:$p, references:[$r1,$r2],
-    parallax:[{to:"codex",name:"adv",effort:"medium",lens:"Adversarial",lens_desc:"attack it"}],
+    parallax:[{to:"gpt",name:"adv",effort:"medium",lens:"Adversarial",lens_desc:"attack it"}],
     subagents:[{lens:"Simplicity",lens_desc:"fewest parts"}],
     "gpt-pro":[{lens:"Deep-Reasoning",lens_desc:"reason deeply",posture:"deep-reasoning"}]}' > "$GCFG"
 GOUT=$("$LAUNCH" prepare --config "$GCFG" 2>/dev/null)
@@ -739,10 +739,10 @@ GCKEYOK="$TMP/gp-goodkey.json"
 jq -n --arg p "$GPKN" '{shared_packet:$p,references:[],parallax:[],subagents:[],"gpt-pro":[{lens:"X",lens_desc:"y"}]}' > "$GCKEYOK"
 expect_ok "gpt-pro: --config accepts the canonical 'gpt-pro' lens-list key" "$LAUNCH" prepare --config "$GCKEYOK"
 GCKEY="$TMP/gp-badkey.json"
-jq -n --arg p "$GPKN" '{shared_packet:$p,references:[],parallax:[{to:"codex",name:"adv",lens:"Adversarial",lens_desc:"attack it"}],subagents:[],"gptpro":[{lens:"X",lens_desc:"y"}]}' > "$GCKEY"
+jq -n --arg p "$GPKN" '{shared_packet:$p,references:[],parallax:[{to:"gpt",name:"adv",lens:"Adversarial",lens_desc:"attack it"}],subagents:[],"gptpro":[{lens:"X",lens_desc:"y"}]}' > "$GCKEY"
 expect_err "gpt-pro: --config rejects a hyphen-less 'gptpro' lens-list key (would silently drop the lane)" "$LAUNCH" prepare --config "$GCKEY"
 GCKEY2="$TMP/gp-badkey2.json"
-jq -n --arg p "$GPKN" '{shared_packet:$p,references:[],parallax:[{to:"codex",name:"adv",lens:"Adversarial",lens_desc:"attack it"}],subagents:[],"gpt_pro":[{lens:"X",lens_desc:"y"}]}' > "$GCKEY2"
+jq -n --arg p "$GPKN" '{shared_packet:$p,references:[],parallax:[{to:"gpt",name:"adv",lens:"Adversarial",lens_desc:"attack it"}],subagents:[],"gpt_pro":[{lens:"X",lens_desc:"y"}]}' > "$GCKEY2"
 expect_err "gpt-pro: --config rejects an underscore 'gpt_pro' lens-list key (would silently drop the lane)" "$LAUNCH" prepare --config "$GCKEY2"
 
 echo "== gpt-pro: gpt-pro-only run + results/digest/clean lanes =="
@@ -778,9 +778,9 @@ GDGO="$TMP/prism-gpo-digest.md"
 grep -q 'GPTPRO-DIGEST-MARKER' "$GDGO" && ok "gpt-pro: digest extracts the gpt-pro ## Digest block" || bad "gpt-pro digest extract"
 grep -q 'lineage: gpt-pro' "$GDGO" && ok "gpt-pro: digest tags the gpt-pro lineage" || bad "gpt-pro digest lineage"
 # phantom-parallax guard: a stale/unrelated result.json must NOT add phantom peers to a gpt-pro-only digest
-printf '{"id":"prism-gpo","expected":1,"succeeded":1,"failed":0,"results":[{"to":"codex","name":"prism-ghost","status":"done","res":"/tmp/ghost.res.md","log":"/tmp/g.log"}]}' > "$TMP/prism-gpo-result.json"
+printf '{"id":"prism-gpo","expected":1,"succeeded":1,"failed":0,"results":[{"to":"gpt","name":"prism-ghost","status":"done","res":"/tmp/ghost.res.md","log":"/tmp/g.log"}]}' > "$TMP/prism-gpo-result.json"
 "$LAUNCH" digest "$GMANO" >/dev/null 2>&1
-{ ! grep -q 'prism-ghost' "$GDGO" && ! grep -q 'lineage: codex' "$GDGO"; } && ok "gpt-pro: gpt-pro-only digest ignores a stale result.json (no phantom peers)" || bad "gpt-pro digest phantom peers"
+{ ! grep -q 'prism-ghost' "$GDGO" && ! grep -q 'lineage: gpt)' "$GDGO"; } && ok "gpt-pro: gpt-pro-only digest ignores a stale result.json (no phantom peers)" || bad "gpt-pro digest phantom peers"
 grep -q 'GPTPRO-DIGEST-MARKER' "$GDGO" && ok "gpt-pro: gpt-pro-only digest still emits the gpt-pro lens despite a stale result.json" || bad "gpt-pro digest dropped gpt-pro lane"
 rm -f "$TMP/prism-gpo-result.json"
 # clean guard: a .log with a run_id but NO .res.md is a possibly-live worker -> refuse.
@@ -817,14 +817,14 @@ MANFL="$TMP/prism-floor-manifest.json"
 # CLI --expect-n still OVERRIDES (back-compat): N=2 on an N=1 shape fails, naming the tier.
 expect_err "contract: --expect-n 2 overrides the contract and fails an N=1 shape" "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n 2
 FERR=$("$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-n 2 2>&1 || true)
-printf '%s' "$FERR" | grep -q 'codex: expected 2, got 1' && ok "contract: floor failure names the under-count tier" || bad "contract floor detail"
+printf '%s' "$FERR" | grep -q 'gpt: expected 2, got 1' && ok "contract: floor failure names the under-count tier" || bad "contract floor detail"
 
 # A dispatch with NO Prism-Mode is rejected — the enforced default cannot be dodged by omission.
 NOCON="$TMP/prism-nocon.md"; make_packet "$NOCON"
 NOCOND="$TMP/prism-nocon.dispatch"
 { printf 'Shared-Packet: %s\n\n' "$NOCON"
   printf 'Type: subagent\nLens: A\nLens-Desc: d\n\n'
-  printf 'Type: parallax\nTo: codex\nLens: B\nLens-Desc: d\n\n'; } > "$NOCOND"
+  printf 'Type: parallax\nTo: gpt\nLens: B\nLens-Desc: d\n\n'; } > "$NOCOND"
 expect_err "contract: a dispatch with no Prism-Mode is rejected" "$LAUNCH" prepare --dispatch "$NOCOND"
 
 # Declaring 'full' on an incomplete (2-tier) shape fails the floor, naming a missing tier.
@@ -832,7 +832,7 @@ ASF="$TMP/prism-asf.md"; make_packet "$ASF"
 ASFD="$TMP/prism-asf.dispatch"
 { printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 1\n\n' "$ASF"
   printf 'Type: subagent\nLens: A\nLens-Desc: d\n\n'
-  printf 'Type: parallax\nTo: codex\nLens: B\nLens-Desc: d\n\n'; } > "$ASFD"
+  printf 'Type: parallax\nTo: gpt\nLens: B\nLens-Desc: d\n\n'; } > "$ASFD"
 expect_err "contract: declaring 'full' on a 2-tier shape fails the floor" "$LAUNCH" prepare --dispatch "$ASFD"
 AERR=$("$LAUNCH" prepare --dispatch "$ASFD" 2>&1 || true)
 printf '%s' "$AERR" | grep -q 'mimo: expected 1, got 0' && ok "contract: full-on-partial names a missing tier" || bad "contract full-on-partial detail"
@@ -840,23 +840,23 @@ printf '%s' "$AERR" | grep -q 'mimo: expected 1, got 0' && ok "contract: full-on
 # The SAME shape with an authorized partial waiver succeeds and records the quote (double-confirm).
 ASW="$TMP/prism-asw.md"; make_packet "$ASW"
 ASWD="$TMP/prism-asw.dispatch"
-{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "use only claude and codex"\n\n' "$ASW"
+{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "use only claude and gpt"\n\n' "$ASW"
   printf 'Type: subagent\nLens: A\nLens-Desc: d\n\n'
-  printf 'Type: parallax\nTo: codex\nLens: B\nLens-Desc: d\n\n'; } > "$ASWD"
+  printf 'Type: parallax\nTo: gpt\nLens: B\nLens-Desc: d\n\n'; } > "$ASWD"
 expect_ok "contract: partial + user quote authorizes a reduced roster" "$LAUNCH" prepare --dispatch "$ASWD"
 MANASW="$TMP/prism-asw-manifest.json"
 [ "$(jq -r '.shape.mode' "$MANASW" 2>/dev/null)" = "partial" ] && ok "contract: partial recorded in manifest" || bad "partial mode in manifest"
-[ "$(jq -r '.shape.partial_user_quote' "$MANASW" 2>/dev/null)" = '"use only claude and codex"' ] && ok "contract: user quote recorded verbatim (audit trail)" || bad "partial quote recorded"
+[ "$(jq -r '.shape.partial_user_quote' "$MANASW" 2>/dev/null)" = '"use only claude and gpt"' ] && ok "contract: user quote recorded verbatim (audit trail)" || bad "partial quote recorded"
 [ "$(jq -r '.shape.validated_roster' "$MANASW" 2>/dev/null)" = "false" ] && ok "contract: partial is not a validated full roster" || bad "partial validated flag"
 jq -e '.shape.excluded_tiers | index("mimo") != null' "$MANASW" >/dev/null 2>&1 && ok "contract: dropped tiers recorded in manifest" || bad "excluded tiers recorded"
 PWARN=$("$LAUNCH" prepare --dispatch "$ASWD" 2>&1 || true)
-{ printf '%s' "$PWARN" | grep -q 'PARTIAL prism' && printf '%s' "$PWARN" | grep -q 'use only claude and codex'; } && ok "contract: partial warns loudly with dropped tiers + cited quote" || bad "partial warning"
+{ printf '%s' "$PWARN" | grep -q 'PARTIAL prism' && printf '%s' "$PWARN" | grep -q 'use only claude and gpt'; } && ok "contract: partial warns loudly with dropped tiers + cited quote" || bad "partial warning"
 
 # Partial WITHOUT a quote is rejected — the double-confirm is mandatory.
 PNQ="$TMP/prism-pnq.md"; make_packet "$PNQ"
 PNQD="$TMP/prism-pnq.dispatch"
 { printf 'Shared-Packet: %s\nPrism-Mode: partial\n\n' "$PNQ"
-  printf 'Type: parallax\nTo: codex\nLens: B\nLens-Desc: d\n\n'; } > "$PNQD"
+  printf 'Type: parallax\nTo: gpt\nLens: B\nLens-Desc: d\n\n'; } > "$PNQD"
 expect_err "contract: partial without Partial-User-Quote is rejected" "$LAUNCH" prepare --dispatch "$PNQD"
 
 # Invalid Prism-Mode value, and 'full' without Prism-N.
@@ -879,12 +879,12 @@ expect_err "contract: full N=0 with M=0 is rejected (gpt-pro-only needs M>=1)" "
 
 # --config escape hatch stays lenient (no contract required); manifest shape = unchecked.
 CLENPKT="$TMP/prism-clen.md"; make_packet "$CLENPKT"
-CLEN="$TMP/clen.json"; jq -n --arg p "$CLENPKT" '{shared_packet:$p,parallax:[{to:"codex",name:"a",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CLEN"
+CLEN="$TMP/clen.json"; jq -n --arg p "$CLENPKT" '{shared_packet:$p,parallax:[{to:"gpt",name:"a",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CLEN"
 expect_ok "contract: --config without a shape stays lenient (escape hatch)" "$LAUNCH" prepare --config "$CLEN"
 [ "$(jq -r '.shape.mode' "$TMP/prism-clen-manifest.json" 2>/dev/null)" = "unchecked" ] && ok "contract: lenient --config records shape.mode=unchecked" || bad "lenient config shape"
 # --expect-n still works on --config (manual floor / override): 1 tier != full roster -> fail.
 CLEN2PKT="$TMP/prism-clen2.md"; make_packet "$CLEN2PKT"
-CLEN2="$TMP/clen2.json"; jq -n --arg p "$CLEN2PKT" '{shared_packet:$p,parallax:[{to:"codex",name:"a",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CLEN2"
+CLEN2="$TMP/clen2.json"; jq -n --arg p "$CLEN2PKT" '{shared_packet:$p,parallax:[{to:"gpt",name:"a",lens:"L",lens_desc:"d"}],subagents:[]}' > "$CLEN2"
 expect_err "contract: --config + --expect-n 1 floor-checks (1 tier != full roster)" "$LAUNCH" prepare --config "$CLEN2" --expect-n 1
 # Flag hygiene retained: --expect-m without --expect-n rejected; non-integer rejected; leading zero ok.
 expect_err "contract: --expect-m without --expect-n is rejected" "$LAUNCH" prepare --dispatch "$TMP/prism-floor.dispatch" --expect-m 1
@@ -896,8 +896,8 @@ echo "== prepare: review-fix hardening (#1-#6) =="
 # record shape.n=null (not the override value), and stay validated_roster=false.
 HP1="$TMP/prism-h1.md"; make_packet "$HP1"
 HP1D="$TMP/h1.dispatch"
-{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "only codex"\n\n' "$HP1"
-  printf 'Type: parallax\nTo: codex\nLens: A\nLens-Desc: d\n\n'; } > "$HP1D"
+{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "only gpt"\n\n' "$HP1"
+  printf 'Type: parallax\nTo: gpt\nLens: A\nLens-Desc: d\n\n'; } > "$HP1D"
 expect_ok "#1: partial + --expect-n succeeds (floor skipped, not a false failure)" "$LAUNCH" prepare --dispatch "$HP1D" --expect-n 1
 H1MAN="$TMP/prism-h1-manifest.json"
 [ "$(jq -r '.shape.n' "$H1MAN" 2>/dev/null)" = "null" ] && ok "#1: partial records shape.n=null (not the --expect-n value)" || bad "#1 partial shape.n null"
@@ -907,13 +907,13 @@ printf '%s' "$H1NOTE" | grep -q 'ignoring --expect-n on a Prism-Mode: partial' &
 
 # #2 — lenient --config with an INCOMPLETE roster warns loudly (and still prepares).
 HP2="$TMP/prism-h2.md"; make_packet "$HP2"
-HP2C="$TMP/h2.json"; jq -n --arg p "$HP2" '{shared_packet:$p,parallax:[{to:"codex",name:"a",lens:"A",lens_desc:"d"}],subagents:[]}' > "$HP2C"
+HP2C="$TMP/h2.json"; jq -n --arg p "$HP2" '{shared_packet:$p,parallax:[{to:"gpt",name:"a",lens:"A",lens_desc:"d"}],subagents:[]}' > "$HP2C"
 H2W=$("$LAUNCH" prepare --config "$HP2C" 2>&1)
 { printf '%s' "$H2W" | grep -q 'roster NOT validated' && printf '%s' "$H2W" | grep -q 'INCOMPLETE roster'; } && ok "#2: lenient --config with incomplete roster warns loudly" || bad "#2 unchecked warning"
 
 # #3 — malformed author-supplied --config .shape fails closed.
 HP3="$TMP/prism-h3.md"; make_packet "$HP3"
-mkbad(){ jq -n --arg p "$HP3" --argjson s "$1" '{shared_packet:$p,shape:$s,parallax:[{to:"codex",name:"a",lens:"A",lens_desc:"d"}],subagents:[]}'; }
+mkbad(){ jq -n --arg p "$HP3" --argjson s "$1" '{shared_packet:$p,shape:$s,parallax:[{to:"gpt",name:"a",lens:"A",lens_desc:"d"}],subagents:[]}'; }
 mkbad '{"mode":"bogus"}'                                          > "$TMP/h3a.json"; expect_err "#3: --config .shape mode=bogus rejected"                "$LAUNCH" prepare --config "$TMP/h3a.json"
 mkbad '{"mode":"full"}'                                           > "$TMP/h3b.json"; expect_err "#3: --config full .shape without n rejected"          "$LAUNCH" prepare --config "$TMP/h3b.json"
 mkbad '{"mode":"full","n":1.5}'                                  > "$TMP/h3c.json"; expect_err "#3: --config full .shape non-integer n rejected"      "$LAUNCH" prepare --config "$TMP/h3c.json"
@@ -931,7 +931,7 @@ expect_err "#4: full N=0 omitting Prism-M is rejected (defaults to 0, needs M>=1
 
 # #5 — parallax rejects an empty/malformed .shape, not only a missing one.
 HP5="$TMP/prism-h5.md"; make_packet "$HP5"
-{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "only codex"\n\n' "$HP5"; printf 'Type: parallax\nTo: codex\nLens: A\nLens-Desc: d\n\n'; } > "$TMP/h5.dispatch"
+{ printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "only gpt"\n\n' "$HP5"; printf 'Type: parallax\nTo: gpt\nLens: A\nLens-Desc: d\n\n'; } > "$TMP/h5.dispatch"
 "$LAUNCH" prepare --dispatch "$TMP/h5.dispatch" >/dev/null 2>&1
 jq '.shape = {}'  "$TMP/prism-h5-manifest.json" > "$TMP/prism-h5b-manifest.json"
 expect_err "#5: parallax rejects a manifest with empty .shape {}"   "$LAUNCH" parallax "$TMP/prism-h5b-manifest.json" --dry-run
@@ -944,7 +944,7 @@ printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-Mode: partial\n\nType: subage
 expect_err "#6: duplicate Prism-Mode rejected"          "$LAUNCH" prepare --dispatch "$TMP/h6a.dispatch"
 printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: 1\nPrism-N: 2\n\nType: subagent\nLens: A\nLens-Desc: d\n' "$HP6" > "$TMP/h6b.dispatch"
 expect_err "#6: duplicate Prism-N rejected"             "$LAUNCH" prepare --dispatch "$TMP/h6b.dispatch"
-printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "a"\nPartial-User-Quote: "b"\n\nType: parallax\nTo: codex\nLens: A\nLens-Desc: d\n' "$HP6" > "$TMP/h6c.dispatch"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "a"\nPartial-User-Quote: "b"\n\nType: parallax\nTo: gpt\nLens: A\nLens-Desc: d\n' "$HP6" > "$TMP/h6c.dispatch"
 expect_err "#6: duplicate Partial-User-Quote rejected"  "$LAUNCH" prepare --dispatch "$TMP/h6c.dispatch"
 printf 'Shared-Packet: %s\nPrism-Mode: full\nPrism-N: abc\n\nType: subagent\nLens: A\nLens-Desc: d\n' "$HP6" > "$TMP/h6d.dispatch"
 expect_err "#6: non-integer Prism-N rejected (contract path)" "$LAUNCH" prepare --dispatch "$TMP/h6d.dispatch"
@@ -988,10 +988,15 @@ HTA="$HERE/../templates/shared-how-to-answer.md"
 grep -qF '## Digest' "$HTA" \
   && ok "contract: shared-how-to-answer.md instructs the '## Digest' heading the extractor greps" \
   || bad "contract: '## Digest' heading missing/renamed in shared-how-to-answer.md (digest extraction would silently zero)"
-# prism-launch derives the fixed top effort as effort_values[-1]; pin that the array
-# stays ordered weakest->strongest so a future reorder can't silently pick the wrong tier.
-[ "$(jq -r '.codex.effort_values[-1]' "$PJ")" = "xhigh" ] \
-  && ok "contract: codex effort_values[-1] is the top tier (xhigh)" || bad "contract: codex effort_values ordering ([-1] != xhigh)"
+# prism-launch pins the gpt effort from `prism_effort` (decoupled from the full effort_values
+# range relay exposes, which now runs up to ultra); pin that it stays max and that relay
+# still exposes the full xhigh/max/ultra range for interactive --effort.
+[ "$(jq -r '.gpt.prism_effort' "$PJ")" = "max" ] \
+  && ok "contract: gpt prism_effort pins max (decoupled from effort_values)" || bad "contract: gpt prism_effort != max"
+[ -n "$(jq -r '.gpt as $g | $g.effort_values | index($g.prism_effort) // empty' "$PJ")" ] \
+  && ok "contract: gpt prism_effort is a member of effort_values (relay would accept the pin)" || bad "contract: gpt prism_effort not in effort_values"
+[ "$(jq -r '.gpt.effort_values | contains(["max","ultra"])' "$PJ")" = "true" ] \
+  && ok "contract: relay exposes gpt full range incl. max + ultra" || bad "contract: gpt effort_values missing max/ultra"
 [ "$(jq -r '."grok-build".effort_values[-1]' "$PJ")" = "high" ] \
   && ok "contract: grok-build effort_values[-1] is the top tier (high)" || bad "contract: grok-build effort_values ordering ([-1] != high)"
 # gpt-pro run_id recovery is a cross-SKILL string coupling: the gpt-pro wrapper prints
@@ -1192,8 +1197,8 @@ case "$NS_OUT" in *$'\nVariant: no-subagents\n'*) ok "scaffold --no-subagents em
 case "$NS_OUT" in *'Prism-Mode: partial'*) ok "scaffold --no-subagents emits Prism-Mode: partial" ;; *) bad "scaffold --no-subagents partial mode" ;; esac
 [ "$(printf '%s\n' "$NS_OUT" | grep -c '^Type: subagent$')" = "0" ] && ok "scaffold --no-subagents emits zero subagent records" || bad "scaffold --no-subagents zero subagent"
 [ "$(printf '%s\n' "$NS_OUT" | grep -c '^Type: parallax$')" -ge 7 ] && ok "scaffold --no-subagents keeps the parallax fan" || bad "scaffold --no-subagents parallax fan"
-# heaviest (subagent-slot) lens moves onto codex (review preset slot-0 = Adversarial)
-printf '%s\n' "$NS_OUT" | grep -A1 '^To: codex$' | grep -q 'Lens: Adversarial' && ok "scaffold --no-subagents moves heaviest lens onto codex (xhigh)" || bad "scaffold --no-subagents codex lens shift"
+# heaviest (subagent-slot) lens moves onto gpt (review preset slot-0 = Adversarial)
+printf '%s\n' "$NS_OUT" | grep -A1 '^To: gpt$' | grep -q 'Lens: Adversarial' && ok "scaffold --no-subagents moves heaviest lens onto gpt (max)" || bad "scaffold --no-subagents gpt lens shift"
 
 # --n 0 with --no-subagents is rejected (that's the gpt-pro-only shape, not no-subagents)
 expect_err "scaffold --no-subagents --n 0 rejected" "$LAUNCH" scaffold --no-subagents --n 0
@@ -1214,7 +1219,7 @@ jq -e '.shape.excluded_tiers | index("subagents")' "$MANN" >/dev/null 2>&1 && ok
 
 # floor check FAILS when a parallax tier is missing (the guarantee the variant adds over bare partial)
 NSMISS="$TMP/nsmiss.dispatch"
-printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: no-subagents\nPrism-N: 1\nPartial-User-Quote: "no subagents"\n\nType: parallax\nTo: codex\nLens: Adversarial\nLens-Desc: d\n' "$PKTN" > "$NSMISS"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: no-subagents\nPrism-N: 1\nPartial-User-Quote: "no subagents"\n\nType: parallax\nTo: gpt\nLens: Adversarial\nLens-Desc: d\n' "$PKTN" > "$NSMISS"
 expect_err "no-subagents floor check fails on a missing parallax tier" "$LAUNCH" prepare --dispatch "$NSMISS"
 
 # a smuggled subagent record under the variant is rejected
@@ -1223,7 +1228,7 @@ expect_err "no-subagents rejects a smuggled subagent record" "$LAUNCH" prepare -
 
 # missing quote rejected (still a user-authorized reduced roster)
 NSNOQ="$TMP/nsnoq.dispatch"
-printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: no-subagents\nPrism-N: 1\n\nType: parallax\nTo: codex\nLens: A\nLens-Desc: d\n' "$PKTN" > "$NSNOQ"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: no-subagents\nPrism-N: 1\n\nType: parallax\nTo: gpt\nLens: A\nLens-Desc: d\n' "$PKTN" > "$NSNOQ"
 expect_err "no-subagents without a Partial-User-Quote rejected" "$LAUNCH" prepare --dispatch "$NSNOQ"
 
 # Variant on Prism-Mode: full rejected
@@ -1233,12 +1238,12 @@ expect_err "Variant on Prism-Mode: full rejected" "$LAUNCH" prepare --dispatch "
 
 # unknown Variant rejected
 NSUV="$TMP/nsuv.dispatch"
-printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: bananas\nPrism-N: 1\nPartial-User-Quote: "x"\n\nType: parallax\nTo: codex\nLens: A\nLens-Desc: d\n' "$PKTN" > "$NSUV"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: bananas\nPrism-N: 1\nPartial-User-Quote: "x"\n\nType: parallax\nTo: gpt\nLens: A\nLens-Desc: d\n' "$PKTN" > "$NSUV"
 expect_err "unknown Variant rejected" "$LAUNCH" prepare --dispatch "$NSUV"
 
 # back-compat: a bare partial (no Variant) carrying Prism-N is STILL rejected
 NSBP="$TMP/nsbp.dispatch"
-printf 'Shared-Packet: %s\nPrism-Mode: partial\nPrism-N: 1\nPartial-User-Quote: "x"\n\nType: parallax\nTo: codex\nLens: A\nLens-Desc: d\n' "$PKTN" > "$NSBP"
+printf 'Shared-Packet: %s\nPrism-Mode: partial\nPrism-N: 1\nPartial-User-Quote: "x"\n\nType: parallax\nTo: gpt\nLens: A\nLens-Desc: d\n' "$PKTN" > "$NSBP"
 expect_err "bare partial with Prism-N still rejected (variant-free path unchanged)" "$LAUNCH" prepare --dispatch "$NSBP"
 
 echo "== no-subagents variant: review fixes (N>1, M>0, --config, alias, calm) =="
@@ -1246,7 +1251,7 @@ echo "== no-subagents variant: review fixes (N>1, M>0, --config, alias, calm) ==
 # N=2 floor check passes; manifest records 14 parallax + shape.n=2 (preset is N=1 only → hand-build)
 PKN2="$TMP/nsn2.md"; make_packet "$PKN2"; NSN2="$TMP/nsn2.dispatch"
 { printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: no-subagents\nPrism-N: 2\nPartial-User-Quote: "no subagents"\n' "$PKN2"
-  i=0; for p in codex grok-build grok-composer glm kimi deepseek mimo; do for c in a b; do i=$((i+1)); printf '\nType: parallax\nTo: %s\nLens: L%s\nLens-Desc: d\n' "$p" "$i"; done; done; } > "$NSN2"
+  i=0; for p in gpt grok-build grok-composer glm kimi deepseek mimo; do for c in a b; do i=$((i+1)); printf '\nType: parallax\nTo: %s\nLens: L%s\nLens-Desc: d\n' "$p" "$i"; done; done; } > "$NSN2"
 expect_ok "no-subagents N=2 floor check passes (14 parallax)" "$LAUNCH" prepare --dispatch "$NSN2"
 [ "$(jq -r '.counts.parallax_total' "$TMP/nsn2-manifest.json" 2>/dev/null)" = "14" ] && ok "no-subagents N=2 manifest parallax_total=14" || bad "N=2 parallax_total"
 [ "$(jq -r '.shape.n' "$TMP/nsn2-manifest.json" 2>/dev/null)" = "2" ] && ok "no-subagents N=2 shape.n=2" || bad "N=2 shape.n"
@@ -1261,7 +1266,7 @@ expect_ok "no-subagents --m 1 prepares" "$LAUNCH" prepare --dispatch "$NSM1"
 # M=1 declared but zero gpt-pro records → variant floor check fails
 NSM1B="$TMP/nsm1b.dispatch"
 { printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: no-subagents\nPrism-N: 1\nPrism-M: 1\nPartial-User-Quote: "x"\n' "$PKM1"
-  for p in codex grok-build grok-composer glm kimi deepseek mimo; do printf '\nType: parallax\nTo: %s\nLens: LB-%s\nLens-Desc: d\n' "$p" "$p"; done; } > "$NSM1B"
+  for p in gpt grok-build grok-composer glm kimi deepseek mimo; do printf '\nType: parallax\nTo: %s\nLens: LB-%s\nLens-Desc: d\n' "$p" "$p"; done; } > "$NSM1B"
 expect_err "no-subagents M=1 with zero gpt-pro records fails floor check" "$LAUNCH" prepare --dispatch "$NSM1B"
 
 # --no-subagent (singular) alias behaves identically
@@ -1274,7 +1279,7 @@ expect_err "scaffold --partial-user-quote without --no-subagents rejected" "$LAU
 # leftover scaffold FILL placeholder quote is rejected by prepare
 PKF="$TMP/nsf.md"; make_packet "$PKF"; NSF="$TMP/nsf.dispatch"
 { printf 'Shared-Packet: %s\nPrism-Mode: partial\nVariant: no-subagents\nPrism-N: 1\nPartial-User-Quote: "FILL — the user'"'"'s exact words"\n' "$PKF"
-  for p in codex grok-build grok-composer glm kimi deepseek mimo; do printf '\nType: parallax\nTo: %s\nLens: LF-%s\nLens-Desc: d\n' "$p" "$p"; done; } > "$NSF"
+  for p in gpt grok-build grok-composer glm kimi deepseek mimo; do printf '\nType: parallax\nTo: %s\nLens: LF-%s\nLens-Desc: d\n' "$p" "$p"; done; } > "$NSF"
 expect_err "no-subagents leftover FILL placeholder quote rejected" "$LAUNCH" prepare --dispatch "$NSF"
 
 # calm informational line on the variant; the loud ⚠ PARTIAL must NOT appear
@@ -1285,7 +1290,7 @@ case "$NSCALM" in *"PARTIAL"*) bad "variant must NOT print ⚠ PARTIAL" ;; *) ok
 # --config raw path: a valid no-subagents .shape with omitted m prepares + normalizes m→0
 PKC="$TMP/nsc.md"; make_packet "$PKC"; CFGNS="$TMP/cfgns.json"
 jq -n --arg p "$PKC" '{shared_packet:$p,
-  parallax:[ ["codex","grok-build","grok-composer","glm","kimi","deepseek","mimo"][] | {to:., name:("ns-"+.), lens:("L-"+.), lens_desc:"d"} ],
+  parallax:[ ["gpt","grok-build","grok-composer","glm","kimi","deepseek","mimo"][] | {to:., name:("ns-"+.), lens:("L-"+.), lens_desc:"d"} ],
   subagents:[],
   shape:{mode:"partial", variant:"no-subagents", n:1, partial_user_quote:"no subagents"}}' > "$CFGNS"
 expect_ok "--config no-subagents variant (omitted m) prepares" "$LAUNCH" prepare --config "$CFGNS"
@@ -1300,7 +1305,7 @@ expect_err "--config rejects variant on mode:full (schema)" "$LAUNCH" prepare --
 # --config raw path: omitted m normalized to 0 → a stray gpt-pro record is caught by the floor check
 PKCG="$TMP/nscg.md"; make_packet "$PKCG"; CFGNSG="$TMP/cfgnsg.json"
 jq -n --arg p "$PKCG" '{shared_packet:$p,
-  parallax:[ ["codex","grok-build","grok-composer","glm","kimi","deepseek","mimo"][] | {to:., name:("ng-"+.), lens:("L-"+.), lens_desc:"d"} ],
+  parallax:[ ["gpt","grok-build","grok-composer","glm","kimi","deepseek","mimo"][] | {to:., name:("ng-"+.), lens:("L-"+.), lens_desc:"d"} ],
   subagents:[], "gpt-pro":[{lens:"G", lens_desc:"d"}],
   shape:{mode:"partial", variant:"no-subagents", n:1, partial_user_quote:"x"}}' > "$CFGNSG"
 expect_err "--config no-subagents omitted m + stray gpt-pro caught by floor check" "$LAUNCH" prepare --config "$CFGNSG"
