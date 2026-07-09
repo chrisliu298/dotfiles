@@ -20,7 +20,7 @@ Useful variants:
 ```bash
 node --experimental-strip-types skills/skill-cleaner/scripts/skill-cleaner.ts --no-logs
 node --experimental-strip-types skills/skill-cleaner/scripts/skill-cleaner.ts --months 6 --max-log-mb 800 --deep-logs
-node --experimental-strip-types skills/skill-cleaner/scripts/skill-cleaner.ts --context-tokens 272000 --budget-percent 2 --no-logs
+node --experimental-strip-types skills/skill-cleaner/scripts/skill-cleaner.ts --context-tokens 372000 --budget-percent 2 --no-logs
 node --experimental-strip-types skills/skill-cleaner/scripts/skill-cleaner.ts --root ~/Dropbox/boxd/skills --no-logs
 ```
 

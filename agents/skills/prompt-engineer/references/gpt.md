@@ -125,6 +125,21 @@ State what the output should look like. Keep this block short — lean on the su
 </verbosity_controls>
 ```
 
+**Brevity — prioritize, don't just compress.** GPT-5.6 is already biased toward
+short answers and is *more* sensitive than earlier models to generic brevity
+instructions ("Be concise", "Keep it short", "Use minimal text"). These can do
+more than strip filler — the model may treat a shorter substitute as preferable
+to producing the full requested artifact, dropping required evidence or steps.
+Replace brevity instructions with prioritization:
+
+```
+Lead with the conclusion. Include the evidence needed to support it, any
+material caveat, and the next action. Omit secondary detail and repetition.
+
+Keep all required facts, decisions, caveats, and next steps. Trim
+introductions, repetition, generic reassurance, and optional background first.
+```
+
 **Formatting defaults** — let formatting serve comprehension, not the other way around.
 
 ```
@@ -469,8 +484,8 @@ If the model still stops at the first plausible answer, add an initiative nudge:
 Start from `medium`, the GPT-5.6 default and recommended balanced point for
 quality, reliability, latency, and cost. Evaluate `low` before `none` when tool
 use, planning, search, or multi-step decision making still matters. Increase to
-`high` or `xhigh` only when evals show a measurable quality gain that justifies
-the extra latency and cost.
+`high`, `xhigh`, or `max` only when evals show a measurable quality gain that
+justifies the extra latency and cost.
 
 - `none`: Reserve for latency-critical tasks that do not need reasoning or
   multi-chained tool calls, such as lightweight voice turns, fast information
@@ -485,6 +500,10 @@ the extra latency and cost.
 - `xhigh`: The hardest asynchronous agentic tasks or evals that test the
   bounds of model intelligence. Avoid as a default unless evals show clear
   benefits.
+- `max`: The top tier — reserve for the most demanding, quality-first work that
+  needs deeper exploration and verification. If you already use `xhigh`, compare
+  `max` against it on representative tasks; the added latency and cost are worth
+  it only when evals show a clear gain.
 
 Higher effort is not automatically better. If the task has conflicting
 instructions, weak stopping criteria, or open-ended tool access, higher effort
@@ -731,6 +750,7 @@ Read the prompt and ask what's going wrong. Common issues and fixes:
 | Generic formatting / drift | No output contract | Add `<output_contract>` with sections and lengths |
 | Over-formats conversational answers | Default to heavy structure | Add the "formatting serve comprehension" block from Step 4 |
 | Inflates edits beyond the ask | No preservation rule | Add the editing-task block from Step 4 |
+| Drops required content when told to be brief | Generic brevity instruction on a compression-biased model | Replace brevity with prioritization — lead with the conclusion, keep required facts and steps (see Step 4) |
 | Acts on risky steps without asking | No safety gate | Add `<verification_loop>` + `<action_safety>` |
 | Ships code without validation | No validation-after-output | Add the Step 10 validation block |
 | Over-reasons / slow | Reasoning effort too high, or prompt over-specifies process | Lower effort; strip legacy scaffolding before raising it |
