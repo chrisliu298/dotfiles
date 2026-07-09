@@ -148,7 +148,7 @@ Parallax is dispatched via `relay` to **different models**. Invoke `relay` direc
 
 | Peer | Lineage | Effort | Note |
 |---|---|---|---|
-| `codex` | OpenAI (GPT-5.5) | `xhigh` | agentic code-review strength |
+| `codex` | OpenAI (GPT-5.6) | `xhigh` | agentic code-review strength |
 | `grok-build` | xAI | `high` | independent of Anthropic/OpenAI |
 | `grok-composer` | xAI (same as grok-build) | none | fast variant; reach for a quick xAI take |
 | `glm` | Zhipu/z.ai | none (pinned max) | independent lineage |

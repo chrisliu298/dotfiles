@@ -17,10 +17,10 @@ Help users write effective prompts — from scratch or by refining existing ones
 Covers three model families; the user specifies which:
 
 - **`prompt-engineer claude`** — Anthropic Claude prompting best practices
-- **`prompt-engineer gpt`** — OpenAI GPT-5.5 general prompting best practices
+- **`prompt-engineer gpt`** — OpenAI GPT-5.6 general prompting best practices
 - **`prompt-engineer codex`** — OpenAI Codex coding agent best practices
 
-If unspecified, ask which model family the prompt targets. If obvious from context (e.g., they mention "Claude", "Anthropic", "GPT", "OpenAI", "Codex"), use that. If they say "GPT" or "OpenAI" without specifying further, ask whether the prompt is for a general GPT-5.5 application or a Codex coding agent — the guidance differs significantly.
+If unspecified, ask which model family the prompt targets. If obvious from context (e.g., they mention "Claude", "Anthropic", "GPT", "OpenAI", "Codex"), use that. If they say "GPT" or "OpenAI" without specifying further, ask whether the prompt is for a general GPT-5.6 application or a Codex coding agent — the guidance differs significantly.
 
 ## Workflow
 

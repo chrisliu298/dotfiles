@@ -529,12 +529,13 @@ ch(){  CLAUDE_CODE_EFFORT_LEVEL=high   _claude --dangerously-skip-permissions "$
 cx(){  CLAUDE_CODE_EFFORT_LEVEL=xhigh  _claude --dangerously-skip-permissions "$@"; }
 cmx(){ CLAUDE_CODE_EFFORT_LEVEL=max    _claude --dangerously-skip-permissions "$@"; }
 
-xn(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=none "$@"; }
-x(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=medium "$@"; }
-xl(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=low "$@"; }
-xm(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=medium "$@"; }
-xh(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=high "$@"; }
-xx(){ command codex --yolo -m gpt-5.5 --config model_reasoning_effort=xhigh "$@"; }
+xn(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=none "$@"; }
+x(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=medium "$@"; }
+xl(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=low "$@"; }
+xm(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=medium "$@"; }
+xh(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=high "$@"; }
+xx(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=xhigh "$@"; }
+xmx(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=max "$@"; }
 _codex_resume_effort(){
     local resume_args=()
     if [[ "$1" == "--last" ]]; then
@@ -543,23 +544,23 @@ _codex_resume_effort(){
     fi
     local effort=medium
     case "$1" in
-        none|low|medium|high|xhigh) effort="$1"; shift ;;
+        none|low|medium|high|xhigh|max) effort="$1"; shift ;;
     esac
-    command codex resume "${resume_args[@]}" --yolo -m gpt-5.5 --config model_reasoning_effort="$effort" "$@"
+    command codex resume "${resume_args[@]}" --yolo -m gpt-5.6-sol --config model_reasoning_effort="$effort" "$@"
 }
 xc(){ _codex_resume_effort --last "$@"; }
 xr(){ _codex_resume_effort "$@"; }
 xu(){ npm install -g @openai/codex@latest "$@"; }
-xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.5 --config model_reasoning_effort=high "${*}"; }
+xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.6-sol --config model_reasoning_effort=high "${*}"; }
 
-# Pi defaults to GPT-5.5 through the OpenAI Codex subscription provider. This
+# Pi defaults to GPT-5.6 through the OpenAI Codex subscription provider. This
 # intentionally uses Pi's `openai-codex` OAuth token in ~/.pi/agent/auth.json,
 # not OPENAI_API_KEY / the API-key `openai` provider.
 _pi(){ env -u TMUX PI_TELEMETRY=0 PI_SKIP_VERSION_CHECK=1 COLORTERM=truecolor "$(command -v pi)" "$@"; }
-p(){ _pi --provider openai-codex --model gpt-5.5 "$@"; }
-pc(){ _pi --provider openai-codex --model gpt-5.5 --continue "$@"; }
+p(){ _pi --provider openai-codex --model gpt-5.6-sol "$@"; }
+pc(){ _pi --provider openai-codex --model gpt-5.6-sol --continue "$@"; }
 pr(){ _pi --resume "$@"; }
-phl(){ (( $# )) || { echo 'Usage: phl "<prompt>"'; return 1; }; _pi --provider openai-codex --model gpt-5.5 -p "${*}"; }
+phl(){ (( $# )) || { echo 'Usage: phl "<prompt>"'; return 1; }; _pi --provider openai-codex --model gpt-5.6-sol -p "${*}"; }
 
 _pi_glm(){
     [[ -n "${GLM_PLAN_KEY_INT:-}" ]] || { echo 'GLM_PLAN_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }

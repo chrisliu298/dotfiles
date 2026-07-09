@@ -25,7 +25,7 @@ node --experimental-strip-types skills/skill-cleaner/scripts/skill-cleaner.ts --
 ```
 
 2. Read the report in this order:
-- `Skill Budget`: GPT-5.5 context size, 2% skills budget, Codex-budgeted usage, and pre-budget full-list pressure.
+- `Skill Budget`: GPT-5.6 context size, 2% skills budget, Codex-budgeted usage, and pre-budget full-list pressure.
 - `Description candidates`: long descriptions where relaxed grammar saves prompt budget.
 - `Duplicates`: same skill name or near-identical description/body across Codex, plugin cache, repo siblings, and personal skill roots.
 - `Unused candidates`: no recent `$skill` mention, `SKILL.md` read, or explicit skill-use trace in recent Codex/OpenClaw logs.
@@ -42,7 +42,7 @@ node --experimental-strip-types skills/skill-cleaner/scripts/skill-cleaner.ts --
 - The script mirrors Codex's model-visible line shape: `- name: description (file: path)`.
 - It applies Codex-like frontmatter rules: YAML frontmatter only, default name from parent dir, single-line sanitized `name` and `description`.
 - It follows Codex `core-skills/src/render.rs`: 2% of raw `context_window`, token cost `ceil(utf8_bytes / 4)`, then full descriptions -> equal description truncation -> omitted minimum lines.
-- It reads `~/.codex/models_cache.json` for GPT-5.5 `context_window`; fallback is 272,000 tokens and 2%.
+- It reads `~/.codex/models_cache.json` for GPT-5.6 `context_window`; fallback is 372,000 tokens and 2%.
 - It scans only normal Codex/plugin/repo skill roots by default. Extra folders such as Dropbox archives are included only with `--root <path>`.
 - It realpath-dedupes roots, so symlinked roots such as `~/.codex/skills/agent-scripts -> ~/Projects/agent-scripts/skills` do not create false duplicates.
 - For duplicate names, it reports description/body similarity and suggests deletion candidates only when bodies are near copies. Keep priority defaults to direct Codex system skills, then direct Codex skills, then plugin skills, then personal/repo copies.

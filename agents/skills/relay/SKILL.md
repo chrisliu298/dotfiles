@@ -36,7 +36,7 @@ If a bare `relay` ever returns "command not found" (a sandboxed/non-zsh/reset-en
 
 | Peer | When to pick | How to invoke |
 |---|---|---|
-| **Codex** (default) | Code review, security review, refactoring, agentic coding. GPT-5.5 lineage. Four effort tiers (`low`/`medium`/`high`/`xhigh`). | `relay call --name ...` (no `--to` needed) |
+| **Codex** (default) | Code review, security review, refactoring, agentic coding. GPT-5.6 lineage. Four effort tiers (`low`/`medium`/`high`/`xhigh`). | `relay call --name ...` (no `--to` needed) |
 | **Grok Build** | An independent xAI lineage (Grok 4.5, model id `grok-4.5`), xAI's agentic coding model. Runs via grok's own CLI in headless mode (not Anthropic-compatible). Three effort tiers (`low`/`medium`/`high`, default `medium`) — `high` is grok-4.5's ceiling (no `xhigh`). | `relay call --to grok-build --name ...` |
 | **Grok Composer** | xAI's fast model (`grok-composer-2.5-fast`) — same lineage as Grok Build, lighter/cheaper. Use as a faster xAI option (not a distinct cross-vendor perspective). No effort knob. | `relay call --to grok-composer --name ...` |
 | **GLM** | An independent lineage (Zhipu/z.ai GLM-5.2), reached through z.ai's Anthropic-compatible endpoint. Use for another cross-vendor perspective. Pinned to `max` reasoning via the registry (like DeepSeek); ignores `--effort`. Text-only (no image input via relay). | `relay call --to glm --name ...` |
@@ -79,9 +79,9 @@ Before raising effort, improve the prompt first — add outcome-first success cr
 
 ## Prompting Codex
 
-**Before composing the prompt body, read the prompt-engineer references** — `~/.claude/skills/prompt-engineer/references/gpt.md` for cross-cutting GPT-5.5 prompt patterns and `~/.claude/skills/prompt-engineer/references/codex.md` for Codex coding agent patterns. If those symlinks are unavailable, use the repo copies at `agents/skills/prompt-engineer/references/`. This is not optional — the guides contain model-specific patterns that materially affect output quality.
+**Before composing the prompt body, read the prompt-engineer references** — `~/.claude/skills/prompt-engineer/references/gpt.md` for cross-cutting GPT-5.6 prompt patterns and `~/.claude/skills/prompt-engineer/references/codex.md` for Codex coding agent patterns. If those symlinks are unavailable, use the repo copies at `agents/skills/prompt-engineer/references/`. This is not optional — the guides contain model-specific patterns that materially affect output quality.
 
-Lead with the outcome, not the procedure. GPT-5.5 responds best to outcome-first prompts — state the goal, success criteria, and stop rules, then let Codex pick the path. Use XML scaffolding only when a specific failure mode needs it:
+Lead with the outcome, not the procedure. GPT-5.6 responds best to outcome-first prompts — state the goal, success criteria, and stop rules, then let Codex pick the path. Use XML scaffolding only when a specific failure mode needs it:
 
 - `<output_contract>` — when format precision matters
 - `<completeness_contract>` — when the task has discrete items that must all be covered

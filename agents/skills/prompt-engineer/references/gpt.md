@@ -1,14 +1,14 @@
-# GPT-5.5 Prompt Craft
+# GPT-5.6 Prompt Craft
 
-Help users write effective prompts for OpenAI GPT models — either from scratch or by refining existing prompts. Based on OpenAI's official GPT-5.5 prompt guidance. For Codex coding agents, see `references/codex.md` instead.
+Help users write effective prompts for OpenAI GPT models — either from scratch or by refining existing prompts. Based on OpenAI's official GPT-5.6 prompt guidance. For Codex coding agents, see `references/codex.md` instead.
 
 ## Core philosophy: outcome-first
 
-GPT-5.5 works best with **outcome-first prompts** that define the target and constraints while leaving room for the model to choose an efficient solution path. Shorter, outcome-first prompts usually outperform process-heavy instruction stacks.
+GPT-5.6 works best with **outcome-first prompts** that define the target and constraints while leaving room for the model to choose an efficient solution path. Shorter, outcome-first prompts usually outperform process-heavy instruction stacks.
 
 - Describe the destination, not every step. State the target outcome, success criteria, constraints, and available context — then let the model choose the search, tool, or reasoning strategy.
 - Avoid unnecessary absolute rules (ALWAYS, NEVER, must, only) for judgment calls. Reserve absolutes for safety, privacy, and compliance.
-- State **both sides of a tradeoff**, not just the cost to avoid. A one-sided rule ("avoid X, it's expensive") makes the model overfit to avoidance; give the counterweight and GPT-5.5 will weigh it — which it does well.
+- State **both sides of a tradeoff**, not just the cost to avoid. A one-sided rule ("avoid X, it's expensive") makes the model overfit to avoidance; give the counterweight and GPT-5.6 will weigh it — which it does well.
 - **Instructions don't add capability.** If a task needs exact arithmetic, current/external data, or a deterministic transform, define a tool for it — telling the model to "be accurate" won't create the capability.
 - Add explicit stopping conditions so the model knows when the job is done.
 - Re-evaluate `low` and `medium` reasoning effort before escalating — they cover more ground than you might expect.
@@ -369,7 +369,7 @@ Use for research, review, and synthesis tasks (not short execution tasks):
 
 For repeated API traffic, keep stable prompt content first and dynamic
 user-specific context near the end so prompt caching can do useful work. Do
-not include the current date solely to tell GPT-5.5 what day it is; provide
+not include the current date solely to tell GPT-5.6 what day it is; provide
 dates only when the task logic, business rules, or user-facing answer depends
 on them.
 
@@ -466,7 +466,7 @@ If the model still stops at the first plausible answer, add an initiative nudge:
 
 #### Reasoning effort defaults
 
-Start from `medium`, the GPT-5.5 default and recommended balanced point for
+Start from `medium`, the GPT-5.6 default and recommended balanced point for
 quality, reliability, latency, and cost. Evaluate `low` before `none` when tool
 use, planning, search, or multi-step decision making still matters. Increase to
 `high` or `xhigh` only when evals show a measurable quality gain that justifies
@@ -629,10 +629,10 @@ established patterns.
 
 #### Vision and image detail
 
-GPT-5.5 preserves more visual detail by default: when `image_detail` is unset
+GPT-5.6 preserves more visual detail by default: when `image_detail` is unset
 or `auto`, it uses `original` behavior up to the documented size limits. Still
 set the image detail explicitly when precision, cost, or latency matter:
-- `auto` / unset — good default for GPT-5.5 vision and computer-use workflows
+- `auto` / unset — good default for GPT-5.6 vision and computer-use workflows
   when preserving visual detail is acceptable.
 - `high` — standard high-fidelity image understanding with tighter resizing
   limits than `original`.
@@ -640,7 +640,7 @@ set the image detail explicitly when precision, cost, or latency matter:
   localization, OCR, click-accuracy tasks), especially on GPT-5.4 and future
   models.
 - `low` — only when speed and context efficiency matter more than fine detail;
-  GPT-5.5 resizes aggressively at this setting.
+  GPT-5.6 resizes aggressively at this setting.
 
 #### Bounding box extraction (OCR / document localization)
 
@@ -747,7 +747,7 @@ Read the prompt and ask what's going wrong. Common issues and fixes:
 - **Start minimal** — the outcome-first structure (Role / Personality / Goal / Success criteria / Constraints / Output / Stop rules) is often enough on its own.
 - **Add what's missing** — paste the relevant XML blocks from this skill only when they address a measured failure mode.
 - **Remove what's counterproductive** — legacy process scaffolding, absolute ALWAYS/NEVER rules on judgment calls, redundant rules, overly high reasoning effort.
-- **Prefer stop rules over "keep going" rules** — GPT-5.5 is more likely to over-search than to under-search; explicit stop conditions usually beat persistence nudges.
+- **Prefer stop rules over "keep going" rules** — GPT-5.6 is more likely to over-search than to under-search; explicit stop conditions usually beat persistence nudges.
 
 ### 3. Present the revision
 

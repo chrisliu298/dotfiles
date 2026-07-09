@@ -2,7 +2,7 @@
 
 Help users write effective prompts for OpenAI Codex coding agents — either from scratch or by refining existing prompts. Based on OpenAI's official Codex prompting guide.
 
-This reference covers Codex CLI prompt patterns (starter prompt, autonomy, preambles, plan tool, presenting work). For general GPT-5.5 prompt patterns (output contracts, follow-through policies, citation rules, etc.), see `references/gpt.md`.
+This reference covers Codex CLI prompt patterns (starter prompt, autonomy, preambles, plan tool, presenting work). For general GPT-5.6 prompt patterns (output contracts, follow-through policies, citation rules, etc.), see `references/gpt.md`.
 
 ## Writing a Codex agent prompt
 
@@ -37,7 +37,7 @@ The Codex-Max prompt is the recommended baseline. Start here and make tactical a
 The full starter prompt:
 
 ```
-You are Codex, based on GPT-5.5. You are running as a coding agent in the
+You are Codex, based on GPT-5.6. You are running as a coding agent in the
 Codex CLI on a user's computer.
 
 # General

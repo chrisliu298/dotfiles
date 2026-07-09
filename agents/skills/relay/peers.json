@@ -3,7 +3,7 @@
     "order": 1,
     "lineage": "codex",
     "transport": "codex",
-    "model": "gpt-5.5",
+    "model": "gpt-5.6-sol",
     "effort_values": ["low", "medium", "high", "xhigh"],
     "default_effort": "medium",
     "template": "codex"

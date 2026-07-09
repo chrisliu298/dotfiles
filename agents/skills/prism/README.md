@@ -64,7 +64,7 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
 │   same model →          ┌─────┬──────────┬─────────┼────────┬────┬────┐           │
 │   shared blind spots,   ▼     ▼          ▼         ▼        ▼    ▼    ▼           │
 │   so convergence here   Codex Grok-Build Grok-Comp GLM Kimi DeepSeek MiMo         │
-│   is DISCOUNTED        (GPT5.5) (xAI) (xAI fast) (z.ai) (Moon) (V4-Pro) (Xiaomi)  │
+│   is DISCOUNTED        (GPT5.6) (xAI) (xAI fast) (z.ai) (Moon) (V4-Pro) (Xiaomi)  │
 │                         └─────┴──────────┴─────────┴────────┴────┴────┘           │
 │                              independent lineages → catch the blind spots the     │
 │                              others share → dissent here carries OUTSIZED weight  │
@@ -299,7 +299,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
 
 | Peer | Model | Lineage | Effort | Notes |
 |---|---|---|---|---|
-| `codex` | GPT-5.5 | OpenAI | `xhigh` | agentic code-review strength |
+| `codex` | GPT-5.6 | OpenAI | `xhigh` | agentic code-review strength |
 | `grok-build` | Grok 4.5 | xAI | `high` | independent of Anthropic/OpenAI |
 | `grok-composer` | Composer 2.5 fast | xAI (same as grok-build) | — | fast variant; quick xAI take |
 | `glm` | GLM-5.2 | Zhipu / z.ai (Anthropic-compatible endpoint) | pinned `max` | `reasoning_effort: max`, like DeepSeek |
