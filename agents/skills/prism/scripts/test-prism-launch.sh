@@ -30,7 +30,7 @@ Design something.
 Some context.
 
 ## Constraints
-You are a read-only leaf node.
+Never start a nested Prism run.
 PKT
 }
 
@@ -151,7 +151,7 @@ printf '%s\n' "$F1ERR" | grep -q 'nest ALL domain content here as ### subsection
 P2c="$TMP/p2c.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$P2c"
 C2c="$TMP/c2c.json"; jq -n --arg p "$P2c" '{shared_packet:$p,parallax:[],subagents:[{lens:"Xc",lens_desc:"y"}]}' > "$C2c"
 expect_ok "injects canonical Constraints when the packet omits them" "$LAUNCH" prepare --config "$C2c"
-{ grep -q '^## Constraints' "$P2c" && grep -q 'read-only leaf node' "$P2c"; } && ok "packet gained the verbatim Constraints" || bad "Constraints not injected into packet"
+{ grep -q '^## Constraints' "$P2c" && grep -q 'Never start a nested Prism run' "$P2c"; } && ok "packet gained the verbatim Constraints" || bad "Constraints not injected into packet"
 # idempotent: re-running prepare must not double-inject
 "$LAUNCH" prepare --config "$C2c" >/dev/null 2>&1
 [ "$(grep -c '^## Constraints' "$P2c")" = "1" ] && ok "Constraints injection is idempotent (no double on re-run)" || bad "Constraints double-injected on re-run"
@@ -167,6 +167,10 @@ grep -q 'Bespoke answer style.' "$P2h" && ok "bespoke How-to-answer left untouch
 P2a="$TMP/p2a.md"; printf '## Full Question\nq\n\n## Context\nc\n\n## Constraints\nBe nice.\n' > "$P2a"
 C2a="$TMP/c2a.json"; jq -n --arg p "$P2a" '{shared_packet:$p,parallax:[],subagents:[{lens:"Xa",lens_desc:"y"}]}' > "$C2a"
 expect_err "rejects a ## Constraints section missing the anti-recursion guard" "$LAUNCH" prepare --config "$C2a"
+# the sentinel appearing ONLY in Full Question/Context must NOT satisfy the section-scoped guard
+P2s="$TMP/p2s.md"; printf '## Full Question\nHow do I avoid a nested Prism run?\n\n## Context\nc\n\n## Constraints\nBe concise.\n' > "$P2s"
+C2s="$TMP/c2s.json"; jq -n --arg p "$P2s" '{shared_packet:$p,parallax:[],subagents:[{lens:"Xs",lens_desc:"y"}]}' > "$C2s"
+expect_err "rejects a Constraints missing the sentinel even when 'nested Prism run' appears in Full Question" "$LAUNCH" prepare --config "$C2s"
 
 # dispatch-only keys mistakenly written into the packet BODY are inert → fail-closed.
 # Include: in the packet (the common misplacement) attaches no files silently.
@@ -997,6 +1001,20 @@ grep -qF '## Digest' "$HTA" \
   && ok "contract: gpt prism_effort is a member of effort_values (relay would accept the pin)" || bad "contract: gpt prism_effort not in effort_values"
 [ "$(jq -r '.gpt.effort_values | contains(["max","ultra"])' "$PJ")" = "true" ] \
   && ok "contract: relay exposes gpt full range incl. max + ultra" || bad "contract: gpt effort_values missing max/ultra"
+# ultra is a multi-agent topology, never auto-derived for a leaf: the safe fallback (top
+# non-ultra tier) must be max, so a missing prism_effort can't silently escalate gpt to ultra.
+[ "$(jq -r '.gpt.effort_values | map(select(. != "ultra")) | last' "$PJ")" = "max" ] \
+  && ok "contract: gpt safe fallback (top non-ultra tier) is max — a missing pin can't reach ultra" || bad "contract: gpt non-ultra top tier != max"
+# runtime fallback (exercises prism-launch's derivation via PRISM_PEERS_JSON, not just the data):
+# an isolated registry with gpt.prism_effort DELETED must still derive `max` (top non-ultra), never ultra.
+FBREG="$TMP/fb-peers.json"; jq 'del(.gpt.prism_effort)' "$PJ" > "$FBREG"
+FBPKT="$TMP/fb.md"; printf '## Full Question\nq\n\n## Context\nc\n' > "$FBPKT"
+FBD="$TMP/fb.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "just gpt"\n\nType: parallax\nTo: gpt\nLens: Adversarial\nLens-Desc: weigh a\n' "$FBPKT" > "$FBD"
+PRISM_PEERS_JSON="$FBREG" "$LAUNCH" prepare --dispatch "$FBD" >/dev/null 2>&1
+[ "$(jq -r '.parallax[0].effort' "$TMP/fb-manifest.json" 2>/dev/null)" = "max" ] && ok "runtime fallback derives max (not ultra) when prism_effort is absent" || bad "runtime fallback != max"
+# an explicit prism_effort of `ultra` is rejected at prepare (never a valid leaf pin)
+ULREG="$TMP/ul-peers.json"; jq '.gpt.prism_effort = "ultra"' "$PJ" > "$ULREG"
+expect_err "rejects a peer whose prism_effort is ultra" env PRISM_PEERS_JSON="$ULREG" "$LAUNCH" prepare --dispatch "$FBD"
 [ "$(jq -r '."grok-build".effort_values[-1]' "$PJ")" = "high" ] \
   && ok "contract: grok-build effort_values[-1] is the top tier (high)" || bad "contract: grok-build effort_values ordering ([-1] != high)"
 # gpt-pro run_id recovery is a cross-SKILL string coupling: the gpt-pro wrapper prints
@@ -1090,7 +1108,7 @@ c
 ### Reference Materials
 - $INCD/a.md
 ## Constraints
-You are a read-only leaf node.
+Never start a nested Prism run.
 EOF
 { inc_dispatch "$PKI4" <<EOF
 Include: $INCD/b.md
@@ -1166,7 +1184,7 @@ grep -q 'PRISM-INCLUDE-START' "$PKI8" \
 PKIL="$TMP/incL.md"
 { printf '## Full Question\nq\n## Context\nc\n### Reference Materials\n- %s\n' "$INCD/a.md"
   head -c 200000 /dev/zero | tr '\0' x
-  printf '\n## Constraints\nYou are a read-only leaf node.\n'; } > "$PKIL"
+  printf '\n## Constraints\nNever start a nested Prism run.\n'; } > "$PKIL"
 { printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "test"\n' "$PKIL"
   printf 'Include: %s\n\nType: subagent\nLens: S\nLens-Desc: d\n' "$INCD/b.md"; } > "$TMP/incL.dispatch"
 expect_err "Include: + manual ### Reference Materials rejected even on a large packet" \
@@ -1174,7 +1192,7 @@ expect_err "Include: + manual ### Reference Materials rejected even on a large p
 
 # 8d) malformed managed region (START with no END) must fail closed, not truncate
 PKIM="$TMP/incM.md"
-printf '## Full Question\nq\n## Context\nc\n<!-- PRISM-INCLUDE-START -->\n### Reference Materials\n- x\n## Constraints\nYou are a read-only leaf node.\n' > "$PKIM"
+printf '## Full Question\nq\n## Context\nc\n<!-- PRISM-INCLUDE-START -->\n### Reference Materials\n- x\n## Constraints\nNever start a nested Prism run.\n' > "$PKIM"
 { printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "test"\n' "$PKIM"
   printf '\nType: subagent\nLens: S\nLens-Desc: d\n'; } > "$TMP/incM.dispatch"
 expect_err "malformed Include sentinel (START, no END) fails closed (no truncation)" \

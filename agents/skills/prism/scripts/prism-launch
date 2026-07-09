@@ -41,7 +41,7 @@ TEMPLATES_DIR=$(cd "$SCRIPT_DIR/../templates" && pwd 2>/dev/null) \
 # tier's .order (dispatch + display position) and .lineage (synthesis-weighting
 # group; the two Grok tiers share "grok"). Adding a standard tier is one stanza
 # here — peershape, scaffold order, and digest lineage all derive from it.
-PEERS_JSON="$SCRIPT_DIR/../../relay/peers.json"
+PEERS_JSON="${PRISM_PEERS_JSON:-$SCRIPT_DIR/../../relay/peers.json}"   # PRISM_PEERS_JSON = test-only registry override
 # Lens catalog — the one place that declares lens descriptions, axis families, and
 # the --preset task-type lens sets. lens_desc_for / preset_lenses read it; SKILL.md
 # describes it but this file is authoritative.
@@ -331,6 +331,11 @@ cmd_prepare() {
   # peers exist, their effort knobs, launcher template style, and tier order/lineage.
   local PEERS="$PEERS_JSON"
   [ -f "$PEERS" ] || die "prepare: peer registry not found at \$SCRIPT_DIR/../../relay/peers.json ($PEERS)"
+  # A Prism effort pin must be a non-empty, non-`ultra` member of its peer's effort_values:
+  # `ultra` is a multi-agent topology never valid as a leaf pin, and an out-of-range pin would
+  # only surface later as a relay dispatch failure. Fail closed here.
+  jq -e '[to_entries[] | .value | select(has("prism_effort"))] | all(.prism_effort as $pe | ($pe != "ultra") and ((.effort_values // []) | index($pe) != null))' "$PEERS" >/dev/null 2>&1 \
+    || die "prepare: a peer's prism_effort is 'ultra', empty, or not a member of its effort_values ($PEERS)."
   # Canonical standard-tier order, derived from the registry once (reused by the
   # optional floor check and the peershape display). JSON array of peer names.
   local ord_json; ord_json=$(registry_tier_peers | jq -Rn '[inputs | select(length>0)]') \
@@ -415,11 +420,14 @@ These belong in the .dispatch file (the one you pass to 'prepare --dispatch'), N
     [ -f "$cfile" ] || die "prepare: canonical constraints template missing: $cfile"
     { printf '\n'; cat "$cfile"; } >> "$packet" || die "prepare: could not inject constraints into $packet"
     echo "prism-launch: injected canonical ## Constraints into $(basename "$packet")" >&2
-  elif ! grep -q 'read-only leaf node' "$packet"; then
+  # Extract ONLY the `## Constraints` section (header to the next `## `), then require the
+  # exact negative sentinel there — a whole-packet grep would false-pass when the phrase
+  # merely appears in the Full Question/Context (e.g. a Prism-reviewing-Prism run).
+  elif ! awk '/^## /{f=0} /^## Constraints[[:space:]]*$/{f=1} f' "$packet" | grep -qF 'Never start a nested Prism run'; then
     # A bespoke block is allowed, but it MUST keep the load-bearing anti-recursion
-    # guard — a present-but-abbreviated Constraints section is the exact safety
+    # sentinel — a present-but-abbreviated Constraints section is the exact safety
     # hole the injection is meant to close, so fail closed on it.
-    die "prepare: the packet's ## Constraints section is missing the anti-recursion guard ('read-only leaf node'). Remove the section to let prepare inject the canonical block, or restore the verbatim text from templates/shared-constraints.md."
+    die "prepare: the packet's ## Constraints section is missing the anti-recursion sentinel ('Never start a nested Prism run'). Remove the section to let prepare inject the canonical block, or restore the verbatim text from templates/shared-constraints.md."
   fi
   # How-to-answer: a presentation-only block (verdict-first, cite sources, no
   # preamble). Unlike Constraints it carries no safety load, so it is injected
@@ -558,14 +566,16 @@ These belong in the .dispatch file (the one you pass to 'prepare --dispatch'), N
         | (.lens_desc | chktext("parallax .lens_desc")) as $desc
         # Effort is fixed and DERIVED from the registry — never authored. A peer may pin an
         # explicit `prism_effort` (the tier Prism dispatches at, decoupled from the full
-        # `effort_values` range relay exposes); otherwise it falls back to `effort_values[-1]`,
-        # the top tier. GPT pins `prism_effort: "max"` while relay exposes up to `ultra`;
-        # Grok Build has no `prism_effort`, so it falls back to `effort_values[-1]` = "high".
+        # `effort_values` range relay exposes); otherwise it falls back to the top NON-`ultra`
+        # tier. `ultra` is a multi-agent TOPOLOGY (a root + parallel subagents), not a depth
+        # tier, and is deliberately NEVER auto-derived for a standard parallax leaf — so a
+        # missing/removed pin cannot silently escalate GPT into a hidden inner fan. GPT pins
+        # `prism_effort: "max"`; Grok Build has no pin, so it falls back to its top tier = "high".
         # Peers with no knob → no --effort. Do NOT use jq `max`: it is lexicographic
         # ("high" < "medium"), which would silently pick the wrong tier. Any authored .effort
         # (only reachable via the lenient --config path; --dispatch rejects it) is ignored.
         | ($peer.effort_values) as $evals
-        | ($peer.prism_effort // (if $evals != null then $evals[-1] else null end)) as $effort
+        | ($peer.prism_effort // (if $evals != null then ($evals | map(select(. != "ultra")) | last) else null end)) as $effort
         | {
             to: $to,
             name: ("prism-" + $name),

@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Anti-recursion: a dispatched Prism/relay peer inherits RELAY_PEER=<peer>. A peer must
+# never fan out to gpt-pro (mirrors the RELAY_PEER guards in relay + prism-launch, which
+# gpt-pro previously lacked). Refuse when the marker is set.
+if [ -n "${RELAY_PEER:-}" ]; then
+  echo "gpt-pro: refused — nested call from inside a '$RELAY_PEER' peer subprocess (anti-recursion)." >&2
+  exit 1
+fi
+
 # gpt-pro — caller-side wrapper for ChatGPT Pro Extended via the gpt-pro-relay
 # engine on macmini. One prompt on stdin, one response on stdout.
 #

@@ -219,7 +219,7 @@ marker. See **§ Autonomous mode** and `references/loop-protocol.md` § Autonomo
 | Elicit | goal-elicit | goal-loop (once) | writes one artifact, stops, never re-invoked |
 | Spec-review (opt) | prism | goal-loop, top-level | reviews the *spec*; you approve edits pre-lock; not re-elicitation |
 | Implement / Fix | goal-drive | goal-loop, **Skill-inline** | inline retains edit authority (a subagent goal-drive would be a leaf and lose it) |
-| Review | prism (default) | goal-loop, **top-level only** | Claude-only; prism owns its own read-only leaf dispatch |
+| Review | prism (default) | goal-loop, **top-level only** | Claude-only; prism owns its own read-only single-model-lens dispatch |
 | Review → fix | **goal-loop itself** | — | routes mechanically; **you** classify the actionable batch |
 
 Rails goal-loop enforces on itself: never asks goal-drive to invoke prism; **never re-elicits** mid-loop

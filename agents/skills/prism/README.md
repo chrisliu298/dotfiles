@@ -284,10 +284,11 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
 ```
   ┌─ Redundancy, not division ─ every agent gets the whole question.
   ├─ Hard completion gate ───── synthesize only after EVERY agent returns.
-  ├─ No recursion ───────────── a dispatched peer must never re-enter prism/relay;
-  │                             the anti-recursion block is injected verbatim + the
-  │                             RELAY_PEER guard refuses a nested launch.
-  ├─ Read-only leaf agents ──── peers/subagents produce analysis only (one .res.md write).
+  ├─ No cross-model recursion ─ a dispatched peer must never re-enter prism/relay or call
+  │                             another model; its own same-model subagents ARE fine. The
+  │                             RELAY_PEER guard refuses a nested launch/relay/gpt-pro.
+  ├─ Read-only agents ───────── produce analysis only (one .res.md write); may use their
+  │                             own same-model subagents, never a nested prism / other model.
   └─ Effort (fixed, CLI-derived) ─ GPT max · Grok-Build high, derived from peers.json — never authored.
 ```
 
