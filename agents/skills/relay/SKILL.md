@@ -73,8 +73,8 @@ BODY
 | `low` | GPT and Grok Build. Quick, cheap turnarounds — simple lookups, small mechanical edits, sanity checks where deep reasoning isn't worth the latency. |
 | `medium` | **Default for GPT and Grok Build.** Balanced starting point for code review, tests, bug fixes, and most refactoring. |
 | `high` | GPT and Grok Build — the deeper reasoning tier (the top tier for Grok Build). Use for hard analysis where the extra latency is worth it. |
-| `xhigh` | GPT only. Hard architecture work, deep security review, or eval-bound tasks worth the extra latency. |
-| `max` | GPT only. Maximum reasoning depth for the hardest problems — more exploration and verification than `xhigh`. **Prism pins the GPT parallax tier here.** |
+| `xhigh` | GPT only. Hard architecture work, deep security review, or eval-bound tasks worth the extra latency. **Prism pins the GPT parallax tier here** (the last validated review-quality tier). |
+| `max` | GPT only. Maximum reasoning depth for the hardest problems — more exploration and verification than `xhigh`. |
 | `ultra` | GPT only. Max reasoning **plus automatic task delegation** (spawns subagents inside the `codex exec` run) — the slowest tier; reach for it only when the task genuinely benefits from decomposition. |
 
 Before raising effort, improve the prompt first — add outcome-first success criteria, stop rules, verification steps, and completeness criteria.

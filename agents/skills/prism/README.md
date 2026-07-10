@@ -91,7 +91,7 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
              Nns (e.g. 1ns) = no-subagents: drop the Claude tier, keep 7 parallax at
              N → dispatched 7N+M, perspectives 7N+M+1. Same as "<q> no subagents".
 
-   No reasoning-effort knob — GPT always max, Grok-Build always high.
+   No reasoning-effort knob — GPT always xhigh, Grok-Build always high.
 
    prism Why does X happen?             → auto-sized (anchor: 1 of each)
    prism 2 Which architecture?          → 2 of each, no gpt-pro
@@ -289,7 +289,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
   │                             RELAY_PEER guard refuses a nested launch/relay/gpt-pro.
   ├─ Read-only agents ───────── produce analysis only (one .res.md write); may use their
   │                             own same-model subagents, never a nested prism / other model.
-  └─ Effort (fixed, CLI-derived) ─ GPT max · Grok-Build high, derived from peers.json — never authored.
+  └─ Effort (fixed, CLI-derived) ─ GPT xhigh · Grok-Build high, derived from peers.json — never authored.
 ```
 
 ---
@@ -300,7 +300,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
 
 | Peer | Model | Lineage | Effort | Notes |
 |---|---|---|---|---|
-| `gpt` | GPT | OpenAI | `max` | agentic code-review strength |
+| `gpt` | GPT | OpenAI | `xhigh` | agentic code-review strength |
 | `grok-build` | Grok 4.5 | xAI | `high` | independent of Anthropic/OpenAI |
 | `grok-composer` | Composer 2.5 fast | xAI (same as grok-build) | — | fast variant; quick xAI take |
 | `glm` | GLM-5.2 | Zhipu / z.ai (Anthropic-compatible endpoint) | pinned `max` | `reasoning_effort: max`, like DeepSeek |

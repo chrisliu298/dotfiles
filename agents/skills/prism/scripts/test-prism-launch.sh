@@ -62,7 +62,7 @@ MAN="$TMP/prism-run1-manifest.json"
 [ "$(jq -r '.counts.dispatched_total' "$MAN" 2>/dev/null)" = "5" ] && ok "dispatched_total = 5" || bad "dispatched_total = 5"
 [ "$(jq -r '.parallax[0].name' "$MAN" 2>/dev/null)" = "prism-temporal" ] && ok "relay name prefixed with prism-" || bad "relay name prefixed with prism-"
 [ "$(jq -r '.parallax[1].effort' "$MAN" 2>/dev/null)" = "null" ] && ok "deepseek effort is null" || bad "deepseek effort is null"
-[ "$(jq -r '.parallax[0].effort' "$MAN" 2>/dev/null)" = "max" ] && ok "gpt effort derived max (authored 'medium' in --config ignored)" || bad "gpt effort derived max"
+[ "$(jq -r '.parallax[0].effort' "$MAN" 2>/dev/null)" = "xhigh" ] && ok "gpt effort derived xhigh (authored 'medium' in --config ignored)" || bad "gpt effort derived xhigh"
 [ "$(jq -r '.parallax[0].template' "$MAN" 2>/dev/null)" = "codex" ] && ok "gpt uses codex template (registry)" || bad "gpt template = codex"
 [ "$(jq -r '.parallax[1].template' "$MAN" 2>/dev/null)" = "costar" ] && ok "deepseek uses shared costar template (registry)" || bad "deepseek template = costar"
 case "$(jq -r '.parallax[0].log' "$MAN" 2>/dev/null)" in *-out-prism-temporal.log) ok "manifest log path matches runtime (prism- prefixed)" ;; *) bad "manifest log path prism- prefixed" ;; esac
@@ -217,11 +217,11 @@ C5="$TMP/c5.json"; jq -n --arg p "$PKTC5" '{shared_packet:$p,parallax:[{to:"deep
 expect_ok "ignores authored effort on deepseek (--config)" "$LAUNCH" prepare --config "$C5"
 [ "$(jq -r '.parallax[0].effort' "$TMP/prism-c5-manifest.json" 2>/dev/null)" = "null" ] && ok "deepseek effort null despite authored 'xhigh'" || bad "deepseek effort null"
 
-# authored gpt effort in --config is ignored; derivation always wins (max, not the authored 'high')
+# authored gpt effort in --config is ignored; derivation always wins (xhigh, not the authored 'high')
 PKTC6="$TMP/prism-c6.md"; make_packet "$PKTC6"
 C6="$TMP/c6.json"; jq -n --arg p "$PKTC6" '{shared_packet:$p,parallax:[{to:"gpt",name:"x",effort:"high",lens:"L",lens_desc:"d"}],subagents:[]}' > "$C6"
 expect_ok "ignores authored gpt effort (--config)" "$LAUNCH" prepare --config "$C6"
-[ "$(jq -r '.parallax[0].effort' "$TMP/prism-c6-manifest.json" 2>/dev/null)" = "max" ] && ok "gpt derives max despite authored 'high'" || bad "gpt derives max"
+[ "$(jq -r '.parallax[0].effort' "$TMP/prism-c6-manifest.json" 2>/dev/null)" = "xhigh" ] && ok "gpt derives xhigh despite authored 'high'" || bad "gpt derives xhigh"
 
 # duplicate lens across run
 C7="$TMP/c7.json"; jq -n --arg p "$PKT" '{shared_packet:$p,parallax:[{to:"gpt",name:"a",lens:"Same",lens_desc:"d"}],subagents:[{lens:"Same",lens_desc:"d"}]}' > "$C7"
@@ -251,7 +251,7 @@ echo "== parallax: --dry-run (no network) =="
 DRY=$("$LAUNCH" parallax "$MAN" --dry-run 2>/dev/null)
 echo "$DRY" | grep -q 'DRY RUN' && ok "dry-run announces itself" || bad "dry-run announces itself"
 [ "$(echo "$DRY" | grep -c 'relay call --to')" = "3" ] && ok "dry-run lists exactly 3 relay calls" || bad "dry-run lists 3 relay calls"
-echo "$DRY" | grep -q 'relay call --to gpt --name prism-temporal --effort max' && ok "gpt dry-run cmd has --effort max (derived)" || bad "gpt dry-run --effort"
+echo "$DRY" | grep -q 'relay call --to gpt --name prism-temporal --effort xhigh' && ok "gpt dry-run cmd has --effort xhigh (derived)" || bad "gpt dry-run --effort"
 echo "$DRY" | grep -q 'relay call --to deepseek --name prism-first-principles <' && ok "deepseek dry-run cmd has no --effort" || bad "deepseek dry-run no --effort"
 [ -f "$TMP/prism-run1-result.json" ] && bad "dry-run must NOT write a result file" || ok "dry-run writes no result file"
 
@@ -285,7 +285,7 @@ MAND="$TMP/prism-rund-manifest.json"
 [ -f "$TMP/prism-rund-config.normalized.json" ] && ok "dispatch: normalized config written for audit" || bad "dispatch: normalized config written"
 jq -e '.parallax[0].lens == "Adversarial" and .subagents[0].lens == "Simplicity"' "$TMP/prism-rund-config.normalized.json" >/dev/null 2>&1 && ok "dispatch: normalized config has expected shape" || bad "dispatch: normalized config shape"
 [ "$(jq -r '.counts.dispatched_total' "$MAND" 2>/dev/null)" = "3" ] && ok "dispatch: dispatched_total = 3" || bad "dispatch: dispatched_total = 3"
-[ "$(jq -r '.parallax[0].effort' "$MAND" 2>/dev/null)" = "max" ] && ok "dispatch: gpt effort derived max (none authored)" || bad "dispatch: gpt effort derived max"
+[ "$(jq -r '.parallax[0].effort' "$MAND" 2>/dev/null)" = "xhigh" ] && ok "dispatch: gpt effort derived xhigh (none authored)" || bad "dispatch: gpt effort derived xhigh"
 [ "$(jq -r '.parallax[0].name' "$MAND" 2>/dev/null)" = "prism-adversarial" ] && ok "dispatch: explicit Name used" || bad "dispatch: explicit Name used"
 [ "$(jq -r '.parallax[1].name' "$MAND" 2>/dev/null)" = "prism-first-principles" ] && ok "dispatch: Name derived from Lens when omitted" || bad "dispatch: Name derived from Lens"
 [ "$(jq -r '.parallax[1].effort' "$MAND" 2>/dev/null)" = "null" ] && ok "dispatch: deepseek effort null" || bad "dispatch: deepseek effort null"
@@ -348,7 +348,7 @@ PKTE="$TMP/prism-rune.md"; make_packet "$PKTE"
 DEF="$TMP/def.dispatch"; printf 'Shared-Packet: %s\nPrism-Mode: partial\nPartial-User-Quote: "just gpt and grok-build"\n\nType: parallax\nTo: gpt\nLens: Adversarial\nLens-Desc: d\n\nType: parallax\nTo: grok-build\nLens: Structural\nLens-Desc: d\n' "$PKTE" > "$DEF"
 expect_ok "prepare --dispatch with no Effort lines" "$LAUNCH" prepare --dispatch "$DEF"
 MANE="$TMP/prism-rune-manifest.json"
-[ "$(jq -r '.parallax[0].effort' "$MANE" 2>/dev/null)" = "max" ] && ok "dispatch: gpt derives max from registry (none authored)" || bad "dispatch: gpt derives max"
+[ "$(jq -r '.parallax[0].effort' "$MANE" 2>/dev/null)" = "xhigh" ] && ok "dispatch: gpt derives xhigh from registry (none authored)" || bad "dispatch: gpt derives xhigh"
 [ "$(jq -r '.parallax[1].effort' "$MANE" 2>/dev/null)" = "high" ] && ok "dispatch: grok-build derives high (NOT lexicographic medium)" || bad "dispatch: grok-build derives high"
 
 # subagents-only dispatch exercises the empty-parallax accumulator ([], not an error)
@@ -993,10 +993,11 @@ grep -qF '## Digest' "$HTA" \
   && ok "contract: shared-how-to-answer.md instructs the '## Digest' heading the extractor greps" \
   || bad "contract: '## Digest' heading missing/renamed in shared-how-to-answer.md (digest extraction would silently zero)"
 # prism-launch pins the gpt effort from `prism_effort` (decoupled from the full effort_values
-# range relay exposes, which now runs up to ultra); pin that it stays max and that relay
-# still exposes the full xhigh/max/ultra range for interactive --effort.
-[ "$(jq -r '.gpt.prism_effort' "$PJ")" = "max" ] \
-  && ok "contract: gpt prism_effort pins max (decoupled from effort_values)" || bad "contract: gpt prism_effort != max"
+# range relay exposes, which runs up to ultra); pin that it stays xhigh — deliberately BELOW the
+# max fallback (so the pin is load-bearing, not a mirror of the default) — and that relay still
+# exposes the full xhigh/max/ultra range for interactive --effort.
+[ "$(jq -r '.gpt.prism_effort' "$PJ")" = "xhigh" ] \
+  && ok "contract: gpt prism_effort pins xhigh (decoupled from effort_values, below max fallback)" || bad "contract: gpt prism_effort != xhigh"
 [ -n "$(jq -r '.gpt as $g | $g.effort_values | index($g.prism_effort) // empty' "$PJ")" ] \
   && ok "contract: gpt prism_effort is a member of effort_values (relay would accept the pin)" || bad "contract: gpt prism_effort not in effort_values"
 [ "$(jq -r '.gpt.effort_values | contains(["max","ultra"])' "$PJ")" = "true" ] \
@@ -1216,7 +1217,10 @@ case "$NS_OUT" in *'Prism-Mode: partial'*) ok "scaffold --no-subagents emits Pri
 [ "$(printf '%s\n' "$NS_OUT" | grep -c '^Type: subagent$')" = "0" ] && ok "scaffold --no-subagents emits zero subagent records" || bad "scaffold --no-subagents zero subagent"
 [ "$(printf '%s\n' "$NS_OUT" | grep -c '^Type: parallax$')" -ge 7 ] && ok "scaffold --no-subagents keeps the parallax fan" || bad "scaffold --no-subagents parallax fan"
 # heaviest (subagent-slot) lens moves onto gpt (review preset slot-0 = Adversarial)
-printf '%s\n' "$NS_OUT" | grep -A1 '^To: gpt$' | grep -q 'Lens: Adversarial' && ok "scaffold --no-subagents moves heaviest lens onto gpt (max)" || bad "scaffold --no-subagents gpt lens shift"
+printf '%s\n' "$NS_OUT" | grep -A1 '^To: gpt$' | grep -q 'Lens: Adversarial' && ok "scaffold --no-subagents moves heaviest lens onto gpt (xhigh)" || bad "scaffold --no-subagents gpt lens shift"
+# drift guard: the scaffold's effort wording must track the gpt prism_effort pin (xhigh), never a stale max
+printf '%s\n' "$NS_OUT" | grep -q '(xhigh)' && ok "scaffold --no-subagents effort comment says (xhigh)" || bad "scaffold --no-subagents effort comment not (xhigh)"
+printf '%s\n' "$NS_OUT" | grep -q '# (max)' && bad "scaffold --no-subagents effort comment still says stale (max)" || ok "scaffold --no-subagents has no stale (max) effort comment"
 
 # --n 0 with --no-subagents is rejected (that's the gpt-pro-only shape, not no-subagents)
 expect_err "scaffold --no-subagents --n 0 rejected" "$LAUNCH" scaffold --no-subagents --n 0
