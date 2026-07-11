@@ -250,56 +250,9 @@ The authoritative run path. `PL` = `~/.claude/skills/prism/scripts/prism-launch`
 
 **2. Write the shared packet** `/tmp/prism-<id>.md` — just `## Full Question` + `## Context` (attach files via `Include:` in the dispatch, not a hand-written block). Add a `### Live research` block only if the answer depends on live online facts (don't front-load findings). `prepare` injects Constraints / How-to-answer / Grounding.
 
-**3. Write the dispatch file** `/tmp/prism-<id>.dispatch` **with the Write tool** (one record per agent — never a shell heredoc, and **never `scaffold > file` then edit it**). Run `PL scaffold --n <N>` first to **print** the `Prism-Mode` contract + all records in canonical order to stdout — use that output as a **copy-from template**, then author the whole dispatch in **one Write call**, replacing the `FILL` lens names + descriptions. (Authoring a brand-new file with Write needs no prior Read; *redirecting* scaffold into the dispatch and then editing it forces a wasted Read, because the harness does not track shell-created files. The line format below exists precisely so the Write tool can author it with no escaping.) At `N ≥ 2`, give each copy a **distinct** lens name — e.g. `Adversarial-A`/`-B` — `prepare` rejects duplicates. `--preset review|design|diagnosis|compare|research|decision|writing` pre-fills eight lenses (N=1), often leaving **zero** FILLs to replace. **Fastest path when a preset fits:** `PL scaffold --preset <type> --packet /tmp/prism-<id>.md --out /tmp/prism-<id>.dispatch` writes a complete, prepare-ready dispatch **directly to the file** (no Write/Edit step at all) — `--out` requires `--preset` + `--packet` so it can only ever emit a zero-FILL file (a FILL skeleton written to a file would just re-create the Read trap). **For gpt-pro:** add `--m <M>` (to any scaffold form) to emit `M` ready `Type: gpt-pro` records with canonical postures — no hand-writing the gpt-pro format; `--n 0 --m <M>` scaffolds a gpt-pro-only run (`Prism-N: 0`, legal only with `M ≥ 1`). **For a no-subagents (external-only) run** (user asked to drop the Claude subagent tier): `PL scaffold --no-subagents [--n N] [--m M] [--preset T]` emits the recognized `Prism-Mode: partial` + `Variant: no-subagents` shape (7 parallax at `N`, zero subagents) — add `--partial-user-quote "<user's words>"` with `--out`. The format is plain `Key: value` lines in blank-line-separated records — no braces/commas/quoting/escaping. Canonical default (all eight at `N=1`, one lens per axis family):
+**3. Write the dispatch file** `/tmp/prism-<id>.dispatch` **with the Write tool** (one record per agent — never a shell heredoc, and **never `scaffold > file` then edit it**). Run `PL scaffold --n <N>` first to **print** the `Prism-Mode` contract + all records in canonical order to stdout — use that output as a **copy-from template**, then author the whole dispatch in **one Write call**, replacing the `FILL` lens names + descriptions. (Authoring a brand-new file with Write needs no prior Read; *redirecting* scaffold into the dispatch and then editing it forces a wasted Read, because the harness does not track shell-created files. The line format below exists precisely so the Write tool can author it with no escaping.) At `N ≥ 2`, give each copy a **distinct** lens name — e.g. `Adversarial-A`/`-B` — `prepare` rejects duplicates. `--preset review|design|diagnosis|compare|research|decision|writing` pre-fills eight lenses (N=1), often leaving **zero** FILLs to replace. **Fastest path when a preset fits:** `PL scaffold --preset <type> --packet /tmp/prism-<id>.md --out /tmp/prism-<id>.dispatch` writes a complete, prepare-ready dispatch **directly to the file** (no Write/Edit step at all) — `--out` requires `--preset` + `--packet` so it can only ever emit a zero-FILL file (a FILL skeleton written to a file would just re-create the Read trap). **For gpt-pro:** add `--m <M>` (to any scaffold form) to emit `M` ready `Type: gpt-pro` records with canonical postures — no hand-writing the gpt-pro format; `--n 0 --m <M>` scaffolds a gpt-pro-only run (`Prism-N: 0`, legal only with `M ≥ 1`). **For a no-subagents (external-only) run** (user asked to drop the Claude subagent tier): `PL scaffold --no-subagents [--n N] [--m M] [--preset T]` emits the recognized `Prism-Mode: partial` + `Variant: no-subagents` shape (7 parallax at `N`, zero subagents) — add `--partial-user-quote "<user's words>"` with `--out`. The format is plain `Key: value` lines in blank-line-separated records — no braces/commas/quoting/escaping.
 
-```text
-Shared-Packet: /tmp/prism-<id>.md
-Prism-Mode: full
-Prism-N: 1
-Prism-M: 0
-
-Type: subagent
-Lens: Simplicity
-Lens-Desc: weigh the approach that requires the fewest moving parts
-
-Type: parallax
-To: gpt
-Name: adversarial
-Lens: Adversarial
-Lens-Desc: weigh the strongest attacks on the proposal
-
-Type: parallax
-To: grok-build
-Lens: First-Principles
-Lens-Desc: weigh how this looks rebuilt from the goal up
-
-Type: parallax
-To: grok-composer
-Lens: Causal
-Lens-Desc: weigh the cause-and-effect chain behind the outcome
-
-Type: parallax
-To: glm
-Lens: Empirical
-Lens-Desc: weigh what the evidence and data actually support
-
-Type: parallax
-To: kimi
-Lens: Temporal
-Lens-Desc: weigh lifecycle, sequencing, and reversibility
-
-Type: parallax
-To: deepseek
-Lens: Stakeholder
-Lens-Desc: weigh how the affected parties experience the outcome
-
-Type: parallax
-To: mimo
-Lens: Breadth-Weighted
-Lens-Desc: weigh the full option space over depth on any one
-```
-
-Format rules: `Shared-Packet:` once; `Prism-Mode:` required. Optional top-level file keys: `Include:` (repeatable), `Include-Base:` (once), `Include-From:`/`Include-Tree:` (repeatable) — the ergonomic file front door (see *Shared Context* → Reference materials); mutually exclusive with `Reference:`. Each record starts at `Type: parallax|subagent|gpt-pro`; blank lines separate records; `#` begins a comment. `parallax` needs `To:`/`Lens:`/`Lens-Desc:` (`Name:` optional, defaults to the slugified lens); `subagent` needs only `Lens:`/`Lens-Desc:`; `gpt-pro` needs `Lens:`/`Lens-Desc:` + optional `Posture:` (`To:`/`Name:` rejected) — the `Type:` value must be the hyphenated `gpt-pro`; the hyphen-less `gptpro` and underscore `gpt_pro` spellings are rejected. **Never author `Effort:`** — `prism-launch` derives it and rejects the line. Everything after the **first** `:` is the literal value (quotes, colons, `>`, `<`, single braces fine) — except the reserved `</` and `{{` (injection guard), which `prepare` rejects.
+`scaffold --n <N>` prints this exact canonical contract + all eight records to stdout — copy from there. **The full annotated example + exhaustive key grammar (record types, required keys, the `Effort:`-rejected and injection-token rules) live in `references/dispatch-shapes.md`; read it when hand-authoring beyond what `scaffold` prints** (custom lenses, `N>1`, exclusions, no-subagents, gpt-pro-only, or after a `prepare` bounce).
 
 **Roster contract** (top-level lines — `scaffold` emits them, so full is the path of least resistance):
 
@@ -345,7 +298,7 @@ Do not poll or sleep-loop — the system notifies you when agents finish.
 
 **6. Wait for ALL** (HARD GATE — see Step 3 below), then **7. Safety check + collect** (Step 3.5; `PL results <manifest>` → read `.res.md`; `PL digest` first for large/high-volume runs), then **8. Synthesize** (Step 4) and optionally `PL clean <id>`. (`results` exit codes: `0` all done · `1` a peer/lens failed — retry with `parallax --only` · `2` a lane still pending, e.g. gpt-pro — not a failure, but not ready to synthesize. It covers **parallax + gpt-pro only** and checks the result against the manifest's full peer set (a partial result reads as `2`/INCOMPLETE, never done); confirm each **subagent** completion notification separately — they have no on-disk artifact.)
 
-**What `prepare` enforces** (so this prose can defer to it on the `--dispatch` path): packet has the required sections; no dispatch-only key misplaced in the packet body (`Include:`/`Include-*`/`Shared-Packet:`/`Prism-*`/`Variant:`/`Partial-User-Quote:` belong in the **dispatch** — in the packet they are inert and silently attach nothing, so `prepare` bounces before mutating it; fenced code blocks are exempt); canonical blocks injected; no surviving `{{slot}}`; each launcher's first line is `CRITICAL:`; dispatch shape valid (`Type`, `To` ∈ registry, required keys); `Prism-Mode: full` floor-checks every standard tier + subagents at N and gpt-pro at M, naming any offender; `Prism-Mode: partial` requires a non-empty quote; `Variant: no-subagents` (partial only, requires `Prism-N ≥ 1` + quote, rejected on `full`) floor-checks all 7 parallax tiers at N + **zero** subagents + gpt-pro at M, rejecting a smuggled subagent record; effort registry-derived (`Effort:` rejected); duplicate lens/relay-name/slug rejected; *declared* gpt-pro references + 5 MB caps validated (an **absent** reference source defaults to packet-only with a warning, not an abort); `N=0` legal only with `M ≥ 1`; malformed `.shape` rejected; injection tokens (`</`, `{{`) rejected; zero-records rejected. `parallax` refuses a manifest with no valid `.shape`. **What you still own:** parsing the invocation + Config-presence gate; choosing N/M; whether a `partial` quote is genuinely user-authored; non-duplicative lenses (the two checks below); live-research instructions; launching all lanes concurrently; waiting for all; self-review; synthesis.
+**What `prepare` enforces** (so this prose can defer to it on the `--dispatch` path): fail-closed on packet sections, misplaced dispatch keys, canonical-block injection, the launcher `CRITICAL:` prefix, dispatch shape, the `full`/`partial`/`Variant: no-subagents` floor checks, effort derivation, duplicate lens/slug, gpt-pro references + 5 MB caps, `N=0` legality, injection tokens, and zero-records — **the full per-check inventory lives in `references/dispatch-shapes.md`** (read it when diagnosing a `prepare` bounce). **What you still own:** parsing the invocation + Config-presence gate; choosing N/M; whether a `partial` quote is genuinely user-authored; non-duplicative lenses (the two checks below); live-research instructions; launching all lanes concurrently; waiting for all; self-review; synthesis.
 
 **Pre-launch judgment checks (yours — not script-enforced):**
 - **Redundancy test:** Swap any two agents' lenses. If the prompts become incoherent, you have divided labor (tell-tale: scope, evidence, tools, output format, or deliverables differ between prompts). Applies across tiers too — a GPT lens and a DeepSeek lens should be swappable in principle (only the prompt format differs).
@@ -356,7 +309,7 @@ Do not poll or sleep-loop — the system notifies you when agents finish.
   - Never assign the same lens to two of GPT, GLM, Kimi, DeepSeek, MiMo, or the Grok tiers.
   - If an adversarial lens carries the heaviest reasoning load on a subtle technical question, assign it to Claude or GPT (`xhigh`); if a parallax tier must take it, prefer a middle-tier peer over DeepSeek/MiMo.
 
-**Manual fallback (TRUE last resort — only if the script file is genuinely missing):** A bare-name "command not found" is NOT a trigger — re-invoke by the absolute path. The manual flow applies **only** when `~/.claude/skills/prism/scripts/prism-launch` does not exist at all (a broken install). It bypasses **every** mechanical guard — the roster contract, floor check, injection guards, manifest `.shape` — so it is the one path where a partial roster can slip through unchecked; never reach for it to "move faster" or to dodge a floor-check failure (that failure is the system working — fix the dispatch). First repair the install (`cd ~/dotfiles && ./dotfiles.sh`). If repair is truly impossible: enforce the full roster yourself (one relay call per standard peer + one Agent call per subagent, no family omitted unless the user explicitly authorized it), render each launcher with `sed -e 's|{{SHARED_PACKET_PATH}}|...|g' -e 's|{{LENS_NAME}}|...|g' -e 's|{{LENS_DESC}}|...|g' templates/launcher-<kind>.tmpl`, then dispatch one `relay call --to <peer> --name prism-<slug>` heredoc per parallax tier (GPT `--effort xhigh`, Grok Build `--effort high`, no `--effort` on the rest; background each, `timeout: 3660000`).
+**Manual fallback (TRUE last resort — only if the script file is genuinely missing):** A bare-name "command not found" is **NOT** a trigger — re-invoke by the absolute path. The manual flow applies **only** when `~/.claude/skills/prism/scripts/prism-launch` does not exist at all (a broken install); it bypasses **every** mechanical guard, so never reach for it to "move faster" or to dodge a floor-check failure (that failure is the system working — fix the dispatch). **The invariant holds even here: enforce the FULL roster yourself — no family omitted unless the user explicitly authorized it.** First repair the install (`cd ~/dotfiles && ./dotfiles.sh`); **if repair is impossible, read `references/recovery.md`** for the launcher-render + per-peer relay dispatch procedure.
 
 ### Step 2: Self-review
 
