@@ -198,38 +198,9 @@ Same-model agents dispatched via the Agent tool. Each gets a distinct lens. **Pr
 
 ### GPT-Pro tier (opt-in)
 
-Dispatched only when the user gave `M > 0`; default count `0`. gpt-pro is **orchestrator-direct**: `prism-launch` composes each launcher for you, but **you fire the `gpt-pro` calls yourself**. It is **not** a relay peer and **not** in the `parallax` fan — never add it to `relay/peers.json` or the parallax batch (a 5–20 min lens would block the fast relay results). `prism-launch` composes and collects gpt-pro (in `prepare`, `results`, `digest`); the transport/run-ids/reattach/semaphore stay wholly in the [[gpt-pro-relay]] wrapper (architecture detail in README).
+Dispatched only when the user gave `M > 0`; default count `0`. gpt-pro is **orchestrator-direct**: `prism-launch` composes each launcher for you, but **you fire the `gpt-pro` calls yourself** (one backgrounded Bash call per lens, concurrent with the parallax fan and Agent calls). It is **not** a relay peer and **not** in the `parallax` fan — never add it to `relay/peers.json` or the parallax batch (a 5–20 min lens would block the fast relay results). Each gpt-pro lens is its **own** completion notification (included in `prepare`'s printed count); collect with `prism-launch results`/`digest`. **Never raise `GPT_PRO_MAX_PARALLEL` from prism** (account anti-abuse risk).
 
-**Declare gpt-pro lenses in the dispatch file — `prepare` composes the launcher; you never hand-inline.** Add one `Type: gpt-pro` record per lens (`Lens` + `Lens-Desc`, optional `Posture: deep-reasoning|research-grounded`). gpt-pro runs in a web tab and **cannot read any local file**, so `prepare` builds a self-contained launcher = template header (anti-recursion guard line 1 + lens) + the frozen packet verbatim (which already carries Grounding) + every reference file's contents + the calibration block. Reference list: the dispatch `Reference:` keys when present, else the packet's `### Reference Materials`. **With no reference source at all, `prepare` defaults to packet-only and prints a non-blocking warning** — a self-contained packet is valid gpt-pro input (it gets the full frozen packet inlined, exactly what `Reference: none` makes explicit), so a zero-file gpt-pro run is **not** a bounce. Any *declared* reference is still validated fail-closed (missing/dir/unreadable/whitespace path, or any single ref or composed prompt over the 5 MB cap, aborts *before* any quota).
-
-```text
-Shared-Packet: /tmp/prism-<id>.md
-# roster contract still REQUIRED; set Prism-M to the gpt-pro count.
-# For a gpt-pro-ONLY run use Prism-N: 0 and Prism-M >= 1. (Standard-tier records omitted here.)
-Prism-Mode: full
-Prism-N: 1
-Prism-M: 1
-# Reference: is OPTIONAL — omit it and gpt-pro gets the shared packet ONLY (prepare warns, no error).
-# Prefer attaching files with Include: lines (it feeds gpt-pro's inline list too). `none` = packet only.
-# Reference: /abs/path/1
-
-Type: gpt-pro
-Lens: Deep-Reasoning
-Lens-Desc: weigh the hardest end-to-end reasoning
-Posture: deep-reasoning
-```
-
-> Inline `#` comments belong on their **own line** — the dispatch parser only treats a line whose first non-space character is `#` as a comment, so `Prism-M: 1  # note` would make the value `1  # note` and bounce. (`scaffold` already emits comments this way.)
-
-**Posture:** gpt-pro has two first-class families — **Deep-Reasoning** and **Research-Grounded**. For `M=1` pick the posture matching the binding axis; for `M=2` pair one of each (e.g. `Depth-Weighted` + a web-tilted `Research-Grounded`); for `M≥3` add distinct postures, never copies. Names must stay distinct across the whole run.
-
-**Launch** the exact line `prepare` printed — one backgrounded Bash call per lens, concurrently with the parallax fan and Agent calls:
-
-```bash
-gpt-pro < /tmp/prism-<id>-gpt-pro-<slug>.md > /tmp/prism-<id>-gpt-pro-<slug>.res.md 2> /tmp/prism-<id>-gpt-pro-<slug>.log
-```
-
-with `run_in_background: true`, `timeout: 7260000` (fall back to `~/.claude/skills/gpt-pro-relay/scripts/gpt-pro` if not on PATH). Each is its **own** completion notification — `prepare`'s printed count includes them. **Collect** with `prism-launch results`/`digest` (both read the gpt-pro lane; gpt-pro is its own `GPT-Pro` digest lineage). **Recovery:** each gpt-pro Bash call is a *Bash* task, so reading its `.output` for the `run_id=` line is correct and required (the "never read a subagent's `.output`" rule does **not** apply here); follow [[gpt-pro-relay]]'s exit-code table (README summarizes it). **Never raise `GPT_PRO_MAX_PARALLEL` from prism** (account anti-abuse risk).
+**Gate — if `M > 0`, read `references/gpt-pro.md` before authoring the `Type: gpt-pro` dispatch records or launching.** It owns the record/posture format + canonical example, the launch command (timeout/PATH fallback), notification accounting, and collect/recovery. `prepare` validates gpt-pro records fail-closed (posture enum, key names, declared references, 5 MB caps), so a skipped read surfaces as a `prepare` bounce, not a silent defect.
 
 ## Shared Context
 
@@ -267,7 +238,7 @@ Write this to `/tmp/prism-<unique-id>.md` with the Write tool (one call, before 
 {Name the EXACT question(s) each agent must research independently, plus any common-floor sources. Do NOT front-load findings. See the Independent research rule.}
 ```
 
-`prepare` appends the canonical blocks (`templates/shared-{constraints,how-to-answer,grounding}.md`) only when absent — idempotent, so re-runs never double them. **It keys on the section prefix, so those three reserved `##` names collide even when extended: `## Constraints on the program` still clashes. A collision either fails closed (Constraints' anti-recursion check) or *silently* drops the canonical block, losing the `## Digest` instruction agents need (How to answer / Grounding). Keep domain content under `## Context` as `###` subsections.** To override one deliberately, author that exact `##` yourself — Constraints **fails closed** without the anti-recursion guard. The packet is **frozen** after `prepare` runs; agents read it live.
+`prepare` appends the canonical blocks (`templates/shared-{constraints,how-to-answer,grounding}.md`) only when absent — idempotent, so re-runs never double them. **It keys on the exact reserved heading, so a prefix-collision heading that is not the exact `##` (`## Constraints on the program`, `## How to answer the question`, …) fails closed naming the offender — keep domain content under `## Context` as `###` subsections.** To override one deliberately, author that exact `##` heading yourself (Constraints then still **fails closed** without the anti-recursion sentinel). The packet is **frozen** after `prepare` runs; agents read it live.
 
 Launcher prompts are committed templates in `templates/` with `{{PLACEHOLDER}}` slots filled by `prism-launch` (one relay template per prompting style, selected by `relay/peers.json`'s `template` field; anti-recursion is the first line of every template). Don't hand-regenerate them. (Adding a peer/template is a `peers.json` + `lens-catalog.json` change — see README.)
 
