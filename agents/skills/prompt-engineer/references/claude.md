@@ -173,6 +173,12 @@ information in <info> tags.
 
 Tell Claude what to do, not what not to do. Match prompt style to desired output.
 
+**Request summaries if you want them:** Current models are more concise and may skip verbal summaries after tool calls, jumping straight to the next action. If you want visibility into what happened, ask for it explicitly:
+```
+After completing a task that involves tool use, provide a quick summary of the
+work you've done.
+```
+
 **Minimize markdown:**
 ```xml
 <avoid_excessive_markdown_and_bullet_points>
@@ -180,7 +186,7 @@ When writing reports, documents, technical explanations, analyses, or any
 long-form content, write in clear, flowing prose using complete paragraphs
 and sentences. Use standard paragraph breaks for organization and reserve
 markdown primarily for `inline code`, code blocks (```...```), and simple
-headings (###, and ###). Avoid using **bold** and *italics*.
+headings (## and ###). Avoid using **bold** and *italics*.
 
 DO NOT use ordered lists (1. ...) or unordered lists (*) unless: a) you're
 presenting truly discrete items where a list format is the best option, or
@@ -252,6 +258,8 @@ sequentially. Never use placeholders or guess missing parameters in tool calls.
 - Prefer general instructions ("think thoroughly") over prescriptive step-by-step plans
 - Use `<thinking>` tags in few-shot examples to show reasoning patterns
 - Ask Claude to self-check: "Before you finish, verify your answer against [test criteria]"
+- **Control depth with `effort`, not prompt tricks.** Current models (Opus 4.6+, Sonnet 4.6, Fable/Mythos 5) use adaptive thinking (`thinking: {type: "adaptive"}`) and calibrate reasoning from the `effort` setting plus query complexity. Lower `effort` to cut overthinking and token usage; raise it for hard reasoning. `budget_tokens` is deprecated and returns a 400 error on Opus 4.7+, Fable 5, and Mythos 5 — use `effort` (or `max_tokens` as a hard ceiling) instead.
+- **Mind the word "think" when thinking is off.** With thinking disabled, some models (notably Opus 4.5) over-trigger on "think" and its variants. If you want reasoning without extended thinking, prefer "consider," "evaluate," or "reason through."
 
 **Reduce overthinking:**
 ```
@@ -443,6 +451,7 @@ Read the prompt and ask what's going wrong. Common issues and fixes:
 - **Add what's missing** — role, examples, XML structure, format spec
 - **Remove what's counterproductive** — aggressive MUST/NEVER language, redundant instructions, anti-laziness prompting that causes overtriggering
 - **Explain the why** — replace bare rules with motivated instructions so Claude can generalize
+- **Drop unsupported prefills** — prefilled assistant responses on the last turn are no longer supported (Claude 4.6+ return a 400 error). Replace format-forcing prefills with structured outputs or an explicit format instruction; replace preamble-skipping prefills (`Here is...`) with a direct instruction like "Respond directly without preamble."
 
 ### 3. Present the revision
 
