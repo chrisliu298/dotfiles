@@ -260,6 +260,7 @@ install_links() {
         [[ -e "$src" ]] || { warn "skip ~/${entry#*:} (source missing)"; continue; }
         ensure_symlink "$src" "$HOME/${entry#*:}"
     done
+    install_delete_hooks
     # settings.json: copy with ~ expansion (Claude Code needs absolute paths)
     local src="$ROOT/agents/claude/settings.json" dest="$HOME/.claude/settings.json"
     [[ -f "$src" ]] || return
@@ -269,6 +270,65 @@ install_links() {
     rm -f "$dest"
     printf '%s\n' "$content" > "$dest"
     log "write ~/.claude/settings.json"
+}
+
+install_delete_hooks() {
+    local hook_src="$ROOT/agents/hooks/prevent-catastrophic-delete.sh"
+    local dir dest
+    for dir in "$HOME/.claude/hooks" "$HOME/.codex/hooks"; do
+        # Migrate the initial whole-directory symlink without touching a real
+        # directory that may contain unrelated host-local hooks.
+        if [[ -L "$dir" && "$(readlink "$dir")" == "$ROOT/agents/hooks" ]]; then
+            rm "$dir"
+        fi
+        mkdir -p "$dir"
+        ensure_symlink "$hook_src" "$dir/prevent-catastrophic-delete.sh"
+    done
+
+    # Codex keeps hooks in a separate file. Merge our owned matcher group so
+    # host-local hooks (notably on l40s) survive dotfiles installation.
+    local hook_config="$ROOT/agents/codex/hooks.json"
+    dest="$HOME/.codex/hooks.json"
+    if [[ -L "$dest" && "$(readlink "$dest")" == "$hook_config" ]]; then
+        rm "$dest"
+    elif [[ -L "$dest" ]]; then
+        warn "skip ~/.codex/hooks.json merge (unexpected symlink)"
+        return 1
+    fi
+    mkdir -p "$(dirname "$dest")"
+    [[ -e "$dest" ]] || printf '%s\n' '{"hooks":{}}' > "$dest"
+    jq -e '
+        type == "object" and
+        ((.hooks // {}) | type == "object") and
+        ((.hooks.PreToolUse // []) | type == "array") and
+        all((.hooks.PreToolUse // [])[];
+            type == "object" and
+            ((.hooks // []) | type == "array") and
+            all((.hooks // [])[]; type == "object"))
+    ' "$dest" >/dev/null 2>&1 || {
+        warn "skip ~/.codex/hooks.json merge (invalid or incompatible schema)"
+        return 1
+    }
+
+    local group tmp
+    group=$(sed "s|~/|$HOME/|g" "$hook_config" | jq -c '.hooks.PreToolUse[0]')
+    tmp=$(mktemp "${dest}.tmp.XXXXXX")
+    jq --argjson group "$group" '
+        .hooks //= {} |
+        .hooks.PreToolUse = (
+            ((.hooks.PreToolUse // [])
+                | map(.hooks = ((.hooks // []) | map(select((.command // "") | endswith("/hooks/prevent-catastrophic-delete.sh") | not))))
+                | map(select((.hooks | length) > 0)))
+            + [$group]
+        )
+    ' "$dest" > "$tmp"
+    if cmp -s "$tmp" "$dest"; then
+        rm "$tmp"
+    else
+        chmod 600 "$tmp"
+        mv "$tmp" "$dest"
+        log "merge ~/.codex/hooks.json"
+    fi
 }
 
 _skills_repos() {

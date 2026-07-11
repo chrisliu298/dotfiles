@@ -27,6 +27,21 @@
   "permissions": {
     "defaultMode": "bypassPermissions"
   },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/prevent-catastrophic-delete.sh",
+            "timeout": 5,
+            "statusMessage": "Checking destructive command safety"
+          }
+        ]
+      }
+    ]
+  },
   "deniedMcpServers": [
     { "serverName": "claude.ai Google Drive" },
     { "serverName": "claude.ai Google Calendar" }

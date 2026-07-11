@@ -16,10 +16,11 @@ dotfiles/
 ├── .claude/skills/          # Project-local Claude skills (this repo only)
 └── agents/
     ├── claude/              # Claude Code (~/.claude/) — CLAUDE.md, settings.json (copied), keybindings, statusline
-    ├── codex/               # Codex (~/.codex/) — AGENTS.md
+    ├── codex/               # Codex (~/.codex/) — AGENTS.md, hooks.json
     ├── grok/                # Grok Build (~/.grok/) — AGENTS.md (relay/prism dispatch target)
     ├── pi/                  # Pi (~/.pi/agent/) — AGENTS.md, settings.json
     ├── eval/                # Instruction-following harness for the shared agent doc (prompts, rubric, runner scripts)
+    ├── hooks/               # Shared Claude/Codex destructive-command guard and tests
     └── skills/              # Repo-owned skill sources (one SKILL.md each) + authoring refs, wired by the SKILLS table
 ```
 
