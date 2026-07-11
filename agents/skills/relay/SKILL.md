@@ -36,7 +36,7 @@ If a bare `relay` ever returns "command not found" (a sandboxed/non-zsh/reset-en
 
 | Peer | When to pick | How to invoke |
 |---|---|---|
-| **GPT** (default) | Code review, security review, refactoring, agentic coding. OpenAI lineage. Six effort tiers (`low`/`medium`/`high`/`xhigh`/`max`/`ultra`). | `relay call --name ...` (no `--to` needed) |
+| **GPT** (default) | Code review, security review, refactoring, agentic coding. OpenAI lineage. Five exposed API effort tiers (`low` through `max`) plus Codex `ultra` orchestration. | `relay call --name ...` (no `--to` needed) |
 | **Grok Build** | An independent xAI lineage (Grok 4.5, model id `grok-4.5`), xAI's agentic coding model. Runs via grok's own CLI in headless mode (not Anthropic-compatible). Three effort tiers (`low`/`medium`/`high`, default `medium`) — `high` is grok-4.5's ceiling (no `xhigh`). | `relay call --to grok-build --name ...` |
 | **Grok Composer** | xAI's fast model (`grok-composer-2.5-fast`) — same lineage as Grok Build, lighter/cheaper. Use as a faster xAI option (not a distinct cross-vendor perspective). No effort knob. | `relay call --to grok-composer --name ...` |
 | **GLM** | An independent lineage (Zhipu/z.ai GLM-5.2), reached through z.ai's Anthropic-compatible endpoint. Use for another cross-vendor perspective. Pinned to `max` reasoning via the registry (like DeepSeek); ignores `--effort`. Text-only (no image input via relay). | `relay call --to glm --name ...` |
@@ -66,7 +66,7 @@ BODY
 
 ## Effort Levels
 
-`--effort` applies to GPT and Grok Build. GPT accepts `low`/`medium`/`high`/`xhigh`/`max`/`ultra` (the full gpt-5.6-sol range); Grok Build accepts `low`/`medium`/`high` (both default `medium`). These are **different vendors' scales, not a shared standard** — a level name means what each vendor defines, so `high` on GPT (OpenAI, [reasoning guide](https://developers.openai.com/api/docs/guides/reasoning)) and `high` on Grok Build (xAI, [reasoning docs](https://docs.x.ai/developers/model-capabilities/text/reasoning)) are not equivalent depths, and neither vendor guarantees a fixed token progression across levels. Pick the level from the model you're calling, not by analogy to the other. DeepSeek, GLM, and Kimi run with reasoning pinned on via the registry (DeepSeek via DeepThink; GLM via `reasoning_effort: max`; Kimi via `CLAUDE_CODE_EFFORT_LEVEL=max`, which selects K2.7-Code on the coding plan — thinking off would route to K2.6), and MiMo and Grok Composer have no effort knob. None of them takes a graded `--effort`, so the flag is silently ignored or omitted on those calls.
+`--effort` applies to GPT and Grok Build. The GPT API supports `none`/`low`/`medium`/`high`/`xhigh`/`max`; relay exposes `low` through `max`, plus Codex-specific `ultra` orchestration. Grok Build accepts `low`/`medium`/`high` (both relay targets default to `medium`). `ultra` is not an OpenAI API `reasoning.effort` value: relay passes it through and Codex interprets it as maximum reasoning plus automatic task delegation. These are **different vendors' scales, not a shared standard** — a level name means what each vendor defines, so `high` on GPT (OpenAI, [reasoning guide](https://developers.openai.com/api/docs/guides/reasoning)) and `high` on Grok Build (xAI, [reasoning docs](https://docs.x.ai/developers/model-capabilities/text/reasoning)) are not equivalent depths, and neither vendor guarantees a fixed token progression across levels. Pick the level from the model you're calling, not by analogy to the other. DeepSeek, GLM, and Kimi run with reasoning pinned on via the registry (DeepSeek via DeepThink; GLM via `reasoning_effort: max`; Kimi via `CLAUDE_CODE_EFFORT_LEVEL=max`, which selects K2.7-Code on the coding plan — thinking off would route to K2.6), and MiMo and Grok Composer have no effort knob. None of them takes a graded `--effort`, so the flag is silently ignored or omitted on those calls.
 
 | Level | When to use |
 |-------|-------------|
@@ -75,7 +75,7 @@ BODY
 | `high` | GPT and Grok Build — the deeper reasoning tier (the top tier for Grok Build). Use for hard analysis where the extra latency is worth it. |
 | `xhigh` | GPT only. Hard architecture work, deep security review, or eval-bound tasks worth the extra latency. **Prism pins the GPT parallax tier here** (the last validated review-quality tier). |
 | `max` | GPT only. Maximum reasoning depth for the hardest problems — more exploration and verification than `xhigh`. |
-| `ultra` | GPT only. Max reasoning **plus automatic task delegation** (spawns subagents inside the `codex exec` run) — the slowest tier; reach for it only when the task genuinely benefits from decomposition. |
+| `ultra` | GPT through relay/Codex only; not an API reasoning-effort value. Max reasoning **plus automatic task delegation** (spawns subagents inside the `codex exec` run) — the slowest tier; reach for it only when the task genuinely benefits from decomposition. |
 
 Before raising effort, improve the prompt first — add outcome-first success criteria, stop rules, verification steps, and completeness criteria.
 

@@ -1,10 +1,21 @@
-# GPT-5.6 Prompt Craft
+# GPT-5.6 Sol Prompt Craft
 
-Help users write effective prompts for OpenAI GPT models — either from scratch or by refining existing prompts. Based on OpenAI's official GPT-5.6 prompt guidance.
+Help users write effective prompts for `gpt-5.6-sol` — also targeted by the
+unqualified `gpt-5.6` API alias — either from scratch or by refining existing
+prompts. This reference follows OpenAI's current GPT-5.6 prompt guidance.
 
 ## Core philosophy: outcome-first
 
-GPT-5.6 works best with **outcome-first prompts** that define the target and constraints while leaving room for the model to choose an efficient solution path. Shorter, outcome-first prompts usually outperform process-heavy instruction stacks.
+GPT-5.6 works best with **outcome-first prompts** that define the target and
+constraints while leaving room for the model to choose an efficient solution
+path. Favor lean prompts: state each instruction once, keep tool descriptions
+concise and precise, and add examples or style rules only when they encode a
+product requirement or correct a measured gap.
+
+Prune from a working baseline, one instruction, example, or tool group at a
+time, then rerun the same representative evals. Track context size at the start
+of a run and as the conversation grows; long sessions amplify repeated prompt
+and tool content.
 
 - Describe the destination, not every step. State the target outcome, success criteria, constraints, and available context — then let the model choose the search, tool, or reasoning strategy.
 - Avoid unnecessary absolute rules (ALWAYS, NEVER, must, only) for judgment calls. Reserve absolutes for safety, privacy, and compliance.
@@ -75,7 +86,9 @@ answer correctly, cite it precisely, then stop.
 
 Personality and collaboration style are separate components. Specify both when the UX matters.
 
-**Personality** — tone, warmth, directness, formality, humor, empathy, polish.
+**Personality** — define concrete writing choices: how directly to answer, when
+to acknowledge a reported problem, when reassurance is relevant, and whether a
+sign-off is appropriate. Add formality or humor only when the product needs it.
 
 **Collaboration style** — when to ask questions, when to make assumptions, when to check work, how to handle uncertainty.
 
@@ -125,12 +138,10 @@ State what the output should look like. Keep this block short — lean on the su
 </verbosity_controls>
 ```
 
-**Brevity — prioritize, don't just compress.** GPT-5.6 is already biased toward
-short answers and is *more* sensitive than earlier models to generic brevity
-instructions ("Be concise", "Keep it short", "Use minimal text"). These can do
-more than strip filler — the model may treat a shorter substitute as preferable
-to producing the full requested artifact, dropping required evidence or steps.
-Replace brevity instructions with prioritization:
+**Brevity — prioritize, don't just compress.** GPT-5.6 tends to be more concise
+by default than GPT-5.5. Re-evaluate broad brevity instructions such as "Be
+concise" or "Keep it short": keep them only when they reliably produce the
+output the application needs. Prefer explicit content priorities:
 
 ```
 Lead with the conclusion. Include the evidence needed to support it, any
@@ -174,15 +185,15 @@ Define when to proceed autonomously vs. when to ask permission. This prevents st
 
 ```xml
 <default_follow_through_policy>
-- If the user's intent is clear and the next step is reversible and low-risk,
-  proceed without asking.
-- Ask permission only if the next step is:
-  (a) irreversible,
-  (b) has external side effects (sending, purchasing, deleting, writing to
-  production), or
-  (c) requires missing sensitive information or a choice that would materially
-  change the outcome.
-- If proceeding, briefly state what you did and what remains optional.
+- For requests to answer, explain, review, diagnose, or plan, inspect the
+  relevant materials and report the result. Do not implement changes unless the
+  request also asks for them.
+- For requests to change, build, or fix, make the requested in-scope local
+  changes and run relevant non-destructive validation without asking first.
+- Safe local actions include reading files, inspecting logs, editing in-scope
+  code, and running tests.
+- Require confirmation for external writes, destructive actions, purchases, or
+  a material expansion of scope.
 </default_follow_through_policy>
 ```
 
@@ -239,19 +250,13 @@ workflow-level rules.
 
 #### Preamble pattern (streaming / tool-heavy agents)
 
-For streaming applications, a short preamble improves perceived responsiveness. This is especially important for Responses API workflows that separate commentary from final answers.
+For streaming applications, a short preamble improves perceived responsiveness.
+Use the same compact rule for coding agents with separate message phases.
 
 ```
-Before any tool calls for a multi-step task, send a short user-visible update
-that acknowledges the request and states the first step. Keep it to one or
-two sentences.
-```
-
-For coding agents with separate message phases:
-
-```
-You must always start with an intermediary update before any content in the
-analysis channel if the task will require calling tools.
+Before the first tool call in a multi-step task, send a one- or two-sentence
+user-visible update stating the first step. Update again only at notable phase
+changes or when the plan changes. Do not narrate routine calls.
 ```
 
 #### Tool persistence
@@ -297,6 +302,37 @@ Prevent early stopping when another tool call would materially improve correctne
 </parallel_tool_calling>
 ```
 
+#### Programmatic Tool Calling
+
+Use Programmatic Tool Calling (PTC) for a **bounded** stage where code can
+filter, join, rank, deduplicate, aggregate, or validate several tool results and
+return a much smaller structured result. Multiple, parallel, or dependent calls
+alone do not justify PTC.
+
+Prefer direct tool calls when one call is sufficient, intermediate outputs are
+small, each result may change the next decision, an action requires approval,
+or the final output must preserve citations or native artifacts.
+
+When direct and programmatic calling are both available, define the route:
+
+```xml
+<tool_orchestration>
+- Use Programmatic Tool Calling only for [bounded stage], using [eligible tools].
+- Run independent eligible calls concurrently when safe.
+- Return exactly [schema], including [required evidence].
+- Stop when [condition] is met; retry transient failures at most [R] times.
+- If required results remain missing, return [structured failure schema].
+- Make one clear handoff; do not switch routes, repeat completed calls, or
+  perform side-effecting actions.
+- Use direct tool calls for [semantic judgment, approval, or final validation].
+</tool_orchestration>
+```
+
+Document eligible tools' return fields, types, and error behavior. If their
+shape is not known before the program is written, use direct calls. Test both
+the `program_output` item and the final assistant message: either can omit a
+required field, citation, or caveat.
+
 #### Terminal tool hygiene (for coding agents)
 
 ```xml
@@ -304,8 +340,6 @@ Prevent early stopping when another tool call would materially improve correctne
 - Only run shell commands via the terminal tool.
 - Never "run" tool names as shell commands.
 - If a patch or edit tool exists, use it directly; do not attempt it in bash.
-- After changes, run a lightweight verification step such as ls, tests, or a
-  build before declaring the task done.
 </terminal_tool_hygiene>
 ```
 
@@ -353,15 +387,10 @@ details, or support wording that can safely be made more generic.
 
 ```xml
 <empty_result_recovery>
-If a lookup returns empty, partial, or suspiciously narrow results:
-- do not immediately conclude that no results exist,
-- try at least one or two fallback strategies,
-  such as:
-  - alternate query wording,
-  - broader filters,
-  - a prerequisite lookup,
-  - or an alternate source or tool,
-- Only then report that no results were found, along with what you tried.
+If an empty, partial, or suspiciously narrow result leaves a required fact
+unresolved, try one materially different strategy: alternate wording, broader
+filters, a prerequisite lookup, or another source or tool. Otherwise stop. If
+the required fact remains missing, report that and say what you tried.
 </empty_result_recovery>
 ```
 
@@ -371,11 +400,9 @@ Use for research, review, and synthesis tasks (not short execution tasks):
 
 ```xml
 <research_mode>
-- Do research in 3 passes:
-  1) Plan: list 3-6 sub-questions to answer.
-  2) Retrieve: search each sub-question and follow 1-2 second-order leads.
-  3) Synthesize: resolve contradictions and write the final answer with
-  citations.
+- Identify the material questions that could change the answer.
+- Retrieve only until each is supported or explicitly unresolved.
+- Resolve material contradictions and cite the claims they affect.
 - Stop only when more searching is unlikely to change the conclusion.
 </research_mode>
 ```
@@ -411,8 +438,7 @@ Before finalizing:
 - Check grounding: are factual claims backed by the provided context or tool
   outputs?
 - Check formatting: does the output match the requested schema or style?
-- Check safety and irreversibility: if the next step has external side effects,
-  ask permission first.
+- Check authorization against `<default_follow_through_policy>`.
 </verification_loop>
 
 <missing_context_gating>
@@ -423,11 +449,6 @@ Before finalizing:
   action.
 </missing_context_gating>
 
-<action_safety>
-- Pre-flight: summarize the intended action and parameters in 1-2 lines.
-- Execute via tool.
-- Post-flight: confirm the outcome and any validation that was performed.
-</action_safety>
 ```
 
 ### Step 10: Validation after output
@@ -509,72 +530,21 @@ Higher effort is not automatically better. If the task has conflicting
 instructions, weak stopping criteria, or open-ended tool access, higher effort
 can increase overthinking, unnecessary searching, or output regressions.
 
+#### Pro mode
+
+Pro mode is an API execution mode, not a separate model or a prompt phrase. For
+difficult, quality-first work where a marginal reliability gain justifies more
+latency and tokens, keep `gpt-5.6-sol` and set `reasoning.mode: "pro"`. Choose
+`reasoning.effort` independently; start from the same effort as the standard-mode
+baseline and compare both modes on representative tasks.
+
+Keep the same outcome-focused prompt in standard and pro modes: state the goal,
+relevant context, constraints, required evidence, success criteria, and output
+format. Do not add instructions to "use pro mode," "think harder," or generate
+multiple candidates. Compare task success, completeness, evidence, total tokens,
+latency, and cost; use pro selectively where the measured gain justifies it.
+
 ### Step 13: Specialized workflow patterns (as needed)
-
-#### User updates (general)
-
-```xml
-<user_updates_spec>
-- Only update the user when starting a new major phase or when something
-  changes the plan.
-- Each update: 1 sentence on outcome + 1 sentence on next step.
-- Do not narrate routine tool calls.
-- Keep the user-facing status short; keep the work exhaustive.
-</user_updates_spec>
-```
-
-For coding agents, use the more detailed version below instead.
-
-#### Coding agent autonomy (GPT agents)
-
-```xml
-<autonomy_and_persistence>
-Persist until the task is fully handled end-to-end within the current turn
-whenever feasible: do not stop at analysis or partial fixes; carry changes
-through implementation, verification, and a clear explanation of outcomes
-unless the user explicitly pauses or redirects you.
-
-Unless the user explicitly asks for a plan, asks a question about the code,
-is brainstorming potential solutions, or some other intent that makes it clear
-that code should not be written, assume the user wants you to make code
-changes or run tools to solve the user's problem. In these cases, it's bad to
-output your proposed solution in a message, you should go ahead and actually
-implement the change. If you encounter challenges or blockers, you should
-attempt to resolve them yourself.
-</autonomy_and_persistence>
-```
-
-#### User updates (for coding agents)
-
-```xml
-<user_updates_spec>
-- Intermediary updates go to the `commentary` channel.
-- User updates are short updates while you are working. They are not final
-  answers.
-- Use 1-2 sentence updates to communicate progress and new information while
-  you work.
-- Do not begin responses with conversational interjections or meta commentary.
-  Avoid openers such as acknowledgements ("Done -", "Got it", or "Great
-  question") or similar framing.
-- Before exploring or doing substantial work, send a user update explaining
-  your understanding of the request and your first step. Avoid commenting on
-  the request or starting with phrases such as "Got it" or "Understood."
-- Provide updates roughly every 30 seconds while working.
-- When exploring, explain what context you are gathering and what you learned.
-  Vary sentence structure so the updates do not become repetitive.
-- When working for a while, keep updates informative and varied, but stay
-  concise.
-- When work is substantial, provide a longer plan after you have enough
-  context. This is the only update that may be longer than 2 sentences and
-  may contain formatting.
-- Before file edits, explain what you are about to change.
-- While thinking, keep the user informed of progress without narrating every
-  tool call. Even if you are not taking actions, send frequent progress
-  updates rather than going silent.
-- Keep the tone of progress updates consistent with the assistant's overall
-  personality.
-</user_updates_spec>
-```
 
 #### Formatting control
 
@@ -683,8 +653,6 @@ Separate persistent personality from per-response writing controls:
 - Emotional register: <direct/calm/energized/etc.> + "not <overdo this>"
 - Formatting: <ban bullets/headers/markdown if you want prose>
 - Length: <hard limit, e.g. <=150 words or 3-5 sentences>
-- Default follow-through: if the request is clear and low-risk, proceed
-  without asking permission.
 </personality_and_writing_controls>
 ```
 
@@ -749,7 +717,7 @@ Read the prompt and ask what's going wrong. Common issues and fixes:
 | Over-formats conversational answers | Default to heavy structure | Add the "formatting serve comprehension" block from Step 4 |
 | Inflates edits beyond the ask | No preservation rule | Add the editing-task block from Step 4 |
 | Drops required content when told to be brief | Generic brevity instruction on a compression-biased model | Replace brevity with prioritization — lead with the conclusion, keep required facts and steps (see Step 4) |
-| Acts on risky steps without asking | No safety gate | Add `<verification_loop>` + `<action_safety>` |
+| Acts on risky steps without asking | No authorization boundary | Add `<default_follow_through_policy>` |
 | Ships code without validation | No validation-after-output | Add the Step 10 validation block |
 | Over-reasons / slow | Reasoning effort too high, or prompt over-specifies process | Lower effort; strip legacy scaffolding before raising it |
 | Drifts in long conversations | No compaction strategy | Compact after milestones; keep prompts identical |
@@ -765,7 +733,7 @@ Read the prompt and ask what's going wrong. Common issues and fixes:
 - **Start minimal** — the outcome-first structure (Role / Personality / Goal / Success criteria / Constraints / Output / Stop rules) is often enough on its own.
 - **Add what's missing** — paste the relevant XML blocks from this skill only when they address a measured failure mode.
 - **Remove what's counterproductive** — legacy process scaffolding, absolute ALWAYS/NEVER rules on judgment calls, redundant rules, overly high reasoning effort.
-- **Prefer stop rules over "keep going" rules** — GPT-5.6 is more likely to over-search than to under-search; explicit stop conditions usually beat persistence nudges.
+- **Prefer bounded persistence** — pair any "keep going" rule with an explicit success condition, retry limit, or stopping rule.
 
 ### 3. Present the revision
 

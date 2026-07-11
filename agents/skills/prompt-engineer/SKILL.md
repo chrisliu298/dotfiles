@@ -1,7 +1,7 @@
 ---
 name: prompt-engineer
 description: |
-  Guide for writing or refining prompts for Claude or GPT, distilled from each
+  Guide for writing or refining prompts for Claude or GPT-5.6 Sol, distilled from each
   vendor's official best practices. Use for new prompts, debugging an existing prompt, or
   "prompt engineering", "system prompt", "Claude/GPT/OpenAI prompt". Accepts arg:
   "claude" or "gpt".
@@ -17,7 +17,7 @@ Help users write effective prompts — from scratch or by refining existing ones
 Covers two model families; the user specifies which:
 
 - **`prompt-engineer claude`** — Anthropic Claude prompting best practices
-- **`prompt-engineer gpt`** — OpenAI GPT general prompting best practices
+- **`prompt-engineer gpt`** — OpenAI `gpt-5.6-sol` prompting best practices
 
 If unspecified, ask which model family the prompt targets. If obvious from context (e.g., they mention "Claude", "Anthropic", "GPT", "OpenAI"), use that.
 
@@ -60,6 +60,6 @@ For a higher-quality result, have the model critique its own draft against these
 Read the corresponding reference file for the full set of patterns, XML blocks, and diagnostic tables:
 
 - **Claude** → `references/claude.md` — clarity, roles, XML structure, examples, output format, thinking guidance, safety controls, agentic patterns, and Claude-specific failure modes.
-- **GPT** → `references/gpt.md` — outcome-first prompting, output contracts, follow-through policies, tool persistence, completeness verification, citation/grounding, reasoning effort, verbosity, and GPT-specific failure modes.
+- **GPT-5.6 Sol** → `references/gpt.md` — outcome-first prompting, output contracts, follow-through policies, tool routing and persistence, completeness verification, citation/grounding, reasoning effort, verbosity, and GPT-specific failure modes.
 
 The Claude and GPT references contain ready-to-paste XML blocks.
