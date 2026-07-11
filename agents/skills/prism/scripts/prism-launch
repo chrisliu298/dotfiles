@@ -415,11 +415,17 @@ These belong in the .dispatch file (the one you pass to 'prepare --dispatch'), N
   # script OWNS it. Author the packet with just Full Question + Context (+ Reference
   # Materials); prepare injects the canonical block here when it is absent.
   # Idempotent — present (e.g. a prepare re-run on the same packet) → left as-is.
+  # Injection keys on the EXACT reserved heading, so a prefix-collision heading
+  # (e.g. `## Constraints on the program`) that is NOT exactly `## Constraints`
+  # fails closed — otherwise `grep -q '^## Constraints'` would match it, skip the
+  # injection, and silently drop the canonical block.
   if ! grep -q '^## Constraints' "$packet"; then
     local cfile="$TEMPLATES_DIR/shared-constraints.md"
     [ -f "$cfile" ] || die "prepare: canonical constraints template missing: $cfile"
     { printf '\n'; cat "$cfile"; } >> "$packet" || die "prepare: could not inject constraints into $packet"
     echo "prism-launch: injected canonical ## Constraints into $(basename "$packet")" >&2
+  elif ! grep -qE '^## Constraints[[:space:]]*$' "$packet"; then
+    die "prepare: the packet has a '## Constraints …' heading that is not the exact reserved heading '## Constraints'. prism keys canonical-block injection on that exact heading, so an extended variant silently suppresses the injected safety block. Nest domain content under ## Context as ### subsections, or use the exact '## Constraints' to intentionally override (it must then carry the anti-recursion sentinel)."
   # Extract ONLY the `## Constraints` section (header to the next `## `), then require the
   # exact negative sentinel there — a whole-packet grep would false-pass when the phrase
   # merely appears in the Full Question/Context (e.g. a Prism-reviewing-Prism run).
@@ -430,25 +436,34 @@ These belong in the .dispatch file (the one you pass to 'prepare --dispatch'), N
     die "prepare: the packet's ## Constraints section is missing the anti-recursion sentinel ('Never start a nested Prism run'). Remove the section to let prepare inject the canonical block, or restore the verbatim text from templates/shared-constraints.md."
   fi
   # How-to-answer: a presentation-only block (verdict-first, cite sources, no
-  # preamble). Unlike Constraints it carries no safety load, so it is injected
-  # AFTER Constraints (so it's the freshest instruction before the agent answers)
-  # and never fails closed on a bespoke section. Idempotent — present → left as-is.
+  # preamble). Injected AFTER Constraints so it's the freshest instruction before
+  # the agent answers. Idempotent — the exact heading present → left as-is (a
+  # deliberate override, which carries no safety load). Like the other two it keys on
+  # the EXACT reserved heading: a prefix-collision heading that is not exactly
+  # `## How to answer` fails closed, since it would otherwise silently drop the
+  # injected block that carries the `## Digest` instruction every agent needs.
   if ! grep -q '^## How to answer' "$packet"; then
     local hfile="$TEMPLATES_DIR/shared-how-to-answer.md"
     [ -f "$hfile" ] || die "prepare: canonical how-to-answer template missing: $hfile"
     { printf '\n'; cat "$hfile"; } >> "$packet" || die "prepare: could not inject how-to-answer into $packet"
     echo "prism-launch: injected canonical ## How to answer into $(basename "$packet")" >&2
+  elif ! grep -qE '^## How to answer[[:space:]]*$' "$packet"; then
+    die "prepare: the packet has a '## How to answer …' heading that is not the exact reserved heading '## How to answer'. prism keys canonical-block injection on that exact heading, so an extended variant (e.g. '## How to answer the question') silently suppresses the injected block that carries the '## Digest' instruction every agent needs. Nest domain content under ## Context as ### subsections, or use the exact '## How to answer' to intentionally override."
   fi
   # Grounding: every agent gets the same fact-grounding block — verify any external /
   # time-sensitive fact against a live source (native WebSearch/WebFetch if they work,
   # else the Jina fallback), don't answer such facts from memory, and skip the web for
   # self-contained tasks. Injected for ALL tiers via the shared packet; gpt-pro inherits
-  # it from the embedded packet (no separate append). Idempotent — present → left as-is.
+  # it from the embedded packet (no separate append). Idempotent — the exact heading
+  # present → left as-is; a prefix-collision heading that is not exactly the reserved one
+  # fails closed (same silent-suppression hazard as the other two).
   if ! grep -q '^## Grounding external facts' "$packet"; then
     local gfile="$TEMPLATES_DIR/shared-grounding.md"
     [ -f "$gfile" ] || die "prepare: canonical grounding template missing: $gfile"
     { printf '\n'; cat "$gfile"; } >> "$packet" || die "prepare: could not inject grounding into $packet"
     echo "prism-launch: injected canonical ## Grounding external facts into $(basename "$packet")" >&2
+  elif ! grep -qE '^## Grounding external facts[[:space:]]*$' "$packet"; then
+    die "prepare: the packet has a '## Grounding external facts …' heading that is not the exact reserved heading '## Grounding external facts'. prism keys canonical-block injection on that exact heading, so an extended variant silently suppresses the injected grounding block. Nest domain content under ## Context as ### subsections, or use the exact '## Grounding external facts' to intentionally override."
   fi
 
   # ── Include: resolution (the ergonomic file front door) ───────────────────────
