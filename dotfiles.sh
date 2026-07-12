@@ -51,7 +51,9 @@ SKILLS=(
     # prism: claude-only caller (dispatches parallax to GPT + Grok + GLM + Kimi + DeepSeek + MiMo via relay)
     "prism|./agents/skills/prism|claude"
     # goal-loop: default review backend is prism (claude-only); built on the Skill/AskUserQuestion
-    # tooling. Off-Claude it only degrades to external/local/none, so keep it claude-only.
+    # tooling. Off-Claude it only degrades to external/local/none, so keep it claude-only. MANUAL
+    # (below), so it's off until `./dotfiles.sh enable goal-loop`; the explicit entry keeps it
+    # claude-only when enabled (the wildcard would otherwise install it to codex/grok/pi).
     "goal-loop|./agents/skills/goal-loop|claude"
     # recall: claude-only; searches THIS project's past Claude transcripts (~/.claude/projects) for
     # an earlier user statement. The store is Claude-specific, so it has no meaning on Codex/Grok.
@@ -72,6 +74,9 @@ MANUAL_SKILLS=(
     autoresearch
     codex-first
     deslop
+    goal-drive
+    goal-elicit
+    goal-loop
     interviewer
     prompt-engineer
 )

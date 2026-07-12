@@ -38,9 +38,6 @@ Columns: **C**laude · Code**x** · **G**rok · **P**i. Legend: ✓ auto-install
 | defuddle                | ✓ | ✓ | ✓ | ✓ | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
 | digest                  | ✓ | ✓ | ✓ | ✓ | local — Re-layer a dense reply into a fast-to-skim form |
 | exec-status             | ✓ | ✓ | ✓ | ✓ | local — Maintain a plain-English STATUS.md executive briefing for long autonomous runs |
-| goal-drive              | ✓ | ✓ | ✓ | ✓ | local — Drive a goal artifact (GOAL.md / checklist / phased doc) to verified done |
-| goal-elicit             | ✓ | ✓ | ✓ | ✓ | local — Multi-round interview → verifiable Goal Contract |
-| goal-loop               | ✓ | — | — | — | local — Stepped elicit→review→fix loop (composes goal-elicit/goal-drive/prism; default review is prism, Claude-only) |
 | gpt-pro-relay           | ✓ | ✓ | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini |
 | humanizer               | ✓ | ✓ | ✓ | ✓ | [blader/humanizer][c-hu] — Remove AI signatures from text |
 | jina                    | ✓ | ✓ | ✓ | ✓ | local — Fetch web content / search via Jina AI |
@@ -62,6 +59,9 @@ Columns: **C**laude · Code**x** · **G**rok · **P**i. Legend: ✓ auto-install
 | autoresearch            | ✱ | ✱ | ✱ | ✱ | local — Karpathy-faithful experiment loop |
 | codex-first             | ✱ | — | — | — | local — Route hands-on work to `codex exec` while Claude specs + reviews (Claude-only) |
 | deslop                  | ✱ | ✱ | ✱ | ✱ | local — Strip AI-slop from code changes |
+| goal-drive              | ✱ | ✱ | ✱ | ✱ | local — Drive a goal artifact (GOAL.md / checklist / phased doc) to verified done |
+| goal-elicit             | ✱ | ✱ | ✱ | ✱ | local — Multi-round interview → verifiable Goal Contract |
+| goal-loop               | ✱ | — | — | — | local — Stepped elicit→review→fix loop (composes goal-elicit/goal-drive/prism; default review is prism, Claude-only) |
 | interviewer             | ✱ | ✱ | ✱ | ✱ | local — Mock AI/ML technical interviews |
 | prompt-engineer         | ✱ | ✱ | ✱ | ✱ | local — Prompt writing per-vendor best practices |
 
