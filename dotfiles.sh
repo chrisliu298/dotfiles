@@ -445,6 +445,27 @@ install_skills() {
     done
 }
 
+# uv-managed CLI tools: installed once per machine via `uv tool install`
+# (not symlinked; credentials/state stay machine-local). Format: "pkg|note".
+CLI_TOOLS=(
+    "claude-swap|cswap: multi-account switcher for Claude Code"
+)
+
+install_tools() {
+    command -v uv >/dev/null 2>&1 || { warn "uv not found; skipping CLI tools"; return; }
+    local installed spec pkg
+    installed=$(uv tool list 2>/dev/null)
+    for spec in "${CLI_TOOLS[@]}"; do
+        pkg="${spec%%|*}"
+        if grep -q "^${pkg} " <<<"$installed"; then
+            log "$pkg already installed"
+        else
+            log "installing $pkg"
+            uv tool install -q "$pkg" 2>&1 | tail -1 || warn "failed to install $pkg"
+        fi
+    done
+}
+
 install_mcp_servers() {
     local has_claude=false has_codex=false
     command -v claude &>/dev/null && has_claude=true
@@ -703,6 +724,9 @@ main() {
     local _plugins_out; _plugins_out=$(mktemp)
     install_plugins > "$_plugins_out" 2>&1 &
     local _plugins_pid=$!
+    local _tools_out; _tools_out=$(mktemp)
+    install_tools > "$_tools_out" 2>&1 &
+    local _tools_pid=$!
 
     # Foreground: local-only sections
     section "Theme"; setup_theme_state
@@ -720,6 +744,11 @@ main() {
     wait "$_plugins_pid" 2>/dev/null || true
     [[ -s "$_plugins_out" ]] && cat "$_plugins_out"
     rm -f "$_plugins_out"
+
+    section "Tools"
+    wait "$_tools_pid" 2>/dev/null || true
+    [[ -s "$_tools_out" ]] && cat "$_tools_out"
+    rm -f "$_tools_out"
 
     stamp_write "$GLOBAL_STAMP" "$(compute_fingerprint)"
     printf '\n  ✨ Done. Restart your shell or %ssource ~/.zshrc%s\n\n' "$_DIM" "$_RST"

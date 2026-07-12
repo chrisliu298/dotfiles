@@ -68,6 +68,14 @@ alias nqu="npx quartz upload"
 alias ct="uv run --directory ~/Developer/GitHub/claude-usage-tracker ~/Developer/GitHub/claude-usage-tracker/main.py"
 alias adb="uv run --directory ~/Developer/GitHub/adb ~/Developer/GitHub/adb/adb.py"
 
+# Account switching (claude-swap). `cs` = TUI dashboard; `csw` rotates.
+alias cs="cswap"                          # bare TUI dashboard
+alias csl="cswap list"                    # accounts + 5h/7d usage
+alias css="cswap status"                  # current account
+alias csw="cswap switch"                  # rotate to next (csw 2 / csw email for specific)
+alias csb="cswap switch --strategy best"  # jump to account with most quota left
+alias csa="cswap auto"                    # auto-switch before hitting limits
+
 # =============================================================================
 # Codex
 # =============================================================================
