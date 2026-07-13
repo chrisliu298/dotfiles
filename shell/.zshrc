@@ -112,6 +112,7 @@ setopt hist_find_no_dups
 # =============================================================================
 setopt auto_cd
 setopt NO_BEEP
+setopt interactive_comments  # allow # comments at the interactive prompt (e.g. pasted snippets)
 
 # Local binaries
 [[ -f "$HOME/.local/bin/env" ]] && source "$HOME/.local/bin/env"
