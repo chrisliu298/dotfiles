@@ -466,7 +466,9 @@ cla() {
         ''|-h|--help) clas; return 2 ;;
         *) print "cla: unknown account '${1}' (use 1|2|3)"; return 1 ;;
     esac
-    sf=$(_cla_state); mkdir -p "${sf:h}" && print -r -- "$n" > "$sf"
+    sf=$(_cla_state)
+    mkdir -p "${sf:h}" && print -r -- "$n" > "$sf.tmp" && mv "$sf.tmp" "$sf" \
+        || { print -u2 "cla: failed to write $sf"; return 1; }
     print "cla: active Claude account → $n ($label)  — applies to all shells until changed"
 }
 
@@ -560,11 +562,13 @@ szt() {
 # account. `whence -p claude` resolves the real binary regardless of the `claude` function.
 _claude(){
     local tok=$(_cla_token) bin=$(whence -p claude)
-    if [[ -n $tok ]]; then
-        env -u TMUX -u ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN="$tok" COLORTERM=truecolor "$bin" "$@"
-    else
-        env -u TMUX COLORTERM=truecolor "$bin" "$@"
-    fi
+    [[ -n $bin ]] || { print -u2 'claude: binary not found on PATH'; return 127; }
+    [[ -n $tok ]] || print -u2 "cla: account $(_cla_current) selected but its CLAUDE_ACCT*_OAUTH_TOKEN is unset on this host — check ~/.zshenv.local (run 'synckeys apply')"
+    # Always scrub the higher-precedence auth vars (ANTHROPIC_AUTH_TOKEN #2 > API_KEY #3 >
+    # CLAUDE_CODE_OAUTH_TOKEN #5) so a subscription launch can never silently fall through
+    # to pay-per-token or a wrong endpoint — even on the empty-token path.
+    env -u TMUX -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL \
+        ${tok:+CLAUDE_CODE_OAUTH_TOKEN="$tok"} COLORTERM=truecolor "$bin" "$@"
 }
 claude(){ _claude "$@"; }  # bare `claude` also runs under the cla-selected account
 c(){ _claude --dangerously-skip-permissions "$@"; }
@@ -682,7 +686,7 @@ _deepseek(){
     # errors at the tool gate instead of failing the request. Mirrors the relay
     # script's claude-env branch.
     local _ds_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
-    env -u TMUX -u ANTHROPIC_API_KEY COLORTERM=truecolor \
+    env -u TMUX -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN COLORTERM=truecolor \
         PATH="$_ds_path" \
         ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic \
         ANTHROPIC_AUTH_TOKEN="$DEEPSEEK_API_KEY_INT" \
@@ -723,7 +727,7 @@ _mimo(){
     # multimodal Reads so image data isn't silently dropped. Mirrors the relay
     # script's claude-env branch.
     local _mm_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
-    env -u TMUX -u ANTHROPIC_API_KEY COLORTERM=truecolor \
+    env -u TMUX -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN COLORTERM=truecolor \
         PATH="$_mm_path" \
         ANTHROPIC_BASE_URL=https://api.xiaomimimo.com/anthropic \
         ANTHROPIC_AUTH_TOKEN="$MIMO_API_KEY_INT" \
@@ -759,7 +763,7 @@ _glm(){
     # the tool gate instead of being silently dropped. Mirrors the relay script's
     # claude-env branch.
     local _glm_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
-    env -u TMUX -u ANTHROPIC_API_KEY COLORTERM=truecolor \
+    env -u TMUX -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN COLORTERM=truecolor \
         PATH="$_glm_path" \
         ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic \
         ANTHROPIC_AUTH_TOKEN="$GLM_PLAN_KEY_INT" \
@@ -800,7 +804,7 @@ _kimi(){
     # Treated text-only here (K2.7-Code vision is unverified over the coding endpoint)
     # — deny multimodal Reads, mirroring ds/mm/glm.
     local _kimi_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
-    env -u TMUX -u ANTHROPIC_AUTH_TOKEN COLORTERM=truecolor \
+    env -u TMUX -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN COLORTERM=truecolor \
         PATH="$_kimi_path" \
         ANTHROPIC_BASE_URL=https://api.kimi.com/coding/ \
         ANTHROPIC_API_KEY="$KIMI_PLAN_KEY_CN" \
