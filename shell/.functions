@@ -428,7 +428,7 @@ synckeys() {
                 tmp=$(mktemp)
                 grep -vE "^export (${vars})=" "$f" > "$tmp" || true
                 { [ -s "$tmp" ] && [ -n "$(tail -c1 "$tmp")" ] && printf "\n" >> "$tmp"; } || true
-                printf "%s\n" "$new" >> "$tmp"; mv "$tmp" "$f"
+                printf "%s\n" "$new" >> "$tmp"; mv "$tmp" "$f"; chmod 600 "$f" "$f.bak" 2>/dev/null || true
             '; then
                 printf '           %s✓%s applied  %s(backup: ~/.zshenv.local.bak)%s\n' "$_g" "$_0" "$_d" "$_0"
             else
@@ -841,7 +841,9 @@ ae() {
             | cut -d. -f2 | tr "_-" "/+" \
             | { read -r p; pad=$((4 - ${#p} % 4)); [ $pad -lt 4 ] && p="$p$(printf "=%.0s" $(seq 1 $pad))"; printf "%s" "$p"; } \
             | base64 -d 2>/dev/null | jq -r ".email // empty" 2>/dev/null)
-        printf "claude=%s\ncodex=%s\n" "${claude:--}" "${codex:--}"
+        cla=$(cat ~/.local/state/dotfiles-claude/account 2>/dev/null)
+        case "$cla" in 1) cla="1 (chrisliu298)";; 2) cla="2 (cyliu298)";; 3) cla="3 (yuhaoliu298)";; *) cla="1 (chrisliu298, default)";; esac
+        printf "cla=%s\nclaude=%s\ncodex=%s\n" "$cla" "${claude:--}" "${codex:--}"
     '
 
     local tmpdir=$(mktemp -d) hosts=(local)
@@ -864,14 +866,15 @@ ae() {
         (( first )) || printf '\n'
         first=0
 
+        local cla=$(sed -n 's/^cla=//p' "$tmpdir/$h.log")
         local claude=$(sed -n 's/^claude=//p' "$tmpdir/$h.log")
         local codex=$(sed -n 's/^codex=//p' "$tmpdir/$h.log")
         local top_bar=$(printf '─%.0s' $(seq 1 $((TW - 5 - ${#h}))))
 
         printf '  %s╭─%s %s%s%s %s%s╮%s\n' "$_d" "$_0" "$_c" "$h" "$_0" "$_d" "$top_bar" "$_0"
-        for prov in claude codex; do
+        for prov in cla claude codex; do
             local val="" color="$_0"
-            [[ "$prov" == "claude" ]] && val="$claude" || val="$codex"
+            case "$prov" in cla) val="$cla" ;; claude) val="$claude" ;; codex) val="$codex" ;; esac
             [[ -z "$val" ]] && { val="(none)"; color="$_r"; }
             printf '  %s│%s  %s%-6s%s  %s%-*s%s %s│%s\n' \
                 "$_d" "$_0" "$_d" "$prov" "$_0" "$color" "$efield" "$val" "$_0" "$_d" "$_0"
