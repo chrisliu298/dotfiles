@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Personal dotfiles and AI agent configurations for macOS with zsh, managed by `dotfiles.sh` (the single entrypoint: initializes submodules, symlinks configs into `~`, installs skills, and registers MCP servers + Claude plugins).
+Personal dotfiles and AI agent configurations for macOS with zsh, managed by `dotfiles.sh` (the single entrypoint: initializes submodules, symlinks configs into `~`, installs skills, and registers MCP servers + Claude plugins + tmux plugins).
 
 > **Project-level doc.** Global Claude instructions live in `agents/claude/CLAUDE.md`. Keep this file aligned with the sibling `AGENTS.md` — same facts and section order; only the H1, this pointer, and Claude's `<important>` wrappers may differ.
 
@@ -31,7 +31,7 @@ dotfiles/
 
 ## Build, Test, and Development Commands
 
-- `./dotfiles.sh` — initialize submodules, sync skill repos, symlink files, install skills, and register MCP servers + plugins.
+- `./dotfiles.sh` — initialize submodules, sync skill repos, symlink files, install skills, and register MCP servers + Claude plugins + tmux plugins (TPM).
 - `./dotfiles.sh lint` — run skill portability checks (universal C/X/G skill mechanical violations); also runs automatically at the end of a full `./dotfiles.sh`.
 - `./dotfiles.sh skills` — list manual skills and whether each is enabled.
 - `./dotfiles.sh enable <name>` / `./dotfiles.sh disable <name>` — toggle a manual skill; rewrites the committed `agents/skills/manual-skills.enabled` set, so commit + `dfs` to propagate the change to every machine.

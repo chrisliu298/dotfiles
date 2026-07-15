@@ -451,6 +451,33 @@ CLI_TOOLS=(
     "claude-swap|cswap: multi-account switcher for Claude Code"
 )
 
+# tmux plugins declared as `set -g @plugin` in .config/tmux/tmux.conf and
+# installed by TPM. Not symlinked and not tracked (.config/tmux/plugins/.gitignore
+# keeps only tpm/ itself), so every machine clones its own copy.
+install_tmux_plugins() {
+    command -v tmux >/dev/null 2>&1 || { warn "tmux not found; skipping tmux plugins"; return; }
+    local tpm_bin="$ROOT/.config/tmux/plugins/tpm/bin/install_plugins"
+    [[ -x "$tpm_bin" ]] || { warn "TPM not initialized; skipping tmux plugins"; return; }
+
+    # Skip when the declared plugin set hasn't changed. TPM parses tmux.conf
+    # itself, so this needs no running server -- it works over dfs's ssh.
+    local stamp_file="$CACHE_DIR/dotfiles-tmux-plugins-stamp"
+    local declared; declared=$(awk '/^[ \t]*set(-option)? +-g +@plugin/ {print $4}' \
+        "$ROOT/.config/tmux/tmux.conf" 2>/dev/null)
+    local fingerprint; fingerprint=$(printf '%s' "$declared" | md5 2>/dev/null \
+        || printf '%s' "$declared" | md5sum 2>/dev/null | cut -d' ' -f1)
+    stamp_fresh "$stamp_file" "$fingerprint" && return
+
+    local out
+    if out=$("$tpm_bin" 2>&1); then
+        while IFS= read -r line; do [[ -n "$line" ]] && log "$line"; done <<<"$out"
+        stamp_write "$stamp_file" "$fingerprint"
+    else
+        warn "tmux plugin install failed"
+        [[ -n "$out" ]] && warn "$out"
+    fi
+}
+
 install_tools() {
     command -v uv >/dev/null 2>&1 || { warn "uv not found; skipping CLI tools"; return; }
     local installed spec pkg
@@ -727,6 +754,9 @@ main() {
     local _tools_out; _tools_out=$(mktemp)
     install_tools > "$_tools_out" 2>&1 &
     local _tools_pid=$!
+    local _tmuxp_out; _tmuxp_out=$(mktemp)
+    install_tmux_plugins > "$_tmuxp_out" 2>&1 &
+    local _tmuxp_pid=$!
 
     # Foreground: local-only sections
     section "Theme"; setup_theme_state
@@ -749,6 +779,11 @@ main() {
     wait "$_tools_pid" 2>/dev/null || true
     [[ -s "$_tools_out" ]] && cat "$_tools_out"
     rm -f "$_tools_out"
+
+    section "Tmux"
+    wait "$_tmuxp_pid" 2>/dev/null || true
+    [[ -s "$_tmuxp_out" ]] && cat "$_tmuxp_out"
+    rm -f "$_tmuxp_out"
 
     stamp_write "$GLOBAL_STAMP" "$(compute_fingerprint)"
     printf '\n  ✨ Done. Restart your shell or %ssource ~/.zshrc%s\n\n' "$_DIM" "$_RST"

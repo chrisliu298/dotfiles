@@ -10,7 +10,7 @@ cd ~/dotfiles
 ./dotfiles.sh
 ```
 
-Syncs submodules, symlinks dotfiles and agent configs to `~`, installs AI agent extensions, registers MCP servers, and verifies all links.
+Syncs submodules, symlinks dotfiles and agent configs to `~`, installs AI agent extensions, registers MCP servers, installs tmux plugins via TPM, and verifies all links.
 
 ## Structure
 
