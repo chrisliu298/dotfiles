@@ -12,6 +12,7 @@
   "enabledPlugins": {
     "code-simplifier@claude-plugins-official": true
   },
+  "model": "opus",
   "effortLevel": "xhigh",
   "autoMemoryEnabled": true,
   "cleanupPeriodDays": 3650000,
