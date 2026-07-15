@@ -446,8 +446,8 @@ synckeys() {
 # =============================================================================
 
 # Persistent, cswap-style selection: `cla <1|2|3>` records the choice in a host-local
-# state file; the `claude` wrapper below reads it at EVERY launch, so one switch applies
-# to all shells at once (even already-open ones) and survives reboots — no per-shell export.
+# state file; the Claude runner `_claude` (Claude Code section) reads it at EVERY launch, so
+# one switch applies to all shells at once (even already-open ones) and survives reboots.
 # Accounts are non-rotating ~1yr subscription setup-tokens in ~/.zshenv.local
 # (CLAUDE_ACCT{1,2,3}_OAUTH_TOKEN). Default is account 1 when unset.
 
@@ -479,18 +479,10 @@ clas() {
         print '⚠ ANTHROPIC_API_KEY is set — the claude wrapper unsets it per-launch, but unset it globally to be safe'
 }
 
-# claude — wrapper: run Claude Code under the account selected by `cla`. Reads the host-local
-# state file at every launch (cswap-style: switching in one shell is picked up by all), injects
-# the matching subscription setup-token as CLAUDE_CODE_OAUTH_TOKEN, and drops any
-# ANTHROPIC_API_KEY so usage always bills the subscription, never pay-per-token.
-claude() {
-    local n vn tok; n=$(_cla_current)
-    vn=CLAUDE_ACCT${n}_OAUTH_TOKEN; tok=${(P)vn}
-    if [[ -z $tok ]]; then
-        print -u2 "claude: CLAUDE_ACCT${n}_OAUTH_TOKEN not set on this host (add it to ~/.zshenv.local)"; return 1
-    fi
-    ( unset ANTHROPIC_API_KEY; export CLAUDE_CODE_OAUTH_TOKEN="$tok"; command claude "$@" )
-}
+# _cla_token — echo the selected account's setup-token (empty if unset on this host). The
+# `_claude` runner (Claude Code section) injects this, so every Claude-family launcher —
+# bare `claude`, `c`, `cx`, `cc`, `chl`, `cch`, … — runs under the cla-selected account.
+_cla_token() { local vn=CLAUDE_ACCT$(_cla_current)_OAUTH_TOKEN; print -r -- "${(P)vn}"; }
 
 # =============================================================================
 # Arxiv
@@ -563,7 +555,18 @@ szt() {
 
 # Unset TMUX for Claude Code so Bun's getColorDepth() doesn't short-circuit
 # to 256-color (the `if (env.TMUX) return 8` check fires before COLORTERM).
-_claude(){ env -u TMUX COLORTERM=truecolor "$(command -v claude)" "$@"; }
+# Also inject the cla-selected subscription setup-token (CLAUDE_CODE_OAUTH_TOKEN) and drop
+# ANTHROPIC_API_KEY so every Claude-family launcher bills the subscription for the chosen
+# account. `whence -p claude` resolves the real binary regardless of the `claude` function.
+_claude(){
+    local tok=$(_cla_token) bin=$(whence -p claude)
+    if [[ -n $tok ]]; then
+        env -u TMUX -u ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN="$tok" COLORTERM=truecolor "$bin" "$@"
+    else
+        env -u TMUX COLORTERM=truecolor "$bin" "$@"
+    fi
+}
+claude(){ _claude "$@"; }  # bare `claude` also runs under the cla-selected account
 c(){ _claude --dangerously-skip-permissions "$@"; }
 cc(){ _claude --dangerously-skip-permissions --continue "$@"; }
 cr(){ _claude --dangerously-skip-permissions --resume "$@"; }
@@ -572,7 +575,7 @@ cu(){ command claude update "$@"; }
 gu(){ command grok update "$@"; }
 cpu(){ local prompt="/push"; (( $# )) && prompt+=" ${*}"; _claude -p --dangerously-skip-permissions "$prompt"; }
 chl(){ (( $# )) || { echo 'Usage: chl "<prompt>"'; return 1; }; _claude -p --dangerously-skip-permissions "${*}"; }
-cch(){ tmux new-session -ds claude-channels "env -u TMUX COLORTERM=truecolor $(command -v claude) --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official $*" 2>/dev/null; tmux attach -t claude-channels; }
+cch(){ local tok=$(_cla_token) bin=$(whence -p claude); tmux new-session -ds claude-channels "env -u TMUX -u ANTHROPIC_API_KEY ${tok:+CLAUDE_CODE_OAUTH_TOKEN=$tok} COLORTERM=truecolor $bin --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official $*" 2>/dev/null; tmux attach -t claude-channels; }
 # Reasoning-effort tiers (CLAUDE_CODE_EFFORT_LEVEL); plain `c` keeps the default.
 cl(){  CLAUDE_CODE_EFFORT_LEVEL=low    _claude --dangerously-skip-permissions "$@"; }
 cm(){  CLAUDE_CODE_EFFORT_LEVEL=medium _claude --dangerously-skip-permissions "$@"; }
@@ -689,7 +692,7 @@ _deepseek(){
         ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-flash \
         ANTHROPIC_SMALL_FAST_MODEL=deepseek-v4-flash \
         CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-pro[1m] \
-        "$(command -v claude)" --disallowedTools "$_ds_deny" "$@"
+        "$(whence -p claude)" --disallowedTools "$_ds_deny" "$@"
 }
 ds(){   CLAUDE_CODE_EFFORT_LEVEL=max  _deepseek --dangerously-skip-permissions "$@"; }
 dsh(){  CLAUDE_CODE_EFFORT_LEVEL=high _deepseek --dangerously-skip-permissions "$@"; }
@@ -730,7 +733,7 @@ _mimo(){
         ANTHROPIC_DEFAULT_HAIKU_MODEL=mimo-v2.5 \
         ANTHROPIC_SMALL_FAST_MODEL=mimo-v2.5 \
         CLAUDE_CODE_SUBAGENT_MODEL=mimo-v2.5-pro \
-        "$(command -v claude)" --disallowedTools "$_mm_deny" "$@"
+        "$(whence -p claude)" --disallowedTools "$_mm_deny" "$@"
 }
 mm(){   _mimo --dangerously-skip-permissions "$@"; }
 mmc(){  _mimo --dangerously-skip-permissions --continue "$@"; }
@@ -766,7 +769,7 @@ _glm(){
         ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.2 \
         ANTHROPIC_SMALL_FAST_MODEL=glm-5.2 \
         CLAUDE_CODE_SUBAGENT_MODEL=glm-5.2 \
-        "$(command -v claude)" --disallowedTools "$_glm_deny" "$@"
+        "$(whence -p claude)" --disallowedTools "$_glm_deny" "$@"
 }
 glm(){   CLAUDE_CODE_EFFORT_LEVEL=max _glm --dangerously-skip-permissions "$@"; }
 glmc(){  CLAUDE_CODE_EFFORT_LEVEL=max _glm --dangerously-skip-permissions --continue "$@"; }
@@ -809,7 +812,7 @@ _kimi(){
         CLAUDE_CODE_SUBAGENT_MODEL=kimi-k2.7-code \
         ENABLE_TOOL_SEARCH=false \
         CLAUDE_CODE_AUTO_COMPACT_WINDOW=262144 \
-        "$(command -v claude)" --disallowedTools "$_kimi_deny" "$@"
+        "$(whence -p claude)" --disallowedTools "$_kimi_deny" "$@"
 }
 km(){   CLAUDE_CODE_EFFORT_LEVEL=max _kimi --dangerously-skip-permissions "$@"; }
 kmc(){  CLAUDE_CODE_EFFORT_LEVEL=max _kimi --dangerously-skip-permissions --continue "$@"; }
