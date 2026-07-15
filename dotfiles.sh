@@ -451,6 +451,23 @@ CLI_TOOLS=(
     "claude-swap|cswap: multi-account switcher for Claude Code"
 )
 
+# Hash the declared `set -g @plugin` set plus the plugin dirs actually on disk,
+# so a deleted plugin invalidates the stamp instead of being skipped forever.
+# Capture once so the md5sum fallback re-pipes the data rather than hashing
+# empty stdin on Linux.
+tmux_plugins_fingerprint() {
+    local conf="$1" data declared present
+    declared=$(awk '/^[ \t]*set(-option)? +-g +@plugin/ {print $4}' "$conf" 2>/dev/null)
+    # find, not ls: ls colorizes when CLICOLOR_FORCE is set, and the escape codes
+    # both pollute the hash and reorder the sort. LC_ALL=C keeps macOS and Linux
+    # collating identically.
+    present=$(find "$(dirname "$conf")/plugins" -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+        | sed 's#.*/##' | LC_ALL=C sort)
+    data=$(printf '%s\n%s' "$declared" "$present")
+    printf '%s' "$data" | md5 2>/dev/null \
+        || printf '%s' "$data" | md5sum 2>/dev/null | cut -d' ' -f1
+}
+
 # tmux plugins declared as `set -g @plugin` in .config/tmux/tmux.conf and
 # installed by TPM. Not symlinked and not tracked (.config/tmux/plugins/.gitignore
 # keeps only tpm/ itself), so every machine clones its own copy.
@@ -459,19 +476,23 @@ install_tmux_plugins() {
     local tpm_bin="$ROOT/.config/tmux/plugins/tpm/bin/install_plugins"
     [[ -x "$tpm_bin" ]] || { warn "TPM not initialized; skipping tmux plugins"; return; }
 
-    # Skip when the declared plugin set hasn't changed. TPM parses tmux.conf
-    # itself, so this needs no running server -- it works over dfs's ssh.
+    # TPM reads the user-level config, not $ROOT's copy. With no config it finds
+    # nothing to install, prints nothing, and still exits 0 -- so check first
+    # rather than stamping that silent no-op as a successful install.
+    local user_conf="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/tmux.conf"
+    [[ -r "$user_conf" ]] || { warn "no tmux.conf at $user_conf; skipping tmux plugins"; return; }
+
+    # TPM parses the conf itself, so this needs no running server -- it works
+    # over dfs's ssh.
     local stamp_file="$CACHE_DIR/dotfiles-tmux-plugins-stamp"
-    local declared; declared=$(awk '/^[ \t]*set(-option)? +-g +@plugin/ {print $4}' \
-        "$ROOT/.config/tmux/tmux.conf" 2>/dev/null)
-    local fingerprint; fingerprint=$(printf '%s' "$declared" | md5 2>/dev/null \
-        || printf '%s' "$declared" | md5sum 2>/dev/null | cut -d' ' -f1)
-    stamp_fresh "$stamp_file" "$fingerprint" && return
+    stamp_fresh "$stamp_file" "$(tmux_plugins_fingerprint "$user_conf")" && return
 
     local out
     if out=$("$tpm_bin" 2>&1); then
         while IFS= read -r line; do [[ -n "$line" ]] && log "$line"; done <<<"$out"
-        stamp_write "$stamp_file" "$fingerprint"
+        # Re-hash after installing: the fingerprint covers what's on disk, which
+        # the install just changed.
+        stamp_write "$stamp_file" "$(tmux_plugins_fingerprint "$user_conf")"
     else
         warn "tmux plugin install failed"
         [[ -n "$out" ]] && warn "$out"
@@ -754,13 +775,17 @@ main() {
     local _tools_out; _tools_out=$(mktemp)
     install_tools > "$_tools_out" 2>&1 &
     local _tools_pid=$!
-    local _tmuxp_out; _tmuxp_out=$(mktemp)
-    install_tmux_plugins > "$_tmuxp_out" 2>&1 &
-    local _tmuxp_pid=$!
 
     # Foreground: local-only sections
     section "Theme"; setup_theme_state
     section "Links";  install_links
+
+    # Must start after Links: TPM reads ~/.config/tmux/tmux.conf (the symlink
+    # install_links creates), not the repo copy. Launched here rather than with
+    # the other network tasks so it still overlaps the waits below.
+    local _tmuxp_out; _tmuxp_out=$(mktemp)
+    install_tmux_plugins > "$_tmuxp_out" 2>&1 &
+    local _tmuxp_pid=$!
 
     wait "$_fetch_pid" 2>/dev/null || true
     section "Skills"; install_skills; lint_skills
