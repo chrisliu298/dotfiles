@@ -77,10 +77,3 @@ export GROK_CLAUDE_HOOKS_ENABLED=false
 # Local secrets (not version controlled)
 # =============================================================================
 [[ -f "$HOME/.zshenv.local" ]] && source "$HOME/.zshenv.local"
-
-# Default Claude Code account (subscription setup-token). Tokens are sourced above from
-# ~/.zshenv.local (CLAUDE_ACCT{1,2,3}_OAUTH_TOKEN); default to account 3 (yuhaoliu298).
-# `cla <1|2|3>` switches per shell. Guarded: a host without the tokens keeps its existing auth.
-if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" && -n "${CLAUDE_ACCT3_OAUTH_TOKEN:-}" ]]; then
-    export CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_ACCT3_OAUTH_TOKEN" CLAUDE_ACTIVE_ACCT=3
-fi

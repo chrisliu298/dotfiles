@@ -445,34 +445,51 @@ synckeys() {
 # Claude Code account switching (subscription setup-tokens)
 # =============================================================================
 
-# cla — select the active Claude Code account for this shell. The three accounts are
-# non-rotating ~1yr subscription OAuth setup-tokens (`claude setup-token`) stored in
-# ~/.zshenv.local as CLAUDE_ACCT{1,2,3}_OAUTH_TOKEN. This exports CLAUDE_CODE_OAUTH_TOKEN
-# (which takes precedence over any cswap /login slot) and clears ANTHROPIC_API_KEY so usage
-# always bills the subscription, never pay-per-token. Verify live with: claude /status
+# Persistent, cswap-style selection: `cla <1|2|3>` records the choice in a host-local
+# state file; the `claude` wrapper below reads it at EVERY launch, so one switch applies
+# to all shells at once (even already-open ones) and survives reboots — no per-shell export.
+# Accounts are non-rotating ~1yr subscription setup-tokens in ~/.zshenv.local
+# (CLAUDE_ACCT{1,2,3}_OAUTH_TOKEN). Default is account 1 when unset.
+
+# _cla_state — path to the host-local selected-account file (mirrors the theme `mode` file).
+_cla_state() { print -r -- "$HOME/.local/state/dotfiles-claude/account"; }
+# _cla_current — echo the selected account number (1/2/3), defaulting to 1.
+_cla_current() { local n; n=$(cat "$(_cla_state)" 2>/dev/null); [[ $n == [123] ]] && print -r -- "$n" || print 1; }
+
+# cla — switch the active Claude account for every shell (persists until changed).
 cla() {
-    local n=${1:-} tok label
-    case "$n" in
-        1|chris|chrisliu298)  n=1; tok=$CLAUDE_ACCT1_OAUTH_TOKEN; label=chrisliu298 ;;
-        2|cy|cyliu298)        n=2; tok=$CLAUDE_ACCT2_OAUTH_TOKEN; label=cyliu298 ;;
-        3|yuhao|yuhaoliu298)  n=3; tok=$CLAUDE_ACCT3_OAUTH_TOKEN; label=yuhaoliu298 ;;
-        ''|-h|--help) print 'usage: cla <1|2|3>   1=chrisliu298  2=cyliu298  3=yuhaoliu298'; return 2 ;;
-        *) print "cla: unknown account '$n' (use 1|2|3)"; return 1 ;;
+    local n label sf
+    case "${1:-}" in
+        1|chris|chrisliu298)  n=1 label=chrisliu298 ;;
+        2|cy|cyliu298)        n=2 label=cyliu298 ;;
+        3|yuhao|yuhaoliu298)  n=3 label=yuhaoliu298 ;;
+        ''|-h|--help) clas; return 2 ;;
+        *) print "cla: unknown account '${1}' (use 1|2|3)"; return 1 ;;
     esac
-    if [[ -z "$tok" ]]; then
-        print "cla: CLAUDE_ACCT${n}_OAUTH_TOKEN is empty — is ~/.zshenv.local set up on this host?"; return 1
-    fi
-    unset ANTHROPIC_API_KEY
-    export CLAUDE_CODE_OAUTH_TOKEN="$tok" CLAUDE_ACTIVE_ACCT="$n"
-    print "cla: active Claude account → $n ($label)"
+    sf=$(_cla_state); mkdir -p "${sf:h}" && print -r -- "$n" > "$sf"
+    print "cla: active Claude account → $n ($label)  — applies to all shells until changed"
 }
 
-# clas — show the active Claude account and warn if ANTHROPIC_API_KEY would override the token.
+# clas — show the active Claude account.
 clas() {
-    print "active Claude account: ${CLAUDE_ACTIVE_ACCT:-unset}  (token: ${CLAUDE_CODE_OAUTH_TOKEN:+set}${CLAUDE_CODE_OAUTH_TOKEN:-none})"
+    local n label; n=$(_cla_current)
+    case $n in 1) label=chrisliu298 ;; 2) label=cyliu298 ;; 3) label=yuhaoliu298 ;; esac
+    print "active Claude account: $n ($label)"
     [[ -n "${ANTHROPIC_API_KEY:-}" ]] && \
-        print '⚠ ANTHROPIC_API_KEY is set — it OVERRIDES the token and bills pay-per-token. run: unset ANTHROPIC_API_KEY'
-    print 'verify live: claude /status'
+        print '⚠ ANTHROPIC_API_KEY is set — the claude wrapper unsets it per-launch, but unset it globally to be safe'
+}
+
+# claude — wrapper: run Claude Code under the account selected by `cla`. Reads the host-local
+# state file at every launch (cswap-style: switching in one shell is picked up by all), injects
+# the matching subscription setup-token as CLAUDE_CODE_OAUTH_TOKEN, and drops any
+# ANTHROPIC_API_KEY so usage always bills the subscription, never pay-per-token.
+claude() {
+    local n vn tok; n=$(_cla_current)
+    vn=CLAUDE_ACCT${n}_OAUTH_TOKEN; tok=${(P)vn}
+    if [[ -z $tok ]]; then
+        print -u2 "claude: CLAUDE_ACCT${n}_OAUTH_TOKEN not set on this host (add it to ~/.zshenv.local)"; return 1
+    fi
+    ( unset ANTHROPIC_API_KEY; export CLAUDE_CODE_OAUTH_TOKEN="$tok"; command claude "$@" )
 }
 
 # =============================================================================
