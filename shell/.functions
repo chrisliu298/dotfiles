@@ -365,11 +365,11 @@ dfs() {
     fi
 }
 
-# synckeys — propagate this machine's ~/.zshenv.local API/plan/oauth secrets to dfs peers.
-# ~/.zshenv.local holds secrets (DEEPSEEK/MIMO_API_KEY_INT, GLM_PLAN_KEY_INT, KIMI_PLAN_KEY_CN,
-# CLAUDE_ACCT{1,2,3}_OAUTH_TOKEN, …) and is intentionally NOT in the dotfiles repo, so `dfs`
-# never carries it — a new `export FOO_API_KEY=...` added here must reach the other machines separately.
-# synckeys upserts the local `export *_API_KEY=` / `*_PLAN_KEY=` / `*_OAUTH_TOKEN=` lines onto each peer (adds
+# synckeys — propagate this machine's ~/.zshenv.local API/plan keys to dfs peers.
+# ~/.zshenv.local holds secrets (DEEPSEEK/MIMO_API_KEY_INT, GLM_PLAN_KEY_INT, KIMI_PLAN_KEY_CN, …) and is
+# intentionally NOT in the dotfiles repo, so `dfs` never carries it — a
+# new `export FOO_API_KEY=...` added here must reach the other machines separately.
+# synckeys upserts the local `export *_API_KEY=` / `*_PLAN_KEY=` lines onto each peer (adds
 # missing, updates changed), never deletes peer-only lines or touches non-key
 # config, and never prints key values (the diff lists variable names only). Each
 # applied peer keeps a ~/.zshenv.local.bak for rollback. Dry-run by default; pass
@@ -378,14 +378,14 @@ synckeys() {
     local _c=$'\033[1;36m' _g=$'\033[32m' _y=$'\033[33m' _r=$'\033[31m' _d=$'\033[2m' _0=$'\033[0m'
     local apply=false
     [[ "${1:-}" == apply || "${1:-}" == -y ]] && apply=true
-    printf '\n  %ssynckeys%s  %s%s ~/.zshenv.local API/plan/oauth secrets to peers%s\n\n' \
+    printf '\n  %ssynckeys%s  %s%s ~/.zshenv.local API/plan keys to peers%s\n\n' \
         "$_c" "$_0" "$_d" "$([[ $apply == true ]] && print propagating || print 'dry-run —')" "$_0"
 
     local src="$HOME/.zshenv.local"
     [[ -f "$src" ]] || { printf '  %s✗%s no %s\n\n' "$_r" "$_0" "$src"; return 1; }
     local local_keys
-    local_keys=$(grep -E '^export [A-Za-z_][A-Za-z0-9_]*(_(API|PLAN)_KEY|_OAUTH_TOKEN)(_[A-Za-z0-9]+)?=' "$src")
-    [[ -n "$local_keys" ]] || { printf '  %s✗%s no *_API_KEY / *_PLAN_KEY / *_OAUTH_TOKEN exports in %s\n\n' "$_r" "$_0" "$src"; return 1; }
+    local_keys=$(grep -E '^export [A-Za-z_][A-Za-z0-9_]*_(API|PLAN)_KEY(_[A-Za-z0-9]+)?=' "$src")
+    [[ -n "$local_keys" ]] || { printf '  %s✗%s no *_API_KEY / *_PLAN_KEY exports in %s\n\n' "$_r" "$_0" "$src"; return 1; }
 
     # SSH alias:hostname -s (same peer set + self-skip as dfs)
     local dfs_peers=(macbookpro16:MacBookPro16 macmini:macmini l40s:lambda-scalar)
@@ -402,7 +402,7 @@ synckeys() {
     local h rc=0 peer_keys add upd ok push line var peer_line
     for h in "${hosts[@]}"; do
         if ! peer_keys=$(command ssh -o ConnectTimeout=10 -o BatchMode=yes "$h" \
-                'grep -E "^export [A-Za-z_][A-Za-z0-9_]*(_(API|PLAN)_KEY|_OAUTH_TOKEN)(_[A-Za-z0-9]+)?=" ~/.zshenv.local 2>/dev/null'); then
+                'grep -E "^export [A-Za-z_][A-Za-z0-9_]*_(API|PLAN)_KEY(_[A-Za-z0-9]+)?=" ~/.zshenv.local 2>/dev/null'); then
             printf '  %s%s%s  %s✗ unreachable%s\n' "$_c" "$h" "$_0" "$_r" "$_0"; rc=1; continue
         fi
         add=() upd=() ok=() push=""
@@ -428,7 +428,7 @@ synckeys() {
                 tmp=$(mktemp)
                 grep -vE "^export (${vars})=" "$f" > "$tmp" || true
                 { [ -s "$tmp" ] && [ -n "$(tail -c1 "$tmp")" ] && printf "\n" >> "$tmp"; } || true
-                printf "%s\n" "$new" >> "$tmp"; mv "$tmp" "$f"; chmod 600 "$f" "$f.bak" 2>/dev/null || true
+                printf "%s\n" "$new" >> "$tmp"; mv "$tmp" "$f"
             '; then
                 printf '           %s✓%s applied  %s(backup: ~/.zshenv.local.bak)%s\n' "$_g" "$_0" "$_d" "$_0"
             else
@@ -440,56 +440,6 @@ synckeys() {
     $apply || printf '\n  %srun%s synckeys apply %sto write%s\n' "$_d" "$_0" "$_d" "$_0"
     printf '\n'; return $rc
 }
-
-# =============================================================================
-# Claude Code account switching (subscription setup-tokens)
-# =============================================================================
-
-# Persistent, cswap-style selection: `cla <1|2|3>` records the choice in a host-local
-# state file; the Claude runner `_claude` (Claude Code section) reads it at EVERY launch, so
-# one switch applies to all shells at once (even already-open ones) and survives reboots.
-# Accounts are non-rotating ~1yr subscription setup-tokens in ~/.zshenv.local
-# (CLAUDE_ACCT{1,2,3}_OAUTH_TOKEN). Default is account 1 when unset.
-# SCOPE: governs Claude launched THROUGH the shell (bare `claude`, c/cx/cc/…). Callers that
-# bypass the shell — IDE extensions, cron/launchd, `dotfiles.sh`'s `claude mcp/plugin` (bash) —
-# use ambient ~/.claude credentials instead (account-agnostic config, so the gap is bounded;
-# with no credentials file they fail loudly rather than pick a wrong account). Peer launchers
-# (ds/glm/km/mm) are a separate world and never touch these subscription tokens.
-
-# _cla_state — path to the host-local selected-account file (mirrors the theme `mode` file).
-_cla_state() { print -r -- "$HOME/.local/state/dotfiles-claude/account"; }
-# _cla_current — echo the selected account number (1/2/3), defaulting to 1.
-_cla_current() { local n; n=$(cat "$(_cla_state)" 2>/dev/null); [[ $n == [123] ]] && print -r -- "$n" || print 1; }
-
-# cla — switch the active Claude account for every shell (persists until changed).
-cla() {
-    local n label sf
-    case "${1:-}" in
-        1|chris|chrisliu298)  n=1 label=chrisliu298 ;;
-        2|cy|cyliu298)        n=2 label=cyliu298 ;;
-        3|yuhao|yuhaoliu298)  n=3 label=yuhaoliu298 ;;
-        ''|-h|--help) clas; return 2 ;;
-        *) print "cla: unknown account '${1}' (use 1|2|3)"; return 1 ;;
-    esac
-    sf=$(_cla_state)
-    mkdir -p "${sf:h}" && print -r -- "$n" > "$sf.tmp" && mv "$sf.tmp" "$sf" \
-        || { print -u2 "cla: failed to write $sf"; return 1; }
-    print "cla: active Claude account → $n ($label)  — applies to all shells until changed"
-}
-
-# clas — show the active Claude account.
-clas() {
-    local n label; n=$(_cla_current)
-    case $n in 1) label=chrisliu298 ;; 2) label=cyliu298 ;; 3) label=yuhaoliu298 ;; esac
-    print "active Claude account: $n ($label)"
-    [[ -n "${ANTHROPIC_API_KEY:-}" ]] && \
-        print '⚠ ANTHROPIC_API_KEY is set — the claude wrapper unsets it per-launch, but unset it globally to be safe'
-}
-
-# _cla_token — echo the selected account's setup-token (empty if unset on this host). The
-# `_claude` runner (Claude Code section) injects this, so every Claude-family launcher —
-# bare `claude`, `c`, `cx`, `cc`, `chl`, `cch`, … — runs under the cla-selected account.
-_cla_token() { local vn=CLAUDE_ACCT$(_cla_current)_OAUTH_TOKEN; print -r -- "${(P)vn}"; }
 
 # =============================================================================
 # Arxiv
@@ -562,20 +512,7 @@ szt() {
 
 # Unset TMUX for Claude Code so Bun's getColorDepth() doesn't short-circuit
 # to 256-color (the `if (env.TMUX) return 8` check fires before COLORTERM).
-# Also inject the cla-selected subscription setup-token (CLAUDE_CODE_OAUTH_TOKEN) and drop
-# ANTHROPIC_API_KEY so every Claude-family launcher bills the subscription for the chosen
-# account. `whence -p claude` resolves the real binary regardless of the `claude` function.
-_claude(){
-    local tok=$(_cla_token) bin=$(whence -p claude)
-    [[ -n $bin ]] || { print -u2 'claude: binary not found on PATH'; return 127; }
-    [[ -n $tok ]] || print -u2 "cla: account $(_cla_current) selected but its CLAUDE_ACCT*_OAUTH_TOKEN is unset on this host — check ~/.zshenv.local (run 'synckeys apply')"
-    # Always scrub the higher-precedence auth vars (ANTHROPIC_AUTH_TOKEN #2 > API_KEY #3 >
-    # CLAUDE_CODE_OAUTH_TOKEN #5) so a subscription launch can never silently fall through
-    # to pay-per-token or a wrong endpoint — even on the empty-token path.
-    env -u TMUX -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_OAUTH_TOKEN \
-        ${tok:+CLAUDE_CODE_OAUTH_TOKEN="$tok"} COLORTERM=truecolor "$bin" "$@"
-}
-claude(){ _claude "$@"; }  # bare `claude` also runs under the cla-selected account
+_claude(){ env -u TMUX COLORTERM=truecolor "$(command -v claude)" "$@"; }
 c(){ _claude --dangerously-skip-permissions "$@"; }
 cc(){ _claude --dangerously-skip-permissions --continue "$@"; }
 cr(){ _claude --dangerously-skip-permissions --resume "$@"; }
@@ -584,18 +521,7 @@ cu(){ command claude update "$@"; }
 gu(){ command grok update "$@"; }
 cpu(){ local prompt="/push"; (( $# )) && prompt+=" ${*}"; _claude -p --dangerously-skip-permissions "$prompt"; }
 chl(){ (( $# )) || { echo 'Usage: chl "<prompt>"'; return 1; }; _claude -p --dangerously-skip-permissions "${*}"; }
-# cch — telegram-channels session in tmux. Routes through `c` inside an interactive zsh so the
-# selected account token is injected by _claude *inside* the session (never placed in the tmux
-# command string / argv, and it follows the current cla selection at launch). tmux runs the
-# argv directly (no sh -c), so extra args pass through "$@" without re-quoting.
-cch(){ tmux new-session -ds claude-channels zsh -ic 'c --channels plugin:telegram@claude-plugins-official "$@"' cch "$@" 2>/dev/null; tmux attach -t claude-channels; }
-# cll — Claude via this machine's interactive /login (macOS Keychain / .credentials.json),
-# NOT the cla setup-token. Setup-tokens are inference-only and can't open connector /
-# Remote-Control channels, so /chrome, Fable 5, and Remote Control need a /login session:
-# run `/login` once on this machine for the account you want, then use `cll` for those. It
-# coexists with the setup-token (independent credentials); to avoid refresh-token rotation,
-# /login any given account on only ONE machine.
-cll(){ env -u TMUX -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL COLORTERM=truecolor "$(whence -p claude)" --dangerously-skip-permissions "$@"; }
+cch(){ tmux new-session -ds claude-channels "env -u TMUX COLORTERM=truecolor $(command -v claude) --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official $*" 2>/dev/null; tmux attach -t claude-channels; }
 # Reasoning-effort tiers (CLAUDE_CODE_EFFORT_LEVEL); plain `c` keeps the default.
 cl(){  CLAUDE_CODE_EFFORT_LEVEL=low    _claude --dangerously-skip-permissions "$@"; }
 cm(){  CLAUDE_CODE_EFFORT_LEVEL=medium _claude --dangerously-skip-permissions "$@"; }
@@ -702,7 +628,7 @@ _deepseek(){
     # errors at the tool gate instead of failing the request. Mirrors the relay
     # script's claude-env branch.
     local _ds_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
-    env -u TMUX -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN COLORTERM=truecolor \
+    env -u TMUX -u ANTHROPIC_API_KEY COLORTERM=truecolor \
         PATH="$_ds_path" \
         ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic \
         ANTHROPIC_AUTH_TOKEN="$DEEPSEEK_API_KEY_INT" \
@@ -712,7 +638,7 @@ _deepseek(){
         ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-flash \
         ANTHROPIC_SMALL_FAST_MODEL=deepseek-v4-flash \
         CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-pro[1m] \
-        "$(whence -p claude)" --disallowedTools "$_ds_deny" "$@"
+        "$(command -v claude)" --disallowedTools "$_ds_deny" "$@"
 }
 ds(){   CLAUDE_CODE_EFFORT_LEVEL=max  _deepseek --dangerously-skip-permissions "$@"; }
 dsh(){  CLAUDE_CODE_EFFORT_LEVEL=high _deepseek --dangerously-skip-permissions "$@"; }
@@ -743,7 +669,7 @@ _mimo(){
     # multimodal Reads so image data isn't silently dropped. Mirrors the relay
     # script's claude-env branch.
     local _mm_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
-    env -u TMUX -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN COLORTERM=truecolor \
+    env -u TMUX -u ANTHROPIC_API_KEY COLORTERM=truecolor \
         PATH="$_mm_path" \
         ANTHROPIC_BASE_URL=https://api.xiaomimimo.com/anthropic \
         ANTHROPIC_AUTH_TOKEN="$MIMO_API_KEY_INT" \
@@ -753,7 +679,7 @@ _mimo(){
         ANTHROPIC_DEFAULT_HAIKU_MODEL=mimo-v2.5 \
         ANTHROPIC_SMALL_FAST_MODEL=mimo-v2.5 \
         CLAUDE_CODE_SUBAGENT_MODEL=mimo-v2.5-pro \
-        "$(whence -p claude)" --disallowedTools "$_mm_deny" "$@"
+        "$(command -v claude)" --disallowedTools "$_mm_deny" "$@"
 }
 mm(){   _mimo --dangerously-skip-permissions "$@"; }
 mmc(){  _mimo --dangerously-skip-permissions --continue "$@"; }
@@ -779,7 +705,7 @@ _glm(){
     # the tool gate instead of being silently dropped. Mirrors the relay script's
     # claude-env branch.
     local _glm_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
-    env -u TMUX -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN COLORTERM=truecolor \
+    env -u TMUX -u ANTHROPIC_API_KEY COLORTERM=truecolor \
         PATH="$_glm_path" \
         ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic \
         ANTHROPIC_AUTH_TOKEN="$GLM_PLAN_KEY_INT" \
@@ -789,7 +715,7 @@ _glm(){
         ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.2 \
         ANTHROPIC_SMALL_FAST_MODEL=glm-5.2 \
         CLAUDE_CODE_SUBAGENT_MODEL=glm-5.2 \
-        "$(whence -p claude)" --disallowedTools "$_glm_deny" "$@"
+        "$(command -v claude)" --disallowedTools "$_glm_deny" "$@"
 }
 glm(){   CLAUDE_CODE_EFFORT_LEVEL=max _glm --dangerously-skip-permissions "$@"; }
 glmc(){  CLAUDE_CODE_EFFORT_LEVEL=max _glm --dangerously-skip-permissions --continue "$@"; }
@@ -820,7 +746,7 @@ _kimi(){
     # Treated text-only here (K2.7-Code vision is unverified over the coding endpoint)
     # — deny multimodal Reads, mirroring ds/mm/glm.
     local _kimi_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
-    env -u TMUX -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN COLORTERM=truecolor \
+    env -u TMUX -u ANTHROPIC_AUTH_TOKEN COLORTERM=truecolor \
         PATH="$_kimi_path" \
         ANTHROPIC_BASE_URL=https://api.kimi.com/coding/ \
         ANTHROPIC_API_KEY="$KIMI_PLAN_KEY_CN" \
@@ -832,7 +758,7 @@ _kimi(){
         CLAUDE_CODE_SUBAGENT_MODEL=kimi-k2.7-code \
         ENABLE_TOOL_SEARCH=false \
         CLAUDE_CODE_AUTO_COMPACT_WINDOW=262144 \
-        "$(whence -p claude)" --disallowedTools "$_kimi_deny" "$@"
+        "$(command -v claude)" --disallowedTools "$_kimi_deny" "$@"
 }
 km(){   CLAUDE_CODE_EFFORT_LEVEL=max _kimi --dangerously-skip-permissions "$@"; }
 kmc(){  CLAUDE_CODE_EFFORT_LEVEL=max _kimi --dangerously-skip-permissions --continue "$@"; }
@@ -848,9 +774,7 @@ ae() {
             | cut -d. -f2 | tr "_-" "/+" \
             | { read -r p; pad=$((4 - ${#p} % 4)); [ $pad -lt 4 ] && p="$p$(printf "=%.0s" $(seq 1 $pad))"; printf "%s" "$p"; } \
             | base64 -d 2>/dev/null | jq -r ".email // empty" 2>/dev/null)
-        cla=$(cat ~/.local/state/dotfiles-claude/account 2>/dev/null)
-        case "$cla" in 1) cla="1 (chrisliu298)";; 2) cla="2 (cyliu298)";; 3) cla="3 (yuhaoliu298)";; *) cla="1 (chrisliu298, default)";; esac
-        printf "cla=%s\nclaude=%s\ncodex=%s\n" "$cla" "${claude:--}" "${codex:--}"
+        printf "claude=%s\ncodex=%s\n" "${claude:--}" "${codex:--}"
     '
 
     local tmpdir=$(mktemp -d) hosts=(local)
@@ -873,15 +797,14 @@ ae() {
         (( first )) || printf '\n'
         first=0
 
-        local cla=$(sed -n 's/^cla=//p' "$tmpdir/$h.log")
         local claude=$(sed -n 's/^claude=//p' "$tmpdir/$h.log")
         local codex=$(sed -n 's/^codex=//p' "$tmpdir/$h.log")
         local top_bar=$(printf '─%.0s' $(seq 1 $((TW - 5 - ${#h}))))
 
         printf '  %s╭─%s %s%s%s %s%s╮%s\n' "$_d" "$_0" "$_c" "$h" "$_0" "$_d" "$top_bar" "$_0"
-        for prov in cla claude codex; do
+        for prov in claude codex; do
             local val="" color="$_0"
-            case "$prov" in cla) val="$cla" ;; claude) val="$claude" ;; codex) val="$codex" ;; esac
+            [[ "$prov" == "claude" ]] && val="$claude" || val="$codex"
             [[ -z "$val" ]] && { val="(none)"; color="$_r"; }
             printf '  %s│%s  %s%-6s%s  %s%-*s%s %s│%s\n' \
                 "$_d" "$_0" "$_d" "$prov" "$_0" "$color" "$efield" "$val" "$_0" "$_d" "$_0"

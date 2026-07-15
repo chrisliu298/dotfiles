@@ -68,17 +68,13 @@ alias nqu="npx quartz upload"
 alias ct="uv run --directory ~/Developer/GitHub/claude-usage-tracker ~/Developer/GitHub/claude-usage-tracker/main.py"
 alias adb="uv run --directory ~/Developer/GitHub/adb ~/Developer/GitHub/adb/adb.py"
 
-# Account switching. Primary path is now `cla <1|2|3>` (see shell/.functions) — non-rotating
-# subscription setup-tokens via CLAUDE_CODE_OAUTH_TOKEN, which OVERRIDES cswap's /login slots.
-# The cswap aliases below remain for local inspection but no longer drive which account is used.
+# Account switching (claude-swap). `cs` = TUI dashboard; `csw` rotates.
 alias cs="cswap"                          # bare TUI dashboard
 alias csl="cswap list"                    # accounts + 5h/7d usage
 alias css="cswap status"                  # current account
-# Retired: switching is now `cla` (setup-tokens). These rotated /login tokens and fought cla,
-# so they now just point to the new command instead of silently mutating cswap's /login slot.
-alias csw='print "retired — account switching is now: cla <1|2|3>  (clas to check current)"'
-alias csb='print "retired — account switching is now: cla <1|2|3>  (clas to check current)"'
-alias csa='print "retired — account switching is now: cla <1|2|3>  (clas to check current)"'
+alias csw="cswap switch"                  # rotate to next (csw 2 / csw email for specific)
+alias csb="cswap switch --strategy best"  # jump to account with most quota left
+alias csa="cswap auto"                    # auto-switch before hitting limits
 
 # =============================================================================
 # Codex
