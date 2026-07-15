@@ -365,11 +365,11 @@ dfs() {
     fi
 }
 
-# synckeys — propagate this machine's ~/.zshenv.local API/plan keys to dfs peers.
-# ~/.zshenv.local holds secrets (DEEPSEEK/MIMO_API_KEY_INT, GLM_PLAN_KEY_INT, KIMI_PLAN_KEY_CN, …) and is
-# intentionally NOT in the dotfiles repo, so `dfs` never carries it — a
-# new `export FOO_API_KEY=...` added here must reach the other machines separately.
-# synckeys upserts the local `export *_API_KEY=` / `*_PLAN_KEY=` lines onto each peer (adds
+# synckeys — propagate this machine's ~/.zshenv.local API/plan/oauth secrets to dfs peers.
+# ~/.zshenv.local holds secrets (DEEPSEEK/MIMO_API_KEY_INT, GLM_PLAN_KEY_INT, KIMI_PLAN_KEY_CN,
+# CLAUDE_ACCT{1,2,3}_OAUTH_TOKEN, …) and is intentionally NOT in the dotfiles repo, so `dfs`
+# never carries it — a new `export FOO_API_KEY=...` added here must reach the other machines separately.
+# synckeys upserts the local `export *_API_KEY=` / `*_PLAN_KEY=` / `*_OAUTH_TOKEN=` lines onto each peer (adds
 # missing, updates changed), never deletes peer-only lines or touches non-key
 # config, and never prints key values (the diff lists variable names only). Each
 # applied peer keeps a ~/.zshenv.local.bak for rollback. Dry-run by default; pass
@@ -378,14 +378,14 @@ synckeys() {
     local _c=$'\033[1;36m' _g=$'\033[32m' _y=$'\033[33m' _r=$'\033[31m' _d=$'\033[2m' _0=$'\033[0m'
     local apply=false
     [[ "${1:-}" == apply || "${1:-}" == -y ]] && apply=true
-    printf '\n  %ssynckeys%s  %s%s ~/.zshenv.local API/plan keys to peers%s\n\n' \
+    printf '\n  %ssynckeys%s  %s%s ~/.zshenv.local API/plan/oauth secrets to peers%s\n\n' \
         "$_c" "$_0" "$_d" "$([[ $apply == true ]] && print propagating || print 'dry-run —')" "$_0"
 
     local src="$HOME/.zshenv.local"
     [[ -f "$src" ]] || { printf '  %s✗%s no %s\n\n' "$_r" "$_0" "$src"; return 1; }
     local local_keys
-    local_keys=$(grep -E '^export [A-Za-z_][A-Za-z0-9_]*_(API|PLAN)_KEY(_[A-Za-z0-9]+)?=' "$src")
-    [[ -n "$local_keys" ]] || { printf '  %s✗%s no *_API_KEY / *_PLAN_KEY exports in %s\n\n' "$_r" "$_0" "$src"; return 1; }
+    local_keys=$(grep -E '^export [A-Za-z_][A-Za-z0-9_]*(_(API|PLAN)_KEY|_OAUTH_TOKEN)(_[A-Za-z0-9]+)?=' "$src")
+    [[ -n "$local_keys" ]] || { printf '  %s✗%s no *_API_KEY / *_PLAN_KEY / *_OAUTH_TOKEN exports in %s\n\n' "$_r" "$_0" "$src"; return 1; }
 
     # SSH alias:hostname -s (same peer set + self-skip as dfs)
     local dfs_peers=(macbookpro16:MacBookPro16 macmini:macmini l40s:lambda-scalar)
@@ -402,7 +402,7 @@ synckeys() {
     local h rc=0 peer_keys add upd ok push line var peer_line
     for h in "${hosts[@]}"; do
         if ! peer_keys=$(command ssh -o ConnectTimeout=10 -o BatchMode=yes "$h" \
-                'grep -E "^export [A-Za-z_][A-Za-z0-9_]*_(API|PLAN)_KEY(_[A-Za-z0-9]+)?=" ~/.zshenv.local 2>/dev/null'); then
+                'grep -E "^export [A-Za-z_][A-Za-z0-9_]*(_(API|PLAN)_KEY|_OAUTH_TOKEN)(_[A-Za-z0-9]+)?=" ~/.zshenv.local 2>/dev/null'); then
             printf '  %s%s%s  %s✗ unreachable%s\n' "$_c" "$h" "$_0" "$_r" "$_0"; rc=1; continue
         fi
         add=() upd=() ok=() push=""
@@ -439,6 +439,40 @@ synckeys() {
 
     $apply || printf '\n  %srun%s synckeys apply %sto write%s\n' "$_d" "$_0" "$_d" "$_0"
     printf '\n'; return $rc
+}
+
+# =============================================================================
+# Claude Code account switching (subscription setup-tokens)
+# =============================================================================
+
+# cla — select the active Claude Code account for this shell. The three accounts are
+# non-rotating ~1yr subscription OAuth setup-tokens (`claude setup-token`) stored in
+# ~/.zshenv.local as CLAUDE_ACCT{1,2,3}_OAUTH_TOKEN. This exports CLAUDE_CODE_OAUTH_TOKEN
+# (which takes precedence over any cswap /login slot) and clears ANTHROPIC_API_KEY so usage
+# always bills the subscription, never pay-per-token. Verify live with: claude /status
+cla() {
+    local n=${1:-} tok label
+    case "$n" in
+        1|chris|chrisliu298)  n=1; tok=$CLAUDE_ACCT1_OAUTH_TOKEN; label=chrisliu298 ;;
+        2|cy|cyliu298)        n=2; tok=$CLAUDE_ACCT2_OAUTH_TOKEN; label=cyliu298 ;;
+        3|yuhao|yuhaoliu298)  n=3; tok=$CLAUDE_ACCT3_OAUTH_TOKEN; label=yuhaoliu298 ;;
+        ''|-h|--help) print 'usage: cla <1|2|3>   1=chrisliu298  2=cyliu298  3=yuhaoliu298'; return 2 ;;
+        *) print "cla: unknown account '$n' (use 1|2|3)"; return 1 ;;
+    esac
+    if [[ -z "$tok" ]]; then
+        print "cla: CLAUDE_ACCT${n}_OAUTH_TOKEN is empty — is ~/.zshenv.local set up on this host?"; return 1
+    fi
+    unset ANTHROPIC_API_KEY
+    export CLAUDE_CODE_OAUTH_TOKEN="$tok" CLAUDE_ACTIVE_ACCT="$n"
+    print "cla: active Claude account → $n ($label)"
+}
+
+# clas — show the active Claude account and warn if ANTHROPIC_API_KEY would override the token.
+clas() {
+    print "active Claude account: ${CLAUDE_ACTIVE_ACCT:-unset}  (token: ${CLAUDE_CODE_OAUTH_TOKEN:+set}${CLAUDE_CODE_OAUTH_TOKEN:-none})"
+    [[ -n "${ANTHROPIC_API_KEY:-}" ]] && \
+        print '⚠ ANTHROPIC_API_KEY is set — it OVERRIDES the token and bills pay-per-token. run: unset ANTHROPIC_API_KEY'
+    print 'verify live: claude /status'
 }
 
 # =============================================================================

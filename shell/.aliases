@@ -68,7 +68,9 @@ alias nqu="npx quartz upload"
 alias ct="uv run --directory ~/Developer/GitHub/claude-usage-tracker ~/Developer/GitHub/claude-usage-tracker/main.py"
 alias adb="uv run --directory ~/Developer/GitHub/adb ~/Developer/GitHub/adb/adb.py"
 
-# Account switching (claude-swap). `cs` = TUI dashboard; `csw` rotates.
+# Account switching. Primary path is now `cla <1|2|3>` (see shell/.functions) — non-rotating
+# subscription setup-tokens via CLAUDE_CODE_OAUTH_TOKEN, which OVERRIDES cswap's /login slots.
+# The cswap aliases below remain for local inspection but no longer drive which account is used.
 alias cs="cswap"                          # bare TUI dashboard
 alias csl="cswap list"                    # accounts + 5h/7d usage
 alias css="cswap status"                  # current account
