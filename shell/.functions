@@ -589,6 +589,13 @@ chl(){ (( $# )) || { echo 'Usage: chl "<prompt>"'; return 1; }; _claude -p --dan
 # command string / argv, and it follows the current cla selection at launch). tmux runs the
 # argv directly (no sh -c), so extra args pass through "$@" without re-quoting.
 cch(){ tmux new-session -ds claude-channels zsh -ic 'c --channels plugin:telegram@claude-plugins-official "$@"' cch "$@" 2>/dev/null; tmux attach -t claude-channels; }
+# cll — Claude via this machine's interactive /login (macOS Keychain / .credentials.json),
+# NOT the cla setup-token. Setup-tokens are inference-only and can't open connector /
+# Remote-Control channels, so /chrome, Fable 5, and Remote Control need a /login session:
+# run `/login` once on this machine for the account you want, then use `cll` for those. It
+# coexists with the setup-token (independent credentials); to avoid refresh-token rotation,
+# /login any given account on only ONE machine.
+cll(){ env -u TMUX -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL COLORTERM=truecolor "$(whence -p claude)" --dangerously-skip-permissions "$@"; }
 # Reasoning-effort tiers (CLAUDE_CODE_EFFORT_LEVEL); plain `c` keeps the default.
 cl(){  CLAUDE_CODE_EFFORT_LEVEL=low    _claude --dangerously-skip-permissions "$@"; }
 cm(){  CLAUDE_CODE_EFFORT_LEVEL=medium _claude --dangerously-skip-permissions "$@"; }
