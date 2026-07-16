@@ -1577,6 +1577,39 @@ $live"
 
 # ── results ──────────────────────────────────────────────────────────────────
 
+# The recovery action for a gpt-pro lens whose Bash task finished without a usable
+# answer, keyed on the wrapper's recorded exit code. ONE code, ONE action, NO gaps —
+# the gap IS the bug: a hint that enumerated 124/255/4/2/3 but omitted exit 1 (the code
+# EVERY engine error returns) left the agent to improvise, and it improvised its way
+# into salvaging a failed run's response.md — a complete answer from the WRONG model —
+# into the synthesis. Print only the row for the code observed; gpt-pro-relay's SKILL.md
+# ("If it fails") stays the full reference for the `reason` behind an exit 1.
+gpt_pro_recovery_hint() {
+  local ec="$1" run="${2:-<id>}" log="$3"
+  case "$ec" in
+    1)
+      echo "           exit 1 = ENGINE ERROR — TERMINAL. result.json is already written, so a reattach only"
+      echo "           re-reads the same error. Read the reason; it IS the decision key (gpt-pro-relay SKILL.md → 'If it fails'):"
+      echo "             ssh macmini \"jq . ~/.gpt-pro/runs/$run/result.json\""
+      echo "           Recovery = a FRESH run, NEW run-id — re-burns 5-20 min of Pro quota, so ASK THE USER."
+      echo "           Never auto-resubmit: a post-send reason may still have a LIVE run (double-submit)."
+      ;;
+    2)  echo "           exit 2 = usage error (bad prompt/run-id/flag) — no quota burned. Fix the call from $log; do NOT reattach." ;;
+    3)  echo "           exit 3 = engine's 60-min cap (status: timeout) — TERMINAL. Don't reattach (a re-fetch re-times-out); surface to the user." ;;
+    4)  echo "           exit 4 = run_dir not found — the submit never landed, so no quota burned. A fresh submit (drop --run-id) is safe." ;;
+    124) echo "           exit 124 = --max-wait elapsed, run STILL PENDING — the worker is alive. Reattach: gpt-pro --run-id $run" ;;
+    255) echo "           exit 255 = SSH transport state unknown. Reattach FIRST: gpt-pro --run-id $run — only if THAT exits 4 did the submit never land." ;;
+    *)  echo "           exit $ec is not a documented gpt-pro code — do not guess. Read $log and gpt-pro-relay SKILL.md → 'If it fails'." ;;
+  esac
+  # The rule that must never be missed, stated where the agent actually is (not only in
+  # a reference file): quality is not evidence of provenance.
+  echo "           QUARANTINE: a failed run's answer file may exist and read as complete — DIAGNOSTIC ONLY."
+  echo "           (model-audit rejects rename it response.rejected.md; other errors leave it at response.md — both VOID.)"
+  echo "           NEVER read it into a lens, digest, tally, or synthesis. A failed lens is VOID: resubmit fresh"
+  echo "           (user decides, costs quota) or take an explicitly user-authorized 'Prism-Mode: partial'."
+  echo "           There is no override for the model audit, by design — cat-ing the run dir is hand-rolling one."
+}
+
 # Print each parallax peer's status + .res.md path from <id>-result.json (written
 # by `parallax`), so the orchestrator reads one structured view instead of parsing
 # the backgrounded task's stdout. Exits non-zero if any peer failed.
@@ -1641,12 +1674,16 @@ cmd_results() {
     fi
   fi
 
-  # GPT-Pro lane (orchestrator-direct) — status read from each lens's .res.md
-  # (non-empty ⇒ done) and .log (surfaces the run_id for reattach if not yet done).
-  # prism-launch never owns gpt-pro's recovery; it only reports it.
+  # GPT-Pro lane (orchestrator-direct) — status read from each lens's recorded .exit
+  # (authoritative when present), its .res.md, and its .log (surfaces the run_id).
+  # prism-launch does NOT own gpt-pro's recovery mechanics — gpt-pro-relay's SKILL.md is
+  # the full exit-code/reason reference — but it DOES own the decision key at the point of
+  # failure: the action for the exit code observed, plus the quarantine rule. A hint that
+  # reports a failure without the matching action is the middle that got a wrong-model
+  # answer salvaged into a synthesis; see gpt_pro_recovery_hint.
   if [ "$gtot" -gt 0 ]; then
     echo "gpt-pro:"
-    local gi=0 gn glens gres glog grun gexit gec
+    local gi=0 gn glens gres glog grun gexit gec gbody
     gn=$(jq '."gpt-pro" | length' "$manifest")
     while [ "$gi" -lt "$gn" ]; do
       glens=$(jq -r ".\"gpt-pro\"[$gi].lens" "$manifest")
@@ -1655,16 +1692,25 @@ cmd_results() {
       gexit="${gres%.res.md}.exit"
       # CONTRACT: prefix mirrors gpt-pro-relay/scripts/gpt-pro's stderr namespace (see clean's note).
       grun=$(sed -n 's/^gpt-pro: run_id=\([^ ]*\).*/\1/p' "$glog" 2>/dev/null | tail -1)
-      if [ -s "$gres" ]; then
-        echo "  [done ] $glens  $gres"
-      elif [ -f "$gexit" ]; then
-        # The launch wrapper recorded an exit code → the Bash task FINISHED. An empty/absent
-        # .res.md with a recorded exit means terminal-or-needs-action, NOT 'still running' —
-        # so it must register as a failure (exit 1), never as passive pending (exit 2).
+      if [ -f "$gexit" ]; then
+        # The launch wrapper recorded an exit code → the Bash task FINISHED. The RECORDED
+        # EXIT outranks the .res.md: the wrapper only writes stdout on exit 0, so a body
+        # sitting next to a non-zero exit is a partially-written failed run, never a usable
+        # answer. An empty/absent .res.md with a recorded exit means terminal-or-needs-action,
+        # NOT 'still running' — it must register as a failure (exit 1), never pending (2).
         gec=$(tr -dc '0-9' < "$gexit" 2>/dev/null); gec="${gec:-?}"
-        echo "  [FAILED] $glens  exited $gec, no .res.md — needs action (NOT still running)${grun:+  run_id=$grun}"
-        echo "           recovery (gpt-pro-relay): 124/255 → reattach 'gpt-pro --run-id ${grun:-<id>}'; 4 → fresh-submit; 2/3 → terminal. log: $glog"
-        failed=1
+        if [ "$gec" = 0 ] && [ -s "$gres" ]; then
+          echo "  [done ] $glens  $gres"
+        else
+          if [ -s "$gres" ]; then gbody="a non-empty .res.md is present but UNUSABLE"; else gbody="no .res.md"; fi
+          echo "  [FAILED] $glens  exited $gec, $gbody — needs action (NOT still running)${grun:+  run_id=$grun}"
+          gpt_pro_recovery_hint "$gec" "$grun" "$glog"
+          failed=1
+        fi
+      elif [ -s "$gres" ]; then
+        # Legacy launch (no .exit sidecar — launched without the wrapper prepare prints):
+        # a non-empty body is the only signal available.
+        echo "  [done ] $glens  $gres"
       else
         # No .res.md and no recorded exit = still running (or launched without the
         # exit-recording wrapper prepare now prints). Treat as pending.

@@ -767,7 +767,28 @@ printf '%s\n' "$RUNOUT" | grep -q 'run_id=ask-20260618-abc' && ok "gpt-pro: resu
 GEXIT="${GRES%.res.md}.exit"; printf '124\n' > "$GEXIT"
 GFOUT=$("$LAUNCH" results "$GMANO" 2>&1); rc=$?
 { [ "$rc" -eq 1 ] && printf '%s\n' "$GFOUT" | grep -q 'FAILED'; } && ok "gpt-pro: a recorded non-zero .exit with no .res.md reports FAILED, exit 1 (not pending)" || bad "gpt-pro exit-sentinel results (got $rc)"
+# the recovery hint is keyed on the OBSERVED code: 124 = worker alive -> reattach, and it
+# must NOT emit the exit-1 (terminal/fresh-run) row.
+{ printf '%s\n' "$GFOUT" | grep -q 'exit 124 = --max-wait elapsed' && printf '%s\n' "$GFOUT" | grep -q 'Reattach: gpt-pro --run-id ask-20260618-abc' \
+  && ! printf '%s\n' "$GFOUT" | grep -q 'ENGINE ERROR'; } \
+  && ok "gpt-pro: exit 124 prints the reattach row only (keyed on the observed code)" || bad "gpt-pro 124 recovery hint"
 rm -f "$GEXIT"
+# #2b: exit 1 — the code EVERY engine error returns, and the one the old hint omitted.
+# It must be present, terminal, point at result.json's reason, and gate a fresh run on the user.
+printf '1\n' > "$GEXIT"
+G1OUT=$("$LAUNCH" results "$GMANO" 2>&1); rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s\n' "$G1OUT" | grep -q 'exit 1 = ENGINE ERROR — TERMINAL'; } \
+  && ok "gpt-pro: exit 1 is a documented branch (was the missing bucket that got a wrong-model answer salvaged)" || bad "gpt-pro exit 1 hint (got $rc)"
+printf '%s\n' "$G1OUT" | grep -q 'result.json' && ok "gpt-pro: exit 1 hint points at result.json's reason as the decision key" || bad "gpt-pro exit 1 reason pointer"
+printf '%s\n' "$G1OUT" | grep -q 'ASK THE USER' && ok "gpt-pro: exit 1 hint gates the quota-burning fresh run on the user" || bad "gpt-pro exit 1 user gate"
+printf '%s\n' "$G1OUT" | grep -q 'QUARANTINE' && ok "gpt-pro: a failed lens prints the response.md quarantine rule at the point of failure" || bad "gpt-pro quarantine rule"
+# #2c: the recorded exit outranks a non-empty .res.md — a body next to a non-zero exit is a
+# partially-written failed run, never a [done] lens.
+printf 'a complete-looking body from an unverified model\n' > "$GRES"
+GQOUT=$("$LAUNCH" results "$GMANO" 2>&1); rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s\n' "$GQOUT" | grep -q 'UNUSABLE'; } \
+  && ok "gpt-pro: a non-zero .exit outranks a non-empty .res.md (no [done] on a failed run)" || bad "gpt-pro exit-outranks-body (got $rc)"
+rm -f "$GEXIT" "$GRES"
 # completed: .res.md present -> results exits 0, digest extracts the block tagged gpt-pro
 cat > "$GRES" <<'RES'
 Body of the gpt-pro answer.

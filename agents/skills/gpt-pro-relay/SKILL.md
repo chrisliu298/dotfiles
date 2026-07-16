@@ -199,7 +199,7 @@ On a remote machine `gpt-pro` runs its own poll loop for up to `--max-wait` (def
 - `run_in_background: true`
 - `timeout: 7260000` — Bash-tool timeout in **milliseconds** = **121 min**, 60 s of slack over the default `--max-wait 7200` (= 120 min) so the tool doesn't preempt the wrapper's final diagnostic. If you change `--max-wait`, set this to at least `(--max-wait + 60) × 1000`.
 
-Three clocks, inner → outer: the engine's **60-min** per-run cap → the wrapper's **`--max-wait`** poll deadline (default 120 min, SSH path) → the Bash-tool **`timeout`** (121 min). A `reason: timeout` (exit 3) is the *engine* cap firing, not `--max-wait`.
+Three clocks, inner → outer: the engine's **60-min** per-run cap → the wrapper's **`--max-wait`** poll deadline (default 120 min, SSH path) → the Bash-tool **`timeout`** (121 min). A `status: "timeout"` (exit 3) is the *engine* cap firing, not `--max-wait`.
 
 Wait for the completion notification. Do NOT poll from the agent side — the wrapper is already polling (the affirmative wait primitive is in Quick start step 4).
 
@@ -211,15 +211,26 @@ Wait for the completion notification. Do NOT poll from the agent side — the wr
 gpt-pro --run-id ask-20260611T002710Z-…    # the literal id, not "$RUN_ID"
 ```
 
-This skips submit and waits for the existing run to complete (blocking fetch on macmini, poll loop over SSH). If the run already finished but you lost the output, read it off macmini directly — quote the remote command so `~` expands on macmini, not locally:
+This skips submit and waits for the existing run to complete (blocking fetch on macmini, poll loop over SSH). If the run already finished but you lost the output, read it off macmini directly — but **read `result.json` FIRST: only `status: "ok"` makes `response.md` usable.** Quote the remote command so `~` expands on macmini, not locally:
 
 ```bash
-ssh macmini "cat ~/.gpt-pro/runs/<run_id>/response.md"
+ssh macmini "jq -r '.status, .reason, .model_audit' ~/.gpt-pro/runs/<run_id>/result.json"   # gate — must print ok
+ssh macmini "cat ~/.gpt-pro/runs/<run_id>/response.md"                                      # ONLY when status == ok
 ```
+
+**On `status: "error"` the body is QUARANTINED — diagnostic only, never an answer.** A rejected turn is complete, fluent, and on-topic; it differs from a verified one **only by provenance**, so "the text looks fine" is not a reason to use it — that inference is exactly how a GPT-5.5 answer once got laundered into a Sol lens. The two model-audit rejects rename the body to **`response.rejected.md`** (and set `rejected_response` in `result.json`) so that returning it takes deliberately naming a rejected file; every other error reason leaves it at `response.md`. **Both are void.** Recovery is a fresh run (new quota → the user decides) or an honest failure report — never a `cat`.
 
 ## Concurrency
 
-Up to `GPT_PRO_MAX_PARALLEL` (default 3) `gpt-pro` calls run in parallel — each worker gets its own tab in a single shared Chrome process. Beyond the cap, additional workers queue on a file-lock semaphore in `~/.gpt-pro/slots/` and wait for a slot to free up. Pro Extended runs are 5–20 min each, so a queued run can be in that same magnitude — don't set `--max-wait` (or the Bash-tool timeout) shorter than that.
+Up to `GPT_PRO_MAX_PARALLEL` (default **6**, clamped to a ceiling of **10**) `gpt-pro` calls run in parallel — each worker gets its own tab in a single shared Chrome process. Beyond the cap, additional workers queue on a file-lock semaphore in `~/.gpt-pro/slots/` and wait for a slot to free up (the worker logs `slot_queued`, then `slot_acquired` when it gets in). A queued run can wait **15+ min before it even reaches `sent`** (961 s observed), so total wall-clock = **queue wait + the 5–20 min run** — don't set `--max-wait` (or the Bash-tool timeout) shorter than that.
+
+**A backgrounded call with no exit code is not a failed call.** Empty output + no completion notification = **still running**. Never diagnose it as lost, and never fresh-submit over it — that double-submits a live run and double-burns quota. Confirm liveness from the stage trace before concluding anything:
+
+```bash
+ssh macmini "tail -5 ~/.gpt-pro/runs/<run_id>/worker.stderr"
+```
+
+`slot_queued` with no `slot_acquired` = queued, waiting its turn. `sent` with no `finished` = generating. Either way: **wait.**
 
 Chrome stays alive between runs (no per-call launch cost after the first) — an invoking agent never needs to tear it down. `ssh macmini gpt-pro-relay close-chrome` is **operator maintenance only** (it refuses by default if any worker is in flight; `--force` kills anyway) — don't run it as part of normal use or recovery. Raising `GPT_PRO_MAX_PARALLEL` above the default is a knob, not a free upgrade: parallel bursts on one ChatGPT Pro session are an account-side anti-abuse signal. If `network.json` starts showing 429s, captcha redirects, or unexplained `needs_reauth` after parallel use, drop it back to `1`.
 
@@ -232,21 +243,41 @@ The wrapper's **exit code** is the agent's decision key — every code maps to o
 | 0 | response on stdout (non-empty) | use it |
 | 1 | engine error, or rc 0 with an empty body (extraction failure) | read the `reason` in stderr → reason table below; if none, inspect `run_dir`. Do **not** blindly resubmit (would re-burn quota) |
 | 2 | usage error (empty/oversized prompt, bad run-id, bad flag) — no quota burned | fix the call from the stderr message; do **not** reattach |
-| 3 | worker hit the engine's 60-min cap (`reason: timeout`) | terminal — don't reattach (a re-fetch just re-times-out); inspect `streaming-*.png`, surface to the user |
+| 3 | worker hit the engine's 60-min cap (`status: "timeout"`) | terminal — don't reattach (a re-fetch just re-times-out); inspect `streaming-*.png`, surface to the user |
 | 4 | run_dir not found (reattach to a run that never landed) | the submit never reached macmini — start a **fresh** run (drop `--run-id`) |
 | 124 | `--max-wait` elapsed, run still pending | reattach: `gpt-pro --run-id <id>` (same envelope) |
 | 255 | SSH transport state unknown | reattach **first**: `gpt-pro --run-id <id>`; only if *that* exits 4 did the submit never land — then resubmit. Never start a fresh run before reattaching (risks a duplicate, double-quota run) |
 
-On a non-zero exit the engine's terminal stderr JSON carries a `reason`; for exit 1 it disambiguates the cause:
+On a non-zero exit the engine's terminal stderr JSON carries a `reason`. **Exit 1 is the catch-all — every engine error returns it** (`err()` hardcodes `exit_code: 1`; only `ok` → 0 and the two timeouts → 3 differ), so for a failed run the **`reason`, not the exit code, is the decision key**.
 
-| reason | exit | meaning | what to do |
-|---|---|---|---|
-| `needs_reauth` | 1 | session cookie missing or expired | tell the user to run `gpt-pro-relay login` on macmini |
-| `model_select_failed` | 1 | couldn't get Pro selected in the picker | selectors drifted; surface `run_dir` to the user |
-| `reasoning_mismatch` | 1 | Extended Pro chip absent after model select | same — selectors drifted |
-| `worker_exception` | 1 | Python exception in the worker | inspect `run_dir/worker.stderr` (structured stage trace) — the last `stage` before the error tells you where it died |
-| `timeout` | 3 | no completion within 60 min | inspect `run_dir/streaming-*.png` |
-| `run_id_conflict` | 2 | reattach id collided with a different run | pick a fresh run (drop `--run-id`) |
+**The chip proves EFFORT; the served slug proves MODEL.** Since the 2026-07 GPT-5.6 redesign the composer chip carries the reasoning-effort tier *only* — the model has no chip signal at all (no aria-label, no dataset key). A chip that read `"Pro"` is therefore **not** evidence the model was right; only the post-send served-slug audit is. The axes are gated separately, which is why a run can pass every pre-send check and still be rejected *after* completing.
+
+The **`sent?`** column is the resubmit-safety key: **pre-send** = the failure happened before the prompt went in, no quota burned, a fresh run is safe. **post-send / ambiguous** = quota may be spent and a live run may exist — **never auto-resubmit** (it double-submits); surface to the user.
+
+| reason | exit | sent? | meaning | what to do |
+|---|---|---|---|---|
+| `needs_reauth` | 1 | pre-send | session cookie missing or expired | user runs `gpt-pro-relay login` on macmini, then resubmit |
+| `model_select_failed` | 1 | pre-send | couldn't get Pro selected in the picker | selectors drifted; surface `run_dir` to the user |
+| `model_drift_before_send` | 1 | pre-send | chip stopped reading `"Pro"` between verify and click — fails closed *before* the send | safe to resubmit (no quota burned); if it repeats, selectors drifted |
+| `served_model_mismatch` | 1 | **post-send** | served slug outside `PRO_MODEL_SLUGS` — the wrong model answered (e.g. `gpt-5-5-pro`, not Sol's `gpt-5-6-pro`) | answer is **VOID + quarantined** to `response.rejected.md`. Never return it. Fresh run re-burns quota → **ask the user** |
+| `model_menu_mismatch` | 1 | **post-send** | slug absent and the chip-menu read confirms a non-Sol model | same as above — void, quarantined, ask the user |
+| `conversation_drift` | 1 | **post-send** | the tab moved to a *different* `/c/<id>`; extracting would return another conversation's answer | void — never salvage. Ask the user before a fresh run |
+| `browser_disconnected_after_send` | 1 | **post-send** | Chrome dropped after the send — the run may still be live | **never auto-resubmit**; check `worker.stderr`/reattach first |
+| `send_outcome_unknown` | 1 | **ambiguous** | the send click raised with no conversation captured — may or may not have sent | **never resend blind**; surface to the user |
+| `page_closed_before_conversation_url` | 1 | **ambiguous** | tab closed before the conversation URL was captured | same — never resend blind |
+| `page_recovery_exhausted` | 1 | **post-send** | tab kept closing; recovery attempts exhausted | terminal; surface `run_dir` |
+| `worker_exception` | 1 | depends | Python exception in the worker | inspect `run_dir/worker.stderr` (structured stage trace) — the last `stage` before the error tells you where it died, and whether `sent` had fired |
+| *(none — `status: "timeout"`)* | 3 | post-send | no completion within the engine's 60-min cap. Arrives as a **status, not a reason** (the dict carries no `reason` key) | terminal — inspect `run_dir/streaming-*.png`. `response.md` holds a **partial** body: audit-passed but incomplete, still not an answer |
+| `deadline_during_recovery` | 3 | post-send | generation budget ran out while recovering a closed tab | terminal — same |
+| `empty_prompt` / `prompt_too_large` | 2 | pre-send | empty stdin, or >5 MB | fix the call; no quota burned |
+| `run_id_conflict` | 2 | pre-send | reattach id collided with a *different* prompt | pick a fresh run (drop `--run-id`) |
+| `run_id_conflict_no_sha` | 2 | pre-send | run_dir exists but `meta.json` lacks a prompt hash (a prior `ask` was killed mid-write) | delete the run_dir and retry, or use a fresh `--run-id` |
+| `not_found` | 4 | — | reattached to a run that never landed | the submit never reached macmini — start a **fresh** run |
+| `wait_timeout` / `fetch_timeout` | 124 | — | `--max-wait` elapsed, **worker still alive** (`status: pending`, not an error) | reattach: `gpt-pro --run-id <id>` |
+
+`model_audit` also appears in a **successful** result — these are the fail-**open** verdicts, not errors: `verified` (slug present and allowlisted — the normal case), `model_ok_slug_missing` (slug absent but the menu confirms Sol; model confirmed, effort unverified), `unverified_missing_slug` (slug absent *and* menu unreadable — a double selector break degrades rather than bricking the tool). The two FATAL verdicts (`slug_mismatch`, `menu_mismatch`) never reach a `status: ok`; they surface as the two mismatch reasons above.
+
+Reasons you may see in `worker.stderr`'s stage trace but **never** as a caller-visible failure — they are internal log lines or other subcommands, don't treat them as your decision key: `chip_menu_open_failed`, `chip_menuitem_missing`, `closed_during_nav`, `browser_pid_not_found`, `shell_missing` (an internal tab-recovery verdict), `missing_prompt` (the detached `_run` worker), `workers_in_flight` (`close-chrome`).
 
 ## Run artifacts
 
