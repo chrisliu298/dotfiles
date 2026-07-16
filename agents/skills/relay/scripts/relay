@@ -496,10 +496,11 @@ EOF
     if [ "${#extra_env[@]}" -gt 0 ]; then peer_cmd+=("${extra_env[@]}"); fi
     # claude-env peers always run headless (claude -p). Deny two unrelated hazard
     # classes up front:
-    #   1. Multimodal Reads — deepseek-v4-pro / mimo-v2.5-pro / glm-5.2 / kimi-k2.7-code are
+    #   1. Multimodal Reads — deepseek-v4-pro / mimo-v2.5-pro / glm-5.2 / k3 are
     #      treated text-only (mimo image support lives in mimo-v2.5/-omni, not -pro;
-    #      deepseek V4 input type is text/string; glm-5.2 input modality is text; kimi
-    #      vision is unverified over the coding endpoint), so an
+    #      deepseek V4 input type is text/string; glm-5.2 input modality is text; K3
+    #      does report image/video input on the coding plan but this lane keeps it
+    #      text-only by choice), so an
     #      image/PDF Read errors (DeepSeek) or is silently dropped (GLM/Kimi/MiMo). The
     #      deny below is one shared string applied to every claude-env peer.
     #   2. Interactive consent gates — ExitPlanMode and AskUserQuestion block

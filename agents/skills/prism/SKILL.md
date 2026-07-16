@@ -154,7 +154,7 @@ Parallax is dispatched via `relay` to **different models**. Invoke `relay` direc
 | `grok-build` | xAI | `high` | independent of Anthropic/OpenAI |
 | `grok-composer` | xAI (same as grok-build) | none | fast variant; reach for a quick xAI take |
 | `glm` | Zhipu/z.ai | none (pinned max) | independent lineage |
-| `kimi` | Moonshot | none (thinking pinned) | independent lineage |
+| `kimi` | Moonshot | none (K3 is thinking-only, effort `max`) | independent lineage |
 | `deepseek` | DeepSeek (open-weight) | none (max/DeepThink) | independent lineage |
 | `mimo` | Xiaomi (open-weight) | none | independent lineage |
 

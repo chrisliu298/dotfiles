@@ -574,7 +574,10 @@ pglmhl(){ (( $# )) || { echo 'Usage: pglmhl "<prompt>"'; return 1; }; _pi_glm -p
 
 _pi_kimi(){
     [[ -n "${KIMI_PLAN_KEY_CN:-}" ]] || { echo 'KIMI_PLAN_KEY_CN not set (see ~/.zshenv.local)' >&2; return 1; }
-    KIMI_API_KEY="$KIMI_PLAN_KEY_CN" _pi --provider kimi-coding --model kimi-for-coding --thinking xhigh "$@"
+    # pi 0.80.3's kimi-coding registry predates K3: it warns "Using custom model id"
+    # but still sends the real `k3`, so this runs K3. It inherits kimi-for-coding's
+    # metadata (contextWindow 262144), which just means pi compacts early.
+    KIMI_API_KEY="$KIMI_PLAN_KEY_CN" _pi --provider kimi-coding --model k3 --thinking xhigh "$@"
 }
 pkm(){ _pi_kimi "$@"; }
 pkmc(){ _pi_kimi --continue "$@"; }
@@ -727,37 +730,41 @@ glmhl(){ (( $# )) || { echo 'Usage: glmhl "<prompt>"'; return 1; }; CLAUDE_CODE_
 # =============================================================================
 # Routes Claude Code at Moonshot's Kimi-for-Coding subscription endpoint
 # (api.kimi.com/coding/) per-invocation, so default `c`/`cc` keep using the Claude
-# subscription. On the coding plan the THINKING TOGGLE picks the model: thinking on
-# -> K2.7-Code (flagship), thinking off -> K2.6. The wrappers below pin
-# CLAUDE_CODE_EFFORT_LEVEL=max to force thinking on -> K2.7-Code. Native WebFetch +
-# WebSearch both work here (the web tools' thinking-off aux calls route to K2.6,
-# which accepts them — no 400, unlike the raw Moonshot K2.7-code endpoint). The
-# coding endpoint authenticates with ANTHROPIC_API_KEY (x-api-key), NOT
-# ANTHROPIC_AUTH_TOKEN, and ignores ANTHROPIC_MODEL (the plan picks the model); we
-# still set it for clarity. Per the Kimi Code guide we set the auto-compact window
-# to the 256K context (262144) and disable tool-search. Requires KIMI_PLAN_KEY_CN (a
-# Kimi Code Console key for the coding plan, distinct from the old Moonshot
-# pay-per-token key; see ~/.zshenv.local).
+# subscription. Getting K3 needs BOTH the plan's own model id (`k3`; see
+# `GET /v1/models` — the pay-per-token name `kimi-k3` is NOT valid here) and
+# thinking on, which the wrappers pin via CLAUDE_CODE_EFFORT_LEVEL=max. The
+# endpoint never rejects a bad selection — it 200s and silently serves a 256K
+# fallback — so verify a model swap with a >262144-token request, not an HTTP
+# status. That fallback is why the web tools work: their thinking-off aux calls
+# land on the plan's non-thinking model, so native WebFetch + WebSearch need no
+# Jina fallback. The compact window is 400000, NOT K3's nominal 1048576: the
+# endpoint caps cumulative message size at 2MB, and K3's own usage.input_tokens
+# measures prose at ~4.5 bytes/token (2MB ≈ 466K tokens), so a 1M window would
+# hard-400 before auto-compact fired. (1M is only reachable near 2 bytes/token —
+# the cap is calibrated to exactly that.) The endpoint
+# authenticates with ANTHROPIC_API_KEY (x-api-key), NOT ANTHROPIC_AUTH_TOKEN.
+# Requires KIMI_PLAN_KEY_CN (a Kimi Code Console key for the coding plan, distinct
+# from the old Moonshot pay-per-token key; see ~/.zshenv.local).
 _kimi(){
     [[ -n "${KIMI_PLAN_KEY_CN:-}" ]] || { echo 'KIMI_PLAN_KEY_CN not set (see ~/.zshenv.local)' >&2; return 1; }
     # Drop relay scripts dir from PATH so Kimi sessions can't shell out to relay.
     local _kimi_path="${PATH//$HOME\/.claude\/skills\/relay\/scripts:/}"
     _kimi_path="${_kimi_path%:$HOME/.claude/skills/relay/scripts}"
-    # Treated text-only here (K2.7-Code vision is unverified over the coding endpoint)
-    # — deny multimodal Reads, mirroring ds/mm/glm.
+    # Treated text-only here by choice — deny multimodal Reads, mirroring ds/mm/glm.
+    # (K3 does report image/video input on the plan; enabling it is a separate call.)
     local _kimi_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
     env -u TMUX -u ANTHROPIC_AUTH_TOKEN COLORTERM=truecolor \
         PATH="$_kimi_path" \
         ANTHROPIC_BASE_URL=https://api.kimi.com/coding/ \
         ANTHROPIC_API_KEY="$KIMI_PLAN_KEY_CN" \
-        ANTHROPIC_MODEL=kimi-k2.7-code \
-        ANTHROPIC_DEFAULT_OPUS_MODEL=kimi-k2.7-code \
-        ANTHROPIC_DEFAULT_SONNET_MODEL=kimi-k2.7-code \
-        ANTHROPIC_DEFAULT_HAIKU_MODEL=kimi-k2.7-code \
-        ANTHROPIC_SMALL_FAST_MODEL=kimi-k2.7-code \
-        CLAUDE_CODE_SUBAGENT_MODEL=kimi-k2.7-code \
+        ANTHROPIC_MODEL=k3 \
+        ANTHROPIC_DEFAULT_OPUS_MODEL=k3 \
+        ANTHROPIC_DEFAULT_SONNET_MODEL=k3 \
+        ANTHROPIC_DEFAULT_HAIKU_MODEL=k3 \
+        ANTHROPIC_SMALL_FAST_MODEL=k3 \
+        CLAUDE_CODE_SUBAGENT_MODEL=k3 \
         ENABLE_TOOL_SEARCH=false \
-        CLAUDE_CODE_AUTO_COMPACT_WINDOW=262144 \
+        CLAUDE_CODE_AUTO_COMPACT_WINDOW=400000 \
         "$(command -v claude)" --disallowedTools "$_kimi_deny" "$@"
 }
 km(){   CLAUDE_CODE_EFFORT_LEVEL=max _kimi --dangerously-skip-permissions "$@"; }
