@@ -1666,7 +1666,8 @@ gpt_pro_recovery_hint() {
   # The rule that must never be missed, stated where the agent actually is (not only in
   # a reference file): quality is not evidence of provenance.
   echo "           QUARANTINE: a failed run's answer file may exist and read as complete — DIAGNOSTIC ONLY."
-  echo "           (model-audit rejects rename it response.rejected.md; other errors leave it at response.md — both VOID.)"
+  echo "           (response.md exists ONLY on status:ok — a failed run's body is response.rejected.md /"
+  echo "            .partial.md / .pending.md, or absent. All VOID: the name is a backstop, not the rule.)"
   echo "           NEVER read it into a lens, digest, tally, or synthesis. A failed lens is VOID: resubmit fresh"
   echo "           (user decides, costs quota) or take an explicitly user-authorized 'Prism-Mode: partial'."
   echo "           There is no override for the model audit, by design — cat-ing the run dir is hand-rolling one."

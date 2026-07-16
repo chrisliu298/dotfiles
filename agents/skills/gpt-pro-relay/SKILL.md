@@ -277,13 +277,14 @@ The **`sent?`** column is the resubmit-safety key: **pre-send** = the failure ha
 
 `model_audit` also appears in a **successful** result — these are the fail-**open** verdicts, not errors: `verified` (slug present and allowlisted — the normal case), `model_ok_slug_missing` (slug absent but the menu confirms Sol; model confirmed, effort unverified), `unverified_missing_slug` (slug absent *and* menu unreadable — a double selector break degrades rather than bricking the tool). The two FATAL verdicts (`slug_mismatch`, `menu_mismatch`) never reach a `status: ok`; they surface as the two mismatch reasons above.
 
-Reasons you may see in `worker.stderr`'s stage trace but **never** as a caller-visible failure — they are internal log lines or other subcommands, don't treat them as your decision key: `chip_menu_open_failed`, `chip_menuitem_missing`, `closed_during_nav`, `browser_pid_not_found`, `shell_missing` (an internal tab-recovery verdict), `missing_prompt` (the detached `_run` worker), `workers_in_flight` (`close-chrome`).
+Reasons you may see in `worker.stderr`'s stage trace but **never** as a caller-visible failure — they are internal log lines or other subcommands, don't treat them as your decision key: `chip_menu_open_failed`, `chip_menuitem_missing`, `closed_during_nav`, `browser_pid_not_found`, `shell_missing` (an internal tab-recovery verdict), `missing_prompt` (the detached `_run` worker), `run_already_claimed` (a duplicate `_run` losing the run's claim to the worker that owns it — it exits touching nothing, and the owner's `result.json` is what your poll returns), `workers_in_flight` (`close-chrome`).
 
 ## Run artifacts
 
 `run_dir` lives on macmini at `~/.gpt-pro/runs/<run_id>/`:
 
-- `prompt.md`, `response.md`, `meta.json`, `result.json`
+- `prompt.md`, `meta.json`, `result.json`
+- **the answer body — under exactly one name, and the name is the verdict.** `response.md` **only** when `result.json` says `status: "ok"`; otherwise `response.rejected.md` (a model-audit reject), `response.partial.md` (timed out — never passed the completion gate), or `response.pending.md` (the run died before any verdict, so the body was never adjudicated at all). A failure before extraction publishes none of them. Only `response.md` is ever an answer; the other three are diagnostics with a complete, fluent, on-topic body — that is precisely why they are not named `response.md`.
 - `pre-send.png`, `streaming-NNN.png`, `final.png`, `error-*.png`
 - `final.html`, `network.json`
 - `worker.stdout` — detached worker's stdout (usually empty)
