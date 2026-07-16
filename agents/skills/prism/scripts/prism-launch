@@ -1050,9 +1050,10 @@ EOF
     echo "(run_in_background: true, timeout: 7260000; each is its own completion notification):"
     echo "$manifest_json" | jq -r '."gpt-pro"[] | "  gpt-pro < \(.launcher) > \(.res) 2> \(.log); printf %s \"$?\" > \((.res|rtrimstr(".res.md")) + ".exit")"'
     echo "(The trailing 'printf … > .exit' records the exit code so 'results' can tell a finished-"
-    echo "but-failed lens from one still running — copy the whole line.) On a non-zero exit, follow"
-    echo "gpt-pro-relay's recovery table (124/255 reattach with the literal run-id from the task"
-    echo ".output; 4 fresh-submit; 2/3 terminal). Never raise GPT_PRO_MAX_PARALLEL."
+    echo "but-failed lens from one still running — copy the whole line.) On a non-zero exit run"
+    echo "'$0 results $manifest' — it prints the recovery action for the exit code observed, and is"
+    echo "the ONLY place that mapping lives. Don't improvise one from a partial list: that is exactly"
+    echo "how a wrong-model answer once got salvaged into a synthesis. Never raise GPT_PRO_MAX_PARALLEL."
     echo
   fi
   echo "manifest: $manifest"
@@ -1557,7 +1558,12 @@ cmd_clean() {
       # gpt-pro-relay/scripts/gpt-pro prints "gpt-pro: run_id=<id> ...". Drift on either
       # side silently breaks recovery (no run_id → abandon/double-submit). Keep in sync;
       # pinned by the cross-file contract test in test-prism-launch.sh.
-      grun=$(sed -n 's/^gpt-pro: run_id=\([^ ]*\).*/\1/p' "$glog" 2>/dev/null | tail -1)
+      # `|| true`: with `set -o pipefail`, sed on a missing .log (a lens never launched, or
+      # launched without the 2> redirect) fails the whole substitution and `set -e` kills the
+      # lane — printing "gpt-pro:" and NOTHING else. A silent empty lane at the moment of
+      # failure is the exact defect class this block exists to prevent. No run_id is a state
+      # to report, not a reason to abort. (Pre-existing; surfaced by the exit-code tests.)
+      grun=$(sed -n 's/^gpt-pro: run_id=\([^ ]*\).*/\1/p' "$glog" 2>/dev/null | tail -1 || true)
       [ -n "$grun" ] || continue
       gres="${glog%.log}.res.md"
       [ -s "$gres" ] && continue            # completed — safe to clean
@@ -1575,6 +1581,43 @@ $live"
   echo "prism-launch: removed $matches artifact(s) matching ${base}*"
 }
 
+# ── gpt-pro lane status ──────────────────────────────────────────────────────
+
+# THE single lane-status predicate for a gpt-pro lens. `results` AND `digest` both go
+# through it so they can never disagree about what counts as usable — they did once, and
+# it was the real hole: `results` correctly called a failed lens VOID while `digest`
+# happily extracted that same body into the synthesis input, laundering it with no agent
+# decision involved.
+#
+# Sets the GP_STATE / GP_EXIT globals; call it DIRECTLY, never as `$(gpt_pro_lane_state …)`.
+# Command substitution runs it in a subshell, where the assignments die with the subshell —
+# and under `set -u` the caller then aborts on the unset global, silently swallowing the
+# whole lens. (Learned the hard way: that abort masqueraded as a clean exclusion.)
+GP_STATE=""; GP_EXIT=""
+#   done    — recorded exit 0 + non-empty body. The ONLY usable state.
+#   failed  — a recorded exit that is non-zero or unparseable. Any body is QUARANTINED.
+#   legacy  — no .exit sidecar but a non-empty body (a launch that predates the wrapper
+#             `prepare` prints). Provenance unverified — usable only after checking
+#             result.json, never silently.
+#   pending — no .exit, no body: still running.
+# The sentinel is parsed STRICTLY (^[0-9]+$): a scrub like `tr -dc 0-9` would read "-1"
+# as 1 and "1x24" as 124 — silently inventing a different row of the decision key.
+gpt_pro_lane_state() {
+  local res="$1" exitf="${1%.res.md}.exit" raw
+  GP_STATE=""; GP_EXIT=""
+  if [ -f "$exitf" ]; then
+    raw=$(tr -d '[:space:]' < "$exitf" 2>/dev/null || true)
+    case "$raw" in
+      ''|*[!0-9]*) GP_EXIT="?" ;;   # unparseable sentinel — never guess a code
+      *)           GP_EXIT="$raw" ;;
+    esac
+    if [ "$GP_EXIT" = 0 ] && [ -s "$res" ]; then GP_STATE=done; else GP_STATE=failed; fi
+    return 0
+  fi
+  if [ -s "$res" ]; then GP_STATE=legacy; else GP_STATE=pending; fi
+  return 0
+}
+
 # ── results ──────────────────────────────────────────────────────────────────
 
 # The recovery action for a gpt-pro lens whose Bash task finished without a usable
@@ -1588,18 +1631,37 @@ gpt_pro_recovery_hint() {
   local ec="$1" run="${2:-<id>}" log="$3"
   case "$ec" in
     1)
-      echo "           exit 1 = ENGINE ERROR — TERMINAL. result.json is already written, so a reattach only"
-      echo "           re-reads the same error. Read the reason; it IS the decision key (gpt-pro-relay SKILL.md → 'If it fails'):"
-      echo "             ssh macmini \"jq . ~/.gpt-pro/runs/$run/result.json\""
-      echo "           Recovery = a FRESH run, NEW run-id — re-burns 5-20 min of Pro quota, so ASK THE USER."
-      echo "           Never auto-resubmit: a post-send reason may still have a LIVE run (double-submit)."
+      echo "           exit 1 = ENGINE ERROR (the catch-all: every engine error returns 1) — the RUN is terminal."
+      echo "           If a run_id exists the engine wrote result.json, so a reattach only re-reads the same error."
+      echo "           The 'reason' — not the exit code — is the decision key (gpt-pro-relay SKILL.md → 'If it fails'):"
+      echo "             ssh macmini \"jq . ~/.gpt-pro/runs/$run/result.json\"     # no run_id? the wrapper failed pre-submit: read $log"
+      echo "           Then branch on it: a PRE-SEND reason (needs_reauth, model_select_failed, model_drift_before_send)"
+      echo "           burned no quota → resubmitting is safe. A POST-SEND/ambiguous reason (served_model_mismatch,"
+      echo "           conversation_drift, browser_disconnected_after_send, send_outcome_unknown) may have a LIVE run and"
+      echo "           costs 5-20 min of Pro quota to redo → NEVER auto-resubmit; ASK THE USER."
       ;;
-    2)  echo "           exit 2 = usage error (bad prompt/run-id/flag) — no quota burned. Fix the call from $log; do NOT reattach." ;;
+    2)  echo "           exit 2 = usage error (bad prompt/run-id/flag) — pre-submit, no quota burned. Fix the call from $log; do NOT reattach." ;;
     3)  echo "           exit 3 = engine's 60-min cap (status: timeout) — TERMINAL. Don't reattach (a re-fetch re-times-out); surface to the user." ;;
     4)  echo "           exit 4 = run_dir not found — the submit never landed, so no quota burned. A fresh submit (drop --run-id) is safe." ;;
-    124) echo "           exit 124 = --max-wait elapsed, run STILL PENDING — the worker is alive. Reattach: gpt-pro --run-id $run" ;;
+    124) echo "           exit 124 = --max-wait elapsed, run STILL PENDING — the worker is ALIVE. Reattach: gpt-pro --run-id $run  (never fresh-submit over it)" ;;
     255) echo "           exit 255 = SSH transport state unknown. Reattach FIRST: gpt-pro --run-id $run — only if THAT exits 4 did the submit never land." ;;
-    *)  echo "           exit $ec is not a documented gpt-pro code — do not guess. Read $log and gpt-pro-relay SKILL.md → 'If it fails'." ;;
+    126|127)
+      echo "           exit $ec = the 'gpt-pro' wrapper could not be executed/found (PATH or permissions) — the lens NEVER RAN."
+      echo "           No quota burned and no run exists. Fix the invocation (fall back to ~/.claude/skills/gpt-pro-relay/scripts/gpt-pro), then relaunch."
+      ;;
+    \?)
+      echo "           the .exit sentinel is unparseable — the code is UNKNOWN, so no row applies. Do NOT guess one."
+      echo "           Treat as needs-action: read $log, and confirm liveness before any resubmit (see QUARANTINE)."
+      ;;
+    *)
+      if [ "$ec" -gt 128 ] 2>/dev/null; then
+        echo "           exit $ec = killed by signal $((ec - 128)) — the local Bash task died, which says NOTHING about the"
+        echo "           macmini worker: it likely SURVIVED (that is the point of the detached worker). Reattach, don't resubmit:"
+        echo "             gpt-pro --run-id $run"
+      else
+        echo "           exit $ec is not a documented gpt-pro code — do not guess. Read $log and gpt-pro-relay SKILL.md → 'If it fails'."
+      fi
+      ;;
   esac
   # The rule that must never be missed, stated where the agent actually is (not only in
   # a reference file): quality is not evidence of provenance.
@@ -1691,26 +1753,34 @@ cmd_results() {
       glog=$(jq -r ".\"gpt-pro\"[$gi].log" "$manifest")
       gexit="${gres%.res.md}.exit"
       # CONTRACT: prefix mirrors gpt-pro-relay/scripts/gpt-pro's stderr namespace (see clean's note).
-      grun=$(sed -n 's/^gpt-pro: run_id=\([^ ]*\).*/\1/p' "$glog" 2>/dev/null | tail -1)
-      if [ -f "$gexit" ]; then
-        # The launch wrapper recorded an exit code → the Bash task FINISHED. The RECORDED
-        # EXIT outranks the .res.md: the wrapper only writes stdout on exit 0, so a body
-        # sitting next to a non-zero exit is a partially-written failed run, never a usable
-        # answer. An empty/absent .res.md with a recorded exit means terminal-or-needs-action,
-        # NOT 'still running' — it must register as a failure (exit 1), never pending (2).
-        gec=$(tr -dc '0-9' < "$gexit" 2>/dev/null); gec="${gec:-?}"
-        if [ "$gec" = 0 ] && [ -s "$gres" ]; then
-          echo "  [done ] $glens  $gres"
-        else
-          if [ -s "$gres" ]; then gbody="a non-empty .res.md is present but UNUSABLE"; else gbody="no .res.md"; fi
-          echo "  [FAILED] $glens  exited $gec, $gbody — needs action (NOT still running)${grun:+  run_id=$grun}"
-          gpt_pro_recovery_hint "$gec" "$grun" "$glog"
-          failed=1
-        fi
-      elif [ -s "$gres" ]; then
-        # Legacy launch (no .exit sidecar — launched without the wrapper prepare prints):
-        # a non-empty body is the only signal available.
+      # `|| true`: with `set -o pipefail`, sed on a missing .log (a lens never launched, or
+      # launched without the 2> redirect) fails the whole substitution and `set -e` kills the
+      # lane — printing "gpt-pro:" and NOTHING else. A silent empty lane at the moment of
+      # failure is the exact defect class this block exists to prevent. No run_id is a state
+      # to report, not a reason to abort. (Pre-existing; surfaced by the exit-code tests.)
+      grun=$(sed -n 's/^gpt-pro: run_id=\([^ ]*\).*/\1/p' "$glog" 2>/dev/null | tail -1 || true)
+      # ONE predicate, shared with digest — see gpt_pro_lane_state (call it directly: it
+      # sets GP_STATE/GP_EXIT, and a $(subshell) would drop them).
+      gpt_pro_lane_state "$gres"; gstate="$GP_STATE"; gec="$GP_EXIT"
+      if [ "$gstate" = done ]; then
         echo "  [done ] $glens  $gres"
+      elif [ "$gstate" = failed ]; then
+        # A recorded exit means the Bash task FINISHED, so this is terminal-or-needs-action,
+        # never 'still running' — it must register as a failure (1), never pending (2). The
+        # exit outranks the body: the wrapper only writes stdout on exit 0, so a body next to
+        # a non-zero exit is a partially-written failed run, never a usable answer.
+        if [ -s "$gres" ]; then gbody="a non-empty .res.md is present but UNUSABLE"; else gbody="no .res.md"; fi
+        echo "  [FAILED] $glens  exited $gec, $gbody — needs action (NOT still running)${grun:+  run_id=$grun}"
+        gpt_pro_recovery_hint "$gec" "$grun" "$glog"
+        failed=1
+      elif [ "$gstate" = legacy ]; then
+        # No .exit sidecar (a launch predating the wrapper `prepare` prints). A body alone is
+        # NOT provenance: an interrupted write leaves a partial body and no sentinel. Surface
+        # it as unverified rather than clean — don't fail the run, but don't bless it either.
+        echo "  [done?] $glens  $gres"
+        echo "           no .exit sidecar — the body is UNVERIFIED (a killed task leaves a partial one)."
+        echo "           Confirm before use: ssh macmini \"jq -r .status ~/.gpt-pro/runs/${grun:-<id>}/result.json\" must print ok."
+        echo "           Relaunch via the command 'prepare' prints — it records .exit, which makes this check unnecessary."
       else
         # No .res.md and no recorded exit = still running (or launched without the
         # exit-recording wrapper prepare now prints). Treat as pending.
@@ -1845,17 +1915,26 @@ cmd_digest() {
     fi
 
     # GPT-Pro lane (orchestrator-direct) — from each lens's .res.md (own lineage).
+    # PROVENANCE GATE: gate every lens on the SAME predicate `results` uses. The digest is
+    # the synthesis INPUT, so a failed lens leaking in here launders it automatically — no
+    # agent decision required. A complete, on-topic body from an unverified model is exactly
+    # what the engine's audit rejected; quality is not evidence of provenance.
     if [ "$gtot" -gt 0 ]; then
-      local gi=0 gn glens gres
+      local gi=0 gn glens gres gstate
       gn=$(jq '."gpt-pro" | length' "$manifest")
       while [ "$gi" -lt "$gn" ]; do
         glens=$(jq -r ".\"gpt-pro\"[$gi].lens" "$manifest")
         gres=$(jq -r ".\"gpt-pro\"[$gi].res" "$manifest")
+        gpt_pro_lane_state "$gres"; gstate="$GP_STATE"
         total=$((total + 1))
         printf '## gpt-pro · %s  (lineage: gpt-pro)\n' "$glens"
-        if [ ! -s "$gres" ]; then
-          printf '_gpt-pro lens pending or failed — no response yet (%s)_\n\n' "$gres"; warns=$((warns + 1))
+        if [ "$gstate" = failed ]; then
+          printf '_gpt-pro lens FAILED (exited %s) — VOID, excluded from this digest. Any body at %s is quarantined: it is NOT this lens'"'"'s answer and must not enter the synthesis. Run `%s results` for the recovery action._\n\n' \
+            "$GP_EXIT" "$gres" "$0"; warns=$((warns + 1))
+        elif [ "$gstate" = pending ]; then
+          printf '_gpt-pro lens still pending — no response yet (%s)_\n\n' "$gres"; warns=$((warns + 1))
         else
+          [ "$gstate" = legacy ] && printf '_⚠ no `.exit` sidecar — body UNVERIFIED; confirm `result.json` status is ok before trusting this lens._\n\n'
           block=$(digest_extract_block "$gres")
           if [ -n "$(printf '%s' "$block" | tr -d '[:space:]')" ]; then
             printf '%s\n\n_full: %s_\n\n' "$block" "$gres"; extracted=$((extracted + 1))

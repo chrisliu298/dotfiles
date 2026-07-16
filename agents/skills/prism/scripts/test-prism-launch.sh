@@ -777,8 +777,12 @@ rm -f "$GEXIT"
 # It must be present, terminal, point at result.json's reason, and gate a fresh run on the user.
 printf '1\n' > "$GEXIT"
 G1OUT=$("$LAUNCH" results "$GMANO" 2>&1); rc=$?
-{ [ "$rc" -eq 1 ] && printf '%s\n' "$G1OUT" | grep -q 'exit 1 = ENGINE ERROR — TERMINAL'; } \
+{ [ "$rc" -eq 1 ] && printf '%s\n' "$G1OUT" | grep -q 'exit 1 = ENGINE ERROR'; } \
   && ok "gpt-pro: exit 1 is a documented branch (was the missing bucket that got a wrong-model answer salvaged)" || bad "gpt-pro exit 1 hint (got $rc)"
+# exit 1 must not prescribe one blanket recovery: pre-send reasons are safe to resubmit,
+# post-send ones may have a live run. The hint has to make the agent branch on the reason.
+{ printf '%s\n' "$G1OUT" | grep -q 'PRE-SEND' && printf '%s\n' "$G1OUT" | grep -q 'POST-SEND'; } \
+  && ok "gpt-pro: exit 1 hint splits pre-send (safe) from post-send (never auto-resubmit)" || bad "gpt-pro exit 1 pre/post split"
 printf '%s\n' "$G1OUT" | grep -q 'result.json' && ok "gpt-pro: exit 1 hint points at result.json's reason as the decision key" || bad "gpt-pro exit 1 reason pointer"
 printf '%s\n' "$G1OUT" | grep -q 'ASK THE USER' && ok "gpt-pro: exit 1 hint gates the quota-burning fresh run on the user" || bad "gpt-pro exit 1 user gate"
 printf '%s\n' "$G1OUT" | grep -q 'QUARANTINE' && ok "gpt-pro: a failed lens prints the response.md quarantine rule at the point of failure" || bad "gpt-pro quarantine rule"
@@ -788,7 +792,70 @@ printf 'a complete-looking body from an unverified model\n' > "$GRES"
 GQOUT=$("$LAUNCH" results "$GMANO" 2>&1); rc=$?
 { [ "$rc" -eq 1 ] && printf '%s\n' "$GQOUT" | grep -q 'UNUSABLE'; } \
   && ok "gpt-pro: a non-zero .exit outranks a non-empty .res.md (no [done] on a failed run)" || bad "gpt-pro exit-outranks-body (got $rc)"
+
+# #2d: THE PROVENANCE GATE. `digest` is the synthesis INPUT, so a failed lens leaking in
+# launders a wrong-model answer with no agent decision at all — `results` calling it VOID is
+# worthless if `digest` serves it anyway. Both must gate on the same predicate.
+cat > "$GRES" <<'RES'
+Complete, fluent, on-topic — and from the wrong model.
+
+## Digest
+- Position: LAUNDERED-WRONG-MODEL-SENTINEL
+- Changes if: none
+RES
+"$LAUNCH" digest "$GMANO" >/dev/null 2>&1
+GDG="$TMP/prism-gpo-digest.md"
+! grep -q 'LAUNDERED-WRONG-MODEL-SENTINEL' "$GDG" \
+  && ok "gpt-pro: digest EXCLUDES a failed lens (no wrong-model answer reaches the synthesis input)" || bad "gpt-pro digest launders a failed lens"
+grep -q 'VOID, excluded from this digest' "$GDG" \
+  && ok "gpt-pro: digest says WHY the lens is absent (void, not merely missing)" || bad "gpt-pro digest void reason"
+
+# #2e: the sentinel is parsed strictly — a digit-scrub would read "-1" as 1 and "1x24" as
+# 124, silently inventing a different row of the decision key.
+printf -- '-1\n' > "$GEXIT"
+GNOUT=$("$LAUNCH" results "$GMANO" 2>&1); rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s\n' "$GNOUT" | grep -q 'unparseable' && ! printf '%s\n' "$GNOUT" | grep -q 'ENGINE ERROR'; } \
+  && ok "gpt-pro: an unparseable .exit reports UNKNOWN, never a guessed code" || bad "gpt-pro strict exit parse (got $rc)"
+
+# #2f: a signal-killed local task says nothing about the detached macmini worker — it likely
+# survived, so the action is reattach, never fresh-submit (which would double-burn quota).
+printf '137\n' > "$GEXIT"
+GSOUT=$("$LAUNCH" results "$GMANO" 2>&1)
+{ printf '%s\n' "$GSOUT" | grep -q 'killed by signal 9' && printf '%s\n' "$GSOUT" | grep -qi 'reattach'; } \
+  && ok "gpt-pro: exit 128+N is read as a signal death → reattach (worker likely alive)" || bad "gpt-pro signal exit row"
+
+# #2g: 126/127 = the wrapper never executed → the lens never ran, no quota, safe to relaunch.
+# (Capture first — results exits 1 and pipefail would mask the grep, as noted above.)
+printf '127\n' > "$GEXIT"
+G7OUT=$("$LAUNCH" results "$GMANO" 2>&1)
+printf '%s\n' "$G7OUT" | grep -q 'NEVER RAN' \
+  && ok "gpt-pro: exit 126/127 = wrapper not executable, lens never ran" || bad "gpt-pro 126/127 row"
 rm -f "$GEXIT" "$GRES"
+
+# #2h: legacy launch (no .exit sidecar) — a body alone is not provenance; report unverified
+# rather than blessing it as clean [done].
+printf 'a body with no exit sentinel\n' > "$GRES"
+GLOUT=$("$LAUNCH" results "$GMANO" 2>&1)
+{ printf '%s\n' "$GLOUT" | grep -q 'done?' && printf '%s\n' "$GLOUT" | grep -q 'UNVERIFIED'; } \
+  && ok "gpt-pro: a legacy no-.exit body reports [done?] UNVERIFIED, not clean [done]" || bad "gpt-pro legacy unverified"
+rm -f "$GRES"
+
+# #2i: prepare must NOT ship a second, partial recovery table — that drift is the whole bug.
+PREPOUT=$("$LAUNCH" prepare --config "$GCO" 2>&1)
+! printf '%s\n' "$PREPOUT" | grep -q '124/255 reattach' \
+  && ok "gpt-pro: prepare no longer prints a partial recovery table (points at results instead)" || bad "gpt-pro prepare partial table"
+
+# #2j: a lens with NO .log (never launched, or launched without the 2> redirect) must still
+# report a row. pipefail + sed-on-a-missing-file used to abort the whole lane under set -e,
+# printing "gpt-pro:" and nothing else — a silent empty lane is the defect class this
+# command exists to prevent.
+GNOLOG="$TMP/nolog"; mkdir -p "$GNOLOG"
+printf '## Full Question\nq\n\n## Context\nc\n' > "$GNOLOG/pkt.md"
+jq -n --arg p "$GNOLOG/pkt.md" '{shared_packet:$p,references:[],parallax:[],subagents:[],"gpt-pro":[{lens:"Deep",lens_desc:"d"}]}' > "$GNOLOG/cfg.json"
+"$LAUNCH" prepare --config "$GNOLOG/cfg.json" >/dev/null 2>&1
+NLOUT=$("$LAUNCH" results "$GNOLOG/pkt-manifest.json" 2>&1); rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s\n' "$NLOUT" | grep -q 'pending'; } \
+  && ok "gpt-pro: a lens with no .log still reports a row (no silent empty lane)" || bad "gpt-pro missing-log silent abort (got $rc)"
 # completed: .res.md present -> results exits 0, digest extracts the block tagged gpt-pro
 cat > "$GRES" <<'RES'
 Body of the gpt-pro answer.
