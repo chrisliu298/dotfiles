@@ -11,7 +11,7 @@ outdir="${3:-.}"
 mkdir -p "$outdir"
 
 # peer:effort  (empty effort => no --effort flag; scales are vendor-specific)
-peers=( "gpt:xhigh" "grok-build:high" "grok-composer:" "glm:" "kimi:" "deepseek:" "mimo:" )
+peers=( "gpt:xhigh" "grok-build:high" "glm:" "kimi:" "deepseek:" "mimo:" )
 for pe in "${peers[@]}"; do
   peer="${pe%%:*}"; eff="${pe##*:}"
   args=( --to "$peer" --name "eval-$label-$peer" )

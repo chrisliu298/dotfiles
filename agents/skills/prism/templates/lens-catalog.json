@@ -1,5 +1,5 @@
 {
-  "_comment": "Single source of truth for Prism's lens catalog: per-lens weighing-posture descriptions (grouped by axis family) and the --preset task-type lens sets. prism-launch reads this (lens_desc_for, preset_lenses); SKILL.md's Lens Axes table and the suggested-lenses guidance describe it but this file is authoritative. Preset arrays are in canonical tier order (heaviest-reasoning lens first, so it lands on the subagent/gpt slot). The menu is open — add a lens with a one-sentence axis, or a preset of eight names drawn from .lenses. test-prism-launch.sh asserts every preset name is a known lens and every lens.axis is in .axes.",
+  "_comment": "Single source of truth for Prism's lens catalog: per-lens weighing-posture descriptions (grouped by axis family) and the --preset task-type lens sets. prism-launch reads this (lens_desc_for, preset_lenses); SKILL.md's Lens Axes table and the suggested-lenses guidance describe it but this file is authoritative. Preset arrays are in canonical tier order (heaviest-reasoning lens first, so it lands on the subagent/gpt slot). The menu is open — add a lens with a one-sentence axis, or a preset of seven names drawn from .lenses. test-prism-launch.sh asserts every preset name is a known lens and every lens.axis is in .axes.",
   "axes": ["Search", "Reframe", "Evidence", "Mechanism", "Challenge", "Human/Value", "Delivery", "Time"],
   "lenses": [
     { "name": "Breadth-Weighted",   "axis": "Search",      "desc": "weigh wide coverage of options and angles over depth" },
@@ -24,12 +24,12 @@
     { "name": "Temporal",           "axis": "Time",        "desc": "weigh how the answer changes over time: lifecycle, sequencing, reversibility (one-way vs two-way doors), path dependence" }
   ],
   "presets": {
-    "review":    ["Adversarial", "Correctness", "Simplicity", "Depth-Weighted", "Temporal", "Outsider", "Stakeholder", "Causal"],
-    "design":    ["First-Principles", "Adversarial", "Simplicity", "Stakeholder", "Temporal", "Empirical", "Breadth-Weighted", "Causal"],
-    "diagnosis": ["Causal", "Falsification", "Empirical", "Depth-Weighted", "Temporal", "Outsider", "Stakeholder", "Pragmatist"],
-    "compare":   ["First-Principles", "Empirical", "Simplicity", "Stakeholder", "Temporal", "Disconfirming", "Breadth-Weighted", "Causal"],
-    "research":  ["First-Principles", "Breadth-Weighted", "Depth-Weighted", "Outsider", "Empirical", "Lateral-Generative", "Temporal", "Stakeholder"],
-    "decision":  ["First-Principles", "Empirical", "Stakeholder", "Temporal", "Pragmatist", "Disconfirming", "Breadth-Weighted", "Causal"],
-    "writing":   ["Adversarial", "Clarity", "Audience", "Simplicity", "Outsider", "Empirical", "Depth-Weighted", "Temporal"]
+    "review":    ["Adversarial", "Correctness", "Simplicity", "Depth-Weighted", "Temporal", "Outsider", "Stakeholder"],
+    "design":    ["First-Principles", "Adversarial", "Simplicity", "Stakeholder", "Temporal", "Empirical", "Breadth-Weighted"],
+    "diagnosis": ["Causal", "Falsification", "Empirical", "Depth-Weighted", "Temporal", "Outsider", "Stakeholder"],
+    "compare":   ["First-Principles", "Empirical", "Simplicity", "Stakeholder", "Temporal", "Disconfirming", "Breadth-Weighted"],
+    "research":  ["First-Principles", "Breadth-Weighted", "Depth-Weighted", "Outsider", "Empirical", "Lateral-Generative", "Temporal"],
+    "decision":  ["First-Principles", "Empirical", "Stakeholder", "Temporal", "Pragmatist", "Disconfirming", "Breadth-Weighted"],
+    "writing":   ["Adversarial", "Clarity", "Audience", "Simplicity", "Outsider", "Empirical", "Depth-Weighted"]
   }
 }

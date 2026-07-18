@@ -4,7 +4,7 @@ Read this when hand-authoring a dispatch beyond what `scaffold` prints for you: 
 
 The partial-roster / `Variant: no-subagents` authorization rules stay in SKILL.md (*Execution Spine* → Roster contract) — that authority gate is prose-only (`prepare` records a `Partial-User-Quote` but cannot prove it), so it is not extracted here.
 
-## Canonical default (all eight tiers at N=1, one lens per axis family)
+## Canonical default (all seven tiers at N=1, one lens per axis family)
 
 ```text
 Shared-Packet: /tmp/prism-<id>.md
@@ -26,11 +26,6 @@ Type: parallax
 To: grok-build
 Lens: First-Principles
 Lens-Desc: weigh how this looks rebuilt from the goal up
-
-Type: parallax
-To: grok-composer
-Lens: Causal
-Lens-Desc: weigh the cause-and-effect chain behind the outcome
 
 Type: parallax
 To: glm
@@ -59,4 +54,4 @@ Lens-Desc: weigh the full option space over depth on any one
 
 ## What prepare enforces (the --dispatch path)
 
-So the SKILL.md prose can defer to it: packet has the required sections; no dispatch-only key misplaced in the packet body (`Include:`/`Include-*`/`Shared-Packet:`/`Prism-*`/`Variant:`/`Partial-User-Quote:` belong in the **dispatch** — in the packet they are inert and silently attach nothing, so `prepare` bounces before mutating it; fenced code blocks are exempt); canonical blocks injected; no surviving `{{slot}}`; each launcher's first line is `CRITICAL:`; dispatch shape valid (`Type`, `To` ∈ registry, required keys); `Prism-Mode: full` floor-checks every standard tier + subagents at N and gpt-pro at M, naming any offender; `Prism-Mode: partial` requires a non-empty quote; `Variant: no-subagents` (partial only, requires `Prism-N ≥ 1` + quote, rejected on `full`) floor-checks all 7 parallax tiers at N + **zero** subagents + gpt-pro at M, rejecting a smuggled subagent record; effort registry-derived (`Effort:` rejected); duplicate lens/relay-name/slug rejected; *declared* gpt-pro references + 5 MB caps validated (an **absent** reference source defaults to packet-only with a warning, not an abort); `N=0` legal only with `M ≥ 1`; malformed `.shape` rejected; injection tokens (`</`, `{{`) rejected; zero-records rejected. `parallax` refuses a manifest with no valid `.shape`.
+So the SKILL.md prose can defer to it: packet has the required sections; no dispatch-only key misplaced in the packet body (`Include:`/`Include-*`/`Shared-Packet:`/`Prism-*`/`Variant:`/`Partial-User-Quote:` belong in the **dispatch** — in the packet they are inert and silently attach nothing, so `prepare` bounces before mutating it; fenced code blocks are exempt); canonical blocks injected; no surviving `{{slot}}`; each launcher's first line is `CRITICAL:`; dispatch shape valid (`Type`, `To` ∈ registry, required keys); `Prism-Mode: full` floor-checks every standard tier + subagents at N and gpt-pro at M, naming any offender; `Prism-Mode: partial` requires a non-empty quote; `Variant: no-subagents` (partial only, requires `Prism-N ≥ 1` + quote, rejected on `full`) floor-checks all 6 parallax tiers at N + **zero** subagents + gpt-pro at M, rejecting a smuggled subagent record; effort registry-derived (`Effort:` rejected); duplicate lens/relay-name/slug rejected; *declared* gpt-pro references + 5 MB caps validated (an **absent** reference source defaults to packet-only with a warning, not an abort); `N=0` legal only with `M ≥ 1`; malformed `.shape` rejected; injection tokens (`</`, `{{`) rejected; zero-records rejected. `parallax` refuses a manifest with no valid `.shape`.

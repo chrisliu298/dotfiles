@@ -45,7 +45,7 @@ compare. The relay-peer legs are scripted; the Claude leg and the judge need Cla
    ./build-runner.sh --none runner_base.md                  # model-default baseline
    ```
 2. **Dispatch each runner** to the agents:
-   - Cross-model peers (GPT/Grok×2/GLM/Kimi/DeepSeek/MiMo): `./run-peers.sh runner_cand.md cand ./out`
+   - Cross-model peers (GPT/Grok/GLM/Kimi/DeepSeek/MiMo): `./run-peers.sh runner_cand.md cand ./out`
    - Claude: hand the runner file to a Claude subagent (Agent tool) — "read this file, follow it,
      output only the numbered replies."
    - (gpt-pro is intentionally excluded: slow + quota.)

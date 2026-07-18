@@ -61,15 +61,15 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
 │  │  Claude × N  │                   │   (peers × N)    │                          │
 │  │  (Agent tool)│                   └─────────┬────────┘                          │
 │  └──────────────┘                             │ one backgrounded fan-out          │
-│   same model →          ┌─────┬──────────┬─────────┼────────┬────┬────┐           │
-│   shared blind spots,   ▼     ▼          ▼         ▼        ▼    ▼    ▼           │
-│   so convergence here   GPT   Grok-Build Grok-Comp GLM Kimi DeepSeek MiMo         │
-│   is DISCOUNTED        (OpenAI) (xAI) (xAI fast) (z.ai) (Moon) (V4-Pro) (Xiaomi)  │
-│                         └─────┴──────────┴─────────┴────────┴────┴────┘           │
+│   same model →          ┌─────┬──────────┬────────┬────┬────┐                     │
+│   shared blind spots,   ▼     ▼          ▼        ▼    ▼    ▼                     │
+│   so convergence here   GPT   Grok-Build GLM  Kimi DeepSeek MiMo                  │
+│   is DISCOUNTED        (OpenAI) (xAI)  (z.ai) (Moon) (V4-Pro) (Xiaomi)            │
+│                         └─────┴──────────┴────────┴────┴────┘                     │
 │                              independent lineages → catch the blind spots the     │
 │                              others share → dissent here carries OUTSIZED weight  │
 └───────────────────────────────────────────────────────────────────────────────────┘
-     Default N=1, M=0:  8×1+0 = 8 dispatched + self = 9 perspectives   (general: 8N+M dispatched, 8N+M+1 perspectives)
+     Default N=1, M=0:  7×1+0 = 7 dispatched + self = 8 perspectives   (general: 7N+M dispatched, 7N+M+1 perspectives)
 ```
 
 * **Subagents** are dispatched with the **Agent tool** (only Claude can).
@@ -85,11 +85,11 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
    prism  [N|Nns]  [M]  <question>
           │         │
           │         └─ M gpt-pro lenses (optional second number; default 0)
-          └─ how many of EACH of the eight standard tiers (default 1; the full 8
+          └─ how many of EACH of the seven standard tiers (default 1; the full 7
              is the floor — a partial fan needs an explicit exclusion). Dispatched
-             = 8N+M; perspectives = 8N+M+1. 0 = drop all eight (gpt-pro-only), M ≥ 1.
-             Nns (e.g. 1ns) = no-subagents: drop the Claude tier, keep 7 parallax at
-             N → dispatched 7N+M, perspectives 7N+M+1. Same as "<q> no subagents".
+             = 7N+M; perspectives = 7N+M+1. 0 = drop all seven (gpt-pro-only), M ≥ 1.
+             Nns (e.g. 1ns) = no-subagents: drop the Claude tier, keep 6 parallax at
+             N → dispatched 6N+M, perspectives 6N+M+1. Same as "<q> no subagents".
 
    No reasoning-effort knob — GPT always xhigh, Grok-Build always high.
 
@@ -97,7 +97,7 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
    prism 2 Which architecture?          → 2 of each, no gpt-pro
    prism 2 3 Bet-the-company call?      → 2 of each + 3 gpt-pro lenses
    prism 0 4 Which approach?            → gpt-pro-only: 4 lenses + self (no standard tiers)
-   prism 1ns 1 Why does X?              → no-subagents: 7 parallax + 1 gpt-pro + self (/9)
+   prism 1ns 1 Why does X?              → no-subagents: 6 parallax + 1 gpt-pro + self (/8)
    prism no deepseek, why X?            → natural-language deviations (exclude/count)
    prism no subagents, why X?           → no-subagents (external-only) via natural language
 ```
@@ -135,8 +135,7 @@ backgrounded process. The Integrator stays in the loop for the judgment.
        ├─ Agent call × N (zero in a no-subagents run) ──────────►  Claude subagents
        │                                                               │
        └─ parallax (bg) ─► ┌── relay ──► gpt ─────────┐                │
-                           ├── relay ──► grok-build   │                │
-                           ├── relay ──► grok-composer├─► <id>-result.json
+                           ├── relay ──► grok-build   ├─► <id>-result.json
                            ├── relay ──► glm          │   + .relay/…res.md (×peer)
                            ├── relay ──► kimi         │                │
                            ├── relay ──► deepseek     │                │
@@ -169,10 +168,10 @@ backgrounded process. The Integrator stays in the loop for the judgment.
               └ print a fill-in dispatch skeleton (the Prism-Mode: full / Prism-N / Prism-M
                 roster contract + records in canonical order; effort is CLI-derived, never authored).
                 --preset review|design|diagnosis|compare|research|decision|writing
-                pre-fills eight lenses by task type (N=1). --m M adds M gpt-pro records.
+                pre-fills seven lenses by task type (N=1). --m M adds M gpt-pro records.
                 --out writes a prepare-ready file (needs --preset + --packet). --no-subagents
                 emits the external-only shape (Prism-Mode: partial + Variant: no-subagents,
-                7 parallax at N, zero subagents); with --out add --partial-user-quote.
+                6 parallax at N, zero subagents); with --out add --partial-user-quote.
 
   prepare   --dispatch <file>     (or --config <json>)  [--expect-n N] [--expect-m M]
               └ validate, render every launcher from templates, write the manifest,
@@ -183,7 +182,7 @@ backgrounded process. The Integrator stays in the loop for the judgment.
                 Prism-Mode: partial + a verbatim Partial-User-Quote (recorded in manifest
                 .shape). The "drop only the Claude subagent tier, keep the parallax fan"
                 case is the recognized Prism-Mode: partial + Variant: no-subagents shape
-                (carries Prism-N/Prism-M; floor-checks 7 parallax at N + 0 subagents;
+                (carries Prism-N/Prism-M; floor-checks 6 parallax at N + 0 subagents;
                 scaffold --no-subagents emits it). --config stays lenient. CLI --expect-n/-m
                 override the contract's N/M on full/unchecked runs only — ignored on any
                 partial run (incl. Variant: no-subagents), which floor-check off their own Prism-N/M.
@@ -302,17 +301,16 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
 |---|---|---|---|---|
 | `gpt` | GPT | OpenAI | `xhigh` | agentic code-review strength |
 | `grok-build` | Grok 4.5 | xAI | `high` | independent of Anthropic/OpenAI |
-| `grok-composer` | Composer 2.5 fast | xAI (same as grok-build) | — | fast variant; quick xAI take |
 | `glm` | GLM-5.2 | Zhipu / z.ai (Anthropic-compatible endpoint) | pinned `max` | `reasoning_effort: max`, like DeepSeek |
 | `kimi` | Kimi K3 | Moonshot (Kimi-for-Coding plan, `api.kimi.com/coding/`) | thinking pinned | model id `k3`; `CLAUDE_CODE_EFFORT_LEVEL=max` (K3 is thinking-only); ignores `--effort` |
 | `deepseek` | DeepSeek V4-Pro | DeepSeek (open-weight) | `max` (DeepThink) | |
 | `mimo` | MiMo-V2.5-Pro | Xiaomi (open-weight) | — | |
 
-Grok Build + Grok Composer are **two dispatched tiers** but **one lineage** for lens-assignment and synthesis weighting. Web: every peer effectively has WebFetch + WebSearch — the two native gaps (MiMo WebSearch, GLM WebFetch) each have a verified Jina fallback. `relay/peers.json` is the single source of truth for endpoints, effort knobs, and launcher-template style.
+Each peer is its **own lineage** for lens-assignment and synthesis weighting. Web: every peer effectively has WebFetch + WebSearch — the two native gaps (MiMo WebSearch, GLM WebFetch) each have a verified Jina fallback. `relay/peers.json` is the single source of truth for endpoints, effort knobs, and launcher-template style.
 
 ### Manifest count caveat
 
-`8N+M` is the orchestrator-level dispatched count. The manifest's `counts.dispatched_total` is the **standard-tier subtotal only** (parallax + subagents — `= 8N` on a full symmetric run, the actual record count on a partial); gpt-pro is tracked separately in `counts."gpt-pro"` (`prism-launch` does not dispatch gpt-pro — the orchestrator does). So on a full run a `grep` of `dispatched_total` yields `8N`, not `8N+M` — add `counts."gpt-pro"` for the full figure.
+`7N+M` is the orchestrator-level dispatched count. The manifest's `counts.dispatched_total` is the **standard-tier subtotal only** (parallax + subagents — `= 7N` on a full symmetric run, the actual record count on a partial); gpt-pro is tracked separately in `counts."gpt-pro"` (`prism-launch` does not dispatch gpt-pro — the orchestrator does). So on a full run a `grep` of `dispatched_total` yields `7N`, not `7N+M` — add `counts."gpt-pro"` for the full figure.
 
 ### gpt-pro lane (architecture + recovery)
 
@@ -322,20 +320,20 @@ gpt-pro is **orchestrator-direct** — not a relay peer and not in the `parallax
 
 Starting points — every lens still answers the full question. The **authoritative ordered arrays live in `templates/lens-catalog.json` (`.presets`)** (heaviest-reasoning-first for tier placement); edit a preset there. The italicized adversarial-family slot is a *candidate*, not a default — keep it only if stress-testing is the binding constraint for the question.
 
-- **Code review**: *Adversarial* + Correctness + Simplicity + Depth-Weighted + Temporal + Outsider + Stakeholder + Causal
-- **Architecture / design**: First-Principles + *Adversarial* + Simplicity + Stakeholder + Temporal + Empirical + Breadth-Weighted + Causal
-- **Implementation** (no preset — compose by hand): Correctness + Pragmatist + *Adversarial* + Depth-Weighted + Outsider + Temporal + Stakeholder + Causal
-- **Diagnosis / root cause**: Causal + *Falsification* + Empirical + Depth-Weighted + Temporal + Outsider + Stakeholder + Pragmatist
-- **Option comparison**: First-Principles + Empirical + Simplicity + Stakeholder + Temporal + *Disconfirming* + Breadth-Weighted + Causal
-- **Writing / communication**: Clarity + Audience + *Adversarial* + Simplicity + Outsider + Empirical + Depth-Weighted + Temporal
-- **Research / exploration**: First-Principles + Breadth-Weighted + Depth-Weighted + Outsider + Empirical + Lateral-Generative + Temporal + Stakeholder
-- **Decision / strategy**: First-Principles + Empirical + Stakeholder + Temporal + Pragmatist + *Disconfirming* + Breadth-Weighted + Causal
+- **Code review**: *Adversarial* + Correctness + Simplicity + Depth-Weighted + Temporal + Outsider + Stakeholder
+- **Architecture / design**: First-Principles + *Adversarial* + Simplicity + Stakeholder + Temporal + Empirical + Breadth-Weighted
+- **Implementation** (no preset — compose by hand): Correctness + Pragmatist + *Adversarial* + Depth-Weighted + Outsider + Temporal + Stakeholder
+- **Diagnosis / root cause**: Causal + *Falsification* + Empirical + Depth-Weighted + Temporal + Outsider + Stakeholder
+- **Option comparison**: First-Principles + Empirical + Simplicity + Stakeholder + Temporal + *Disconfirming* + Breadth-Weighted
+- **Writing / communication**: Clarity + Audience + *Adversarial* + Simplicity + Outsider + Empirical + Depth-Weighted
+- **Research / exploration**: First-Principles + Breadth-Weighted + Depth-Weighted + Outsider + Empirical + Lateral-Generative + Temporal
+- **Decision / strategy**: First-Principles + Empirical + Stakeholder + Temporal + Pragmatist + *Disconfirming* + Breadth-Weighted
 
 The lens menu (descriptions, axis families) is also single-sourced in `lens-catalog.json` and stays open — mint a task-specific lens when you can name its axis in one sentence.
 
 ### Adding a peer / standard tier
 
-Transport + launcher-template style is one `relay/peers.json` stanza (a standard tier also sets `order` + `lineage` — scaffold order, peershape, and digest lineage all derive from it). For a new **standard tier**, additionally add one lens to each `--preset` set in `templates/lens-catalog.json` (the scaffold count-guard fails closed until they match) and update the "8 tiers" / `8N` counts in `SKILL.md`.
+Transport + launcher-template style is one `relay/peers.json` stanza (a standard tier also sets `order` + `lineage` — scaffold order, peershape, and digest lineage all derive from it). For a new **standard tier**, additionally add one lens to each `--preset` set in `templates/lens-catalog.json` (the scaffold count-guard fails closed until they match) and update the "7 tiers" / `7N` counts in `SKILL.md`.
 
 ---
 

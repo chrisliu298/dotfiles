@@ -215,7 +215,7 @@ recover_codex_response() {
 
 # Auto-detect caller and peer from the skill directory this script lives in.
 # Caller is always Claude under the current one-direction protocol; the default
-# peer is gpt. Use --to grok-build, --to grok-composer, --to glm, --to kimi, --to deepseek, or --to mimo to route elsewhere.
+# peer is gpt. Use --to grok-build, --to glm, --to kimi, --to deepseek, or --to mimo to route elsewhere.
 # Returns "from to" (e.g. "claude gpt") or empty string if unknown.
 detect_peers() {
   local script_dir
@@ -444,7 +444,7 @@ EOF
     # spawning (defense in depth atop the RELAY_PEER guard — note: --disallowed-tools
     # Agent instead breaks agent-build, since disabling background conflicts with
     # run_terminal_cmd's default). --effort is appended only for peers that declare
-    # effort_values (grok-build, not grok-composer).
+    # effort_values (gpt and grok-build).
     # GROK_CLAUDE_*_ENABLED=false: disable the full Claude-compat suite explicitly
     # here (not only via .zshenv) so a dispatched peer stays isolated even from a
     # reset/cron/non-zsh shell that never sourced .zshenv — no Claude skills, global
@@ -691,10 +691,10 @@ Subcommands:
 Call options:
   --name <slug>      Call identifier
   --effort <level>   Reasoning effort: gpt (low/medium/high/xhigh/max/ultra), grok-build (low/medium/high).
-                     Ignored for grok-composer, glm, kimi, deepseek (always max), and mimo (no knob).
+                     Ignored for glm, kimi, deepseek (always max), and mimo (no knob).
   --body-only        Strip frontmatter from response output
   --from <peer>      Override caller detection (normally claude)
-  --to <peer>        Override peer detection (gpt, grok-build, grok-composer, glm, kimi, deepseek, mimo; default gpt)
+  --to <peer>        Override peer detection (gpt, grok-build, glm, kimi, deepseek, mimo; default gpt)
 USAGE
 }
 

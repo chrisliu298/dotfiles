@@ -39,7 +39,7 @@ TEMPLATES_DIR=$(cd "$SCRIPT_DIR/../templates" && pwd 2>/dev/null) \
 # Peer registry — relay's sibling file. The one place that declares which peers
 # exist, their effort knobs / template style, and (prism-consumed) each standard
 # tier's .order (dispatch + display position) and .lineage (synthesis-weighting
-# group; the two Grok tiers share "grok"). Adding a standard tier is one stanza
+# group; each peer is its own lineage). Adding a standard tier is one stanza
 # here — peershape, scaffold order, and digest lineage all derive from it.
 PEERS_JSON="${PRISM_PEERS_JSON:-$SCRIPT_DIR/../../relay/peers.json}"   # PRISM_PEERS_JSON = test-only registry override
 # Lens catalog — the one place that declares lens descriptions, axis families, and
@@ -312,7 +312,7 @@ cmd_prepare() {
   [ -z "$config" ] && [ -z "$dispatch" ] && die "prepare: --config <config.json> or --dispatch <dispatch-file> required"
   # Opt-in floor check: --expect-n N asserts the symmetric shape (every standard
   # tier + subagents at exactly N); --expect-m M additionally pins gpt-pro. Absent
-  # → today's lenient validation. This makes the "full 8-tier fan at N is the floor"
+  # → today's lenient validation. This makes the "full 7-tier fan at N is the floor"
   # invariant structural, not prose-only.
   case "$expect_n" in *[!0-9]*) die "prepare: --expect-n must be a non-negative integer, got: $expect_n" ;; esac
   case "$expect_m" in *[!0-9]*) die "prepare: --expect-m must be a non-negative integer, got: $expect_m" ;; esac
@@ -1328,7 +1328,7 @@ preset_lenses() {
 }
 
 # Emit a ready-to-fill dispatch skeleton for the symmetric default (N of every
-# model; GPT xhigh + Grok Build high are fixed). With --preset <task-type>, pre-fill eight lenses (N=1).
+# model; GPT xhigh + Grok Build high are fixed). With --preset <task-type>, pre-fill seven lenses (N=1).
 # Otherwise replace each "FILL" Lens / Lens-Desc, then Write it as the dispatch
 # file. Removes the mechanical Type/To/order boilerplate.
 
@@ -1439,7 +1439,7 @@ cmd_scaffold() {
         printf '# self (the orchestrator) is the lone Claude perspective; n/total = %sN + M + self.\n\n' "$npeers"
       else
         printf 'Prism-Mode: full\nPrism-N: 1\nPrism-M: %s\n\n' "$m"
-        printf '# Preset "%s": eight lenses pre-filled in canonical tier order (GPT xhigh, Grok Build high — CLI-derived at prepare).\n' "$preset"
+        printf '# Preset "%s": seven lenses pre-filled in canonical tier order (GPT xhigh, Grok Build high — CLI-derived at prepare).\n' "$preset"
         printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
         printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
         printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
@@ -1488,7 +1488,7 @@ cmd_scaffold() {
     printf '# (e.g. Adversarial) lens on gpt (xhigh). Write the Shared-Packet file before prepare.\n\n'
   else
     printf 'Prism-Mode: full\nPrism-N: %s\nPrism-M: %s\n\n' "$n" "$m"
-    printf '# Symmetric scaffold: N=%s of each of the eight models (GPT xhigh, Grok Build high — CLI-derived at prepare).\n' "$n"
+    printf '# Symmetric scaffold: N=%s of each of the seven models (GPT xhigh, Grok Build high — CLI-derived at prepare).\n' "$n"
     printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
     printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
     printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
@@ -1811,8 +1811,8 @@ cmd_results() {
 
 # ── digest ─────────────────────────────────────────────────────────────────
 
-# Synthesis lineage for a peer, from the registry's .lineage field (the two Grok
-# tiers share "grok"; every other peer is its own lineage). Single-sourced in
+# Synthesis lineage for a peer, from the registry's .lineage field (every peer
+# is its own lineage). Single-sourced in
 # peers.json — see registry_lineage_of.
 digest_lineage_of() {
   registry_lineage_of "$1"
@@ -1977,11 +1977,11 @@ Usage:  (all subcommands require `jq` in PATH)
   prism-launch --help | --version  ·  prism-launch <subcommand> --help
 
 scaffold:  emit a ready-to-fill dispatch skeleton for the symmetric default (N of each of the
-           eight models; GPT xhigh + Grok Build high fixed). Emits the full-roster contract
+           seven models; GPT xhigh + Grok Build high fixed). Emits the full-roster contract
            (Prism-Mode: full / Prism-N / Prism-M) for you. Prints to stdout as a copy-from
            template — author the dispatch with the Write tool (do NOT redirect stdout into the
            file and then edit it: a shell-made file forces a wasted Read). Replace each "FILL".
-           --preset <review|design|diagnosis|compare|research|decision|writing> pre-fills eight
+           --preset <review|design|diagnosis|compare|research|decision|writing> pre-fills seven
            lenses by task type (N=1). --out <path> writes a prepare-READY dispatch directly
            (requires --preset + --packet, i.e. zero FILLs) so the agent skips Write/Edit
            entirely. --m <M> emits M ready Type: gpt-pro records (canonical Deep-Reasoning /
@@ -2009,7 +2009,7 @@ prepare:   validate the dispatch/config, render all launchers from templates, wr
            contract's N/M on full/unchecked runs (advanced/back-compat); they are IGNORED on any
            partial run (incl. Variant: no-subagents), which floor-checks off its own Prism-N/M.
            No-subagents: Prism-Mode: partial + Variant: no-subagents (or scaffold --no-subagents)
-           keeps the 7 parallax tiers at N and drops the Claude subagent tier (zero Agent calls);
+           keeps the 6 parallax tiers at N and drops the Claude subagent tier (zero Agent calls);
            prepare floor-checks it and prints a calm note, not ⚠ PARTIAL. See the prism SKILL.md.
 parallax:  fan out every relay call as ONE backgrounded process, wait for all, write a structured
            result. Run with run_in_background: true. --only <name> retries a single failed peer.

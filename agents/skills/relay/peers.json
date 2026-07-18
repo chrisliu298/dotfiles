@@ -18,15 +18,8 @@
     "default_effort": "medium",
     "template": "costar"
   },
-  "grok-composer": {
-    "order": 3,
-    "lineage": "grok",
-    "transport": "grok",
-    "model": "grok-composer-2.5-fast",
-    "template": "costar"
-  },
   "glm": {
-    "order": 4,
+    "order": 3,
     "lineage": "glm",
     "transport": "claude-env",
     "base": "https://api.z.ai/api/anthropic",
@@ -38,7 +31,7 @@
     "template": "costar"
   },
   "kimi": {
-    "order": 5,
+    "order": 4,
     "lineage": "kimi",
     "transport": "claude-env",
     "base": "https://api.kimi.com/coding/",
@@ -49,7 +42,7 @@
     "template": "costar"
   },
   "deepseek": {
-    "order": 6,
+    "order": 5,
     "lineage": "deepseek",
     "transport": "claude-env",
     "base": "https://api.deepseek.com/anthropic",
@@ -59,7 +52,7 @@
     "template": "costar"
   },
   "mimo": {
-    "order": 7,
+    "order": 6,
     "lineage": "mimo",
     "transport": "claude-env",
     "base": "https://api.xiaomimimo.com/anthropic",
