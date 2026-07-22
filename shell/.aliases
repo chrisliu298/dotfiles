@@ -75,6 +75,7 @@ alias css="cswap status"                  # current account
 alias csw="cswap switch"                  # rotate to next (csw 2 / csw email for specific)
 alias csb="cswap switch --strategy best"  # jump to account with most quota left
 alias csa="cswap auto"                    # auto-switch before hitting limits
+alias csu="cswap upgrade"                 # upgrade cswap
 
 # =============================================================================
 # Codex
