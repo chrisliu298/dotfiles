@@ -11,7 +11,8 @@ description: >-
   transforms, routine small edits, mechanical syncs, and single-correct-answer
   tasks. With no leading number, autonomously decide N and gpt-pro from
   the question every time (N=1 is the bottom-rung anchor, never a lazy default);
-  with an explicit number (e.g. `prism 2 1`), honor it verbatim and skip
+  with explicit numbers `prism N M` (e.g. `prism 2 1` = 2 of each model +
+  1 gpt-pro lens; M is a count, not a flag), honor them verbatim and skip
   auto-sizing. There is no reasoning-effort knob. Scale above the anchor only
   when decision risk justifies the 7N-agent cost.
 user-invocable: true
