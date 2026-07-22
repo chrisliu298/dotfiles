@@ -160,7 +160,7 @@ theme() {
     fi
 
     local _c=$'\033[1;36m' _g=$'\033[32m' _r=$'\033[31m' _d=$'\033[2m' _0=$'\033[0m'
-    local peers=(macmini:macmini l40s:lambda-scalar)
+    local peers=(macmini-fast:macmini l40s:lambda-scalar)
     local self_host self_host_l peer peer_alias peer_host hosts=()
     self_host=$(hostname -s 2>/dev/null)
     self_host_l=${self_host:l}
@@ -280,7 +280,7 @@ dfs() {
     printf '\n  %sdfs%s  %ssync dotfiles everywhere%s\n\n' "$_c" "$_0" "$_d" "$_0"
 
     # SSH alias:hostname -s
-    local dfs_peers=(macbookpro16:MacBookPro16 macmini:macmini l40s:lambda-scalar)
+    local dfs_peers=(macbookpro16:MacBookPro16 macmini-fast:macmini l40s:lambda-scalar)
     local self_host=$(hostname -s 2>/dev/null)
     local self_host_l=${self_host:l}
     local self_alias="" peer peer_alias peer_host hosts=() failed_hosts=()
@@ -388,7 +388,7 @@ synckeys() {
     [[ -n "$local_keys" ]] || { printf '  %s✗%s no *_API_KEY / *_PLAN_KEY exports in %s\n\n' "$_r" "$_0" "$src"; return 1; }
 
     # SSH alias:hostname -s (same peer set + self-skip as dfs)
-    local dfs_peers=(macbookpro16:MacBookPro16 macmini:macmini l40s:lambda-scalar)
+    local dfs_peers=(macbookpro16:MacBookPro16 macmini-fast:macmini l40s:lambda-scalar)
     local self_host=$(hostname -s 2>/dev/null); local self_host_l=${self_host:l}
     local peer peer_alias peer_host hosts=()
     for peer in "${dfs_peers[@]}"; do
