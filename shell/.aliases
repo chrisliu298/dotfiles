@@ -105,6 +105,7 @@ if (( IS_MACOS )); then
 
     # SSH
     alias sm="ssh macmini"
+    alias smf="ssh macmini-fast"
     alias sl="ssh l40s"
 
     # Tailscale
