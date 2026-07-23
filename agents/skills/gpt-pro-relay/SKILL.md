@@ -220,6 +220,22 @@ ssh macmini "cat ~/.gpt-pro/runs/<run_id>/response.md"                          
 
 **On `status: "error"` the body is QUARANTINED — diagnostic only, never an answer.** A rejected turn is complete, fluent, and on-topic; it differs from a verified one **only by provenance**, so "the text looks fine" is not a reason to use it — that inference is exactly how a GPT-5.5 answer once got laundered into a Sol lens. The two model-audit rejects rename the body to **`response.rejected.md`** (and set `rejected_response` in `result.json`) so that returning it takes deliberately naming a rejected file; every other error reason leaves it at `response.md`. **Both are void.** Recovery is a fresh run (new quota → the user decides) or an honest failure report — never a `cat`.
 
+## Stopping a run
+
+To interrupt a run you launched — you changed your mind, or a better answer arrived elsewhere — use `--stop` with the literal run-id (same envelope isn't needed; stop is quick and bounded):
+
+```bash
+gpt-pro --stop ask-20260611T002710Z-…    # the literal id, not "$RUN_ID"
+```
+
+It's **graceful and worker-driven**: the command writes a stop signal into the run_dir and the owning worker consumes it at its next phase gate. If the prompt **hasn't been sent yet**, the run is **dequeued** (no Pro quota spent). If it **was already sent**, the worker **clicks ChatGPT's Stop button** on the live turn to halt generation. Either way the run finalizes `status: stopped` and **no response is returned** (the partial is discarded, not published). All output is JSONL on stderr.
+
+- **`stopped` / `already_finished` / `pending` → exit 0.** `pending` means the worker is alive and will consume the stop; poll `fetch` to confirm.
+- **`no_live_worker` → exit 2.** No live worker consumed the signal (the worker process itself died, rare — workers survive SSH drops). Server-side generation may still be running; use the manual teardown path if you must halt it: `ssh macmini gpt-pro-relay close-chrome --force` is a blunt last resort (kills all tabs).
+- **`not_found` → exit 4.** Unknown run-id.
+
+Stop is **not** resubmit-safe cover for a mistake: a dequeued run spent no quota, but a run stopped after send already burned its reasoning up to the interrupt. Don't stop-then-resubmit reflexively.
+
 ## Concurrency
 
 Up to `GPT_PRO_MAX_PARALLEL` (default **6**, clamped to a ceiling of **10**) `gpt-pro` calls run in parallel — each worker gets its own tab in a single shared Chrome process. Beyond the cap, additional workers queue on a file-lock semaphore in `~/.gpt-pro/slots/` and wait for a slot to free up (the worker logs `slot_queued`, then `slot_acquired` when it gets in). A queued run can wait **15+ min before it even reaches `sent`** (961 s observed), so total wall-clock = **queue wait + the 5–20 min run** — don't set `--max-wait` (or the Bash-tool timeout) shorter than that.

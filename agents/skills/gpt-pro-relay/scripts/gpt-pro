@@ -15,6 +15,7 @@ fi
 # Usage:
 #   gpt-pro [--max-wait <sec>] [--dry-run] < prompt.md   # new run, prompt on stdin
 #   gpt-pro --run-id <id> [--max-wait <sec>]             # reattach / recover a run
+#   gpt-pro --stop <id>                                  # interrupt a run (dequeue or click Stop)
 #   gpt-pro --help | --version
 #
 # It absorbs everything mechanical: run-id generation, local-vs-SSH transport,
@@ -27,7 +28,7 @@ fi
 # envelope (run_in_background:true, timeout:7260000), the Pro-quota cost gate,
 # and prompt composition. Those are the caller's judgment, not the shell's.
 
-VERSION=1
+VERSION=2
 
 HOST=macmini
 RELAY_BIN=gpt-pro-relay
@@ -54,6 +55,7 @@ gpt-pro — send one prompt to ChatGPT Pro Extended (via macmini)
 Usage:
   gpt-pro [-f <path>]... [--max-wait <sec>] [--dry-run] < prompt.md   # new run
   gpt-pro --run-id <id> [--max-wait <sec>]                            # reattach / recover a run
+  gpt-pro --stop <id>                                                 # interrupt a run
   gpt-pro --help | --version
 
 Options:
@@ -64,6 +66,8 @@ Options:
   --include-tree <dir>  Inline a directory recursively (capped, skips hidden/vendor/binary/secrets). Repeatable.
   --allow-secret <path> Permit one file the secret scan would otherwise refuse. Repeatable.
   --run-id <id>         Reattach to an existing run (recovery only); skips submit.
+  --stop <id>           Interrupt a run: dequeue if it hasn't sent yet, else click ChatGPT's
+                        Stop button on the live turn. Graceful; no response is returned.
   --max-wait <sec>      Caller-side poll deadline (default 7200 = 120 min).
   --dry-run             Resolve files + run-id, report the composed size, then exit. No quota used.
 
@@ -71,20 +75,22 @@ Files are validated, secret-scanned, and capped (5 MB composed) BEFORE submit �
 burned on rejection. Put only your question on stdin; pass files with -f instead of hand-cat.
 
 Output: response on stdout; run-id + diagnostics + engine JSONL on stderr.
-Exit:   0 ok · 1 error/empty · 2 usage · 3 worker timeout · 4 not found
+Exit:   0 ok · 1 error/empty · 2 usage · 3 worker timeout · 4 not found · 5 stopped (no body; via --run-id fetch)
         · 124 timed out, still pending (recover with --run-id) · 255 SSH transport unknown (reattach with --run-id)
+        · stop: 0 stopped/already-finished/pending · 2 no live worker · 4 unknown run
 
 Always wrap the Bash call in run_in_background:true, timeout:7260000.
 USAGE
 }
 
 # ---- parse args ----
-RUN_ID=""; REATTACH=false; MAX_WAIT=7200; DRY=false
+RUN_ID=""; REATTACH=false; STOP=false; MAX_WAIT=7200; MAX_WAIT_SET=false; DRY=false
 INC_FILES=(); INC_FROMS=(); INC_TREES=(); INC_ALLOW=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --run-id)       [ $# -ge 2 ] || die 2 "--run-id requires a value"; RUN_ID="$2"; REATTACH=true; shift 2 ;;
-    --max-wait)     [ $# -ge 2 ] || die 2 "--max-wait requires a value"; MAX_WAIT="$2"; shift 2 ;;
+    --stop)         [ $# -ge 2 ] || die 2 "--stop requires a run-id"; RUN_ID="$2"; STOP=true; shift 2 ;;
+    --max-wait)     [ $# -ge 2 ] || die 2 "--max-wait requires a value"; MAX_WAIT="$2"; MAX_WAIT_SET=true; shift 2 ;;
     -f|--file)      [ $# -ge 2 ] || die 2 "$1 requires a path"; INC_FILES+=("$2"); shift 2 ;;
     --files-from)   [ $# -ge 2 ] || die 2 "--files-from requires a file"; INC_FROMS+=("$2"); shift 2 ;;
     --include-tree) [ $# -ge 2 ] || die 2 "--include-tree requires a directory"; INC_TREES+=("$2"); shift 2 ;;
@@ -100,6 +106,16 @@ done
 HAVE_INCLUDES=false
 { [ "${#INC_FILES[@]}" -gt 0 ] || [ "${#INC_FROMS[@]}" -gt 0 ] || [ "${#INC_TREES[@]}" -gt 0 ]; } && HAVE_INCLUDES=true
 if $REATTACH && $HAVE_INCLUDES; then die 2 "-f/--file/--files-from/--include-tree compose a NEW run; they don't apply to --run-id recovery"; fi
+if $STOP; then
+  $REATTACH && die 2 "--stop and --run-id are mutually exclusive; --stop already names the run to interrupt"
+  $HAVE_INCLUDES && die 2 "--stop interrupts an existing run; it takes no files"
+  [ "${#INC_ALLOW[@]}" -gt 0 ] && die 2 "--allow-secret composes a NEW run; it doesn't apply to --stop"
+  $DRY && die 2 "--stop and --dry-run are mutually exclusive; --stop is itself the action (there's nothing to preview)"
+  # --max-wait governs the submit/poll path only; the engine's `stop --timeout`
+  # (default 30s) bounds a stop. Reject its PRESENCE (not its value) so an
+  # explicit `--max-wait 7200` — equal to the default — is still rejected.
+  $MAX_WAIT_SET && die 2 "--max-wait does not apply to --stop (the engine's stop timeout governs); drop it"
+fi
 case "$MAX_WAIT" in ''|*[!0-9]*) die 2 "--max-wait must be a positive integer (seconds)" ;; esac
 MAX_WAIT=$((10#$MAX_WAIT))                       # normalize so e.g. 08 isn't read as octal
 (( MAX_WAIT > 0 )) || die 2 "--max-wait must be greater than 0 seconds"
@@ -115,6 +131,28 @@ if $LOCAL; then RUN=(); else RUN=(ssh "${SSH_OPTS[@]}" "$HOST"); fi
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/gpt-pro.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 PROMPT_FILE="$WORK/prompt"; OUT="$WORK/out"; ERR="$WORK/err"
+
+# ---- stop mode: interrupt an existing run, then exit. No prompt, no poll loop.
+# The engine's `stop` writes the file signal, probes worker liveness, and bounds
+# its own wait (--timeout 30); over SSH that single call is bounded by ServerAlive.
+# All output is JSONL on stderr (stop returns no response body). Exit codes are
+# the engine's: 0 stopped/already-finished/pending · 2 no live worker · 4 unknown.
+if $STOP; then
+  [[ "$RUN_ID" =~ ^[A-Za-z0-9._-]{1,100}$ ]] \
+    || die 2 "invalid run_id: '$RUN_ID' (expected [A-Za-z0-9._-]+, <=100 chars)"
+  echo "gpt-pro: stop run_id=$RUN_ID transport=$($LOCAL && echo local || echo ssh)" >&2
+  run_stop() {
+    if $LOCAL; then "$RELAY_BIN" stop "$RUN_ID" >"$OUT" 2>"$ERR"
+    else ssh "${SSH_OPTS[@]}" "$HOST" "$RELAY_BIN" stop "$RUN_ID" >"$OUT" 2>"$ERR"; fi
+  }
+  set +e; run_stop; rc=$?; set -e
+  if (( rc == 127 )) && [ "$RELAY_BIN" != "$RELAY_VENV" ]; then
+    RELAY_BIN="$RELAY_VENV"; set +e; run_stop; rc=$?; set -e
+  fi
+  [ -s "$ERR" ] && cat "$ERR" >&2
+  [ -s "$OUT" ] && cat "$OUT" >&2   # stop emits no stdout body; surface anything that appears
+  exit "$rc"
+fi
 
 if $REATTACH; then
   [[ "$RUN_ID" =~ ^[A-Za-z0-9._-]{1,100}$ ]] \

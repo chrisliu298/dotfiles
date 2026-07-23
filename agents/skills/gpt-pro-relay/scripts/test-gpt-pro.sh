@@ -10,6 +10,13 @@
 # Run: bash agents/skills/gpt-pro-relay/scripts/test-gpt-pro.sh
 set -uo pipefail
 
+# This offline harness drives the wrapper against FAKE engines only — never the
+# real gpt-pro. So the wrapper's anti-recursion guard (which refuses when
+# RELAY_PEER is set) is a false positive here: unset it, or every nested wrapper
+# call exits 1 when the harness is itself run inside a relay peer (e.g. a GPT
+# review), yielding a spurious 0/N.
+unset RELAY_PEER
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WRAP="$HERE/gpt-pro"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/gptpro-test.XXXXXX")"
@@ -52,14 +59,28 @@ case "$sub" in
       submit_drop_recover|submit_127) printf 'THE ANSWER\n'; echo '{"ok":true}'>&2; exit 0 ;;
       *)                  printf 'THE ANSWER\n'; echo '{"ok":true}'>&2; exit 0 ;;
     esac ;;
+  stop)
+    case "$GPRT_SCN" in
+      stop_no_worker) echo '{"status":"no_live_worker"}'>&2; exit 2 ;;
+      stop_not_found) echo '{"status":"not_found"}'>&2; exit 4 ;;
+      *)              echo '{"status":"stopped","reason":"stopped_after_send"}'>&2; exit 0 ;;
+    esac ;;
   *) echo "fake-ssh: bad sub '$sub' in: ${args[*]}">&2; exit 99 ;;
 esac
 FAKE
 chmod +x "$TMP/binssh/ssh"
 
-# ---- fake hostname (local mode → returns macmini) ----
+# ---- fake hostname ----
+# Local mode (binlocal first on PATH) → "macmini" → wrapper takes the LOCAL path.
+# SSH mode (binssh only) → a NON-macmini name → wrapper takes the SSH path and
+# uses the fake `ssh` above. Faking BOTH modes is load-bearing: without the
+# binssh override, running this harness ON macmini detects the real hostname,
+# mis-routes "ssh" cases through the LOCAL path, and — since binssh has no fake
+# engine — falls through to the REAL gpt-pro-relay, spawning real Pro workers.
 printf '#!/usr/bin/env bash\necho macmini\n' > "$TMP/binlocal/hostname"
 chmod +x "$TMP/binlocal/hostname"
+printf '#!/usr/bin/env bash\necho gprt-testhost\n' > "$TMP/binssh/hostname"
+chmod +x "$TMP/binssh/hostname"
 
 # ---- fake local engine gpt-pro-relay ----
 cat > "$TMP/binlocal/gpt-pro-relay" <<'FAKE'
@@ -71,6 +92,10 @@ case "$1" in
            *)           printf 'LOCAL ANSWER\n'; echo '{"ok":true}'>&2; exit 0 ;;
          esac ;;
   fetch) printf 'LOCAL REATTACH\n'; echo '{"ok":true}'>&2; exit 0 ;;
+  stop)  case "$GPRT_SCN" in
+           stop_no_worker) echo '{"status":"no_live_worker"}'>&2; exit 2 ;;
+           *)              echo '{"status":"stopped"}'>&2; exit 0 ;;
+         esac ;;
   *)     echo "fake-engine: bad sub $1">&2; exit 99 ;;
 esac
 FAKE
@@ -126,6 +151,19 @@ mkdir -p "$INCF/tree"; printf 'TT\n' > "$INCF/tree/t.txt"
 EXP_ERR="included 1 local file"; run_case "--files-from composes the listed file"          ssh success 0 "--files-from $INCF/list.txt"
 EXP_ERR="included 1 local file"; run_case "--include-tree composes a directory"            ssh success 0 "--include-tree $INCF/tree"
 EXP_ERR="would include";         run_case "--dry-run lists resolved files, no submit"       ssh success 0 "--dry-run -f $INCF/a.txt"
+
+# ---- stop: interrupt an existing run ----
+echo "── stop ──"
+SID="ask-20260530T000000Z-abc"
+EXP_ERR='"status":"stopped"';        run_case "--stop live turn (ssh) → exit 0"      ssh   stop_default   0 "--stop $SID"
+EXP_ERR='"status":"no_live_worker"'; run_case "--stop dead worker → exit 2"          ssh   stop_no_worker 2 "--stop $SID"
+EXP_ERR='"status":"not_found"';      run_case "--stop unknown run → exit 4"          ssh   stop_not_found 4 "--stop nope-run"
+EXP_ERR='"status":"stopped"';        run_case "--stop local path → exit 0"           local stop_default   0 "--stop $SID"
+EXP_ERR="mutually exclusive";        run_case "--stop + --dry-run rejected → exit 2"  local stop_default   2 "--stop $SID --dry-run"
+EXP_ERR="does not apply";            run_case "--stop + --max-wait rejected → exit 2" local stop_default   2 "--stop $SID --max-wait 60"
+EXP_ERR="does not apply";            run_case "--stop + --max-wait=default rejected"  local stop_default   2 "--stop $SID --max-wait 7200"
+EXP_ERR="takes no files";            run_case "--stop + -f rejected → exit 2"         local stop_default   2 "--stop $SID -f $INCF/a.txt"
+EXP_ERR="already names the run";     run_case "--stop + --run-id rejected → exit 2"   local stop_default   2 "--stop $SID --run-id $SID"
 
 echo
 echo "──────────────────────────────"
