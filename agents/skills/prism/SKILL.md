@@ -152,7 +152,7 @@ Parallax is dispatched via `relay` to **different models**. Invoke `relay` direc
 | `gpt` | OpenAI | `xhigh` | agentic code-review strength |
 | `grok-build` | xAI | `high` | independent of Anthropic/OpenAI |
 | `glm` | Zhipu/z.ai | none (pinned max) | independent lineage |
-| `kimi` | Moonshot | none (K3 is thinking-only, effort `max`) | independent lineage |
+| `kimi` | Moonshot | none (K3 is thinking-only, effort `high`) | independent lineage |
 | `deepseek` | DeepSeek (open-weight) | none (max/DeepThink) | independent lineage |
 | `mimo` | Xiaomi (open-weight) | none | independent lineage |
 

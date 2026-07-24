@@ -38,7 +38,7 @@
     "key_env": "KIMI_PLAN_KEY_CN",
     "auth_style": "api_key",
     "model": "k3",
-    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "400000" },
+    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "high", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "400000" },
     "template": "costar"
   },
   "deepseek": {

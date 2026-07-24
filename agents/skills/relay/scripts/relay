@@ -359,8 +359,12 @@ cmd_call() {
   fi
 
   # Build req. cmd_req surfaces effort in frontmatter for codex; the
-  # claude-env peers (deepseek, glm, and kimi pinned to max via the registry
-  # extra_env; mimo with no effort knob) ignore it.
+  # claude-env peers (deepseek and glm pinned to max, kimi to high, via the
+  # registry extra_env; mimo with no effort knob) ignore it. Kimi sits at `high`
+  # deliberately: it is K3's own default effort, and this batch lane runs on a
+  # quota-metered subscription, so relay/prism trade max-depth for quota. The
+  # interactive km* launchers in shell/.functions stay at max — a human is
+  # watching there, and they are not what burns prism-scale quota.
   local req_args=(--from "$from" --to "$to" --effort "$effort")
   [ -n "$name" ] || die "call: --name required"
   check_slug "call: --name" "$name"
@@ -691,7 +695,7 @@ Subcommands:
 Call options:
   --name <slug>      Call identifier
   --effort <level>   Reasoning effort: gpt (low/medium/high/xhigh/max/ultra), grok-build (low/medium/high).
-                     Ignored for glm, kimi, deepseek (always max), and mimo (no knob).
+                     Ignored for glm, deepseek (always max), kimi (always high), and mimo (no knob).
   --body-only        Strip frontmatter from response output
   --from <peer>      Override caller detection (normally claude)
   --to <peer>        Override peer detection (gpt, grok-build, glm, kimi, deepseek, mimo; default gpt)
