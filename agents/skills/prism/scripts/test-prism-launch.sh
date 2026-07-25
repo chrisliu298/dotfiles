@@ -1117,6 +1117,18 @@ expect_err "rejects a peer whose prism_effort is ultra" env PRISM_PEERS_JSON="$U
 KMEFF="$(jq -r '.kimi.extra_env.CLAUDE_CODE_EFFORT_LEVEL' "$PJ")"
 [ -n "$KMEFF" ] && [ "$KMEFF" != "null" ] && [ "$KMEFF" != "none" ] && [ "$KMEFF" != "off" ] \
   && ok "contract: kimi pins a non-off effort level (holds thinking on)" || bad "contract: kimi effort level is off/unset (thinking-off routes off K2.7)"
+# Every model tier must be pinned to the peer's own id in relay's claude-env envelope: an
+# unpinned tier sends a Claude model id to a third-party gateway, which answers a bad id with a
+# silent fallback, not an error. A new Anthropic tier (fable was the last one) is the way this
+# regresses, so pin the full set — in the envelope AND in the reserved-key guard that stops a
+# registry stanza from overriding it.
+RLY="$HERE/../../relay/scripts/relay"
+for _tier in ANTHROPIC_DEFAULT_FABLE_MODEL ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL ANTHROPIC_SMALL_FAST_MODEL CLAUDE_CODE_SUBAGENT_MODEL; do
+  grep -qF "\"$_tier=\$model\"" "$RLY" \
+    && ok "contract: relay pins $_tier to the peer model" || bad "contract: relay leaves $_tier unpinned (a Claude id would reach the peer gateway)"
+  grep -qE "\|${_tier}[|)]" "$RLY" \
+    && ok "contract: reserved-key guard covers $_tier" || bad "contract: reserved-key guard missing $_tier (a stanza could override it)"
+done
 # gpt-pro run_id recovery is a cross-SKILL string coupling: the gpt-pro wrapper prints
 # "gpt-pro: run_id=<id> ..." on stderr, and prism-launch greps '^gpt-pro: run_id=' (clean's
 # live-worker guard + results' reattach hint). A spelling/format drift on EITHER side

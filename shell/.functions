@@ -633,6 +633,7 @@ _deepseek(){
         ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic \
         ANTHROPIC_AUTH_TOKEN="$DEEPSEEK_API_KEY_INT" \
         ANTHROPIC_MODEL=deepseek-v4-pro[1m] \
+        ANTHROPIC_DEFAULT_FABLE_MODEL=deepseek-v4-pro[1m] \
         ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-v4-pro[1m] \
         ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4-pro[1m] \
         ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-flash \
@@ -674,6 +675,7 @@ _mimo(){
         ANTHROPIC_BASE_URL=https://api.xiaomimimo.com/anthropic \
         ANTHROPIC_AUTH_TOKEN="$MIMO_API_KEY_INT" \
         ANTHROPIC_MODEL=mimo-v2.5-pro \
+        ANTHROPIC_DEFAULT_FABLE_MODEL=mimo-v2.5-pro \
         ANTHROPIC_DEFAULT_OPUS_MODEL=mimo-v2.5-pro \
         ANTHROPIC_DEFAULT_SONNET_MODEL=mimo-v2.5-pro \
         ANTHROPIC_DEFAULT_HAIKU_MODEL=mimo-v2.5 \
@@ -710,6 +712,7 @@ _glm(){
         ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic \
         ANTHROPIC_AUTH_TOKEN="$GLM_PLAN_KEY_INT" \
         ANTHROPIC_MODEL=glm-5.2 \
+        ANTHROPIC_DEFAULT_FABLE_MODEL=glm-5.2 \
         ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.2 \
         ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.2 \
         ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.2 \
@@ -738,10 +741,11 @@ glmhl(){ (( $# )) || { echo 'Usage: glmhl "<prompt>"'; return 1; }; CLAUDE_CODE_
 # aux calls disable thinking and that model accepts them. K2.7 exposes no graded
 # reasoning effort (only k3/k3-256k carry
 # `think_efforts`), so the level merely has to be non-off to hold thinking on;
-# `high` is what Kimi's own Claude Code guide configures. The compact window is
-# K2.7's full 262144 context — ~1.2MB of prose, comfortably under the endpoint's
-# 2MB cumulative message cap (that cap is why the K3 lane needed 400000 rather
-# than its nominal 1M). The endpoint
+# `high` is what Kimi's own Claude Code guide configures. The compact window and
+# the max-context budget are both K2.7's full 262144 context (the guide sets the
+# pair together) — ~1.2MB of prose, comfortably under the endpoint's 2MB
+# cumulative message cap (that cap is why the K3 lane needed 400000 rather than
+# its nominal 1M). The endpoint
 # authenticates with ANTHROPIC_API_KEY (x-api-key), NOT ANTHROPIC_AUTH_TOKEN.
 # Requires KIMI_PLAN_KEY_CN (a Kimi Code Console key for the coding plan, distinct
 # from the old Moonshot pay-per-token key; see ~/.zshenv.local).
@@ -759,6 +763,7 @@ _kimi(){
         ANTHROPIC_BASE_URL=https://api.kimi.com/coding/ \
         ANTHROPIC_API_KEY="$KIMI_PLAN_KEY_CN" \
         ANTHROPIC_MODEL=kimi-for-coding \
+        ANTHROPIC_DEFAULT_FABLE_MODEL=kimi-for-coding \
         ANTHROPIC_DEFAULT_OPUS_MODEL=kimi-for-coding \
         ANTHROPIC_DEFAULT_SONNET_MODEL=kimi-for-coding \
         ANTHROPIC_DEFAULT_HAIKU_MODEL=kimi-for-coding \
@@ -766,6 +771,7 @@ _kimi(){
         CLAUDE_CODE_SUBAGENT_MODEL=kimi-for-coding \
         ENABLE_TOOL_SEARCH=false \
         CLAUDE_CODE_AUTO_COMPACT_WINDOW=262144 \
+        CLAUDE_CODE_MAX_CONTEXT_TOKENS=262144 \
         "$(command -v claude)" --disallowedTools "$_kimi_deny" "$@"
 }
 km(){   CLAUDE_CODE_EFFORT_LEVEL=high _kimi --dangerously-skip-permissions "$@"; }

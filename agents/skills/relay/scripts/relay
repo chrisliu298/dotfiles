@@ -479,19 +479,25 @@ EOF
     while IFS=$'\t' read -r k v; do
       [ -n "$k" ] || continue
       case "$k" in
-        PATH|RELAY_PEER|ANTHROPIC_BASE_URL|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_API_KEY|ANTHROPIC_MODEL|ANTHROPIC_DEFAULT_OPUS_MODEL|ANTHROPIC_DEFAULT_SONNET_MODEL|ANTHROPIC_DEFAULT_HAIKU_MODEL|ANTHROPIC_SMALL_FAST_MODEL|CLAUDE_CODE_SUBAGENT_MODEL)
+        PATH|RELAY_PEER|ANTHROPIC_BASE_URL|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_API_KEY|ANTHROPIC_MODEL|ANTHROPIC_DEFAULT_FABLE_MODEL|ANTHROPIC_DEFAULT_OPUS_MODEL|ANTHROPIC_DEFAULT_SONNET_MODEL|ANTHROPIC_DEFAULT_HAIKU_MODEL|ANTHROPIC_SMALL_FAST_MODEL|CLAUDE_CODE_SUBAGENT_MODEL)
           die "call: peer '$to' extra_env may not override reserved env var '$k' (registry safety guard)" ;;
       esac
       extra_env+=("$k=$v")
     done < <(jq -r '.extra_env // {} | to_entries[] | "\(.key)\t\(.value)"' <<<"$peer_json")
     # Clear any inherited ANTHROPIC auth so the parent session's token can't leak in;
     # then set exactly the one this peer's auth_style needs.
+    # EVERY model tier is pinned to $model, not just ANTHROPIC_MODEL. An unpinned tier
+    # sends a Claude model id (fable/opus/sonnet/haiku) to a third-party endpoint, and
+    # these gateways answer a bad id with a silent fallback rather than an error — so
+    # the miss is invisible. Keep this list in sync with the reserved-key guard above
+    # and with the interactive launchers in shell/.functions.
     peer_cmd=(env -u CLAUDECODE -u TMUX -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_API_KEY
       "PATH=$sanitized_path" "RELAY_PEER=$to"
       COLORTERM=truecolor
       "ANTHROPIC_BASE_URL=$base"
       "$auth_var=$auth_token"
       "ANTHROPIC_MODEL=$model"
+      "ANTHROPIC_DEFAULT_FABLE_MODEL=$model"
       "ANTHROPIC_DEFAULT_OPUS_MODEL=$model"
       "ANTHROPIC_DEFAULT_SONNET_MODEL=$model"
       "ANTHROPIC_DEFAULT_HAIKU_MODEL=$model"
