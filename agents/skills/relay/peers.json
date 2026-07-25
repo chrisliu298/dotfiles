@@ -37,8 +37,8 @@
     "base": "https://api.kimi.com/coding/",
     "key_env": "KIMI_PLAN_KEY_CN",
     "auth_style": "api_key",
-    "model": "k3",
-    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "high", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "400000" },
+    "model": "kimi-for-coding",
+    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "high", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "262144" },
     "template": "costar"
   },
   "deepseek": {

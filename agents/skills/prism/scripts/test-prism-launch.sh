@@ -1106,6 +1106,17 @@ ULREG="$TMP/ul-peers.json"; jq '.gpt.prism_effort = "ultra"' "$PJ" > "$ULREG"
 expect_err "rejects a peer whose prism_effort is ultra" env PRISM_PEERS_JSON="$ULREG" "$LAUNCH" prepare --dispatch "$FBD"
 [ "$(jq -r '."grok-build".effort_values[-1]' "$PJ")" = "high" ] \
   && ok "contract: grok-build effort_values[-1] is the top tier (high)" || bad "contract: grok-build effort_values ordering ([-1] != high)"
+# The Kimi coding endpoint returns HTTP 200 for ANY model string and silently serves a 256K
+# fallback, so a typo'd id produces no runtime signal at all — pin it here instead. The window
+# must match the model's own context, and the effort level has to stay non-off: K2.7 Coding is
+# thinking-only (no graded effort), and a thinking-off request routes off the model entirely.
+[ "$(jq -r '.kimi.model' "$PJ")" = "kimi-for-coding" ] \
+  && ok "contract: kimi pins the plan's K2.7 model id (a bad id would 200 and silently downgrade)" || bad "contract: kimi.model != kimi-for-coding"
+[ "$(jq -r '.kimi.extra_env.CLAUDE_CODE_AUTO_COMPACT_WINDOW' "$PJ")" = "262144" ] \
+  && ok "contract: kimi compact window matches K2.7's 262144 context" || bad "contract: kimi compact window != 262144"
+KMEFF="$(jq -r '.kimi.extra_env.CLAUDE_CODE_EFFORT_LEVEL' "$PJ")"
+[ -n "$KMEFF" ] && [ "$KMEFF" != "null" ] && [ "$KMEFF" != "none" ] && [ "$KMEFF" != "off" ] \
+  && ok "contract: kimi pins a non-off effort level (holds thinking on)" || bad "contract: kimi effort level is off/unset (thinking-off routes off K2.7)"
 # gpt-pro run_id recovery is a cross-SKILL string coupling: the gpt-pro wrapper prints
 # "gpt-pro: run_id=<id> ..." on stderr, and prism-launch greps '^gpt-pro: run_id=' (clean's
 # live-worker guard + results' reattach hint). A spelling/format drift on EITHER side

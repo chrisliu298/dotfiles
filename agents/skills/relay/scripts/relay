@@ -360,11 +360,11 @@ cmd_call() {
 
   # Build req. cmd_req surfaces effort in frontmatter for codex; the
   # claude-env peers (deepseek and glm pinned to max, kimi to high, via the
-  # registry extra_env; mimo with no effort knob) ignore it. Kimi sits at `high`
-  # deliberately: it is K3's own default effort, and this batch lane runs on a
-  # quota-metered subscription, so relay/prism trade max-depth for quota. The
-  # interactive km* launchers in shell/.functions stay at max — a human is
-  # watching there, and they are not what burns prism-scale quota.
+  # registry extra_env; mimo with no effort knob) ignore it. Kimi's `high` is not
+  # a depth setting: K2.7 Coding exposes no graded effort at all (`GET /v1/models`
+  # returns no `think_efforts` for it — only k3/k3-256k have one), so the level
+  # merely has to be non-off to hold thinking on, which the plan requires. `high`
+  # is the value Kimi's own Claude Code guide configures.
   local req_args=(--from "$from" --to "$to" --effort "$effort")
   [ -n "$name" ] || die "call: --name required"
   check_slug "call: --name" "$name"
@@ -500,11 +500,11 @@ EOF
     if [ "${#extra_env[@]}" -gt 0 ]; then peer_cmd+=("${extra_env[@]}"); fi
     # claude-env peers always run headless (claude -p). Deny two unrelated hazard
     # classes up front:
-    #   1. Multimodal Reads — deepseek-v4-pro / mimo-v2.5-pro / glm-5.2 / k3 are
-    #      treated text-only (mimo image support lives in mimo-v2.5/-omni, not -pro;
-    #      deepseek V4 input type is text/string; glm-5.2 input modality is text; K3
-    #      does report image/video input on the coding plan but this lane keeps it
-    #      text-only by choice), so an
+    #   1. Multimodal Reads — deepseek-v4-pro / mimo-v2.5-pro / glm-5.2 /
+    #      kimi-for-coding are treated text-only (mimo image support lives in
+    #      mimo-v2.5/-omni, not -pro; deepseek V4 input type is text/string;
+    #      glm-5.2 input modality is text; K2.7 Coding does report image/video
+    #      input on the plan but this lane keeps it text-only by choice), so an
     #      image/PDF Read errors (DeepSeek) or is silently dropped (GLM/Kimi/MiMo). The
     #      deny below is one shared string applied to every claude-env peer.
     #   2. Interactive consent gates — ExitPlanMode and AskUserQuestion block
@@ -695,7 +695,7 @@ Subcommands:
 Call options:
   --name <slug>      Call identifier
   --effort <level>   Reasoning effort: gpt (low/medium/high/xhigh/max/ultra), grok-build (low/medium/high).
-                     Ignored for glm, deepseek (always max), kimi (always high), and mimo (no knob).
+                     Ignored for glm, deepseek (always max), kimi (thinking pinned), and mimo (no knob).
   --body-only        Strip frontmatter from response output
   --from <peer>      Override caller detection (normally claude)
   --to <peer>        Override peer detection (gpt, grok-build, glm, kimi, deepseek, mimo; default gpt)
