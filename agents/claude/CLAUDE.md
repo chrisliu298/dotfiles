@@ -24,7 +24,7 @@ Behavioral defaults for any task, code or not. Under ambiguity: decide and proce
 - Taste: match surrounding style; rework anything chaotic, redundant, convoluted, or inconsistent.
 - Surgical cleanup: remove only the imports/variables/functions your change orphaned. Don't delete pre-existing dead code — mention it.
 - Preserve sources: edit, copy, or fetch with curl/wget instead of reconstructing. Regenerate only when requested, required by the canonical workflow, or the source can't safely be preserved.
-- Workspace hygiene: keep scratch files out of the repo (use /tmp); delete temporary outputs before handoff.
+- Workspace hygiene: keep scratch files out of the repo (use the session scratch dir if the harness provides one, else /tmp); delete temporary outputs before handoff.
 - Trace test: before declaring done, every edited line traces to the request — or it's an orphan your edit created; delete it.
 
 ## Agent coordination
