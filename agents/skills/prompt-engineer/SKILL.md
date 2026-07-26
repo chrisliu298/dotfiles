@@ -29,6 +29,7 @@ The process is the same regardless of model family:
 
 **Step 1: Clarify the task** — ask the user:
 - What should the model do? (core task)
+- Which exact model, and at what reasoning effort? Guidance now diverges enough between versions (verbosity, thinking defaults, verification, delegation) that the target model changes the draft.
 - What does good output look like? (format, length, tone/structure)
 - What context will be available at runtime? (documents, user input, tool results)
 - Will the model have tools? (search, file editing, code execution, etc.)
@@ -43,7 +44,7 @@ The process is the same regardless of model family:
 - **Over-constraint** — would any blunt `NEVER`/`ALWAYS` rule make the model *withhold information it actually has* or refuse a valid action? Replace the prohibition with a source of truth ("the provided context is authoritative — answer from it; redirect only when the value is genuinely absent").
 - **Instruction strength** — are `CRITICAL`/`MUST`/`NEVER` earning their place, or papering over missing structure or a missing tool? Dial back to plain phrasing where they aren't.
 
-For a higher-quality result, have the model critique its own draft against these checks in the same turn, then revise — an inline version of the generate → review → refine pattern.
+For a higher-quality result, have the model critique its own draft against these checks in the same turn, then revise — an inline version of the generate → review → refine pattern. This is a review pass over a draft artifact, not an answer-verification loop; don't add standing "double-check your work" instructions to the prompt you're writing, which several current models already do unprompted.
 
 **Step 4: Present the draft** — show the complete prompt and explain design choices.
 
@@ -59,7 +60,7 @@ For a higher-quality result, have the model critique its own draft against these
 
 Read the corresponding reference file for the full set of patterns, XML blocks, and diagnostic tables:
 
-- **Claude** → `references/claude.md` — clarity, roles, XML structure, examples, output format, thinking guidance, safety controls, agentic patterns, and Claude-specific failure modes.
+- **Claude** → `references/claude.md` — clarity, roles, XML structure, examples, output format, effort and thinking guidance, safety controls, agentic patterns, and a per-model section (Opus 5, Sonnet 5, Fable 5/Mythos 5, earlier models) covering the behaviors that differ enough to change the prompt.
 - **GPT-5.6 Sol** → `references/gpt.md` — outcome-first prompting, output contracts, follow-through policies, tool routing and persistence, completeness verification, citation/grounding, reasoning effort, verbosity, and GPT-specific failure modes.
 
 The Claude and GPT references contain ready-to-paste XML blocks.
