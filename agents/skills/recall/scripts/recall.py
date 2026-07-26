@@ -212,7 +212,7 @@ def parse_duration(s) -> int:
 
 # ---------------------------------------------------------------------------- Claude store
 # (storage + extraction primitives carried over verbatim from rehydrate's Claude adapter; format
-# notes in references/claude.md)
+# notes in references/transcript-store.md)
 TUI_TYPES = {"file-history-snapshot", "permission-mode", "mode", "ai-title"}
 
 

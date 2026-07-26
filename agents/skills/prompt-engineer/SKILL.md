@@ -60,7 +60,7 @@ For a higher-quality result, have the model critique its own draft against these
 
 Read the corresponding reference file for the full set of patterns, XML blocks, and diagnostic tables:
 
-- **Claude** → `references/claude.md` — clarity, roles, XML structure, examples, output format, effort and thinking guidance, safety controls, agentic patterns, and a per-model section (Opus 5, Sonnet 5, Fable 5/Mythos 5, earlier models) covering the behaviors that differ enough to change the prompt.
+- **Claude** → `references/claude-prompting.md` — clarity, roles, XML structure, examples, output format, effort and thinking guidance, safety controls, agentic patterns, and a per-model section (Opus 5, Sonnet 5, Fable 5/Mythos 5, earlier models) covering the behaviors that differ enough to change the prompt.
 - **GPT-5.6 Sol** → `references/gpt.md` — outcome-first prompting, output contracts, follow-through policies, tool routing and persistence, completeness verification, citation/grounding, reasoning effort, verbosity, and GPT-specific failure modes.
 
 The Claude and GPT references contain ready-to-paste XML blocks.

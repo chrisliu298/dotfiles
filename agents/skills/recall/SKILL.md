@@ -123,7 +123,7 @@ The bundled `scripts/recall.py` is stdlib-only (run via `uv`). The Claude transc
 cwd-encoding, and record-shape details — and the gotchas behind them — live in `references/`. Read
 the relevant one only if the locator misbehaves or Claude Code changed its transcript format:
 
-- `references/claude.md` — `~/.claude/projects/<encoded-cwd>/<uuid>.jsonl`; cwd encoding; the
+- `references/transcript-store.md` — `~/.claude/projects/<encoded-cwd>/<uuid>.jsonl`; cwd encoding; the
   `isSidechain` / interactive-vs-relay (`TUI_TYPES`) filters; record/content shapes.
 - `references/schema.md` — the normalized event model, BM25 ranking + confidence gates, redaction,
   and the format-drift policy.

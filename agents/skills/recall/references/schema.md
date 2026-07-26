@@ -1,6 +1,6 @@
 # Normalized model, ranking, redaction, drift policy
 
-The retrieval half of recall. `claude.md` covers storage and record shapes; everything here is the
+The retrieval half of recall. `transcript-store.md` covers storage and record shapes; everything here is the
 search pipeline: how a transcript becomes searchable Docs, how they're ranked, and how the
 confidence gates decide silent-load vs ask vs no-match.
 
@@ -14,7 +14,7 @@ text(truncated+redacted), ts, sidechain
 ```
 
 `build_corpus()` keeps only **user/assistant text events** (sidechains, tool output, and injected
-turns dropped — see `claude.md`), and wraps each in a `Doc`: `session, transcript, line, role, text,
+turns dropped — see `transcript-store.md`), and wraps each in a `Doc`: `session, transcript, line, role, text,
 date, tokens, session_rank`. The unit of retrieval is the **individual turn**, because that's what
 carries an `L<line>` anchor and what the agent loads. Surrounding context is fetched on demand with
 `show`, never by indexing windows.
@@ -90,6 +90,6 @@ ever added, redact at write time so secrets never persist to disk.)
 - **Tolerant parsing** — `events()` uses `.get()` access and structural type checks; a vanished or
   locked transcript is skipped, a multi-MB record is peeked-and-drained (never fully parsed), and a
   malformed line is skipped. A wholesale record-type rename (Claude Code changes its JSONL shapes)
-  would show up as steadily empty results — re-check the shapes in `claude.md` against a live file,
+  would show up as steadily empty results — re-check the shapes in `transcript-store.md` against a live file,
   update `events()` / the `TUI_TYPES` set / the injected-prefix list, and re-stamp the "Verified
-  YYYY-MM-DD / version" line in `claude.md`.
+  YYYY-MM-DD / version" line in `transcript-store.md`.
