@@ -1114,6 +1114,18 @@ expect_err "rejects a peer whose prism_effort is ultra" env PRISM_PEERS_JSON="$U
   && ok "contract: kimi pins the plan's K2.7 model id (a bad id would 200 and silently downgrade)" || bad "contract: kimi.model != kimi-for-coding"
 [ "$(jq -r '.kimi.extra_env.CLAUDE_CODE_AUTO_COMPACT_WINDOW' "$PJ")" = "262144" ] \
   && ok "contract: kimi compact window matches K2.7's 262144 context" || bad "contract: kimi compact window != 262144"
+# DeepSeek carries the same hazard for the same reason: the relay lane runs the bare
+# deepseek-v4-flash id (no [1m] harness selector), so the window has to be pinned explicitly
+# or the harness compacts at its default long before the model's 1M backend limit. The id
+# itself is a deliberate divergence from the interactive `ds` lane, which stays on V4-Pro.
+[ "$(jq -r '.deepseek.model' "$PJ")" = "deepseek-v4-flash" ] \
+  && ok "contract: deepseek lane pins the V4-Flash id (diverges from interactive ds on purpose)" || bad "contract: deepseek.model != deepseek-v4-flash"
+[ "$(jq -r '.deepseek.extra_env.CLAUDE_CODE_AUTO_COMPACT_WINDOW' "$PJ")" = "1000000" ] \
+  && ok "contract: deepseek compact window matches V4's 1M context" || bad "contract: deepseek compact window != 1000000"
+[ "$(jq -r '.deepseek.extra_env.CLAUDE_CODE_MAX_CONTEXT_TOKENS' "$PJ")" = "1000000" ] \
+  && ok "contract: deepseek max context tokens matches V4's 1M context" || bad "contract: deepseek max context tokens != 1000000"
+[ "$(jq -r '.deepseek.extra_env.CLAUDE_CODE_EFFORT_LEVEL' "$PJ")" = "max" ] \
+  && ok "contract: deepseek pins max effort (DeepThink)" || bad "contract: deepseek effort != max"
 KMEFF="$(jq -r '.kimi.extra_env.CLAUDE_CODE_EFFORT_LEVEL' "$PJ")"
 [ -n "$KMEFF" ] && [ "$KMEFF" != "null" ] && [ "$KMEFF" != "none" ] && [ "$KMEFF" != "off" ] \
   && ok "contract: kimi pins a non-off effort level (holds thinking on)" || bad "contract: kimi effort level is off/unset (thinking-off routes off K2.7)"

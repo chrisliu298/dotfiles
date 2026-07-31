@@ -47,8 +47,8 @@
     "transport": "claude-env",
     "base": "https://api.deepseek.com/anthropic",
     "key_env": "DEEPSEEK_API_KEY_INT",
-    "model": "deepseek-v4-pro[1m]",
-    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max" },
+    "model": "deepseek-v4-flash",
+    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max", "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1000000", "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1000000" },
     "template": "costar"
   },
   "mimo": {

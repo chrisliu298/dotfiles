@@ -604,19 +604,30 @@ pmmhl(){ (( $# )) || { echo 'Usage: pmmhl "<prompt>"'; return 1; }; _pi_mimo -p 
 # =============================================================================
 # Routes Claude Code at DeepSeek per-invocation, so default `c`/`cc` keep using
 # the Claude subscription. DeepSeek V4 Pro has two distinct effort levels: high
-# and max. The 1M-token context window is native/default — no special suffix is
-# needed. Requires DEEPSEEK_API_KEY_INT in env (see ~/.zshenv.local).
+# and max. Both V4 models are 1M-context on the backend, but the harness still
+# needs its own window signal — see the [1m] note below.
+# Requires DEEPSEEK_API_KEY_INT in env (see ~/.zshenv.local).
 #
 # NOTE: _deepseek/_mimo/_glm/_kimi below duplicate the model id, endpoint, and
 # extras that also live in agents/skills/relay/peers.json — the
 # relay/prism source of truth. These interactive launchers are a separate
 # consumer; if you change a model id, endpoint, or key var, update peers.json too
 # (and vice versa). See relay SKILL.md "Peer registry".
+#
+# DELIBERATE DIVERGENCE (2026-07-31): peers.json pins the relay/prism deepseek
+# lane to deepseek-v4-flash — the 0731 agent-post-trained build, which DeepSeek
+# benchmarks above V4-Pro-Preview on agent tasks. These interactive lanes — and
+# Pi's pds above — stay on V4-Pro. Do not "resync" the model ids; revisit both
+# when the official V4-Pro ships ("coming soon" per the 2026-07-31 changelog).
 
 # Haiku / small-fast (background) tier → deepseek-v4-flash: 3x cheaper miss
 # ($0.14 vs $0.435 /MTok) at no cost to the main agent. main/opus/sonnet/subagent
-# stay on deepseek-v4-pro[1m] — the [1m] pins the 1M context window (accepted by
-# the endpoint, verified 2026-07-02; flash is 1M-native so takes no suffix).
+# stay on deepseek-v4-pro[1m] — the [1m] is the *harness's* 1M-window selector,
+# not an API id (accepted by the endpoint, verified 2026-07-02). Both V4 models
+# are 1M on the backend; the bare flash id is fine here because this is only the
+# small-fast/background tier. Where a bare id drives a main agent — the relay
+# deepseek lane — set CLAUDE_CODE_{AUTO_COMPACT_WINDOW,MAX_CONTEXT_TOKENS}
+# explicitly instead, as peers.json does for flash and for Kimi.
 # Matches DeepSeek's official Claude Code setup
 # (api-docs.deepseek.com/quick_start/agent_integrations/claude_code).
 _deepseek(){
