@@ -30,7 +30,9 @@ fi
 
 VERSION=2
 
-HOST=macmini
+# Override with GPT_PRO_HOST to pick a different SSH route to the same box — e.g.
+# GPT_PRO_HOST=macmini-fast when Tailscale is down or slow (see ~/.ssh/config).
+HOST=${GPT_PRO_HOST:-macmini}
 RELAY_BIN=gpt-pro-relay
 RELAY_VENV=/Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro-relay
 SSH_OPTS=(-S none -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
