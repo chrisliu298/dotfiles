@@ -23,7 +23,7 @@ dotfiles/
     ├── claude/              # Claude Code config (CLAUDE.md, settings, hooks)
     ├── codex/               # Codex config (AGENTS.md)
     ├── grok/                # Grok Build config (AGENTS.md)
-    ├── pi/                  # Pi config (AGENTS.md, settings)
+    ├── pi/                  # Pi config (AGENTS.md, settings, themes)
     └── skills/              # Repo-owned skill sources + authoring references
 ```
 

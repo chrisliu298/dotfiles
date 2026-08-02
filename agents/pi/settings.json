@@ -5,14 +5,17 @@
   "enableInstallTelemetry": false,
   "defaultProjectTrust": "always",
   "quietStartup": false,
-  "lastChangelogVersion": "0.80.3",
-  "theme": "dark",
+  "lastChangelogVersion": "0.83.0",
+  "steeringMode": "all",
+  "followUpMode": "all",
+  "theme": "dotfiles",
   "packages": [
     "npm:pi-subagents",
     "npm:pi-web-access",
     "npm:@plannotator/pi-extension",
     "npm:context-mode",
     "npm:pi-hermes-memory",
-    "npm:pi-lens"
+    "npm:pi-lens",
+    "git:github.com/algal/pi-openai-server-compaction@8a3de2f3b0c178fdd6f73f2f94172dfc3943e466"
   ]
 }

@@ -6,7 +6,7 @@ Personal dotfiles and AI agent configurations for macOS with zsh, managed by `do
 
 ## Project Structure & Module Organization
 
-Four `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`CLAUDE.md`, `settings.json` — copied, not symlinked — keybindings, statusline), `codex/` → `~/.codex/`, `grok/` → `~/.grok/` (relay/prism dispatch target), `pi/` → `~/.pi/agent/`. The rest are not agent homes:
+Four `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`CLAUDE.md`, `settings.json` — copied, not symlinked — keybindings, statusline, themes), `codex/` → `~/.codex/`, `grok/` → `~/.grok/` (relay/prism dispatch target), `pi/` → `~/.pi/agent/`. The rest are not agent homes:
 
 - `agents/eval/` — instruction-following harness for the shared agent doc (prompts, rubric, runner scripts).
 - `agents/hooks/` — shared Claude/Codex destructive-command guard and tests.
@@ -28,7 +28,7 @@ Elsewhere:
 ## Conventions
 
 - **Shell load order**: `shell/.zshenv` (platform detection, env, PATH) → `shell/.zshrc` (plugins, sources `.aliases` + `.functions`)
-- **Themes**: Ghostty, Starship, btop, and tmux (Catppuccin Latte/GitHub Light ↔ GitHub Dark), toggled with `theme light|dark|toggle|status`; use `theme --all <mode>` to apply the same mode on this host plus macmini and l40s. The active choice is **host-local** — a single `mode` file under `~/.local/state/dotfiles-theme/` (never tracked, so switching never dirties git); definitions stay in-repo. `shell/theme-apply` materializes each tool's live config from `mode` (Ghostty/tmux via optional `config-file`/`source-file -q` includes; btop/Starship as generated files, since neither supports includes), and `dotfiles.sh` seeds/re-applies it per host.
+- **Themes**: Ghostty, Starship, btop, tmux, and pi (Catppuccin Latte/GitHub Light ↔ GitHub Dark), toggled with `theme light|dark|toggle|status`; use `theme --all <mode>` to apply the same mode on this host plus macmini and l40s. The active choice is **host-local** — a single `mode` file under `~/.local/state/dotfiles-theme/` (never tracked, so switching never dirties git); definitions stay in-repo. `shell/theme-apply` materializes each tool's live config from `mode` (Ghostty/tmux via optional `config-file`/`source-file -q` includes; btop/Starship as generated files, since neither supports includes), and `dotfiles.sh` seeds/re-applies it per host. pi is the special case: it pins its `theme` setting to the custom theme `dotfiles`, and `theme-apply` swaps *what that theme is* by copying `agents/pi/themes/<mode>.json` to `~/.pi/agent/themes/dotfiles.json` — pi watches that file, so running sessions repaint without a restart. It needs this because its auto mode (`theme: "light/dark"`, since 0.79.7) resolves from terminal background detection rather than from `mode`, so it would ignore `theme --all` whenever the terminal disagrees with the host's chosen mode (notably SSH sessions into macmini/l40s).
 
 ## Skills, MCP Servers & Plugins
 

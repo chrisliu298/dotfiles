@@ -3,19 +3,22 @@
 #
 # Single source of truth for turning a light/dark choice into live config,
 # shared by the `theme` shell function and dotfiles.sh so the two never drift.
-# Writes ONLY host-local files (XDG state dir + the real ~/.config/btop/btop.conf)
-# — never a git-tracked file — so switching themes can never dirty the tree.
+# Writes ONLY host-local files (XDG state dir + the real ~/.config/btop/btop.conf
+# and ~/.pi/agent/themes/) — never a git-tracked file — so switching themes can
+# never dirty the tree.
 #
 # Usage: theme-apply <light|dark>
 #
 # Derived outputs (all outside git):
-#   $STATE_DIR/ghostty.conf   one line, pulled in by ghostty `config-file = ?…`
-#   $STATE_DIR/tmux.conf      one line, pulled in by tmux `source-file -q …`
-#   $STATE_DIR/starship.toml  full config (STARSHIP_CONFIG target), palette applied
-#   ~/.config/btop/btop.conf  full config, generated from the tracked template
+#   $STATE_DIR/ghostty.conf        one line, pulled in by ghostty `config-file = ?…`
+#   $STATE_DIR/tmux.conf           one line, pulled in by tmux `source-file -q …`
+#   $STATE_DIR/starship.toml       full config (STARSHIP_CONFIG target), palette applied
+#   ~/.config/btop/btop.conf       full config, generated from the tracked template
+#   ~/.pi/agent/themes/dotfiles.json     full theme, copied from the tracked definition
 #
 # Theme *definitions* stay tracked: ghostty/tmux theme files, btop themes/,
-# and the starship [palettes.*] tables inside the template.
+# agents/pi/themes/{light,dark}.json, and the starship [palettes.*] tables
+# inside the template.
 set -eu
 
 mode=${1:?usage: theme-apply <light|dark>}
@@ -26,6 +29,10 @@ STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme"
 btop_template="${BTOP_TEMPLATE:-$HOME/.config/btop/btop.conf.template}"
 starship_template="${STARSHIP_TEMPLATE:-$HOME/.config/starship/starship.toml}"
 btop_live="${BTOP_LIVE:-$HOME/.config/btop/btop.conf}"
+# pi has no ~/.pi/agent/themes symlink to read definitions through, so this one
+# points straight at the repo (dotfiles.sh overrides it during a fresh install).
+pi_themes="${PI_THEMES:-$HOME/dotfiles/agents/pi/themes}"
+pi_live="${PI_LIVE_THEME:-$HOME/.pi/agent/themes/dotfiles.json}"
 
 case "$mode" in
     light) ghostty_theme="Catppuccin Latte"; btop_theme="github_light"; tmux_theme="github_light"; starship_palette="catppuccin_latte" ;;
@@ -72,3 +79,34 @@ if [ -f "$starship_template" ]; then
     }
     mv "$STATE_DIR/starship.toml.tmp" "$STATE_DIR/starship.toml"
 fi
+
+# pi pins its `theme` setting to the custom theme "dotfiles" and lets this script
+# swap what that theme *is*. Unlike the btop and starship templates — which can
+# legitimately be absent mid-install — the definition lives in the repo and the
+# pinned setting references it unconditionally, so a missing one is a hard error:
+# pi would fail to load the theme and fall back to its own default palette while
+# dotfiles.sh still logged the apply as successful.
+install_agent_theme() {
+    src="$1" live="$2" label="$3"
+    if [ ! -f "$src" ]; then
+        printf 'theme-apply: %s theme definition missing: %s\n' "$label" "$src" >&2
+        exit 1
+    fi
+    mkdir -p "$(dirname "$live")"
+    cp "$src" "$live.tmp" || {
+        rm -f "$live.tmp"
+        printf 'theme-apply: failed to stage %s theme from %s\n' "$label" "$src" >&2
+        exit 1
+    }
+    mv "$live.tmp" "$live"
+}
+
+# pi: it *does* have an auto mode — `"theme": "light/dark"` (since 0.79.7) picks
+# between two themes — but it resolves from terminal background detection, not
+# from our `mode` file, so it would ignore `theme --all` and diverge whenever the
+# terminal doesn't match the host's chosen mode (notably SSH sessions into
+# macmini/l40s). Keeping `mode` authoritative means swapping the definition
+# instead. Both carry "name": "dotfiles", so the copy needs no rewriting, and pi
+# hot-reloads the active custom theme, so running sessions repaint immediately.
+install_agent_theme "$pi_themes/$mode.json" "$pi_live" pi
+
