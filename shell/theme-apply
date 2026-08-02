@@ -119,11 +119,11 @@ install_agent_theme "$pi_themes/$mode.json" "$pi_live" pi
 # claude: same trick, different reason. Claude Code's `theme = auto` does follow
 # the terminal, but it only picks between Anthropic's own palettes — and the
 # light one paints user messages rgb(240,240,240), indistinguishable from
-# Catppuccin Latte's #eff1f5 background. Matching this repo needs a custom
-# theme, and selecting one pins the light/dark base, so settings.json pins
-# `theme` to "custom:dotfiles" and the mode picks which definition that slug
-# resolves to. Each file maps 56 of Claude's 72 color tokens onto the mode's
-# family (Latte / GitHub Dark); see agents/claude/README.md for the rules and
-# the contrast numbers. Claude watches ~/.claude/themes and re-resolves
-# base+overrides on change, so running sessions repaint without a restart.
+# Catppuccin Latte's #eff1f5 background. Fixing that needs a custom theme, and
+# selecting one pins the light/dark base, so settings.json pins `theme` to
+# "custom:dotfiles" and the mode picks which definition that slug resolves to.
+# Each file overrides only the user-message band and its hover, tinted to the
+# mode's family; everything else stays on Anthropic's palette. Claude watches
+# ~/.claude/themes and re-resolves base+overrides on change, so running sessions
+# repaint without a restart.
 install_agent_theme "$claude_themes/$mode.json" "$claude_live" claude

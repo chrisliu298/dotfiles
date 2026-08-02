@@ -740,12 +740,12 @@ lint_agentdocs() {
 }
 
 # ── Claude theme drift-guard ─────────────────────────────────────
-# agents/claude/themes/{light,dark}.json override 56 of Claude Code's 72 color
-# tokens by name. The loader is silent in both failure modes: an override naming
-# a token that no longer exists is dropped with no log at any level (not even
-# --debug), and a `base` it doesn't recognize falls back to "dark" — which would
-# paint 56 light values on a dark base. Both are invisible until you notice a
-# stray color weeks later, so assert against the installed binary instead.
+# agents/claude/themes/{light,dark}.json name Claude Code color tokens directly.
+# The loader is silent in both failure modes: an override naming a token that no
+# longer exists is dropped with no log at any level (not even --debug), and a
+# `base` it doesn't recognize falls back to "dark" — which would drop light.json
+# onto a dark palette. Both are invisible until you notice a stray color weeks
+# later, so assert against the installed binary instead.
 # Advisory-only when the binary or the tools to read it are absent (peers may
 # not have Claude Code installed).
 lint_claude_theme() {
