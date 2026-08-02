@@ -11,6 +11,15 @@ disable_mouse_tracking() {
     printf '\e[?1000l\e[?1002l\e[?1003l\e[?1006l' >/dev/tty 2>/dev/null
 }
 
+# The machines this repo is kept in sync across, as `ssh-alias:hostname -s` pairs.
+# Single source of truth: both `theme --all` and `dfs` fan out over this list and
+# skip whichever entry is the current host. Keeping two copies drifted once —
+# `theme --all` omitted macbookpro16, so a mode set from another machine never
+# reached it while `dfs` had already shipped it the definitions.
+_dotfiles_peers() {
+    printf '%s\n' macbookpro16:MacBookPro16 macmini-fast:macmini l40s:lambda-scalar
+}
+
 _theme_resolve_mode() {
     local mode="${1:-toggle}"
     local state_dir="${DOTFILES_THEME_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme}"
@@ -160,7 +169,7 @@ theme() {
     fi
 
     local _c=$'\033[1;36m' _g=$'\033[32m' _r=$'\033[31m' _d=$'\033[2m' _0=$'\033[0m'
-    local peers=(macmini-fast:macmini l40s:lambda-scalar)
+    local peers=("${(@f)$(_dotfiles_peers)}")
     local self_host self_host_l peer peer_alias peer_host hosts=()
     self_host=$(hostname -s 2>/dev/null)
     self_host_l=${self_host:l}
@@ -280,7 +289,7 @@ dfs() {
     printf '\n  %sdfs%s  %ssync dotfiles everywhere%s\n\n' "$_c" "$_0" "$_d" "$_0"
 
     # SSH alias:hostname -s
-    local dfs_peers=(macbookpro16:MacBookPro16 macmini-fast:macmini l40s:lambda-scalar)
+    local dfs_peers=("${(@f)$(_dotfiles_peers)}")
     local self_host=$(hostname -s 2>/dev/null)
     local self_host_l=${self_host:l}
     local self_alias="" peer peer_alias peer_host hosts=() failed_hosts=()

@@ -101,16 +101,17 @@ That is reuse across roles that never render adjacent, not a collision.
 
 ### After a Claude Code upgrade
 
-Overrides naming a token that no longer exists are **dropped silently** — no error, no log. If
-a color looks stock after an upgrade, check that the theme's keys still exist in the base
-palette:
+Overrides naming a token that no longer exists are **dropped silently** — no error, no log, not
+even under `--debug` — and a `base` Claude doesn't recognize falls back to `dark`, which would
+paint 56 light values on a dark base. Both are invisible until you notice a stray color weeks
+later, so `./dotfiles.sh lint` asserts against the installed binary (`lint_claude_theme`): it
+reads the palette key set out of the Claude Code executable and fails on any token name it
+doesn't contain, any unrecognized `base`, and any value Claude's validator would reject. It runs
+at the end of every full `./dotfiles.sh`, so `dfs` exercises it on each host, and it downgrades
+to a skip where Claude Code isn't installed.
 
-```sh
-strings -a ~/.local/share/claude/versions/$(claude --version | cut -d' ' -f1) \
-  | grep -oE 'userMessageBackground|diffAddedWord|effortUltra'
-```
-
-Verified against Claude Code 2.1.220: all 56 keys present in both the `light` and `dark` bases.
+That makes an upgrade that renames a token loud instead of silent. Verified against 2.1.220:
+all 56 keys present in both the `light` and `dark` bases.
 
 ## Status line
 

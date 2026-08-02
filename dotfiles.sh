@@ -678,11 +678,13 @@ lint_skills() {
         hits=1
     done
     (( hits )) && warn "fix per agents/skills/references/universal-skill-authoring.md, or scope the skill claude-only"
-    # docmaint + agentdocs statuses propagate: fatal for `./dotfiles.sh lint`, advisory in a full run
-    local _dm=0 _ad=0
-    lint_docmaint  || _dm=$?
-    lint_agentdocs || _ad=$?
-    return $(( _dm || _ad ))
+    # docmaint + agentdocs + claude-theme statuses propagate: fatal for `./dotfiles.sh lint`,
+    # advisory in a full run
+    local _dm=0 _ad=0 _ct=0
+    lint_docmaint     || _dm=$?
+    lint_agentdocs    || _ad=$?
+    lint_claude_theme || _ct=$?
+    return $(( _dm || _ad || _ct ))
 }
 
 # ── docmaint drift-guard ─────────────────────────────────────────
@@ -731,6 +733,68 @@ lint_agentdocs() {
         if [[ ! -f "$ROOT/$f" ]]; then warn "agentdocs: missing copy $f"; rc=1; continue; fi
         if ! diff -q <(tail -n +2 "$ROOT/$ref") <(tail -n +2 "$ROOT/$f") >/dev/null 2>&1; then
             warn "agentdocs: $f differs from $ref below the H1 (bodies must be identical) — re-copy the canonical text"
+            rc=1
+        fi
+    done
+    return "$rc"
+}
+
+# ── Claude theme drift-guard ─────────────────────────────────────
+# agents/claude/themes/{light,dark}.json override 56 of Claude Code's 72 color
+# tokens by name. The loader is silent in both failure modes: an override naming
+# a token that no longer exists is dropped with no log at any level (not even
+# --debug), and a `base` it doesn't recognize falls back to "dark" — which would
+# paint 56 light values on a dark base. Both are invisible until you notice a
+# stray color weeks later, so assert against the installed binary instead.
+# Advisory-only when the binary or the tools to read it are absent (peers may
+# not have Claude Code installed).
+lint_claude_theme() {
+    local bin themes="$ROOT/agents/claude/themes"
+    [[ -d "$themes" ]] || return 0
+    bin=$(command -v claude 2>/dev/null) || { log "claude theme: claude not installed, skipped"; return 0; }
+    while [[ -L "$bin" ]]; do bin=$(readlink "$bin"); done
+    if ! command -v strings >/dev/null 2>&1 || ! command -v perl >/dev/null 2>&1; then
+        log "claude theme: strings/perl unavailable, skipped"; return 0
+    fi
+
+    # Palette key set, read value-independently: anchor on the first key of any
+    # palette literal and collect keys until one repeats (the next palette).
+    local keys
+    keys=$(strings -a "$bin" 2>/dev/null | perl -ne '
+        next unless /autoAccept:"/;
+        my $seg = substr($_, index($_, "autoAccept:\""), 8000);
+        my (%seen, @k);
+        while ($seg =~ /([A-Za-z_][A-Za-z0-9_]*):"/g) { last if $seen{$1}++; push @k, $1 }
+        print "$_\n" for @k; exit 0;')
+    if [[ -z "$keys" ]]; then
+        warn "claude theme: could not read the palette from $bin — check the extraction in lint_claude_theme"
+        return 1
+    fi
+
+    local bases rc=0 f mode base bad
+    bases=$(strings -a "$bin" 2>/dev/null | grep -o '"dark","light"[^]]*' | head -1)
+    for mode in light dark; do
+        f="$themes/$mode.json"
+        [[ -f "$f" ]] || { warn "claude theme: missing $mode.json"; rc=1; continue; }
+        base=$(jq -r '.base' "$f")
+        if [[ -n "$bases" && ",$bases," != *"\"$base\""* ]]; then
+            warn "claude theme: $mode.json base \"$base\" is not a built-in theme — Claude silently falls back to dark"
+            rc=1
+        fi
+        # Overrides Claude would drop on the floor: unknown key, or a value its
+        # validator rejects (#rgb, #rrggbb, rgb(r, g, b), ansi256(n), ansi:name).
+        bad=$(comm -23 <(jq -r '.overrides|keys[]' "$f" | sort) <(printf '%s\n' "$keys" | sort))
+        if [[ -n "$bad" ]]; then
+            warn "claude theme: $mode.json names tokens absent from $(basename "$bin") — dropped silently:"
+            printf '%s\n' "$bad" | sed 's/^/        /' >&2
+            rc=1
+        fi
+        bad=$(jq -r '.overrides|to_entries[]
+                     |select(.value|test("^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|rgb\\( ?[0-9]{1,3}, ?[0-9]{1,3}, ?[0-9]{1,3} ?\\)|ansi256\\([0-9]{1,3}\\)|ansi:[a-zA-Z]+)$")|not)
+                     |"\(.key) = \(.value)"' "$f")
+        if [[ -n "$bad" ]]; then
+            warn "claude theme: $mode.json has values Claude's validator rejects:"
+            printf '%s\n' "$bad" | sed 's/^/        /' >&2
             rc=1
         fi
     done
