@@ -20,7 +20,7 @@ dotfiles/
 ├── shell/                   # Zsh config (Zinit, Starship, fzf)
 ├── .config/                 # App configs (Neovim, tmux, btop)
 └── agents/                  # AI agent configurations
-    ├── claude/              # Claude Code config (CLAUDE.md, settings, hooks)
+    ├── claude/              # Claude Code config (CLAUDE.md, settings, hooks, themes)
     ├── codex/               # Codex config (AGENTS.md)
     ├── grok/                # Grok Build config (AGENTS.md)
     ├── pi/                  # Pi config (AGENTS.md, settings, themes)

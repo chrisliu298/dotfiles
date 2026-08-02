@@ -15,10 +15,11 @@
 #   $STATE_DIR/starship.toml       full config (STARSHIP_CONFIG target), palette applied
 #   ~/.config/btop/btop.conf       full config, generated from the tracked template
 #   ~/.pi/agent/themes/dotfiles.json     full theme, copied from the tracked definition
+#   ~/.claude/themes/dotfiles.json       full theme, copied from the tracked definition
 #
 # Theme *definitions* stay tracked: ghostty/tmux theme files, btop themes/,
-# agents/pi/themes/{light,dark}.json, and the starship [palettes.*] tables
-# inside the template.
+# agents/{pi,claude}/themes/{light,dark}.json, and the starship [palettes.*]
+# tables inside the template.
 set -eu
 
 mode=${1:?usage: theme-apply <light|dark>}
@@ -33,6 +34,10 @@ btop_live="${BTOP_LIVE:-$HOME/.config/btop/btop.conf}"
 # points straight at the repo (dotfiles.sh overrides it during a fresh install).
 pi_themes="${PI_THEMES:-$HOME/dotfiles/agents/pi/themes}"
 pi_live="${PI_LIVE_THEME:-$HOME/.pi/agent/themes/dotfiles.json}"
+# Claude Code is the same special case as pi (see below), and ~/.claude/themes is
+# likewise not symlinked, so this also points straight at the repo.
+claude_themes="${CLAUDE_THEMES:-$HOME/dotfiles/agents/claude/themes}"
+claude_live="${CLAUDE_LIVE_THEME:-$HOME/.claude/themes/dotfiles.json}"
 
 case "$mode" in
     light) ghostty_theme="Catppuccin Latte"; btop_theme="github_light"; tmux_theme="github_light"; starship_palette="catppuccin_latte" ;;
@@ -80,12 +85,13 @@ if [ -f "$starship_template" ]; then
     mv "$STATE_DIR/starship.toml.tmp" "$STATE_DIR/starship.toml"
 fi
 
-# pi pins its `theme` setting to the custom theme "dotfiles" and lets this script
-# swap what that theme *is*. Unlike the btop and starship templates — which can
-# legitimately be absent mid-install — the definition lives in the repo and the
-# pinned setting references it unconditionally, so a missing one is a hard error:
-# pi would fail to load the theme and fall back to its own default palette while
-# dotfiles.sh still logged the apply as successful.
+# pi and Claude Code both pin their `theme` setting to the custom theme
+# "dotfiles" and let this script swap what that theme *is*. Unlike the btop and
+# starship templates — which can legitimately be absent mid-install — these
+# definitions live in the repo and the pinned setting references them
+# unconditionally, so a missing one is a hard error: the agent would fail to
+# load the theme and fall back to its own default palette while dotfiles.sh
+# still logged the apply as successful.
 install_agent_theme() {
     src="$1" live="$2" label="$3"
     if [ ! -f "$src" ]; then
@@ -110,3 +116,14 @@ install_agent_theme() {
 # hot-reloads the active custom theme, so running sessions repaint immediately.
 install_agent_theme "$pi_themes/$mode.json" "$pi_live" pi
 
+# claude: same trick, different reason. Claude Code's `theme = auto` does follow
+# the terminal, but its built-in light palette paints user messages
+# rgb(240,240,240) — indistinguishable from Catppuccin Latte's #eff1f5
+# background. Fixing that needs a custom theme, and selecting one pins the
+# light/dark base, so settings.json pins `theme` to "custom:dotfiles" and the
+# mode picks which definition that slug resolves to. Claude watches
+# ~/.claude/themes and re-resolves base+overrides on change, so running sessions
+# repaint without a restart. dark.json overrides nothing — the stock dark
+# palette already reads fine on GitHub Dark; it exists so switching to dark
+# restores it.
+install_agent_theme "$claude_themes/$mode.json" "$claude_live" claude

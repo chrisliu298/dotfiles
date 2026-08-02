@@ -224,8 +224,9 @@ _ensure_source() {
 # ── Install functions ────────────────────────────────────────────
 
 # Host-local active theme, decoupled from git. The choice lives in a single
-# mode file under XDG state; theme-apply materializes the five tools' live config
-# from it (ghostty/tmux via optional includes; btop/Starship/pi as generated files).
+# mode file under XDG state; theme-apply materializes the six tools' live config
+# from it (ghostty/tmux via optional includes; btop/Starship/pi/claude as generated
+# files).
 # MUST run before install_links: it converts a legacy whole-dir btop symlink into
 # a real dir so the per-file btop links below don't rm -rf through the symlink
 # into the repo. Idempotent and safe to re-run on every host.
@@ -254,6 +255,7 @@ setup_theme_state() {
     BTOP_TEMPLATE="$ROOT/.config/btop/btop.conf.template" \
     STARSHIP_TEMPLATE="$ROOT/.config/starship/starship.toml" \
     PI_THEMES="$ROOT/agents/pi/themes" \
+    CLAUDE_THEMES="$ROOT/agents/claude/themes" \
         "$ROOT/shell/theme-apply" "$mode" \
         && log "apply theme: $mode" \
         || warn "theme-apply failed for mode=$mode"
