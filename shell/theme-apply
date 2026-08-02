@@ -4,8 +4,8 @@
 # Single source of truth for turning a light/dark choice into live config,
 # shared by the `theme` shell function and dotfiles.sh so the two never drift.
 # Writes ONLY host-local files (XDG state dir + the real ~/.config/btop/btop.conf
-# and ~/.pi/agent/themes/) — never a git-tracked file — so switching themes can
-# never dirty the tree.
+# and ~/.{pi/agent,claude}/themes/) — never a git-tracked file — so switching
+# themes can never dirty the tree.
 #
 # Usage: theme-apply <light|dark>
 #
@@ -117,13 +117,13 @@ install_agent_theme() {
 install_agent_theme "$pi_themes/$mode.json" "$pi_live" pi
 
 # claude: same trick, different reason. Claude Code's `theme = auto` does follow
-# the terminal, but its built-in light palette paints user messages
-# rgb(240,240,240) — indistinguishable from Catppuccin Latte's #eff1f5
-# background. Fixing that needs a custom theme, and selecting one pins the
-# light/dark base, so settings.json pins `theme` to "custom:dotfiles" and the
-# mode picks which definition that slug resolves to. Claude watches
-# ~/.claude/themes and re-resolves base+overrides on change, so running sessions
-# repaint without a restart. dark.json overrides nothing — the stock dark
-# palette already reads fine on GitHub Dark; it exists so switching to dark
-# restores it.
+# the terminal, but it only picks between Anthropic's own palettes — and the
+# light one paints user messages rgb(240,240,240), indistinguishable from
+# Catppuccin Latte's #eff1f5 background. Matching this repo needs a custom
+# theme, and selecting one pins the light/dark base, so settings.json pins
+# `theme` to "custom:dotfiles" and the mode picks which definition that slug
+# resolves to. Each file maps 56 of Claude's 72 color tokens onto the mode's
+# family (Latte / GitHub Dark); see agents/claude/README.md for the rules and
+# the contrast numbers. Claude watches ~/.claude/themes and re-resolves
+# base+overrides on change, so running sessions repaint without a restart.
 install_agent_theme "$claude_themes/$mode.json" "$claude_live" claude
