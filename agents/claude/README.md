@@ -26,16 +26,24 @@ Both files set `base` (`light`/`dark`) and override exactly two tokens: the user
 and its hover. Everything else stays on Anthropic's palette for that base — the repo's own
 colors live in the terminal, and Claude paints straight onto the Ghostty canvas.
 
-| mode | band | hover | canvas | band vs canvas | stock band | body text on band |
-|------|------|-------|--------|----------------|------------|-------------------|
-| light | `#ccd0da` (Latte `surface1`) | `#dce0e8` (`crust`) | `#eff1f5` | 1.37:1 | 1.01:1 | 13.60:1 |
-| dark | `#30363d` (GitHub Dark) | `#3d444d` | `#0d1117` | 1.55:1 | 1.59:1 | 12.20:1 |
+| mode | band | hover | canvas | band vs canvas | hover vs canvas | stock band | body text on band |
+|------|------|-------|--------|----------------|-----------------|------------|-------------------|
+| light | `#dce0e8` (Latte `crust`) | `#ccd0da` (`surface0`) | `#eff1f5` | 1.17:1 | 1.37:1 | 1.01:1 | 15.87:1 |
+| dark | `#21262d` (GitHub Dark) | `#30363d` | `#0d1117` | 1.25:1 | 1.57:1 | 1.59:1 | 15.21:1 |
 
-The stock dark band reads well at 1.59:1 from its canvas, which set the target; the stock light
-band misses it entirely at 1.01:1 — the bug this fixes — and tmux's elevated `#161b22` would have
-landed at 1.08:1 and disappeared the same way. Light deliberately sits one stop *below* the shared
-target: a dark band on a light canvas reads heavier than a light band on a dark one at equal
-contrast ratio, so matching the number overshoots. Tuned by eye from there.
+The stock dark band sets the ceiling at 1.59:1 from its canvas; the stock light band misses
+entirely at 1.01:1 — the bug this fixes. Both bands sit one stop *inside* that ceiling: legible as
+a distinct block without reading as a slab, tuned by eye from there. Light stays below dark's
+number on purpose — a dark band on a light canvas reads heavier than a light band on a dark one at
+equal contrast ratio, so matching it overshoots.
+
+Hover moves *away* from the canvas in both modes (light darkens, dark lightens), so hovering always
+adds weight, and each mode's hover is the value its band used to hold.
+
+The light band is the same `#dce0e8` as the tmux status bar (`.config/tmux/themes/github_light.conf`)
+— one shared band surface across the screen in light mode. Dark can't share a hex: the tmux bar is
+anchored *below* the canvas at `#010409` while a message band has to sit above it, so the two match
+in rule (one stop off the canvas) rather than in value.
 
 Dark overrides the pair rather than inheriting because stock dark is a neutral `rgb(55,55,55)`,
 slightly warm against GitHub Dark's blue-gray canvas.

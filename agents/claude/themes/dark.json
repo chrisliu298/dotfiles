@@ -2,7 +2,7 @@
   "name": "dotfiles",
   "base": "dark",
   "overrides": {
-    "userMessageBackground": "#30363d",
-    "userMessageBackgroundHover": "#3d444d"
+    "userMessageBackground": "#21262d",
+    "userMessageBackgroundHover": "#30363d"
   }
 }
