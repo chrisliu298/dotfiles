@@ -1,5 +1,13 @@
 # GitHub Dark - Based on primer/github-vscode-theme
-# The default dark theme from GitHub's VS Code extension
+# The default dark theme from GitHub's VS Code extension. ANSI 0-15 match Primer
+# exactly; the one derived value is:
+#  - selection-background is not a Primer token: the theme defines
+#    editor.selectionBackground as the accent blue at 20%, which terminals need
+#    opaque. #1c2f45 is ansi.blue (#58a6ff) at 20% flattened onto the #0d1117
+#    canvas -- 1.39:1, matching the light theme's 1.33:1. Deliberately ansi.blue
+#    and not the theme's chrome accent (#2f81f7, which would give #142744 at a
+#    washed-out 1.26:1), so the selection matches the blue the terminal itself
+#    prints. Recompute if the background below ever changes.
 
 # ANSI Normal (0-7)
 palette = 0=#484f58
@@ -24,5 +32,5 @@ palette = 15=#ffffff
 # Base colors
 background = #0d1117
 foreground = #e6edf3
-selection-background = #1b3a5c
+selection-background = #1c2f45
 selection-foreground = #e6edf3
