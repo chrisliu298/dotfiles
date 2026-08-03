@@ -17,7 +17,7 @@ Skills are not here — they are symlinked into `~/.claude/skills/` from `agents
 
 Claude Code has a `theme: auto` that follows the terminal, but its built-in palettes are
 Anthropic's, not this repo's — and its light palette paints user messages `rgb(240,240,240)`,
-invisible on Catppuccin Latte's `#eff1f5`. Selecting any custom theme pins the light/dark base,
+invisible on the `#fafafa` canvas at 1.09:1. Selecting any custom theme pins the light/dark base,
 so `settings.json` pins `theme` to `custom:dotfiles` and `shell/theme-apply` copies
 `themes/<mode>.json` over `~/.claude/themes/dotfiles.json`. Claude watches that directory, so
 running sessions repaint without a restart. Same mechanism as pi.
@@ -28,22 +28,30 @@ colors live in the terminal, and Claude paints straight onto the Ghostty canvas.
 
 | mode | band | hover | canvas | band vs canvas | hover vs canvas | stock band | body text on band |
 |------|------|-------|--------|----------------|-----------------|------------|-------------------|
-| light | `#dce0e8` (Latte `crust`) | `#ccd0da` (`surface0`) | `#eff1f5` | 1.17:1 | 1.37:1 | 1.01:1 | 15.87:1 |
-| dark | `#21262d` (GitHub Dark) | `#30363d` | `#0d1117` | 1.25:1 | 1.57:1 | 1.59:1 | 15.21:1 |
+| light | `#ebedef` (`neutral.muted`) | `#d0d7de` (`border.default`) | `#fafafa` | 1.12:1 | 1.39:1 | 1.09:1 | 17.89:1 |
+| dark | `#21262d` (`border.muted`) | `#30363d` (`border.default`) | `#0d1117` | 1.25:1 | 1.57:1 | 1.59:1 | 15.21:1 |
 
 The stock dark band sets the ceiling at 1.59:1 from its canvas; the stock light band misses
-entirely at 1.01:1 — the bug this fixes. Both bands sit one stop *inside* that ceiling: legible as
+entirely at 1.09:1 — the bug this fixes. Both bands sit one stop *inside* that ceiling: legible as
 a distinct block without reading as a slab, tuned by eye from there. Light stays below dark's
 number on purpose — a dark band on a light canvas reads heavier than a light band on a dark one at
 equal contrast ratio, so matching it overshoots.
 
 Hover moves *away* from the canvas in both modes (light darkens, dark lightens), so hovering always
-adds weight, and each mode's hover is the value its band used to hold.
+adds weight.
 
-The light band is the same `#dce0e8` as the tmux status bar (`.config/tmux/themes/github_light.conf`)
-— one shared band surface across the screen in light mode. Dark can't share a hex: the tmux bar is
-anchored *below* the canvas at `#010409` while a message band has to sit above it, so the two match
-in rule (one stop off the canvas) rather than in value.
+Neither mode shares a hex with the tmux status bar (`#eaeef2` light, `#010409` dark) — they match in
+*rule* instead: every band on screen sits one stop off its own canvas. The tmux bar is chrome anchored
+below the canvas; a message band sits above it in dark and, on a canvas this light, just off it in
+light. `neutral.muted` is Primer's background token for exactly this — a surface that reads as a
+distinct block without claiming elevation.
+
+Both light values are derived rather than picked: `#ebedef` is `neutral.muted` (`rgba(175,184,193,0.2)`)
+flattened onto the `#fafafa` canvas, the same flatten rule the Ghostty themes use for
+`selection-background`. Recompute it if the canvas ever changes. The hover pair mirrors dark exactly —
+`border.muted` band, `border.default` hover — except light's `border.muted` (`#d8dee4`, 1.30:1) lands
+heavier than the 1.12:1 this band is tuned to, so light takes `neutral.muted` for the band and keeps
+`border.default` for the hover.
 
 Dark overrides the pair rather than inheriting because stock dark is a neutral `rgb(55,55,55)`,
 slightly warm against GitHub Dark's blue-gray canvas.

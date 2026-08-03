@@ -6,8 +6,8 @@ Terminal application configs.
 
 | App | Config | Notes |
 |-----|--------|-------|
-| Ghostty | `ghostty/config` | Berkeley Mono font, Catppuccin Latte/GitHub Dark themes |
-| Starship | `starship/starship.toml` | Prompt with Catppuccin Latte/GitHub Dark palettes |
+| Ghostty | `ghostty/config` | Berkeley Mono font, GitHub Light/Dark themes (light canvas softened to `#fafafa`) |
+| Starship | `starship/starship.toml` | Prompt with GitHub Light/Dark palettes |
 | Neovim | `nvim/init.lua` | Minimal, no plugins |
 | tmux | `tmux/tmux.conf` | Prefix: `C-a`, vi mode, mouse enabled, GitHub Light/Dark themes |
 | btop | `btop/btop.conf` | GitHub Light/Dark themes, braille graphs |

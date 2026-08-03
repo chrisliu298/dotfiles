@@ -67,8 +67,8 @@ _theme_local() {
     esac
 
     case "$new_mode" in
-        light) ghostty_theme="Catppuccin Latte"; btop_theme="github_light"; tmux_theme="github_light"; starship_palette="catppuccin_latte"; system_theme="Light" ;;
-        dark)  ghostty_theme="GitHub Dark";       btop_theme="github_dark";  tmux_theme="github_dark";  starship_palette="github_dark";      system_theme="Dark"  ;;
+        light) ghostty_theme="GitHub Light"; btop_theme="github_light"; tmux_theme="github_light"; starship_palette="github_light"; system_theme="Light" ;;
+        dark)  ghostty_theme="GitHub Dark";  btop_theme="github_dark";  tmux_theme="github_dark";  starship_palette="github_dark";  system_theme="Dark"  ;;
     esac
 
     # Validate tracked theme *definitions* exist before switching.

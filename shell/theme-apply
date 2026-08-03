@@ -40,8 +40,8 @@ claude_themes="${CLAUDE_THEMES:-$HOME/dotfiles/agents/claude/themes}"
 claude_live="${CLAUDE_LIVE_THEME:-$HOME/.claude/themes/dotfiles.json}"
 
 case "$mode" in
-    light) ghostty_theme="Catppuccin Latte"; btop_theme="github_light"; tmux_theme="github_light"; starship_palette="catppuccin_latte" ;;
-    dark)  ghostty_theme="GitHub Dark";       btop_theme="github_dark";  tmux_theme="github_dark";  starship_palette="github_dark" ;;
+    light) ghostty_theme="GitHub Light"; btop_theme="github_light"; tmux_theme="github_light"; starship_palette="github_light" ;;
+    dark)  ghostty_theme="GitHub Dark";  btop_theme="github_dark";  tmux_theme="github_dark";  starship_palette="github_dark" ;;
     *) printf 'theme-apply: invalid mode: %s (want light|dark)\n' "$mode" >&2; exit 2 ;;
 esac
 
@@ -118,8 +118,8 @@ install_agent_theme "$pi_themes/$mode.json" "$pi_live" pi
 
 # claude: same trick, different reason. Claude Code's `theme = auto` does follow
 # the terminal, but it only picks between Anthropic's own palettes — and the
-# light one paints user messages rgb(240,240,240), indistinguishable from
-# Catppuccin Latte's #eff1f5 background. Fixing that needs a custom theme, and
+# light one paints user messages rgb(240,240,240), indistinguishable from the
+# #fafafa canvas at 1.09:1. Fixing that needs a custom theme, and
 # selecting one pins the light/dark base, so settings.json pins `theme` to
 # "custom:dotfiles" and the mode picks which definition that slug resolves to.
 # Each file overrides only the user-message band and its hover, tinted to the

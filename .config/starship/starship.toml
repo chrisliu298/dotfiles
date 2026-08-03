@@ -162,14 +162,17 @@ gh_purple = "#bc8cff"    # infrastructure, vim replace
 gh_muted = "#8b949e"     # user@host — present but quiet
 gh_dimmed = "#6e7681"    # time, cmd_duration — ambient
 
-# Catppuccin Latte palette
-# Same semantic roles as github_dark, mapped onto the Latte color family.
-[palettes.catppuccin_latte]
-gh_red = "#d20f39"       # root user, errors, prompt error
-gh_green = "#40a02b"     # git clean, prompt ok
-gh_yellow = "#df8e1d"    # git dirty/state, vim visual
-gh_blue = "#1e66f5"      # directory — primary navigation
-gh_cyan = "#179299"      # language runtimes — secondary info
-gh_purple = "#8839ef"    # infrastructure, vim replace
-gh_muted = "#6c6f85"     # user@host — present but quiet
-gh_dimmed = "#8c8fa1"    # time, cmd_duration — ambient
+# GitHub Light palette — same semantic roles as github_dark, on Primer's light scale.
+# These track the Ghostty GitHub Light ANSI slots, so the prompt and the terminal
+# agree. Yellow is the exception: it takes Primer's attention fg #9a6700 (4.9:1 on
+# the #fafafa canvas) rather than the ANSI gold, which sits at 2.3:1 and is only
+# legible as a fill.
+[palettes.github_light]
+gh_red = "#cf222e"       # root user, errors, prompt error
+gh_green = "#1a7f37"     # git clean, prompt ok
+gh_yellow = "#9a6700"    # git dirty/state, vim visual
+gh_blue = "#0969da"      # directory — primary navigation
+gh_cyan = "#1b7c83"      # language runtimes — secondary info
+gh_purple = "#8250df"    # infrastructure, vim replace
+gh_muted = "#6e7781"     # user@host — present but quiet
+gh_dimmed = "#8c959f"    # time, cmd_duration — ambient
