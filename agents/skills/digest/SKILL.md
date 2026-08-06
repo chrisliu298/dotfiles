@@ -21,7 +21,7 @@ Default: the immediately preceding assistant message. If the user names a file o
 
 ## Output shape
 
-Re-emit in this order (mirrors the Response Contract in CLAUDE.md / AGENTS.md):
+Re-emit in this order:
 
 1. **Answer** — one line: the outcome, answer, or decision. Never buried.
 2. **Short version** the reader can act on without scrolling:

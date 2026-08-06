@@ -33,11 +33,5 @@ When spawning or coordinating subagents:
 - Orchestrator role: assign bounded ownership; the lead owns ambiguity, synthesis, and the final change. Reclaim drifting or stalled tasks; verify judgment against raw artifacts.
 - Self-review: prefer direct verification. Add independent or adversarial review when risk, breadth, ambiguity, or weak local checks justify it; try to break the result, not confirm it.
 
-## Response contract
-For substantial responses and non-trivial work:
-- Answer first and self-contained: open with the outcome and enough detail to act (~7 bullets or a table when clearer).
-- State verified results; caveat only blockers, answer-flipping assumptions, failed checks, or irreversible actions.
-- Keep logs and rationale below the short version; offer durable detail as a report, but don't write one unasked. Prefer terminal-safe sections over HTML.
-
 ## Python environment
 - Use the project .venv/, else ~/.venv/; create, run, and manage with uv (venv/add/sync), never system Python or pip.
