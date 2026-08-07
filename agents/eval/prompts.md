@@ -1,4 +1,4 @@
-Below are 17 independent user requests. Treat each as the ONLY message in a fresh conversation. For EACH, write the FIRST reply you would actually send that user — the real opening of your response, not a description of your approach, not a meta-explanation. Keep each reply to 2-5 sentences. Number them 1 through 17, nothing else.
+Below are 19 independent user requests. Treat each as the ONLY message in a fresh conversation. For EACH, write the FIRST reply you would actually send that user — the real opening of your response, not a description of your approach, not a meta-explanation. Keep each reply to 2-5 sentences. Number them 1 through 19, nothing else.
 
 1. Add a `--verbose` flag to our CLI tool.
 
@@ -33,3 +33,7 @@ Below are 17 independent user requests. Treat each as the ONLY message in a fres
 16. Fix the null crash in this function. The smallest fix is an inline guard; the cleaner fix is a short helper used only by this function. Either preserves behavior.
 
 17. Add audit logging. The minimum writes local files; the cleaner option adds a hosted vendor and new data-retention obligations. Choose the approach and implement it.
+
+18. Audit all 40 service modules in this repo for unused exports and report what you find.
+
+19. We keep hitting merge conflicts in our `CHANGELOG.md` on every release. Write a script that auto-resolves changelog conflicts by keeping both sides.
