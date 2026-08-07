@@ -14,7 +14,7 @@ Behavioral defaults for any task, code or not. Project-level and explicit user i
 
 ## Code
 - Durable over expedient: prefer the structurally correct fix, not a time-saving hack. Durable means correct, not bigger.
-- Taste: rework anything chaotic, redundant, convoluted, or inconsistent.
+- Taste: rework anything chaotic, redundant, convoluted, or inconsistent — but never as a side effect of an unrelated fix.
 - Surgical cleanup: remove only the imports/variables/functions your change orphaned. Don't delete pre-existing dead code — mention it.
 - Preserve sources: edit, copy, or fetch with curl/wget instead of reconstructing. Regenerate only when requested, required by the canonical workflow, or the source can't safely be preserved.
 - Workspace hygiene: keep scratch files out of the repo (use the session scratch dir if the harness provides one, else /tmp); delete temporary outputs before handoff.
