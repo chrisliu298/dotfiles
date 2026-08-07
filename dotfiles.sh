@@ -226,7 +226,7 @@ _ensure_source() {
 # Host-local active theme, decoupled from git. The choice lives in a single
 # mode file under XDG state; theme-apply materializes the seven tools' live config
 # from it (ghostty/tmux via optional includes; btop/Starship/pi/claude as generated
-# files; Codex by updating only its desktop appearance setting).
+# files; Codex by updating only its TUI theme and desktop appearance settings).
 # MUST run before install_links: it converts a legacy whole-dir btop symlink into
 # a real dir so the per-file btop links below don't rm -rf through the symlink
 # into the repo. Idempotent and safe to re-run on every host.

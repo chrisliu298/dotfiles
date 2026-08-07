@@ -15,7 +15,7 @@
 #   $STATE_DIR/tmux.conf           one line, pulled in by tmux `source-file -q …`
 #   $STATE_DIR/starship.toml       full config (STARSHIP_CONFIG target), palette applied
 #   ~/.config/btop/btop.conf       full config, generated from the tracked template
-#   ~/.codex/config.toml           existing config, desktop appearance only
+#   ~/.codex/config.toml           existing config, TUI theme + desktop appearance only
 #   ~/.pi/agent/themes/dotfiles.json     full theme, copied from the tracked definition
 #   ~/.claude/themes/dotfiles.json       full theme, copied from the tracked definition
 #
@@ -43,8 +43,8 @@ claude_themes="${CLAUDE_THEMES:-$HOME/dotfiles/agents/claude/themes}"
 claude_live="${CLAUDE_LIVE_THEME:-$HOME/.claude/themes/dotfiles.json}"
 
 case "$mode" in
-    light) ghostty_theme="GitHub Light"; btop_theme="github_light"; tmux_theme="github_light"; starship_palette="github_light" ;;
-    dark)  ghostty_theme="GitHub Dark";  btop_theme="github_dark";  tmux_theme="github_dark";  starship_palette="github_dark" ;;
+    light) ghostty_theme="GitHub Light"; btop_theme="github_light"; tmux_theme="github_light"; starship_palette="github_light"; codex_tui_theme="catppuccin-latte" ;;
+    dark)  ghostty_theme="GitHub Dark";  btop_theme="github_dark";  tmux_theme="github_dark";  starship_palette="github_dark";  codex_tui_theme="catppuccin-mocha" ;;
     *) printf 'theme-apply: invalid mode: %s (want light|dark)\n' "$mode" >&2; exit 2 ;;
 esac
 
@@ -88,32 +88,48 @@ if [ -f "$starship_template" ]; then
     mv "$STATE_DIR/starship.toml.tmp" "$STATE_DIR/starship.toml"
 fi
 
-# Codex Desktop persists its appearance in the host-local config. Keep the
-# dotfiles mode authoritative by changing only appearanceTheme inside [desktop];
-# preserve every other host-specific setting. CLI-only hosts safely carry the
-# same preference for future desktop use.
+# Codex's automatic TUI theme depends on a short terminal-background probe. That
+# can time out over SSH and fall back to the dark theme on a light terminal, so
+# pin the same light/dark defaults Codex would choose adaptively. Desktop has a
+# separate appearance setting. Preserve every other host-specific setting.
 if [ -f "$codex_config" ]; then
     codex_tmp="${codex_config}.theme.$$"
-    awk -v repl="appearanceTheme = \"$mode\"" '
+    awk \
+        -v desktop_repl="appearanceTheme = \"$mode\"" \
+        -v tui_repl="theme = \"$codex_tui_theme\"" '
         /^\[[^]]+\][[:space:]]*$/ {
-            if (in_desktop && !found_key) print repl
+            if (in_desktop && !found_desktop_key) print desktop_repl
+            if (in_tui && !found_tui_key) print tui_repl
             in_desktop = ($0 == "[desktop]")
-            if (in_desktop) found_section = 1
+            in_tui = ($0 == "[tui]")
+            if (in_desktop) found_desktop_section = 1
+            if (in_tui) found_tui_section = 1
             print
             next
         }
         in_desktop && /^appearanceTheme[[:space:]]*=/ {
-            print repl
-            found_key = 1
+            print desktop_repl
+            found_desktop_key = 1
+            next
+        }
+        in_tui && /^theme[[:space:]]*=/ {
+            print tui_repl
+            found_tui_key = 1
             next
         }
         { print }
         END {
-            if (in_desktop && !found_key) print repl
-            if (!found_section) {
+            if (in_desktop && !found_desktop_key) print desktop_repl
+            if (in_tui && !found_tui_key) print tui_repl
+            if (!found_tui_section) {
+                print ""
+                print "[tui]"
+                print tui_repl
+            }
+            if (!found_desktop_section) {
                 print ""
                 print "[desktop]"
-                print repl
+                print desktop_repl
             }
         }
     ' "$codex_config" > "$codex_tmp" || {
