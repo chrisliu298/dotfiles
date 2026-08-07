@@ -92,6 +92,9 @@ _theme_local() {
     if (( ! rollback )) && command -v starship >/dev/null 2>&1; then
         STARSHIP_CONFIG="$starship_state" starship explain >/dev/null || rollback=1
     fi
+    if (( ! rollback )) && command -v codex >/dev/null 2>&1; then
+        codex features list >/dev/null || rollback=1
+    fi
     if (( rollback )); then
         printf 'theme: generated config failed validation — rolling back\n' >&2
         [[ -n "$prev_mode" ]] && "$apply" "$prev_mode" >/dev/null 2>&1
@@ -137,6 +140,7 @@ _theme_local() {
     printf '  btop:    %s (restart btop to apply)\n' "$btop_theme"
     printf '  tmux:    %s\n' "$tmux_theme"
     printf '  Prompt:  %s\n' "$starship_palette"
+    printf '  Codex:   %s\n' "$new_mode"
 }
 
 theme() {

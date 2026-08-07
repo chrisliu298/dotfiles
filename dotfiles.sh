@@ -224,9 +224,9 @@ _ensure_source() {
 # ── Install functions ────────────────────────────────────────────
 
 # Host-local active theme, decoupled from git. The choice lives in a single
-# mode file under XDG state; theme-apply materializes the six tools' live config
+# mode file under XDG state; theme-apply materializes the seven tools' live config
 # from it (ghostty/tmux via optional includes; btop/Starship/pi/claude as generated
-# files).
+# files; Codex by updating only its desktop appearance setting).
 # MUST run before install_links: it converts a legacy whole-dir btop symlink into
 # a real dir so the per-file btop links below don't rm -rf through the symlink
 # into the repo. Idempotent and safe to re-run on every host.

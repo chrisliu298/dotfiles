@@ -4,7 +4,8 @@
 # Single source of truth for turning a light/dark choice into live config,
 # shared by the `theme` shell function and dotfiles.sh so the two never drift.
 # Writes ONLY host-local files (XDG state dir + the real ~/.config/btop/btop.conf
-# and ~/.{pi/agent,claude}/themes/) — never a git-tracked file — so switching
+# plus ~/.codex/config.toml and ~/.{pi/agent,claude}/themes/) — never a
+# git-tracked file — so switching
 # themes can never dirty the tree.
 #
 # Usage: theme-apply <light|dark>
@@ -14,6 +15,7 @@
 #   $STATE_DIR/tmux.conf           one line, pulled in by tmux `source-file -q …`
 #   $STATE_DIR/starship.toml       full config (STARSHIP_CONFIG target), palette applied
 #   ~/.config/btop/btop.conf       full config, generated from the tracked template
+#   ~/.codex/config.toml           existing config, desktop appearance only
 #   ~/.pi/agent/themes/dotfiles.json     full theme, copied from the tracked definition
 #   ~/.claude/themes/dotfiles.json       full theme, copied from the tracked definition
 #
@@ -30,6 +32,7 @@ STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme"
 btop_template="${BTOP_TEMPLATE:-$HOME/.config/btop/btop.conf.template}"
 starship_template="${STARSHIP_TEMPLATE:-$HOME/.config/starship/starship.toml}"
 btop_live="${BTOP_LIVE:-$HOME/.config/btop/btop.conf}"
+codex_config="${CODEX_CONFIG:-$HOME/.codex/config.toml}"
 # pi has no ~/.pi/agent/themes symlink to read definitions through, so this one
 # points straight at the repo (dotfiles.sh overrides it during a fresh install).
 pi_themes="${PI_THEMES:-$HOME/dotfiles/agents/pi/themes}"
@@ -83,6 +86,43 @@ if [ -f "$starship_template" ]; then
         exit 1
     }
     mv "$STATE_DIR/starship.toml.tmp" "$STATE_DIR/starship.toml"
+fi
+
+# Codex Desktop persists its appearance in the host-local config. Keep the
+# dotfiles mode authoritative by changing only appearanceTheme inside [desktop];
+# preserve every other host-specific setting. CLI-only hosts safely carry the
+# same preference for future desktop use.
+if [ -f "$codex_config" ]; then
+    codex_tmp="${codex_config}.theme.$$"
+    awk -v repl="appearanceTheme = \"$mode\"" '
+        /^\[[^]]+\][[:space:]]*$/ {
+            if (in_desktop && !found_key) print repl
+            in_desktop = ($0 == "[desktop]")
+            if (in_desktop) found_section = 1
+            print
+            next
+        }
+        in_desktop && /^appearanceTheme[[:space:]]*=/ {
+            print repl
+            found_key = 1
+            next
+        }
+        { print }
+        END {
+            if (in_desktop && !found_key) print repl
+            if (!found_section) {
+                print ""
+                print "[desktop]"
+                print repl
+            }
+        }
+    ' "$codex_config" > "$codex_tmp" || {
+        rm -f "$codex_tmp"
+        printf 'theme-apply: failed to stage Codex config from %s\n' "$codex_config" >&2
+        exit 1
+    }
+    chmod 600 "$codex_tmp"
+    mv "$codex_tmp" "$codex_config"
 fi
 
 # pi and Claude Code both pin their `theme` setting to the custom theme
