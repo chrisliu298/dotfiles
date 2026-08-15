@@ -2,9 +2,9 @@
 effort: low
 name: gpt-pro-relay
 description: |
-  Send a prompt to ChatGPT Pro Extended via gpt-pro-relay on macmini — over SSH from any
+  Send a prompt to ChatGPT Pro via gpt-pro-relay on macmini — over SSH from any
   other machine, or directly when invoked on macmini itself. Use for "ask gpt-pro", "send
-  to gpt-pro", "use gpt-pro", "Pro Extended take", "ask the deep model", or "second
+  to gpt-pro", "use gpt-pro", "Pro take", "ask the deep model", or "second
   opinion from chatgpt pro". The wrapper (not the caller) polls through flaky
   networks; the agent fires one backgrounded call and waits for the notification.
 allowed-tools: Bash(gpt-pro:*), Bash(~/.claude/skills/gpt-pro-relay/scripts/gpt-pro:*), Bash(ssh:*), Read, Write
@@ -25,7 +25,7 @@ the work so transport drops (or parent death) don't kill it — reconnect with
 The happy path, in execution order — the sections below are the authoritative
 detail; this is the shape:
 
-1. **Runtime** — Pro Extended runs take 5–20 min. Launch immediately; the
+1. **Runtime** — Pro runs take 5–20 min. Launch immediately; the
    invocation (direct, or a calling skill adding a gpt-pro lens) is the
    go-ahead. Never pause to confirm — mention the runtime only as passing
    context if useful.
@@ -34,10 +34,13 @@ detail; this is the shape:
    into the prompt: pass each one with **`-f <path>`** (repeatable; globs and
    `@base-relative` paths ok; whole dirs via `--include-tree`) and `gpt-pro` inlines
    them for you — validated, secret-scanned, and capped (5 MB composed) **before**
-   submit, no quota burned on rejection. The file on stdin then holds just your
-   question (plus any prior decisions only you know). GPT-Pro *can* search the public
-   web, so for external facts include the grounding directive — see "Grounding external
-   facts". (Hand-paste only when you need a surgical excerpt `-f` can't express.)
+   submit, no quota burned on rejection. If ChatGPT converts that composed paste
+   into a `Pasted markdown` attachment, the relay restores and verifies a short
+   ordinary top-level execution instruction before Send. The file on stdin then
+   holds just your question (plus any prior decisions only you know). GPT-Pro *can*
+   search the public web, so for external facts include the grounding directive —
+   see "Grounding external facts". (Hand-paste only when you need a surgical excerpt
+   `-f` can't express.)
 3. **Run it as a Bash-tool call** — mandatory on every call (a bare shell command
    is a trap: it blocks the turn and drops the envelope). Issue exactly:
    ```text
@@ -125,6 +128,16 @@ gpt-pro --dry-run -f src/foo.py --include-tree docs/ < question.md
 You rarely need to assemble the prompt by hand now. If you must (a surgical excerpt `-f` can't
 express), build the whole prompt in a file with the Write tool and pipe it in with no `-f`.
 
+Large composed prompts cross a ChatGPT frontend boundary: the browser turns the paste into a
+`Pasted markdown` file and leaves the ordinary message box empty. That used to work by accident,
+but the backend may now treat instructions inside the file as document content and merely ask
+what to do next. The relay handles this dynamically (no hard-coded size threshold): it detects
+the empty message box, adds a short top-level instruction to execute the attached prompt now,
+and verifies that instruction before Send. Do not work around this by dropping context or
+hand-splitting files. A pre-send `instruction_boundary_lost_before_send` means the verification
+failed and no quota was burned; a post-send `instruction_boundary_lost` means Pro still only
+acknowledged/planned, and its body is quarantined rather than returned.
+
 ## Grounding external facts
 
 Web research is one of gpt-pro's **two first-class modes** (alongside deep reasoning), not an
@@ -190,7 +203,7 @@ confidence in place of naming its assumptions.
 
 ## Runtime note
 
-Pro Extended runs take 5–20 minutes per prompt. Invoking gpt-pro is itself the go-ahead — whether the user named it directly or a calling skill (prism, goal-loop) added a gpt-pro lens. Just launch; do **not** pause to confirm or wait for a "continue". Mention the ~5–20 min runtime in passing only if it's useful context, never as a gate.
+Pro runs take 5–20 minutes per prompt. Invoking gpt-pro is itself the go-ahead — whether the user named it directly or a calling skill (prism, goal-loop) added a gpt-pro lens. Just launch; do **not** pause to confirm or wait for a "continue". Mention the ~5–20 min runtime in passing only if it's useful context, never as a gate.
 
 ## Background and timeout
 
@@ -218,7 +231,7 @@ ssh macmini "jq -r '.status, .reason, .model_audit' ~/.gpt-pro/runs/<run_id>/res
 ssh macmini "cat ~/.gpt-pro/runs/<run_id>/response.md"                                      # ONLY when status == ok
 ```
 
-**On `status: "error"` the body is QUARANTINED — diagnostic only, never an answer.** A rejected turn is complete, fluent, and on-topic; it differs from a verified one **only by provenance**, so "the text looks fine" is not a reason to use it — that inference is exactly how a GPT-5.5 answer once got laundered into a Sol lens. The two model-audit rejects rename the body to **`response.rejected.md`** (and set `rejected_response` in `result.json`) so that returning it takes deliberately naming a rejected file; every other error reason leaves it at `response.md`. **Both are void.** Recovery is a fresh run (new quota → the user decides) or an honest failure report — never a `cat`.
+**On `status: "error"` any extracted body is QUARANTINED — diagnostic only, never an answer.** A rejected turn can be complete, fluent, and on-topic, so "the text looks fine" is not a reason to use it. Model-audit failures publish `response.rejected.md`; an attachment acknowledgement instead of completed work publishes `response.incomplete.md`; a failure before adjudication may leave `response.pending.md`. None is `response.md`, and all are void. Recovery is a fresh run (new quota → the user decides) or an honest failure report — never a `cat`.
 
 ## Stopping a run
 
@@ -275,6 +288,8 @@ The **`sent?`** column is the resubmit-safety key: **pre-send** = the failure ha
 | `needs_reauth` | 1 | pre-send | session cookie missing or expired | user runs `gpt-pro-relay login` on macmini, then resubmit |
 | `model_select_failed` | 1 | pre-send | couldn't get Pro selected in the picker | selectors drifted; surface `run_dir` to the user |
 | `model_drift_before_send` | 1 | pre-send | chip stopped reading `"Pro"` between verify and click — fails closed *before* the send | safe to resubmit (no quota burned); if it repeats, selectors drifted |
+| `instruction_boundary_lost_before_send` | 1 | pre-send | a large paste became attachment-only and the relay could not prove a non-empty ordinary execution instruction before Send | no quota burned; surface `run_dir`. Safe to retry after updating/fixing the relay; repeated failures mean composer selectors or behavior drifted |
+| `instruction_boundary_lost` | 1 | **post-send** | despite the restored top-level instruction, Pro only acknowledged/read the attached prompt and asked for another instruction or promised to continue later | output is **VOID + quarantined** to `response.incomplete.md`. Never return it. A fresh run re-burns quota → **ask the user** |
 | `served_model_mismatch` | 1 | **post-send** | served slug outside `PRO_MODEL_SLUGS` — the wrong model answered (e.g. `gpt-5-5-pro`, not Sol's `gpt-5-6-pro`) | answer is **VOID + quarantined** to `response.rejected.md`. Never return it. Fresh run re-burns quota → **ask the user** |
 | `model_menu_mismatch` | 1 | **post-send** | slug absent and the chip-menu read confirms a non-Sol model | same as above — void, quarantined, ask the user |
 | `conversation_drift` | 1 | **post-send** | the tab moved to a *different* `/c/<id>`; extracting would return another conversation's answer | void — never salvage. Ask the user before a fresh run |
@@ -283,7 +298,7 @@ The **`sent?`** column is the resubmit-safety key: **pre-send** = the failure ha
 | `page_closed_before_conversation_url` | 1 | **ambiguous** | tab closed before the conversation URL was captured | same — never resend blind |
 | `page_recovery_exhausted` | 1 | **post-send** | tab kept closing; recovery attempts exhausted | terminal; surface `run_dir` |
 | `worker_exception` | 1 | depends | Python exception in the worker | inspect `run_dir/worker.stderr` (structured stage trace) — the last `stage` before the error tells you where it died, and whether `sent` had fired |
-| *(none — `status: "timeout"`)* | 3 | post-send | no completion within the engine's 60-min cap. Arrives as a **status, not a reason** (the dict carries no `reason` key) | terminal — inspect `run_dir/streaming-*.png`. `response.md` holds a **partial** body: audit-passed but incomplete, still not an answer |
+| *(none — `status: "timeout"`)* | 3 | post-send | no completion within the engine's 60-min cap. Arrives as a **status, not a reason** (the dict carries no `reason` key) | terminal — inspect `run_dir/streaming-*.png`. `response.partial.md` holds a partial body, never an answer |
 | `deadline_during_recovery` | 3 | post-send | generation budget ran out while recovering a closed tab | terminal — same |
 | `empty_prompt` / `prompt_too_large` | 2 | pre-send | empty stdin, or >5 MB | fix the call; no quota burned |
 | `run_id_conflict` | 2 | pre-send | reattach id collided with a *different* prompt | pick a fresh run (drop `--run-id`) |
@@ -300,7 +315,7 @@ Reasons you may see in `worker.stderr`'s stage trace but **never** as a caller-v
 `run_dir` lives on macmini at `~/.gpt-pro/runs/<run_id>/`:
 
 - `prompt.md`, `meta.json`, `result.json`
-- **the answer body — under exactly one name, and the name is the verdict.** `response.md` **only** when `result.json` says `status: "ok"`; otherwise `response.rejected.md` (a model-audit reject), `response.partial.md` (timed out — never passed the completion gate), or `response.pending.md` (the run died before any verdict, so the body was never adjudicated at all). A failure before extraction publishes none of them. Only `response.md` is ever an answer; the other three are diagnostics with a complete, fluent, on-topic body — that is precisely why they are not named `response.md`.
+- **the answer body — under exactly one name, and the name is the verdict.** `response.md` **only** when `result.json` says `status: "ok"`; otherwise `response.rejected.md` (a model-audit reject), `response.incomplete.md` (the attached task was acknowledged rather than executed), `response.partial.md` (timed out — never passed the completion gate), or `response.pending.md` (the run died before any verdict, so the body was never adjudicated at all). A failure before extraction publishes none of them. Only `response.md` is ever an answer; the other four are diagnostics that may look plausible — that is precisely why they are not named `response.md`.
 - `pre-send.png`, `streaming-NNN.png`, `final.png`, `error-*.png`
 - `final.html`, `network.json`
 - `worker.stdout` — detached worker's stdout (usually empty)
@@ -312,7 +327,7 @@ Reach for them via `ssh macmini cat <run_dir>/<file>` or `ssh macmini ls <run_di
 
 | Situation | Verdict |
 |---|---|
-| Pro Extended reasoning, from any machine with SSH to macmini | Yes |
+| Pro reasoning, from any machine with SSH to macmini | Yes |
 | Tolerating a flaky network on a 5–20 min reasoning run | Yes — `gpt-pro` polls through drops without intervention |
 | Driving your local live Chrome with any model + effort | Use a local Chrome-driving skill instead |
 | Multi-turn follow-ups in the same chat | Doesn't fit — gpt-pro is one-shot per invocation |
