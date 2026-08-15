@@ -301,7 +301,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
 |---|---|---|---|---|
 | `gpt` | GPT | OpenAI | `xhigh` | agentic code-review strength |
 | `grok-build` | Grok 4.5 | xAI | `high` | independent of Anthropic/OpenAI |
-| `glm` | GLM-5.2 | Zhipu / z.ai (Anthropic-compatible endpoint) | pinned `max` | `reasoning_effort: max`, like DeepSeek |
+| `glm` | GLM-5.3 | Zhipu / z.ai (Anthropic-compatible endpoint) | pinned `max` | `reasoning_effort: max`, like DeepSeek |
 | `kimi` | Kimi K2.7 Coding | Moonshot (Kimi-for-Coding plan, `api.kimi.com/coding/`) | thinking pinned | model id `kimi-for-coding`; `CLAUDE_CODE_EFFORT_LEVEL=high` (K2.7 is thinking-only and exposes no graded effort — the level only has to be non-off); ignores `--effort` |
 | `deepseek` | DeepSeek V4-Flash | DeepSeek (open-weight) | `max` (DeepThink) | agent-post-trained `0731` build; the interactive `ds` family and Pi's `pds` stay on V4-Pro |
 | `mimo` | MiMo-V2.5-Pro | Xiaomi (open-weight) | — | |
