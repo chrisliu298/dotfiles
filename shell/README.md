@@ -25,7 +25,7 @@ See `.aliases` and `.functions` for the full list. Highlights:
 - **Tmux**: `t`, `ta`, `tl`, `tn`, `tk`, `to` (new/attach to `$PWD` name), `tka` (kill all)
 - **Python/uv**: `sv` (source venv), `us` (sync), `ua` (add)
 - **Claude Code**: `c` (auto-accept), `cc` (continue), `cr` (resume), `cpu` (/push), `cl`/`cm`/`ch`/`cx`/`cmx` (low/medium/high/xhigh/max effort)
-- **Codex**: `x` (default=medium), `xn`/`xl`/`xm`/`xh`/`xx`/`xmx` (none/low/medium/high/xhigh/max reasoning), `xc` (resume --last)
+- **Codex**: `x` (default=medium), `xn`/`xl`/`xm`/`xh`/`xx`/`xmx` (none/low/medium/high/xhigh/max reasoning), `xc` (resume --last), `scout-papers-scholar-inbox-all` (sequentially scout the five awesome lists)
 - **Pi**: `p` (GPT-5.6 via Codex subscription), `pc`/`pr`/`phl` (continue/resume/headless), `pglm`/`pkm`/`pds`/`pmm` (GLM/Kimi/DeepSeek/MiMo)
 - **Homebrew**: `bi`/`bu`/`bic` (install/uninstall/cask), `bupd`/`bupg` (update/upgrade)
 - **Functions**: `dfs` (pull + install + sync remote), `theme [light|dark|toggle|status]` / `theme --all <mode>` (Ghostty + Starship + btop + tmux + macOS; `--all` also applies to macmini and l40s), `synckeys` (propagate `~/.zshenv.local` API/plan keys to peers; dry-run by default, `synckeys apply` to write), `rename_device`
