@@ -567,7 +567,7 @@ xr(){ _codex_resume_effort "$@"; }
 xu(){ npm install -g @openai/codex@latest "$@"; }
 xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.6-sol --config model_reasoning_effort=high "${*}"; }
 scout-papers-scholar-inbox-all() {
-    local root="$HOME/Developer/GitHub" repo
+    local root="$HOME/Developer/GitHub" repo result_file log_file rc
     local repos=(
         awesome-llm-unlearning
         awesome-on-policy-distillation
@@ -582,15 +582,29 @@ scout-papers-scholar-inbox-all() {
             return 1
         }
         printf '\n==> %s\n' "$repo"
+        result_file="$(mktemp "${TMPDIR:-/tmp}/scout-papers-result.XXXXXX")" || return 1
+        log_file="$(mktemp "${TMPDIR:-/tmp}/scout-papers-log.XXXXXX")" || {
+            command rm -f -- "$result_file"
+            return 1
+        }
         command codex exec \
             --cd "$root/$repo" \
             --yolo \
             -m gpt-5.6-sol \
-            --config model_reasoning_effort=high \
-            '$scout-papers-scholar-inbox' || {
+            --config model_reasoning_effort=medium \
+            --output-last-message "$result_file" \
+            '$scout-papers-scholar-inbox' >"$log_file" 2>&1
+        rc=$?
+
+        if (( rc )); then
             printf 'Scholar Inbox scout failed in %s; stopping.\n' "$repo" >&2
+            tail -n 40 "$log_file" >&2
+            command rm -f -- "$result_file" "$log_file"
             return 1
-        }
+        fi
+
+        [[ ! -s "$result_file" ]] || sed -n '1,$p' "$result_file"
+        command rm -f -- "$result_file" "$log_file"
     done
 
     printf '\nAll Scholar Inbox scouts completed.\n'
