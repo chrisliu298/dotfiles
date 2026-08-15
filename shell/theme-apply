@@ -15,7 +15,7 @@
 #   $STATE_DIR/tmux.conf           one line, pulled in by tmux `source-file -q …`
 #   $STATE_DIR/starship.toml       full config (STARSHIP_CONFIG target), palette applied
 #   ~/.config/btop/btop.conf       full config, generated from the tracked template
-#   ~/.codex/config.toml           existing config, TUI theme + desktop appearance only
+#   ~/.codex/config.toml           existing config, TUI theme only
 #   ~/.pi/agent/themes/dotfiles.json     full theme, copied from the tracked definition
 #   ~/.claude/themes/dotfiles.json       full theme, copied from the tracked definition
 #
@@ -90,26 +90,17 @@ fi
 
 # Codex's automatic TUI theme depends on a short terminal-background probe. That
 # can time out over SSH and fall back to the dark theme on a light terminal, so
-# pin the same light/dark defaults Codex would choose adaptively. Desktop has a
-# separate appearance setting. Preserve every other host-specific setting.
+# pin the same light/dark defaults Codex would choose adaptively. Desktop follows
+# macOS independently, so leave its user-controlled appearance setting untouched.
 if [ -f "$codex_config" ]; then
     codex_tmp="${codex_config}.theme.$$"
     awk \
-        -v desktop_repl="appearanceTheme = \"$mode\"" \
         -v tui_repl="theme = \"$codex_tui_theme\"" '
         /^\[[^]]+\][[:space:]]*$/ {
-            if (in_desktop && !found_desktop_key) print desktop_repl
             if (in_tui && !found_tui_key) print tui_repl
-            in_desktop = ($0 == "[desktop]")
             in_tui = ($0 == "[tui]")
-            if (in_desktop) found_desktop_section = 1
             if (in_tui) found_tui_section = 1
             print
-            next
-        }
-        in_desktop && /^appearanceTheme[[:space:]]*=/ {
-            print desktop_repl
-            found_desktop_key = 1
             next
         }
         in_tui && /^theme[[:space:]]*=/ {
@@ -119,17 +110,11 @@ if [ -f "$codex_config" ]; then
         }
         { print }
         END {
-            if (in_desktop && !found_desktop_key) print desktop_repl
             if (in_tui && !found_tui_key) print tui_repl
             if (!found_tui_section) {
                 print ""
                 print "[tui]"
                 print tui_repl
-            }
-            if (!found_desktop_section) {
-                print ""
-                print "[desktop]"
-                print desktop_repl
             }
         }
     ' "$codex_config" > "$codex_tmp" || {
