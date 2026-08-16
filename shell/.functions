@@ -566,6 +566,49 @@ xc(){ _codex_resume_effort --last "$@"; }
 xr(){ _codex_resume_effort "$@"; }
 xu(){ npm install -g @openai/codex@latest "$@"; }
 xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.6-sol --config model_reasoning_effort=high "${*}"; }
+scout-papers-scholar-inbox-all() {
+    local root="$HOME/Developer/GitHub" repo result_file log_file rc
+    local repos=(
+        awesome-llm-unlearning
+        awesome-on-policy-distillation
+        awesome-rl-for-video-generation
+        awesome-rm-for-video-generation
+        awesome-rubric-rewards
+    )
+
+    for repo in "${repos[@]}"; do
+        [[ -d "$root/$repo/.git" ]] || {
+            printf 'Missing repository: %s\n' "$root/$repo" >&2
+            return 1
+        }
+        printf '\n==> %s\n' "$repo"
+        result_file="$(mktemp "${TMPDIR:-/tmp}/scout-papers-result.XXXXXX")" || return 1
+        log_file="$(mktemp "${TMPDIR:-/tmp}/scout-papers-log.XXXXXX")" || {
+            command rm -f -- "$result_file"
+            return 1
+        }
+        command codex exec \
+            --cd "$root/$repo" \
+            --yolo \
+            -m gpt-5.6-sol \
+            --config model_reasoning_effort=medium \
+            --output-last-message "$result_file" \
+            '$scout-papers-scholar-inbox' >"$log_file" 2>&1
+        rc=$?
+
+        if (( rc )); then
+            printf 'Scholar Inbox scout failed in %s; stopping.\n' "$repo" >&2
+            tail -n 40 "$log_file" >&2
+            command rm -f -- "$result_file" "$log_file"
+            return 1
+        fi
+
+        [[ ! -s "$result_file" ]] || sed -n '1,$p' "$result_file"
+        command rm -f -- "$result_file" "$log_file"
+    done
+
+    printf '\nAll Scholar Inbox scouts completed.\n'
+}
 
 # Pi defaults to GPT-5.6 through the OpenAI Codex subscription provider. This
 # intentionally uses Pi's `openai-codex` OAuth token in ~/.pi/agent/auth.json,
@@ -578,7 +621,7 @@ phl(){ (( $# )) || { echo 'Usage: phl "<prompt>"'; return 1; }; _pi --provider o
 
 _pi_glm(){
     [[ -n "${GLM_PLAN_KEY_INT:-}" ]] || { echo 'GLM_PLAN_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }
-    ZAI_API_KEY="$GLM_PLAN_KEY_INT" _pi --provider zai --model glm-5.2 --thinking xhigh "$@"
+    ZAI_API_KEY="$GLM_PLAN_KEY_INT" _pi --provider zai --model glm-5.3 --thinking xhigh "$@"
 }
 pglm(){ _pi_glm "$@"; }
 pglmc(){ _pi_glm --continue "$@"; }
@@ -716,18 +759,19 @@ mmhl(){ (( $# )) || { echo 'Usage: mmhl "<prompt>"'; return 1; }; _mimo -p --dan
 # GLM (via Claude Code, Anthropic-compatible endpoint)
 # =============================================================================
 # Routes Claude Code at Zhipu/z.ai GLM per-invocation, so default `c`/`cc` keep
-# using the Claude subscription. glm-5.2 supports a graded reasoning_effort
+# using the Claude subscription. glm-5.3 supports a graded reasoning_effort
 # (max/xhigh/high/medium/low/minimal/none, default max); we pin max here — the
 # same level the relay/prism registry pins (peers.json extra_env). Model id keeps
-# its dot and takes no `[1m]` suffix (that selector is DeepSeek-specific; GLM-5.2
-# serves its native context directly). Requires GLM_PLAN_KEY_INT in
-# env (see ~/.zshenv.local).
+# its dot and takes no `[1m]` suffix: z.ai documents a `glm-5.3[1m]` long-context
+# variant, but this coding-plan key rejects it (error 1214 `modelCode: does not
+# exist`, same for `glm-5.2[1m]`), so GLM serves its native context directly.
+# Requires GLM_PLAN_KEY_INT in env (see ~/.zshenv.local).
 _glm(){
     [[ -n "${GLM_PLAN_KEY_INT:-}" ]] || { echo 'GLM_PLAN_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }
     # Drop relay scripts dir from PATH so GLM sessions can't shell out to relay.
     local _glm_path="${PATH//$HOME\/.claude\/skills\/relay\/scripts:/}"
     _glm_path="${_glm_path%:$HOME/.claude/skills/relay/scripts}"
-    # glm-5.2 is text-only — deny multimodal Reads so an image/PDF Read errors at
+    # glm-5.3 is text-only — deny multimodal Reads so an image/PDF Read errors at
     # the tool gate instead of being silently dropped. Mirrors the relay script's
     # claude-env branch.
     local _glm_deny='Read(*.png),Read(*.jpg),Read(*.jpeg),Read(*.gif),Read(*.bmp),Read(*.svg),Read(*.webp),Read(*.pdf)'
@@ -735,13 +779,13 @@ _glm(){
         PATH="$_glm_path" \
         ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic \
         ANTHROPIC_AUTH_TOKEN="$GLM_PLAN_KEY_INT" \
-        ANTHROPIC_MODEL=glm-5.2 \
-        ANTHROPIC_DEFAULT_FABLE_MODEL=glm-5.2 \
-        ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.2 \
-        ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.2 \
-        ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.2 \
-        ANTHROPIC_SMALL_FAST_MODEL=glm-5.2 \
-        CLAUDE_CODE_SUBAGENT_MODEL=glm-5.2 \
+        ANTHROPIC_MODEL=glm-5.3 \
+        ANTHROPIC_DEFAULT_FABLE_MODEL=glm-5.3 \
+        ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.3 \
+        ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.3 \
+        ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.3 \
+        ANTHROPIC_SMALL_FAST_MODEL=glm-5.3 \
+        CLAUDE_CODE_SUBAGENT_MODEL=glm-5.3 \
         "$(command -v claude)" --disallowedTools "$_glm_deny" "$@"
 }
 glm(){   CLAUDE_CODE_EFFORT_LEVEL=max _glm --dangerously-skip-permissions "$@"; }
