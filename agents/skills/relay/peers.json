@@ -24,7 +24,7 @@
     "transport": "claude-env",
     "base": "https://api.z.ai/api/anthropic",
     "key_env": "GLM_PLAN_KEY_INT",
-    "model": "glm-5.2",
+    "model": "glm-5.3",
     "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max" },
     "tmux_fallback": true,
     "tmux_only": true,
