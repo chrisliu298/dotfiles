@@ -50,7 +50,7 @@ Wiring details — where each kind of skill is edited, the `SKILLS`/`MCP_SERVERS
 - Match existing history: imperative, concise subjects (`Add ...`, `Update ...`, `Remove ...`, `Refactor ...`).
 - Keep commits atomic by logical change (docs vs scripts vs skill content).
 - PRs include: purpose, changed paths, verification commands run, and any migration/symlink impact. Link related issues; add screenshots only for UI-facing documentation changes.
-- **Sync after push**: after `git push` succeeds, run `dfs` (a `shell/.functions` helper) to propagate to peers — concurrent `git pull --ff-only` + `./dotfiles.sh` on `macbookpro16`, `macmini`, `l40s`; the current host is skipped. Do **not** run `dfs` on host `K65YGWKKWH`, which is intentionally outside the peer set. Skipping it elsewhere leaves the other machines on the previous revision. Non-interactive/agent shells: `zsh -c 'source ~/dotfiles/shell/.functions && dfs'` (self-contained; no TTY or `.zshrc` needed).
+- **Sync after push**: after `git push` succeeds, run `dfs` (a `shell/.functions` helper) to propagate to peers — concurrent `git pull --ff-only` + `./dotfiles.sh` on `macbookpro16`, `macmini`, `l40s`; the current host is skipped. Skipping this leaves the other machines on the previous revision. Non-interactive/agent shells: `zsh -c 'source ~/dotfiles/shell/.functions && dfs'` (self-contained; no TTY or `.zshrc` needed).
 
 </important>
 
