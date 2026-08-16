@@ -525,7 +525,8 @@ szt() {
 
 # Unset TMUX for Claude Code so Bun's getColorDepth() doesn't short-circuit
 # to 256-color (the `if (env.TMUX) return 8` check fires before COLORTERM).
-_claude(){ env -u TMUX COLORTERM=truecolor "$(command -v claude)" "$@"; }
+# This machine uses the managed SuperRelay Opus 4.8 lane by default.
+_claude(){ "$HOME/.local/bin/claude-relay" "$@"; }
 c(){ _claude --dangerously-skip-permissions "$@"; }
 cc(){ _claude --dangerously-skip-permissions --continue "$@"; }
 cr(){ _claude --dangerously-skip-permissions --resume "$@"; }
@@ -534,7 +535,13 @@ cu(){ command claude update "$@"; }
 gu(){ command grok update "$@"; }
 cpu(){ local prompt="/push"; (( $# )) && prompt+=" ${*}"; _claude -p --dangerously-skip-permissions "$prompt"; }
 chl(){ (( $# )) || { echo 'Usage: chl "<prompt>"'; return 1; }; _claude -p --dangerously-skip-permissions "${*}"; }
-cch(){ tmux new-session -ds claude-channels "env -u TMUX COLORTERM=truecolor $(command -v claude) --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official $*" 2>/dev/null; tmux attach -t claude-channels; }
+cch(){
+    local _cmd="$HOME/.local/bin/claude-relay --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official"
+    local _arg
+    for _arg in "$@"; do _cmd+=" ${(q)_arg}"; done
+    tmux new-session -ds claude-channels "$_cmd" 2>/dev/null
+    tmux attach -t claude-channels
+}
 # Reasoning-effort tiers (CLAUDE_CODE_EFFORT_LEVEL); plain `c` keeps the default.
 cl(){  CLAUDE_CODE_EFFORT_LEVEL=low    _claude --dangerously-skip-permissions "$@"; }
 cm(){  CLAUDE_CODE_EFFORT_LEVEL=medium _claude --dangerously-skip-permissions "$@"; }
@@ -615,8 +622,8 @@ pmmhl(){ (( $# )) || { echo 'Usage: pmmhl "<prompt>"'; return 1; }; _pi_mimo -p 
 # =============================================================================
 # DeepSeek (via Claude Code, Anthropic-compatible endpoint)
 # =============================================================================
-# Routes Claude Code at DeepSeek per-invocation, so default `c`/`cc` keep using
-# the Claude subscription. DeepSeek V4 Pro has two distinct effort levels: high
+# Routes Claude Code at DeepSeek per-invocation, while default `c`/`cc` use the
+# managed SuperRelay Opus 4.8 lane. DeepSeek V4 Pro has two distinct effort levels: high
 # and max. Both V4 models are 1M-context on the backend, but the harness still
 # needs its own window signal — see the [1m] note below.
 # Requires DEEPSEEK_API_KEY_INT in env (see ~/.zshenv.local).
@@ -675,8 +682,8 @@ dshl(){ (( $# )) || { echo 'Usage: dshl "<prompt>"'; return 1; }; CLAUDE_CODE_EF
 # MiMo (via Claude Code, Anthropic-compatible endpoint)
 # =============================================================================
 # Routes Claude Code at Xiaomi MiMo per-invocation via the MiMo pay-per-token API
-# endpoint (api.xiaomimimo.com/anthropic, MIMO_API_KEY_INT), so default `c`/`cc`
-# keep using the Claude subscription. mimo-v2.5-pro exposes no effort tiers on this
+# endpoint (api.xiaomimimo.com/anthropic, MIMO_API_KEY_INT), while default `c`/`cc`
+# use the managed SuperRelay Opus 4.8 lane. mimo-v2.5-pro exposes no effort tiers on this
 # Anthropic/Claude Code endpoint (the model's OpenAI-style low/medium/high
 # reasoning_effort isn't surfaced here), so CLAUDE_CODE_EFFORT_LEVEL is a no-op —
 # unlike DeepSeek's high/max. mimo-v2.5-pro is 1M-context-native, so no suffix is
@@ -715,8 +722,8 @@ mmhl(){ (( $# )) || { echo 'Usage: mmhl "<prompt>"'; return 1; }; _mimo -p --dan
 # =============================================================================
 # GLM (via Claude Code, Anthropic-compatible endpoint)
 # =============================================================================
-# Routes Claude Code at Zhipu/z.ai GLM per-invocation, so default `c`/`cc` keep
-# using the Claude subscription. glm-5.2 supports a graded reasoning_effort
+# Routes Claude Code at Zhipu/z.ai GLM per-invocation, while default `c`/`cc` use
+# the managed SuperRelay Opus 4.8 lane. glm-5.2 supports a graded reasoning_effort
 # (max/xhigh/high/medium/low/minimal/none, default max); we pin max here — the
 # same level the relay/prism registry pins (peers.json extra_env). Model id keeps
 # its dot and takes no `[1m]` suffix (that selector is DeepSeek-specific; GLM-5.2
@@ -753,8 +760,8 @@ glmhl(){ (( $# )) || { echo 'Usage: glmhl "<prompt>"'; return 1; }; CLAUDE_CODE_
 # Kimi (via Claude Code, Kimi-for-Coding subscription plan) — aliases: km/kmc/kmr/kmhl
 # =============================================================================
 # Routes Claude Code at Moonshot's Kimi-for-Coding subscription endpoint
-# (api.kimi.com/coding/) per-invocation, so default `c`/`cc` keep using the Claude
-# subscription. Getting K2.7 Coding needs BOTH the plan's own model id
+# (api.kimi.com/coding/) per-invocation, while default `c`/`cc` use the managed
+# SuperRelay Opus 4.8 lane. Getting K2.7 Coding needs BOTH the plan's own model id
 # (`kimi-for-coding`; see `GET /v1/models` — the display name "Kimi K2.7 Code"
 # and the old `kimi-k2.7-code` string are NOT valid ids here) and thinking on,
 # which the wrappers pin via CLAUDE_CODE_EFFORT_LEVEL. The endpoint never

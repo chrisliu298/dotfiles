@@ -117,6 +117,22 @@ setopt interactive_comments  # allow # comments at the interactive prompt (e.g. 
 # Local binaries
 [[ -f "$HOME/.local/bin/env" ]] && source "$HOME/.local/bin/env"
 
+# Super Relay API key (stored in macOS Keychain, not in this file)
+export SUPER_RELAY_KEY="$(security find-generic-password -a bytedance -s super-relay-api-key -w 2>/dev/null)"
+if [[ -n "$SUPER_RELAY_KEY" ]]; then
+    export ANTHROPIC_BASE_URL="https://super-relay.byted.org"
+    export ANTHROPIC_AUTH_TOKEN="$SUPER_RELAY_KEY"
+    export ANTHROPIC_MODEL="model_hub/es1_orange_o48"
+    export ANTHROPIC_DEFAULT_OPUS_MODEL="$ANTHROPIC_MODEL"
+    export ANTHROPIC_DEFAULT_SONNET_MODEL="$ANTHROPIC_MODEL"
+    export ANTHROPIC_DEFAULT_HAIKU_MODEL="$ANTHROPIC_MODEL"
+    export ANTHROPIC_DEFAULT_FABLE_MODEL="$ANTHROPIC_MODEL"
+    export ANTHROPIC_SMALL_FAST_MODEL="$ANTHROPIC_MODEL"
+    export CLAUDE_CODE_SUBAGENT_MODEL="$ANTHROPIC_MODEL"
+    export CLAUDE_CODE_ATTRIBUTION_HEADER=0
+    unset ANTHROPIC_API_KEY ANTHROPIC_CUSTOM_HEADERS
+fi
+
 # Zoxide (smart cd)
 (( $+commands[zoxide] )) && eval "$(zoxide init zsh)"
 
@@ -136,3 +152,6 @@ if [[ -n "$CMUX_SHELL_INTEGRATION" ]]; then
         [[ -o zle ]] && zle && zle reset-prompt
     }
 fi
+
+# merlin-cli
+export PATH="$HOME/.merlin-cli/bin:$PATH"
