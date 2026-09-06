@@ -34,7 +34,7 @@ Elsewhere:
 
 Never edit in `~/.claude/skills/`, `~/.codex/skills/`, `~/.grok/skills/`, or `~/.pi/agent/skills/` — those are symlinks. Check `agents/skills/README.md` for source.
 
-Wiring details — where each kind of skill is edited, the `SKILLS`/`MCP_SERVERS`/`PLUGINS` tables, manual-skill toggling, and the universal-skill authoring rules — live in the `skill-wiring` skill in `.claude/skills/`. Run `./dotfiles.sh` after any change to re-sync symlinks.
+Run `./dotfiles.sh` after any change to re-sync symlinks.
 
 ## Testing Guidelines
 
