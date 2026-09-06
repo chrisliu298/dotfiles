@@ -549,14 +549,14 @@ ch(){  CLAUDE_CODE_EFFORT_LEVEL=high   _claude --dangerously-skip-permissions "$
 cx(){  CLAUDE_CODE_EFFORT_LEVEL=xhigh  _claude --dangerously-skip-permissions "$@"; }
 cmx(){ CLAUDE_CODE_EFFORT_LEVEL=max    _claude --dangerously-skip-permissions "$@"; }
 
-xn(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=none "$@"; }
-x(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=medium "$@"; }
-xl(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=low "$@"; }
-xm(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=medium "$@"; }
-xh(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=high "$@"; }
-xx(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=xhigh "$@"; }
-xmx(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=max "$@"; }
-xul(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=ultra "$@"; }
+xn(){ command codex --yolo -m gpt-6-astra --config model_reasoning_effort=none "$@"; }
+x(){ command codex --yolo -m gpt-6-astra --config model_reasoning_effort=medium "$@"; }
+xl(){ command codex --yolo -m gpt-6-astra --config model_reasoning_effort=low "$@"; }
+xm(){ command codex --yolo -m gpt-6-astra --config model_reasoning_effort=medium "$@"; }
+xh(){ command codex --yolo -m gpt-6-astra --config model_reasoning_effort=high "$@"; }
+xx(){ command codex --yolo -m gpt-6-astra --config model_reasoning_effort=xhigh "$@"; }
+xmx(){ command codex --yolo -m gpt-6-astra --config model_reasoning_effort=max "$@"; }
+xul(){ command codex --yolo -m gpt-6-astra --config model_reasoning_effort=ultra "$@"; }
 _codex_resume_effort(){
     local resume_args=()
     if [[ "$1" == "--last" ]]; then
@@ -567,12 +567,12 @@ _codex_resume_effort(){
     case "$1" in
         none|low|medium|high|xhigh|max) effort="$1"; shift ;;
     esac
-    command codex resume "${resume_args[@]}" --yolo -m gpt-5.6-sol --config model_reasoning_effort="$effort" "$@"
+    command codex resume "${resume_args[@]}" --yolo -m gpt-6-astra --config model_reasoning_effort="$effort" "$@"
 }
 xc(){ _codex_resume_effort --last "$@"; }
 xr(){ _codex_resume_effort "$@"; }
 xu(){ npm install -g @openai/codex@latest "$@"; }
-xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.6-sol --config model_reasoning_effort=high "${*}"; }
+xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-6-astra --config model_reasoning_effort=high "${*}"; }
 scout-papers-scholar-inbox-all() {
     local root="$HOME/Developer/GitHub" repo result_file log_file rc
     local repos=(
