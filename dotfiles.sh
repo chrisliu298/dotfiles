@@ -476,6 +476,17 @@ CLI_TOOLS=(
     "claude-swap|cswap: multi-account switcher for Claude Code"
 )
 
+# Homebrew font casks. The SF families ship as .pkg installers that require
+# sudo, so install_fonts runs in the foreground (see main) to let the password
+# prompt through; already-installed casks are skipped, so it only prompts once.
+FONTS=(
+    font-sf-pro
+    font-sf-mono
+    font-sf-compact
+    font-new-york
+    font-noto-sans
+)
+
 # Hash the declared `set -g @plugin` set plus the plugin dirs actually on disk,
 # so a deleted plugin invalidates the stamp instead of being skipped forever.
 # Capture once so the md5sum fallback re-pipes the data rather than hashing
@@ -535,6 +546,20 @@ install_tools() {
         else
             log "installing $pkg"
             uv tool install -q "$pkg" 2>&1 | tail -1 || warn "failed to install $pkg"
+        fi
+    done
+}
+
+install_fonts() {
+    [[ "$(uname -s)" == "Darwin" ]] || return
+    command -v brew >/dev/null 2>&1 || { warn "brew not found; skipping fonts"; return; }
+    local cask
+    for cask in "${FONTS[@]}"; do
+        if brew list --cask "$cask" >/dev/null 2>&1; then
+            log "$cask already installed"
+        else
+            log "installing $cask (may prompt for sudo)"
+            brew install --cask "$cask" >/dev/null 2>&1 || warn "failed to install $cask"
         fi
     done
 }
@@ -893,6 +918,10 @@ main() {
     wait "$_tools_pid" 2>/dev/null || true
     [[ -s "$_tools_out" ]] && cat "$_tools_out"
     rm -f "$_tools_out"
+
+    # Foreground: the SF font .pkg installers need sudo, so this must not be
+    # backgrounded (a backgrounded sudo can't read the password from the TTY).
+    section "Fonts"; install_fonts
 
     section "Tmux"
     wait "$_tmuxp_pid" 2>/dev/null || true
