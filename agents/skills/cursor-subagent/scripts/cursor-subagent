@@ -1,0 +1,131 @@
+#!/usr/bin/env zsh
+
+emulate -L zsh
+
+cursor_agent_bin="${CURSOR_AGENT_BIN:-cursor-agent}"
+
+if [[ "$cursor_agent_bin" == */* ]]; then
+    cursor_agent_available=false
+    [[ -x "$cursor_agent_bin" ]] && cursor_agent_available=true
+else
+    cursor_agent_available=false
+    (( $+commands[$cursor_agent_bin] )) && cursor_agent_available=true
+fi
+
+if [[ "$cursor_agent_available" == false ]]; then
+    print -u2 "cursor-subagent: cursor-agent is not installed or not on PATH"
+    exit 127
+fi
+
+effort=high
+cursor_args=()
+
+usage() {
+    print -u2 'usage: cursor-subagent [--effort high|xhigh] [cursor-agent options] [prompt]'
+    print -u2 '       cursor-subagent [--effort high|xhigh] [cursor-agent options] < prompt.md'
+}
+
+while (( $# > 0 )); do
+    case "$1" in
+        --effort)
+            if (( $# < 2 )); then
+                usage
+                exit 2
+            fi
+            effort="$2"
+            shift 2
+            ;;
+        --)
+            shift
+            cursor_args+=("$@")
+            break
+            ;;
+        *)
+            cursor_args+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if [[ "$effort" != high && "$effort" != xhigh ]]; then
+    print -u2 'cursor-subagent: effort must be high or xhigh'
+    exit 2
+fi
+
+if [[ -t 0 && ${#cursor_args} -eq 0 ]]; then
+    usage
+    exit 2
+fi
+
+diagnostic_file="$(mktemp "${TMPDIR:-/tmp}/cursor-subagent.err.XXXXXX")" || exit 1
+events_file="$(mktemp "${TMPDIR:-/tmp}/cursor-subagent.events.XXXXXX")" || exit 1
+cleanup() {
+    rm -f -- "$diagnostic_file" "$events_file"
+}
+trap cleanup EXIT HUP INT TERM
+
+custom_output=false
+for arg in "${cursor_args[@]}"; do
+    if [[ "$arg" == --output-format || "$arg" == --output-format=* || \
+        "$arg" == --stream-partial-output ]]; then
+        custom_output=true
+        break
+    fi
+done
+
+if [[ "$custom_output" == false ]] && (( $+commands[jq] )); then
+    "$cursor_agent_bin" --print --model "gpt-5.6-sol-$effort" \
+        --output-format stream-json --stream-partial-output "${cursor_args[@]}" \
+        > "$events_file" 2> >(tee "$diagnostic_file" >&2)
+    exit_status=$?
+
+    result_json="$(
+        jq -c 'select(.type == "result" and .is_error == false) | .result' \
+            "$events_file" 2>/dev/null | tail -n 1
+    )"
+    final_json="$(
+        jq -c '
+            select(.type == "assistant" and (.timestamp_ms == null))
+            | .message.content[]?
+            | select(.type == "text")
+            | .text
+        ' "$events_file" 2>/dev/null | tail -n 1
+    )"
+    if [[ -z "$final_json" ]]; then
+        final_json="$(
+            jq -Rsc '
+                [
+                    split("\n")[]
+                    | fromjson?
+                    | select(.type == "assistant" and (.timestamp_ms != null))
+                    | .message.content[]?
+                    | select(.type == "text")
+                    | .text
+                ]
+                | join("")
+            ' "$events_file" 2>/dev/null
+        )"
+        [[ "$final_json" == '""' ]] && final_json=
+    fi
+
+    if [[ -n "$result_json" ]]; then
+        print -r -- "$(print -r -- "$result_json" | jq -r '.')"
+    elif (( exit_status != 0 )) && [[ -n "$final_json" ]] && \
+        grep -q 'WritableIterable is closed' "$events_file" "$diagnostic_file"; then
+        print -r -- "$(print -r -- "$final_json" | jq -r '.')"
+        print -u2 'cursor-subagent: recovered Cursor final response after its output stream closed'
+        exit_status=0
+    else
+        command cat "$events_file"
+    fi
+else
+    "$cursor_agent_bin" --print --model "gpt-5.6-sol-$effort" "${cursor_args[@]}" \
+        2> >(tee "$diagnostic_file" >&2)
+    exit_status=$?
+fi
+
+if (( exit_status != 0 )) && grep -q 'SecItemCopyMatching failed -50' "$diagnostic_file"; then
+    print -u2 'cursor-subagent: Cursor could not read its macOS Keychain login. If this command is running in a restricted sandbox, rerun this helper with narrowly scoped unsandboxed execution; do not replace the login or model based on this error alone.'
+fi
+
+exit "$exit_status"

@@ -44,14 +44,15 @@ SKILLS=(
     # (RELAY_PEER guard + PATH scrub of both script dirs + the GROK_CLAUDE_*_ENABLED=false
     # compat suite set in .zshenv and the relay grok transport).
     "*|./agents/skills|claude,codex,grok,pi"
-    # Relay: claude-only caller; targets GPT, Grok, GLM, Kimi, DeepSeek, and MiMo via the script
+    # Relay: claude-only caller; targets GPT, Grok, GLM, Kimi, DeepSeek, and MiMo via the script.
+    # MANUAL (below); explicit entry keeps it claude-only when enabled (the wildcard would install it everywhere).
     "relay|./agents/skills/relay|claude"
-    # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup)
+    # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup). MANUAL (below).
     "keep-warm|./agents/skills/keep-warm|claude"
     # crons: claude-only durable manifest + re-arm for the recurring /loop + CronCreate fleet
-    # (CronCreate/CronList/CronDelete are Claude-only); preparer-not-actuator, no docmaint freshness gate
+    # (CronCreate/CronList/CronDelete are Claude-only); preparer-not-actuator, no docmaint freshness gate. MANUAL (below).
     "crons|./agents/skills/crons|claude"
-    # prism: claude-only caller (dispatches parallax to GPT + Grok + GLM + Kimi + DeepSeek + MiMo via relay)
+    # prism: claude-only caller (dispatches parallax to GPT + Grok + GLM + Kimi + DeepSeek + MiMo via relay). MANUAL (below).
     "prism|./agents/skills/prism|claude"
     # goal-loop: default review backend is prism (claude-only); built on the Skill/AskUserQuestion
     # tooling. Off-Claude it only degrades to external/local/none, so keep it claude-only. MANUAL
@@ -59,14 +60,27 @@ SKILLS=(
     # claude-only when enabled (the wildcard would otherwise install it to codex/grok/pi).
     "goal-loop|./agents/skills/goal-loop|claude"
     # recall: claude-only; searches THIS project's past Claude transcripts (~/.claude/projects) for
-    # an earlier user statement. The store is Claude-specific, so it has no meaning on Codex/Grok.
+    # an earlier user statement. The store is Claude-specific, so it has no meaning on Codex/Grok. MANUAL (below).
     "recall|./agents/skills/recall|claude"
     # codex-first: claude-only routing skill — delegates hands-on work to `codex exec` while Claude
     # specs + reviews; a Codex/Grok session self-delegating to Codex is meaningless. MANUAL (below),
     # so it's off until `./dotfiles.sh enable codex-first`. The explicit entry overrides the wildcard.
     "codex-first|./agents/skills/codex-first|claude"
-    "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex,grok,pi"
-    "humanizer|blader/humanizer|claude,codex,grok,pi"
+    # claude-subagent: Codex-only caller; installing it into Claude would enable recursive self-dispatch.
+    "claude-subagent|./agents/skills/claude-subagent|codex"
+    # cursor-subagent: Codex-only caller; pins a strong GPT-5.6 Sol collaborator through Cursor Agent.
+    "cursor-subagent|./agents/skills/cursor-subagent|codex"
+    # dual-subagent: Codex-only caller; concurrently consults the two Codex-only subagent helpers.
+    "dual-subagent|./agents/skills/dual-subagent|codex"
+    # Off claude+codex by request, kept on grok+pi. digest/exec-status/jina/mental-seal/xurl are
+    # otherwise wildcard-sourced; these explicit grok,pi entries override the wildcard's agents set.
+    "defuddle|kepano/obsidian-skills/skills/defuddle|grok,pi"
+    "humanizer|blader/humanizer|grok,pi"
+    "digest|./agents/skills/digest|grok,pi"
+    "exec-status|./agents/skills/exec-status|grok,pi"
+    "jina|./agents/skills/jina|grok,pi"
+    "mental-seal|./agents/skills/mental-seal|grok,pi"
+    "xurl|./agents/skills/xurl|grok,pi"
     "pdf|anthropics/skills/skills/pdf|claude"
     "skill-creator|anthropics/skills/skills/skill-creator|claude"
     "pdf|openai/skills/skills/.curated/pdf|codex,grok,pi"
@@ -76,12 +90,17 @@ SKILLS=(
 MANUAL_SKILLS=(
     autoresearch
     codex-first
+    crons
     deslop
     goal-drive
     goal-elicit
     goal-loop
     interviewer
+    keep-warm
+    prism
     prompt-engineer
+    recall
+    relay
 )
 
 # Which manual skills are currently enabled — a committed declarative set, one

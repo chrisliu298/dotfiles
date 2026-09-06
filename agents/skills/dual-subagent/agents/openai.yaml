@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dual Subagent"
+  short_description: "Delegate read-only work to Claude and Cursor"
+  default_prompt: "Use $dual-subagent to complete this read-only task with Claude and Cursor, then reconcile their findings without modifying project files or external state."
