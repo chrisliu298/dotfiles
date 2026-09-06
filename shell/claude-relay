@@ -1,0 +1,27 @@
+#!/bin/zsh
+set -euo pipefail
+
+relay_key="${SUPER_RELAY_KEY:-}"
+if [[ -z "$relay_key" ]]; then
+    relay_key="$(/usr/bin/security find-generic-password -a bytedance -s super-relay-api-key -w 2>/dev/null)"
+fi
+[[ -n "$relay_key" ]] || { print -u2 'SuperRelay key not found (Keychain service: super-relay-api-key)'; exit 1; }
+
+claude_bin="$HOME/.local/bin/claude"
+[[ -x "$claude_bin" ]] || { print -u2 "Claude Code binary not found: $claude_bin"; exit 1; }
+
+exec /usr/bin/env -u TMUX -u ANTHROPIC_API_KEY -u ANTHROPIC_CUSTOM_HEADERS \
+    COLORTERM=truecolor \
+    ANTHROPIC_BASE_URL=https://super-relay.byted.org \
+    ANTHROPIC_AUTH_TOKEN="$relay_key" \
+    ANTHROPIC_MODEL=model_hub/es1_orange_o48 \
+    ANTHROPIC_DEFAULT_OPUS_MODEL=model_hub/es1_orange_o48 \
+    ANTHROPIC_DEFAULT_SONNET_MODEL=model_hub/es1_orange_o48 \
+    ANTHROPIC_DEFAULT_HAIKU_MODEL=model_hub/es1_orange_o48 \
+    ANTHROPIC_DEFAULT_FABLE_MODEL=model_hub/es1_orange_o48 \
+    ANTHROPIC_SMALL_FAST_MODEL=model_hub/es1_orange_o48 \
+    CLAUDE_CODE_SUBAGENT_MODEL=model_hub/es1_orange_o48 \
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000 \
+    CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000 \
+    CLAUDE_CODE_ATTRIBUTION_HEADER=0 \
+    "$claude_bin" "$@"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cursor Subagent"
+  short_description: "Get an independent Cursor review"
+  default_prompt: "Use $cursor-subagent to get an independent Cursor review of this task."

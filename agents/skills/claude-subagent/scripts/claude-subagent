@@ -1,0 +1,23 @@
+#!/usr/bin/env zsh
+
+functions_file="${HOME}/.functions"
+
+if [[ ! -r "$functions_file" ]]; then
+    print -u2 "claude-subagent: cannot read $functions_file"
+    exit 127
+fi
+
+source "$functions_file"
+
+if (( ! $+functions[c] )); then
+    print -u2 "claude-subagent: c is not defined after sourcing $functions_file"
+    exit 127
+fi
+
+if [[ -t 0 && $# -eq 0 ]]; then
+    print -u2 'usage: claude-subagent [claude options] [prompt]'
+    print -u2 '       claude-subagent [claude options] < prompt.md'
+    exit 2
+fi
+
+c -p "$@"

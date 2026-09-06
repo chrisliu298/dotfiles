@@ -11,6 +11,7 @@ LINKS=(
     "shell/.zshenv:.zshenv"
     "shell/.zshrc:.zshrc"
     "shell/theme-apply:.local/bin/theme-apply"
+    "shell/claude-relay:.local/bin/claude-relay"
     ".config/starship:.config/starship"
     # btop has no config include and rewrites its own config, so its live
     # ~/.config/btop/btop.conf is host-local (generated, outside git). Only the
@@ -62,6 +63,9 @@ SKILLS=(
     # specs + reviews; a Codex/Grok session self-delegating to Codex is meaningless. MANUAL (below),
     # so it's off until `./dotfiles.sh enable codex-first`. The explicit entry overrides the wildcard.
     "codex-first|./agents/skills/codex-first|claude"
+    "claude-subagent|./agents/skills/claude-subagent|codex"
+    "cursor-subagent|./agents/skills/cursor-subagent|codex"
+    "dual-subagent|./agents/skills/dual-subagent|codex"
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex,grok,pi"
     "humanizer|blader/humanizer|claude,codex,grok,pi"
     "pdf|anthropics/skills/skills/pdf|claude"

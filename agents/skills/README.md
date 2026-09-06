@@ -27,13 +27,16 @@ Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via
 
 Columns: **C**laude · Code**x** · **G**rok · **P**i. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
-> GLM, Kimi, DeepSeek, and MiMo are all reached **through** Claude Code as the harness (each is a `claude` session pointed at that model's endpoint) via the `glm`/`km`/`ds`/`mm` aliases (see `shell/.functions`), so they inherit the Claude column directly (no separate skill dir). **Grok** is a relay/prism dispatch target (no interactive alias) with its own `~/.grok/skills/` mirror of the Codex set, and **Pi** is a standalone harness with its own `~/.pi/agent/skills/` mirror — so both columns equal Code**x**. The Claude-only orchestration skills (relay, prism, goal-loop, keep-warm, crons, codex-first, skill-creator) — plus recall, which reads Claude's own transcript store — stay off Codex/Grok/Pi; relay and prism are additionally guarded so a dispatched peer can't trigger them.
+> GLM, Kimi, DeepSeek, and MiMo are all reached **through** Claude Code as the harness (each is a `claude` session pointed at that model's endpoint) via the `glm`/`km`/`ds`/`mm` aliases (see `shell/.functions`), so they inherit the Claude column directly (no separate skill dir). **Grok** is a relay/prism dispatch target (no interactive alias) with its own `~/.grok/skills/` mirror of the Codex set, and **Pi** is a standalone harness with its own `~/.pi/agent/skills/` mirror — so both columns equal Code**x** except for the Codex-only subagent callers. The Claude-only orchestration skills (relay, prism, goal-loop, keep-warm, crons, codex-first, skill-creator) — plus recall, which reads Claude's own transcript store — stay off Codex/Grok/Pi; `claude-subagent`, `cursor-subagent`, and `dual-subagent` are Codex-only, and relay and prism are additionally guarded so a dispatched peer can't trigger them.
 
 **Enabled** (✓ auto-installed):
 
 | Skill | C | X | G | P | Source · Description |
 |-------|:-:|:-:|:-:|:-:|----------------------|
 | arxiv-reader            | ✓ | ✓ | ✓ | ✓ | local — Read arxiv via TeX / HF markdown / HTML fallback |
+| claude-subagent         | — | ✓ | — | — | local — Read-only Claude helper used by dual-subagent |
+| cursor-subagent         | — | ✓ | — | — | local — Read-only Cursor helper pinned to GPT-5.6 Sol |
+| dual-subagent           | — | ✓ | — | — | local — Delegate read-only research, analysis, checks, and review to Claude and Cursor |
 | crons                   | ✓ | — | — | — | local — Durable manifest + re-arm for the recurring /loop cron fleet (Claude-only; preparer-not-actuator, no false assurance) |
 | defuddle                | ✓ | ✓ | ✓ | ✓ | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
 | digest                  | ✓ | ✓ | ✓ | ✓ | local — Re-layer a dense reply into a fast-to-skim form |

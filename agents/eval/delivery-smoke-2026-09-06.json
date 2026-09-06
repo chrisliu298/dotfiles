@@ -1,0 +1,111 @@
+{
+  "instruction_sha256": "b77e0535abbb1c6c229fa716ff05422783cb16c2e0fb361b0cca0e70f15b1a7c",
+  "outputs": {
+    "claude": [
+      {
+        "id": 1,
+        "actions": [
+          "reuse valid CPU/loader receipts",
+          "submit training job to the queue now"
+        ],
+        "extra_confirmations": 0,
+        "repeated_checks": 0,
+        "first_effective_action": "submit training job to the queue now",
+        "delegation_route": "none (lead handles directly)",
+        "explanation": "Prerequisites are met and the queue is long-lead, so enqueue immediately without waiting on the optional GPU canary or re-running passed checks."
+      },
+      {
+        "id": 2,
+        "actions": [
+          "update LR only",
+          "reuse table snapshot, tokenizer, renderer, loss semantics, media, and their valid receipts",
+          "resume the experiment"
+        ],
+        "extra_confirmations": 0,
+        "repeated_checks": 0,
+        "first_effective_action": "update LR and resume",
+        "delegation_route": "none (lead handles directly)",
+        "explanation": "Only LR changed and all other inputs plus receipts are unchanged and valid, so reuse the existing evidence rather than re-verifying it."
+      },
+      {
+        "id": 3,
+        "actions": [
+          "answer 1000 from the manifest",
+          "continue the unfinished implementation task"
+        ],
+        "extra_confirmations": 0,
+        "repeated_checks": 0,
+        "first_effective_action": "answer 1000 from the manifest",
+        "delegation_route": "none (lead handles directly)",
+        "explanation": "The exact count is already known, so answer directly and keep doing the authorized work since no stop was requested."
+      },
+      {
+        "id": 4,
+        "actions": [
+          "batch all four questions on the three documents into one dual-subagent read-only call",
+          "then spawn two native subagents in parallel to modify the two independent modules"
+        ],
+        "extra_confirmations": 0,
+        "repeated_checks": 0,
+        "first_effective_action": "one dual-subagent read-only call for the four questions",
+        "delegation_route": "dual-subagent for read-only inspection, then native subagents for modifications",
+        "explanation": "Read-only findings route to a single batched dual-subagent call as a prerequisite, then the two independent module edits run as parallel native subagents."
+      }
+    ],
+    "cursor": [
+      {
+        "id": 1,
+        "actions": [
+          "Submit the authorized formal training job immediately",
+          "Record the submission receipt",
+          "Run the optional GPU canary only if it cannot delay or contend with training"
+        ],
+        "extra_confirmations": 0,
+        "repeated_checks": 0,
+        "first_effective_action": "Submit the formal training job",
+        "delegation_route": "Direct execution",
+        "explanation": "All required prerequisites have valid evidence, so the optional canary must not delay entry into the long queue."
+      },
+      {
+        "id": 2,
+        "actions": [
+          "Reuse all unchanged artifacts and valid receipts",
+          "Update the LR-dependent configuration and run metadata",
+          "Resume the authorized experiment"
+        ],
+        "extra_confirmations": 0,
+        "repeated_checks": 0,
+        "first_effective_action": "Update the LR-dependent configuration",
+        "delegation_route": "Direct execution",
+        "explanation": "Only LR changed, so unchanged evidence remains valid and unrelated checks should not be repeated."
+      },
+      {
+        "id": 3,
+        "actions": [
+          "Answer that the manifest specifies 1000 samples",
+          "Continue the unfinished authorized implementation"
+        ],
+        "extra_confirmations": 0,
+        "repeated_checks": 0,
+        "first_effective_action": "Answer: 1000 samples",
+        "delegation_route": "Direct response followed by direct execution",
+        "explanation": "The question can be answered immediately without treating it as a pause or revocation of the existing authorization."
+      },
+      {
+        "id": 4,
+        "actions": [
+          "Batch all four questions across the three documents into one dual-subagent call",
+          "Wait for and synthesize the prerequisite read-only findings",
+          "Assign each module to a separate native modification subagent",
+          "Run the two independent modifications concurrently",
+          "Integrate and directly verify the resulting changes"
+        ],
+        "extra_confirmations": 0,
+        "repeated_checks": 0,
+        "first_effective_action": "Delegate one batched read-only inspection through dual-subagent",
+        "delegation_route": "One batched dual-subagent read-only stage, then two concurrent native modification subagents",
+        "explanation": "The related inspection belongs in one dual-subagent call, while the dependent and independent module changes can begin concurrently only after those findings are available."
+      }
+    ]
+  }
+}

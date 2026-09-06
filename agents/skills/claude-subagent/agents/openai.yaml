@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claude Subagent"
+  short_description: "Get an independent Claude review"
+  default_prompt: "Use $claude-subagent to get an independent Claude review of this task."
