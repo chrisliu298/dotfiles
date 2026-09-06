@@ -94,3 +94,10 @@ First used (2026-07) to clear an aggressive de-format + prune + four-file unific
 doc: 8 model lineages × {current, pruned} + repeats, blind-judged — aggregate parity (pruned ≥
 current), so the pruned/unified doc was adopted. The `lint_agentdocs` guard in `dotfiles.sh` now just
 asserts the four files are identical below the H1 (each file keeps its own `# CLAUDE.md`/`# AGENTS.md` title).
+
+## Delivery and delegation smoke cases
+
+Use [delivery-cases.md](delivery-cases.md) with the current global instructions in one
+read-only dual-subagent call. Do not use the legacy multi-peer dispatcher for this
+focused check. See [the dated result](delivery-smoke-2026-09-06.md) and its
+[responses](delivery-smoke-2026-09-06.json) for the criteria and limitations.
