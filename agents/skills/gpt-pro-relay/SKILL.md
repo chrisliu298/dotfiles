@@ -25,10 +25,10 @@ the work so transport drops (or parent death) don't kill it — reconnect with
 The happy path, in execution order — the sections below are the authoritative
 detail; this is the shape:
 
-1. **Runtime** — Pro runs take 5–20 min. Launch immediately; the
-   invocation (direct, or a calling skill adding a gpt-pro lens) is the
-   go-ahead. Never pause to confirm — mention the runtime only as passing
-   context if useful.
+1. **Runtime** — Pro runs typically take 5–20 min, but can run as long as
+   1–2 hours. Launch immediately; the invocation (direct, or a calling skill
+   adding a gpt-pro lens) is the go-ahead. Never pause to confirm — mention the
+   runtime only as passing context if useful.
 2. **Put the question in a file; attach local files with `-f`** — GPT-Pro can't see
    anything local to you (codebase, shell, this conversation). Don't hand-`cat` files
    into the prompt: pass each one with **`-f <path>`** (repeatable; globs and
@@ -197,13 +197,13 @@ verification, not a calibrated probability.
 ```
 
 **On return**, treat it as the action plan: run the `Best next check` and verify the listed
-claims before relying on the answer. Because a re-query costs another 5–20 min, a
-targeted check is almost always cheaper than re-running. Discount any answer that self-asserts
+claims before relying on the answer. Because a re-query costs another run (5–20 min, up to
+1–2 hours), a targeted check is almost always cheaper than re-running. Discount any answer that self-asserts
 confidence in place of naming its assumptions.
 
 ## Runtime note
 
-Pro runs take 5–20 minutes per prompt. Invoking gpt-pro is itself the go-ahead — whether the user named it directly or a calling skill (prism, goal-loop) added a gpt-pro lens. Just launch; do **not** pause to confirm or wait for a "continue". Mention the ~5–20 min runtime in passing only if it's useful context, never as a gate.
+Pro runs typically take 5–20 minutes per prompt, but can run as long as 1–2 hours. Invoking gpt-pro is itself the go-ahead — whether the user named it directly or a calling skill (prism, goal-loop) added a gpt-pro lens. Just launch; do **not** pause to confirm or wait for a "continue". Mention the runtime in passing only if it's useful context, never as a gate.
 
 ## Background and timeout
 
@@ -251,7 +251,7 @@ Stop is **not** resubmit-safe cover for a mistake: a dequeued run spent no quota
 
 ## Concurrency
 
-Up to `GPT_PRO_MAX_PARALLEL` (default **6**, clamped to a ceiling of **10**) `gpt-pro` calls run in parallel — each worker gets its own tab in a single shared Chrome process. Beyond the cap, additional workers queue on a file-lock semaphore in `~/.gpt-pro/slots/` and wait for a slot to free up (the worker logs `slot_queued`, then `slot_acquired` when it gets in). A queued run can wait **15+ min before it even reaches `sent`** (961 s observed), so total wall-clock = **queue wait + the 5–20 min run** — don't set `--max-wait` (or the Bash-tool timeout) shorter than that.
+Up to `GPT_PRO_MAX_PARALLEL` (default **6**, clamped to a ceiling of **10**) `gpt-pro` calls run in parallel — each worker gets its own tab in a single shared Chrome process. Beyond the cap, additional workers queue on a file-lock semaphore in `~/.gpt-pro/slots/` and wait for a slot to free up (the worker logs `slot_queued`, then `slot_acquired` when it gets in). A queued run can wait **15+ min before it even reaches `sent`** (961 s observed), so total wall-clock = **queue wait + the run itself (5–20 min, up to 1–2 hours)** — don't set `--max-wait` (or the Bash-tool timeout) shorter than that.
 
 **A backgrounded call with no exit code is not a failed call.** Empty output + no completion notification = **still running**. Never diagnose it as lost, and never fresh-submit over it — that double-submits a live run and double-burns quota. Confirm liveness from the stage trace before concluding anything:
 
