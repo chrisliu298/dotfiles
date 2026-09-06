@@ -2,6 +2,12 @@
 # macOS
 # =============================================================================
 
+dock_autohide_test() {
+    defaults write com.apple.dock autohide -bool true
+    defaults write com.apple.dock autohide -bool false
+    killall Dock
+}
+
 # =============================================================================
 # Terminal
 # =============================================================================
