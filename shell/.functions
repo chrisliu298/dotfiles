@@ -525,7 +525,7 @@ szt() {
 
 # Unset TMUX for Claude Code so Bun's getColorDepth() doesn't short-circuit
 # to 256-color (the `if (env.TMUX) return 8` check fires before COLORTERM).
-# This machine uses the managed SuperRelay Opus 4.8 lane by default.
+# The launcher clears endpoint/model overrides and uses Claude's personal profile.
 _claude(){ "$HOME/.local/bin/claude-relay" "$@"; }
 c(){ _claude --dangerously-skip-permissions "$@"; }
 cc(){ _claude --dangerously-skip-permissions --continue "$@"; }

@@ -1,0 +1,23 @@
+#!/bin/zsh
+set -euo pipefail
+
+claude_bin="$HOME/.local/bin/claude"
+[[ -x "$claude_bin" ]] || { print -u2 "Claude Code binary not found: $claude_bin"; exit 1; }
+
+exec /usr/bin/env -u TMUX \
+    -u ANTHROPIC_BASE_URL \
+    -u ANTHROPIC_AUTH_TOKEN \
+    -u ANTHROPIC_API_KEY \
+    -u ANTHROPIC_CUSTOM_HEADERS \
+    -u ANTHROPIC_MODEL \
+    -u ANTHROPIC_DEFAULT_OPUS_MODEL \
+    -u ANTHROPIC_DEFAULT_SONNET_MODEL \
+    -u ANTHROPIC_DEFAULT_HAIKU_MODEL \
+    -u ANTHROPIC_DEFAULT_FABLE_MODEL \
+    -u ANTHROPIC_SMALL_FAST_MODEL \
+    -u CLAUDE_CODE_SUBAGENT_MODEL \
+    -u CLAUDE_CODE_AUTO_COMPACT_WINDOW \
+    -u CLAUDE_CODE_MAX_CONTEXT_TOKENS \
+    -u CLAUDE_CODE_ATTRIBUTION_HEADER \
+    COLORTERM=truecolor \
+    "$claude_bin" "$@"
