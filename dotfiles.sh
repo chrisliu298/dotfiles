@@ -34,23 +34,16 @@ LINKS=(
 # source: ./path (local) or owner/repo[/subpath] (GitHub)
 SKILLS=(
     # The wildcard installs every skill to Claude and Codex; the explicit entries below narrow
-    # that (claude-only: relay, prism, crons, recall, codex-first, skill-creator; codex-only: claude-subagent, session-history).
+    # that (claude-only: relay, prism, recall, skill-creator; codex-only: claude-subagent, session-history).
     "*|./agents/skills|claude,codex"
     # Relay: claude-only caller; targets GPT via the script.
     # MANUAL (below); explicit entry keeps it claude-only when enabled (the wildcard would install it everywhere).
     "relay|./agents/skills/relay|claude"
-    # crons: claude-only durable manifest + re-arm for the recurring /loop + CronCreate fleet
-    # (CronCreate/CronList/CronDelete are Claude-only); preparer-not-actuator, no freshness gate. MANUAL (below).
-    "crons|./agents/skills/crons|claude"
     # prism: claude-only caller (dispatches parallax to GPT via relay). MANUAL (below).
     "prism|./agents/skills/prism|claude"
     # recall: claude-only; searches THIS project's past Claude transcripts (~/.claude/projects) for
     # an earlier user statement. The store is Claude-specific, so it has no meaning on Codex. MANUAL (below).
     "recall|./agents/skills/recall|claude"
-    # codex-first: claude-only routing skill — delegates hands-on work to `codex exec` while Claude
-    # specs + reviews; a Codex session self-delegating to Codex is meaningless. MANUAL (below),
-    # so it's off until `./dotfiles.sh enable codex-first`. The explicit entry overrides the wildcard.
-    "codex-first|./agents/skills/codex-first|claude"
     # claude-subagent: Codex-only caller; installing it into Claude would enable recursive self-dispatch.
     "claude-subagent|./agents/skills/claude-subagent|codex"
     # session-history: Codex-only; searches Codex rollout transcripts on demand.
@@ -63,8 +56,6 @@ SKILLS=(
 
 # Skills not auto-installed (opt-in). Toggle with: ./dotfiles.sh enable/disable <name>.
 MANUAL_SKILLS=(
-    codex-first
-    crons
     prism
     recall
     relay

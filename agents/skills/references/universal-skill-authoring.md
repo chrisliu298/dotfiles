@@ -3,7 +3,7 @@
 How to write a `SKILL.md` that is shared across both agents (marked C/X in the
 [skill matrix](../README.md)) so one file works — or degrades cleanly — on each. Read this
 before editing a skill wired to more than `claude`. Claude-only skills (relay, prism,
-crons, recall, codex-first) are exempt.
+recall) are exempt.
 
 ## The one idea
 
