@@ -1,0 +1,223 @@
+#!/usr/bin/env zsh
+
+emulate -L zsh
+
+if [[ "${CODEX_REVIEW_SUBAGENT_ACTIVE:-}" == 1 ]]; then
+    print -u2 'dual-subagent: recursive Codex subagent delegation is blocked'
+    exit 126
+fi
+
+cursor_trust=false
+timeout_seconds=7200
+
+usage() {
+    print -u2 'usage: dual-subagent [--trust] [--timeout-seconds N] < prompt.md'
+}
+
+while (( $# > 0 )); do
+    case "$1" in
+        --trust)
+            cursor_trust=true
+            shift
+            ;;
+        --timeout-seconds)
+            if (( $# < 2 )); then
+                usage
+                exit 2
+            fi
+            timeout_seconds="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            print -u2 "dual-subagent: unknown option: $1"
+            usage
+            exit 2
+            ;;
+    esac
+done
+
+if [[ "$timeout_seconds" != <-> ]] || (( timeout_seconds <= 0 )); then
+    print -u2 'dual-subagent: timeout must be a positive number of seconds'
+    exit 2
+fi
+
+if [[ -t 0 ]]; then
+    usage
+    exit 2
+fi
+
+script_dir="${0:A:h}"
+skills_dir="${script_dir:h:h}"
+claude_helper="$skills_dir/claude-subagent/scripts/claude-subagent"
+cursor_helper="$skills_dir/cursor-subagent/scripts/cursor-subagent"
+
+for helper in "$claude_helper" "$cursor_helper"; do
+    if [[ ! -x "$helper" ]]; then
+        print -u2 "dual-subagent: helper is missing or not executable: $helper"
+        exit 127
+    fi
+done
+
+scratch_root="${TMPDIR:-/tmp}"
+scratch_dir="$(mktemp -d "$scratch_root/dual-subagent.XXXXXX")" || exit 1
+prompt_file="$scratch_dir/prompt.md"
+claude_out="$scratch_dir/claude.out"
+claude_err="$scratch_dir/claude.err"
+cursor_out="$scratch_dir/cursor.out"
+cursor_err="$scratch_dir/cursor.err"
+claude_timeout="$scratch_dir/claude.timeout"
+cursor_timeout="$scratch_dir/cursor.timeout"
+timeout_cancel="$scratch_dir/timeout.cancel"
+timeout_sleep_pid_file="$scratch_dir/timeout-sleep.pid"
+
+terminate_process_tree() {
+    local signal_name="$1"
+    local pid="$2"
+    local child
+    local children
+
+    if (( $+commands[pgrep] )); then
+        children="$(pgrep -P "$pid" 2>/dev/null)"
+        for child in ${(f)children}; do
+            [[ -n "$child" ]] && terminate_process_tree "$signal_name" "$child"
+        done
+    fi
+    kill "-$signal_name" "$pid" 2>/dev/null || true
+}
+
+cleanup() {
+    : > "$timeout_cancel"
+    if [[ -z "${timeout_sleep_pid:-}" && -s "$timeout_sleep_pid_file" ]]; then
+        timeout_sleep_pid="$(< "$timeout_sleep_pid_file")"
+    fi
+    if [[ -n "${timeout_sleep_pid:-}" ]]; then
+        kill "$timeout_sleep_pid" 2>/dev/null || true
+    fi
+    if [[ -n "${timeout_pid:-}" ]]; then
+        kill "$timeout_pid" 2>/dev/null || true
+        wait "$timeout_pid" 2>/dev/null || true
+    fi
+    if [[ -n "${claude_pid:-}" ]]; then
+        terminate_process_tree TERM "$claude_pid"
+    fi
+    if [[ -n "${cursor_pid:-}" ]]; then
+        terminate_process_tree TERM "$cursor_pid"
+    fi
+    rm -f -- "$prompt_file" "$claude_out" "$claude_err" "$cursor_out" "$cursor_err" \
+        "$claude_timeout" "$cursor_timeout" "$timeout_cancel" "$timeout_sleep_pid_file"
+    rmdir "$scratch_dir" 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
+
+command cat > "$prompt_file"
+if [[ ! -s "$prompt_file" ]]; then
+    print -u2 'dual-subagent: prompt is empty'
+    exit 2
+fi
+
+claude_args=(--effort high)
+cursor_args=(--effort xhigh --mode ask)
+if [[ "$cursor_trust" == true ]]; then
+    cursor_args+=(--trust)
+fi
+
+"$claude_helper" "${claude_args[@]}" < "$prompt_file" > "$claude_out" 2> "$claude_err" &
+claude_pid=$!
+"$cursor_helper" "${cursor_args[@]}" < "$prompt_file" > "$cursor_out" 2> "$cursor_err" &
+cursor_pid=$!
+
+process_is_running() {
+    local pid="$1"
+    local state
+
+    kill -0 "$pid" 2>/dev/null || return 1
+    state="$(ps -p "$pid" -o state= 2>/dev/null)"
+    [[ "$state" != Z* ]]
+}
+
+(
+    sleep "$timeout_seconds" &
+    timer_pid=$!
+    print -r -- "$timer_pid" > "$timeout_sleep_pid_file"
+    wait "$timer_pid" 2>/dev/null
+
+    [[ -e "$timeout_cancel" ]] && exit 0
+
+    if process_is_running "$claude_pid"; then
+        print -u2 "dual-subagent: Claude timed out after $timeout_seconds seconds; terminating it"
+        : > "$claude_timeout"
+        terminate_process_tree TERM "$claude_pid"
+    fi
+    if process_is_running "$cursor_pid"; then
+        print -u2 "dual-subagent: Cursor timed out after $timeout_seconds seconds; terminating it"
+        : > "$cursor_timeout"
+        terminate_process_tree TERM "$cursor_pid"
+    fi
+
+    if [[ -e "$claude_timeout" || -e "$cursor_timeout" ]]; then
+        for _ in 1 2 3 4 5; do
+            process_is_running "$claude_pid" || process_is_running "$cursor_pid" || break
+            sleep 1
+        done
+        process_is_running "$claude_pid" && terminate_process_tree KILL "$claude_pid"
+        process_is_running "$cursor_pid" && terminate_process_tree KILL "$cursor_pid"
+    fi
+) &
+timeout_pid=$!
+
+for _ in {1..100}; do
+    [[ -s "$timeout_sleep_pid_file" ]] && break
+    sleep 0.01
+done
+if [[ ! -s "$timeout_sleep_pid_file" ]]; then
+    print -u2 'dual-subagent: failed to start timeout watchdog'
+    exit 1
+fi
+timeout_sleep_pid="$(< "$timeout_sleep_pid_file")"
+print -u2 "dual-subagent: waiting for both peers (timeout: $timeout_seconds seconds)"
+
+wait "$claude_pid"
+claude_status=$?
+claude_pid=
+wait "$cursor_pid"
+cursor_status=$?
+cursor_pid=
+
+: > "$timeout_cancel"
+kill "$timeout_sleep_pid" 2>/dev/null || true
+wait "$timeout_pid" 2>/dev/null || true
+timeout_sleep_pid=
+timeout_pid=
+
+print '=== CLAUDE ==='
+command cat "$claude_out"
+print '\n=== CURSOR ==='
+command cat "$cursor_out"
+
+if [[ -e "$claude_timeout" ]]; then
+    print -u2 "dual-subagent: Claude timed out after $timeout_seconds seconds"
+    command cat "$claude_err" >&2
+    claude_status=1
+elif (( claude_status != 0 )) || [[ ! -s "$claude_out" ]]; then
+    print -u2 "dual-subagent: Claude failed (exit $claude_status)"
+    command cat "$claude_err" >&2
+    claude_status=1
+fi
+if [[ -e "$cursor_timeout" ]]; then
+    print -u2 "dual-subagent: Cursor timed out after $timeout_seconds seconds"
+    command cat "$cursor_err" >&2
+    cursor_status=1
+elif (( cursor_status != 0 )) || [[ ! -s "$cursor_out" ]]; then
+    print -u2 "dual-subagent: Cursor failed (exit $cursor_status)"
+    command cat "$cursor_err" >&2
+    cursor_status=1
+fi
+
+if (( claude_status != 0 || cursor_status != 0 )); then
+    exit 1
+fi
