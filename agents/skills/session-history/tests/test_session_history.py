@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "session_history.py"
@@ -39,6 +40,13 @@ class SessionHistoryTests(unittest.TestCase):
         self.cwd = str(Path(self.temp.name) / "project")
         Path(self.cwd).mkdir()
         self.session = "11111111-1111-1111-1111-111111111111"
+        # Isolate from the invoking Codex session so results don't depend on
+        # whether the suite runs inside Codex.
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop("CODEX_THREAD_ID", None)
+        os.environ.pop("CODEX_SESSION_ID", None)
 
     def tearDown(self) -> None:
         self.temp.cleanup()
@@ -287,7 +295,15 @@ class SessionHistoryTests(unittest.TestCase):
             [self.meta(), message("hangul", "user", "한국어 테스트 결정", 1, "2026-09-09T01:00:01Z")],
         )
         empty = history.search_history(self.root, "session history", cwd=self.cwd, scope="all")
-        hangul = history.search_history(self.root, "한국어 테스트", cwd=self.cwd, scope="all")
+        # A foreign session id keeps the recent-query heuristic from excluding
+        # the only turn as the invoking one.
+        hangul = history.search_history(
+            self.root,
+            "한국어 테스트",
+            cwd=self.cwd,
+            scope="all",
+            explicit_session_id="22222222-2222-2222-2222-222222222222",
+        )
         self.assertEqual(empty["status"], "empty_query")
         self.assertTrue(hangul["candidates"])
 
