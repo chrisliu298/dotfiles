@@ -21,6 +21,10 @@ background-blur = 16
 minimum-contrast = 1.1
 
 font-family = Berkeley Mono
+# Pin the Han fallback. Ghostty reuses whichever fallback face it loaded first,
+# so one Hangul or kana glyph otherwise makes shared Han characters render in a
+# Korean or Japanese font while simplified-only ones use PingFang, mixing weights.
+font-family = PingFang SC
 font-size = 18
 font-thicken = true
 
