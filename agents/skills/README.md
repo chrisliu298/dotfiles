@@ -23,7 +23,7 @@ Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via
 
 Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
-> GLM, Kimi, DeepSeek, and MiMo are all reached **through** Claude Code as the harness (each is a `claude` session pointed at that model's endpoint) via the `glm`/`km`/`ds`/`mm` aliases (see `shell/.functions`), so they inherit the Claude column directly (no separate skill dir). The Claude-only orchestration skills (relay, prism, goal-loop, keep-warm, crons, codex-first, skill-creator) — plus recall, which reads Claude's own transcript store — stay off Codex; relay and prism are additionally guarded so a dispatched peer can't trigger them.
+> The Claude-only orchestration skills (relay, prism, goal-loop, keep-warm, crons, codex-first, skill-creator) — plus recall, which reads Claude's own transcript store — stay off Codex; relay and prism are additionally guarded so a dispatched peer can't trigger them.
 
 **Enabled** (✓ auto-installed):
 
@@ -50,10 +50,10 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 | goal-loop               | ✱ | — | local — Stepped elicit→review→fix loop (composes goal-elicit/goal-drive/prism; default review is prism, Claude-only) |
 | interviewer             | ✱ | ✱ | local — Mock AI/ML technical interviews |
 | keep-warm               | ✱ | — | local — Cache heartbeat (uses Claude-only scheduling tools) |
-| prism                   | ✱ | — | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to GPT + GLM + Kimi + DeepSeek + MiMo via relay) |
+| prism                   | ✱ | — | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to GPT via relay) |
 | prompt-engineer         | ✱ | ✱ | local — Prompt writing per-vendor best practices |
 | recall                  | ✱ | — | local — Search this project's past Claude sessions for an earlier user statement/decision (Claude-only; lexical BM25 over the transcript store) |
-| relay                   | ✱ | — | local — Cross-agent relay from Claude to GPT/GLM/Kimi/DeepSeek/MiMo (Claude-only caller) |
+| relay                   | ✱ | — | local — Cross-agent relay from Claude to GPT (Claude-only caller) |
 | todo                    | ✱ | ✱ | local — TODO.md tracking across sessions |
 
 > Note: SKILL.md supports an optional Claude-only `effort` frontmatter (`medium` / `high` / `max`) to set thinking budget per skill. Currently unset on every skill in this repo — they all inherit the session default.

@@ -33,14 +33,14 @@ See `.aliases` and `.functions` for the full list. Highlights:
 
 Effort suffixes follow one convention — `n`=none, `l`=low, `m`=medium, `h`=high, `x`=xhigh, `mx`=max. Each model exposes only the tiers its endpoint supports; the bare alias is that model's sensible default.
 
-| tier | suffix | Claude `c` | Codex `x` | GLM `glm` | Kimi `km` | DeepSeek `ds` | MiMo `mm` |
-|------|:------:|:----------:|:---------:|:---------:|:----------:|:-------------:|:---------:|
-| *bare (default)* | — | `c` (high) | `x` (medium) | `glm` (max) | `km` (K2.7) | `ds` (max) | `mm` (default) |
-| none | `n` | — | `xn` | — | — | — | — |
-| low | `l` | `cl` | `xl` | — | — | → high | — |
-| medium | `m` | `cm` | `xm` | — | — | → high | — |
-| high | `h` | `ch` | `xh` | — | — | `dsh` | — |
-| xhigh | `x` | `cx` | `xx` | — | — | → max | — |
-| max | `mx` | `cmx` | `xmx` | `glm` (bare) | — | `ds` (bare) | — |
+| tier | suffix | Claude `c` | Codex `x` |
+|------|:------:|:----------:|:---------:|
+| *bare (default)* | — | `c` (high) | `x` (medium) |
+| none | `n` | — | `xn` |
+| low | `l` | `cl` | `xl` |
+| medium | `m` | `cm` | `xm` |
+| high | `h` | `ch` | `xh` |
+| xhigh | `x` | `cx` | `xx` |
+| max | `mx` | `cmx` | `xmx` |
 
-`→` = the requested value collapses to that tier (DeepSeek maps low/medium → high, xhigh → max); MiMo's Anthropic endpoint surfaces no effort control. GLM-5.3 supports a graded `reasoning_effort` (max/xhigh/high/…/none) but the launcher pins **max** — the same level the relay/prism registry pins — so only bare `glm`=max is exposed. Kimi (`km`) runs on the Kimi-for-Coding subscription plan (`api.kimi.com/coding/`), pinned to the plan's **`kimi-for-coding`** model id (K2.7 Coding); K2.7 is thinking-only and exposes no graded reasoning effort, so the launcher pins `CLAUDE_CODE_EFFORT_LEVEL=high` — the value Kimi's own Claude Code guide configures, and enough to hold thinking on — and only bare `km` is exposed. The compact window is K2.7's full 256K context (262144). Continue/resume/headless suffixes (`*c`/`*r`/`*hl`) are uniform across the existing Claude/Codex/GLM/Kimi/DeepSeek/MiMo aliases. Bare `c` doesn't pin an effort — it inherits `effortLevel` from `agents/claude/settings.json` (with adaptive thinking on), currently `high`, so `c` ≡ `ch`.
+Continue/resume/headless suffixes (`*c`/`*r`/`*hl`) are uniform across the Claude/Codex aliases. Bare `c` doesn't pin an effort — it inherits `effortLevel` from `agents/claude/settings.json` (with adaptive thinking on), currently `high`, so `c` ≡ `ch`.

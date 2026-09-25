@@ -37,7 +37,7 @@ SKILLS=(
     # that (claude-only: relay, prism, keep-warm, crons, goal-loop, recall, codex-first,
     # skill-creator; codex-only: claude-subagent, session-history, gpt-pro-relay).
     "*|./agents/skills|claude,codex"
-    # Relay: claude-only caller; targets GPT, GLM, Kimi, DeepSeek, and MiMo via the script.
+    # Relay: claude-only caller; targets GPT via the script.
     # MANUAL (below); explicit entry keeps it claude-only when enabled (the wildcard would install it everywhere).
     "relay|./agents/skills/relay|claude"
     # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup). MANUAL (below).
@@ -45,7 +45,7 @@ SKILLS=(
     # crons: claude-only durable manifest + re-arm for the recurring /loop + CronCreate fleet
     # (CronCreate/CronList/CronDelete are Claude-only); preparer-not-actuator, no docmaint freshness gate. MANUAL (below).
     "crons|./agents/skills/crons|claude"
-    # prism: claude-only caller (dispatches parallax to GPT + GLM + Kimi + DeepSeek + MiMo via relay). MANUAL (below).
+    # prism: claude-only caller (dispatches parallax to GPT via relay). MANUAL (below).
     "prism|./agents/skills/prism|claude"
     # goal-loop: default review backend is prism (claude-only); built on the Skill/AskUserQuestion
     # tooling. Off-Claude it only degrades to external/local/none, so keep it claude-only. MANUAL
