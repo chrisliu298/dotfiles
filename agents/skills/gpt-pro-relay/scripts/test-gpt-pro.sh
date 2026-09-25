@@ -87,11 +87,16 @@ cat > "$TMP/binlocal/gpt-pro-relay" <<'FAKE'
 #!/usr/bin/env bash
 case "$1" in
   ask)   cat >/dev/null
+         # The wrapper must forward --max-wait as the engine's parent-side wait bound.
+         case " $* " in *" --generation-timeout 3 "*)
+           echo '{"status":"pending","reason":"wait_timeout"}'>&2; exit 124 ;; esac
          case "$GPRT_SCN" in
            local_empty) echo '{"ok":true}'>&2; exit 0 ;;
            *)           printf 'LOCAL ANSWER\n'; echo '{"ok":true}'>&2; exit 0 ;;
          esac ;;
-  fetch) printf 'LOCAL REATTACH\n'; echo '{"ok":true}'>&2; exit 0 ;;
+  fetch) case " $* " in *" --timeout 3 "*)
+           echo '{"status":"pending","reason":"fetch_timeout"}'>&2; exit 124 ;; esac
+         printf 'LOCAL REATTACH\n'; echo '{"ok":true}'>&2; exit 0 ;;
   stop)  case "$GPRT_SCN" in
            stop_no_worker) echo '{"status":"no_live_worker"}'>&2; exit 2 ;;
            *)              echo '{"status":"stopped"}'>&2; exit 0 ;;
@@ -138,6 +143,8 @@ echo "── local (default) path ──"
 EXP_OUT="LOCAL ANSWER";                      run_case "local blocking ask → ok"             local local_success    0   ""
 EXP_ERR="empty response";                    run_case "local empty body → exit 1"           local local_empty      1   ""
 EXP_OUT="LOCAL REATTACH";                    run_case "local --run-id blocking fetch → ok"  local local_reattach   0   "--run-id ask-20260530T000000Z-abc"
+EXP_ERR="still pending";                     run_case "local --max-wait bounds ask → 124"   local local_success    124 "--max-wait 3"
+EXP_ERR="still pending";                     run_case "local --max-wait bounds fetch → 124" local local_reattach   124 "--run-id ask-20260530T000000Z-abc --max-wait 3"
 
 # ---- file inclusion (-f / --file) composition, via the shared filectx helper ----
 # These exercise the compose-before-submit path: a clean file composes and submits

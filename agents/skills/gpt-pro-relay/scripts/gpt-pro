@@ -71,14 +71,14 @@ Options:
   --run-id <id>         Reattach to an existing run (recovery only); skips submit.
   --stop <id>           Interrupt a run: dequeue if it hasn't sent yet, else click ChatGPT's
                         Stop button on the live turn. Graceful; no response is returned.
-  --max-wait <sec>      Caller-side poll deadline (default 7200 = 120 min).
+  --max-wait <sec>      Caller-side wait deadline, local or SSH (default 7200 = 120 min); the run keeps going.
   --dry-run             Resolve files + run-id, report the composed size, then exit. No quota used.
 
 Files are validated, secret-scanned, and capped (5 MB composed) BEFORE submit — no quota
 burned on rejection. Put only your question on stdin; pass files with -f instead of hand-cat.
 
 Output: response on stdout; run-id + diagnostics + engine JSONL on stderr.
-Exit:   0 ok · 1 error/empty · 2 usage · 3 worker timeout · 4 not found · 5 stopped (no body; via --run-id fetch)
+Exit:   0 ok · 1 error/empty · 2 usage · 3 legacy worker timeout · 4 not found · 5 stopped (no body; via --run-id fetch)
         · 124 timed out, still pending (recover with --run-id) · 255 SSH transport unknown (reattach with --run-id)
         · stop: 0 stopped/already-finished/pending · 2 no live worker · 4 unknown run
 
@@ -216,10 +216,11 @@ emit() {  # <outfile> <errfile>
 
 # ---- LOCAL path: blocking call, no SSH, no poll loop (nothing to drop) ----
 # ask blocks until the run finishes and prints the response; fetch blocks until ready.
+# --max-wait bounds only this wait (engine exit 124); the detached worker keeps running.
 if $LOCAL; then
   run_local() {
-    if $REATTACH; then "$RELAY_BIN" fetch "$RUN_ID" >"$OUT" 2>"$ERR"
-    else "$RELAY_BIN" ask --run-id "$RUN_ID" <"$PROMPT_FILE" >"$OUT" 2>"$ERR"; fi
+    if $REATTACH; then "$RELAY_BIN" fetch "$RUN_ID" --timeout "$MAX_WAIT" >"$OUT" 2>"$ERR"
+    else "$RELAY_BIN" ask --run-id "$RUN_ID" --generation-timeout "$MAX_WAIT" <"$PROMPT_FILE" >"$OUT" 2>"$ERR"; fi
   }
   set +e; run_local; rc=$?; set -e
   if (( rc == 127 )) && [ "$RELAY_BIN" != "$RELAY_VENV" ]; then
@@ -227,6 +228,7 @@ if $LOCAL; then
   fi
   (( rc == 0 )) && emit "$OUT" "$ERR"
   cat "$ERR" >&2 2>/dev/null || true
+  (( rc == 124 )) && die 124 "timed out after ${MAX_WAIT}s, run still pending — recover with: gpt-pro --run-id $RUN_ID"
   exit "$rc"
 fi
 
