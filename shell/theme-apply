@@ -4,7 +4,7 @@
 # Single source of truth for turning a light/dark choice into live config,
 # shared by the `theme` shell function and dotfiles.sh so the two never drift.
 # Writes ONLY host-local files (XDG state dir + the real ~/.config/btop/btop.conf
-# plus ~/.codex/config.toml and ~/.{pi/agent,claude}/themes/) — never a
+# plus ~/.codex/config.toml and ~/.claude/themes/) — never a
 # git-tracked file — so switching
 # themes can never dirty the tree.
 #
@@ -16,11 +16,10 @@
 #   $STATE_DIR/starship.toml       full config (STARSHIP_CONFIG target), palette applied
 #   ~/.config/btop/btop.conf       full config, generated from the tracked template
 #   ~/.codex/config.toml           existing config, TUI theme only
-#   ~/.pi/agent/themes/dotfiles.json     full theme, copied from the tracked definition
 #   ~/.claude/themes/dotfiles.json       full theme, copied from the tracked definition
 #
 # Theme *definitions* stay tracked: ghostty/tmux theme files, btop themes/,
-# agents/{pi,claude}/themes/{light,dark}.json, and the starship [palettes.*]
+# agents/claude/themes/{light,dark}.json, and the starship [palettes.*]
 # tables inside the template.
 set -eu
 
@@ -33,12 +32,8 @@ btop_template="${BTOP_TEMPLATE:-$HOME/.config/btop/btop.conf.template}"
 starship_template="${STARSHIP_TEMPLATE:-$HOME/.config/starship/starship.toml}"
 btop_live="${BTOP_LIVE:-$HOME/.config/btop/btop.conf}"
 codex_config="${CODEX_CONFIG:-$HOME/.codex/config.toml}"
-# pi has no ~/.pi/agent/themes symlink to read definitions through, so this one
+# Claude Code has no ~/.claude/themes symlink to read definitions through, so this
 # points straight at the repo (dotfiles.sh overrides it during a fresh install).
-pi_themes="${PI_THEMES:-$HOME/dotfiles/agents/pi/themes}"
-pi_live="${PI_LIVE_THEME:-$HOME/.pi/agent/themes/dotfiles.json}"
-# Claude Code is the same special case as pi (see below), and ~/.claude/themes is
-# likewise not symlinked, so this also points straight at the repo.
 claude_themes="${CLAUDE_THEMES:-$HOME/dotfiles/agents/claude/themes}"
 claude_live="${CLAUDE_LIVE_THEME:-$HOME/.claude/themes/dotfiles.json}"
 
@@ -126,8 +121,8 @@ if [ -f "$codex_config" ]; then
     mv "$codex_tmp" "$codex_config"
 fi
 
-# pi and Claude Code both pin their `theme` setting to the custom theme
-# "dotfiles" and let this script swap what that theme *is*. Unlike the btop and
+# Claude Code pins its `theme` setting to the custom theme "dotfiles" and lets
+# this script swap what that theme *is*. Unlike the btop and
 # starship templates — which can legitimately be absent mid-install — these
 # definitions live in the repo and the pinned setting references them
 # unconditionally, so a missing one is a hard error: the agent would fail to
@@ -148,16 +143,7 @@ install_agent_theme() {
     mv "$live.tmp" "$live"
 }
 
-# pi: it *does* have an auto mode — `"theme": "light/dark"` (since 0.79.7) picks
-# between two themes — but it resolves from terminal background detection, not
-# from our `mode` file, so it would ignore `theme --all` and diverge whenever the
-# terminal doesn't match the host's chosen mode (notably SSH sessions into
-# macmini/l40s). Keeping `mode` authoritative means swapping the definition
-# instead. Both carry "name": "dotfiles", so the copy needs no rewriting, and pi
-# hot-reloads the active custom theme, so running sessions repaint immediately.
-install_agent_theme "$pi_themes/$mode.json" "$pi_live" pi
-
-# claude: same trick, different reason. Claude Code's `theme = auto` does follow
+# claude: Claude Code's `theme = auto` does follow
 # the terminal, but it only picks between Anthropic's own palettes — and the
 # light one paints user messages rgb(240,240,240), indistinguishable from the
 # #fafafa canvas at 1.09:1. Fixing that needs a custom theme, and

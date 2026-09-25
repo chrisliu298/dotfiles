@@ -526,7 +526,7 @@ szt() {
 }
 
 # =============================================================================
-# Claude Code / Codex / TraeCode / Pi
+# Claude Code / Codex
 # =============================================================================
 
 # Unset TMUX for Claude Code so Bun's getColorDepth() doesn't short-circuit
@@ -555,33 +555,8 @@ ch(){  CLAUDE_CODE_EFFORT_LEVEL=high   _claude --dangerously-skip-permissions "$
 cx(){  CLAUDE_CODE_EFFORT_LEVEL=xhigh  _claude --dangerously-skip-permissions "$@"; }
 cmx(){ CLAUDE_CODE_EFFORT_LEVEL=max    _claude --dangerously-skip-permissions "$@"; }
 
-xn(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=none "$@"; }
-x(){ command codex --yolo "$@"; }
-xl(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=low "$@"; }
-xm(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=medium "$@"; }
-xh(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=high "$@"; }
-xx(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=xhigh "$@"; }
-xmx(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=max "$@"; }
-xul(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=ultra "$@"; }
-_codex_resume_effort(){
-    local resume_args=()
-    if [[ "$1" == "--last" ]]; then
-        resume_args=(--last)
-        shift
-    fi
-    local effort=medium
-    case "$1" in
-        none|low|medium|high|xhigh|max) effort="$1"; shift ;;
-    esac
-    command codex resume "${resume_args[@]}" --yolo -m gpt-5.6-sol --config model_reasoning_effort="$effort" "$@"
-}
-xc(){ _codex_resume_effort --last "$@"; }
-xr(){ _codex_resume_effort "$@"; }
-xu(){ npm install -g @openai/codex@latest "$@"; }
-xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.6-sol --config model_reasoning_effort=high "${*}"; }
-
-tc(){ command traecli -y -m GPT-5.6-Sol -c model_reasoning_effort=high "$@"; }
-
+# Sequentially scout every awesome-list repo's Scholar Inbox feed with Claude
+# Code (Opus, high effort), printing only each run's final message.
 scout-papers-scholar-inbox-all() {
     local root="$HOME/Developer/GitHub" repo result_file log_file rc
     local repos=(
@@ -591,6 +566,12 @@ scout-papers-scholar-inbox-all() {
         awesome-rm-for-video-generation
         awesome-rubric-rewards
     )
+    # The skill drives the shared scholar_inbox.py client, which lives outside
+    # each list repo; grant it as a working directory when it is present.
+    # `--add-dir` is variadic, so the prompt needs a `--` terminator after it.
+    local scout_lib="${SCOUT_LIB:-$root/scout-lib}"
+    local -a extra_dirs=()
+    [[ -d "$scout_lib" ]] && extra_dirs=(--add-dir "$scout_lib")
 
     for repo in "${repos[@]}"; do
         [[ -d "$root/$repo/.git" ]] || {
@@ -603,18 +584,19 @@ scout-papers-scholar-inbox-all() {
             command rm -f -- "$result_file"
             return 1
         }
-        command codex exec \
-            --cd "$root/$repo" \
-            --yolo \
-            -m gpt-5.6-sol \
-            --config model_reasoning_effort=medium \
-            --output-last-message "$result_file" \
-            '$scout-papers-scholar-inbox' >"$log_file" 2>&1
+        (
+            cd "$root/$repo" || exit 1
+            CLAUDE_CODE_EFFORT_LEVEL=high _claude -p \
+                --dangerously-skip-permissions \
+                --model opus \
+                "${extra_dirs[@]}" \
+                -- '/scout-papers-scholar-inbox'
+        ) </dev/null >"$result_file" 2>"$log_file"
         rc=$?
 
         if (( rc )); then
             printf 'Scholar Inbox scout failed in %s; stopping.\n' "$repo" >&2
-            tail -n 40 "$log_file" >&2
+            tail -n 40 "$result_file" "$log_file" >&2
             command rm -f -- "$result_file" "$log_file"
             return 1
         fi
@@ -626,56 +608,36 @@ scout-papers-scholar-inbox-all() {
     printf '\nAll Scholar Inbox scouts completed.\n'
 }
 
-# Pi defaults to GPT-5.6 through the OpenAI Codex subscription provider. This
-# intentionally uses Pi's `openai-codex` OAuth token in ~/.pi/agent/auth.json,
-# not OPENAI_API_KEY / the API-key `openai` provider.
-_pi(){ env -u TMUX PI_TELEMETRY=0 PI_SKIP_VERSION_CHECK=1 COLORTERM=truecolor "$(command -v pi)" "$@"; }
-p(){ _pi --provider openai-codex --model gpt-5.6-sol "$@"; }
-pc(){ _pi --provider openai-codex --model gpt-5.6-sol --continue "$@"; }
-pr(){ _pi --resume "$@"; }
-phl(){ (( $# )) || { echo 'Usage: phl "<prompt>"'; return 1; }; _pi --provider openai-codex --model gpt-5.6-sol -p "${*}"; }
-
-_pi_glm(){
-    [[ -n "${GLM_PLAN_KEY_INT:-}" ]] || { echo 'GLM_PLAN_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }
-    ZAI_API_KEY="$GLM_PLAN_KEY_INT" _pi --provider zai --model glm-5.3 --thinking xhigh "$@"
+xn(){ command codex --yolo -m gpt-6-sol --config model_reasoning_effort=none "$@"; }
+x(){ command codex --yolo -m gpt-6-sol --config model_reasoning_effort=medium "$@"; }
+xl(){ command codex --yolo -m gpt-6-sol --config model_reasoning_effort=low "$@"; }
+xm(){ command codex --yolo -m gpt-6-sol --config model_reasoning_effort=medium "$@"; }
+xh(){ command codex --yolo -m gpt-6-sol --config model_reasoning_effort=high "$@"; }
+xx(){ command codex --yolo -m gpt-6-sol --config model_reasoning_effort=xhigh "$@"; }
+xmx(){ command codex --yolo -m gpt-6-sol --config model_reasoning_effort=max "$@"; }
+xul(){ command codex --yolo -m gpt-6-sol --config model_reasoning_effort=ultra "$@"; }
+_codex_resume_effort(){
+    local resume_args=()
+    if [[ "$1" == "--last" ]]; then
+        resume_args=(--last)
+        shift
+    fi
+    local effort=medium
+    case "$1" in
+        none|low|medium|high|xhigh|max) effort="$1"; shift ;;
+    esac
+    command codex resume "${resume_args[@]}" --yolo -m gpt-6-sol --config model_reasoning_effort="$effort" "$@"
 }
-pglm(){ _pi_glm "$@"; }
-pglmc(){ _pi_glm --continue "$@"; }
-pglmr(){ _pi_glm --resume "$@"; }
-pglmhl(){ (( $# )) || { echo 'Usage: pglmhl "<prompt>"'; return 1; }; _pi_glm -p "${*}"; }
-
-_pi_kimi(){
-    [[ -n "${KIMI_PLAN_KEY_CN:-}" ]] || { echo 'KIMI_PLAN_KEY_CN not set (see ~/.zshenv.local)' >&2; return 1; }
-    KIMI_API_KEY="$KIMI_PLAN_KEY_CN" _pi --provider kimi-coding --model kimi-for-coding --thinking xhigh "$@"
-}
-pkm(){ _pi_kimi "$@"; }
-pkmc(){ _pi_kimi --continue "$@"; }
-pkmr(){ _pi_kimi --resume "$@"; }
-pkmhl(){ (( $# )) || { echo 'Usage: pkmhl "<prompt>"'; return 1; }; _pi_kimi -p "${*}"; }
-
-_pi_deepseek(){
-    [[ -n "${DEEPSEEK_API_KEY_INT:-}" ]] || { echo 'DEEPSEEK_API_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }
-    DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY_INT" _pi --provider deepseek --model deepseek-v4-pro --thinking xhigh "$@"
-}
-pds(){ _pi_deepseek "$@"; }
-pdsc(){ _pi_deepseek --continue "$@"; }
-pdsr(){ _pi_deepseek --resume "$@"; }
-pdshl(){ (( $# )) || { echo 'Usage: pdshl "<prompt>"'; return 1; }; _pi_deepseek -p "${*}"; }
-
-_pi_mimo(){
-    [[ -n "${MIMO_API_KEY_INT:-}" ]] || { echo 'MIMO_API_KEY_INT not set (see ~/.zshenv.local)' >&2; return 1; }
-    XIAOMI_API_KEY="$MIMO_API_KEY_INT" _pi --provider xiaomi --model mimo-v2.5-pro "$@"
-}
-pmm(){ _pi_mimo "$@"; }
-pmmc(){ _pi_mimo --continue "$@"; }
-pmmr(){ _pi_mimo --resume "$@"; }
-pmmhl(){ (( $# )) || { echo 'Usage: pmmhl "<prompt>"'; return 1; }; _pi_mimo -p "${*}"; }
+xc(){ _codex_resume_effort --last "$@"; }
+xr(){ _codex_resume_effort "$@"; }
+xu(){ npm install -g @openai/codex@latest "$@"; }
+xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-6-sol --config model_reasoning_effort=high "${*}"; }
 
 # =============================================================================
 # DeepSeek (via Claude Code, Anthropic-compatible endpoint)
 # =============================================================================
-# Routes Claude Code at DeepSeek per-invocation, while default `c`/`cc` use the
-# managed SuperRelay Opus 4.8 lane. DeepSeek V4 Pro has two distinct effort levels: high
+# Routes Claude Code at DeepSeek per-invocation, so default `c`/`cc` keep using
+# the Claude subscription. DeepSeek V4 Pro has two distinct effort levels: high
 # and max. Both V4 models are 1M-context on the backend, but the harness still
 # needs its own window signal — see the [1m] note below.
 # Requires DEEPSEEK_API_KEY_INT in env (see ~/.zshenv.local).
@@ -688,8 +650,8 @@ pmmhl(){ (( $# )) || { echo 'Usage: pmmhl "<prompt>"'; return 1; }; _pi_mimo -p 
 #
 # DELIBERATE DIVERGENCE (2026-07-31): peers.json pins the relay/prism deepseek
 # lane to deepseek-v4-flash — the 0731 agent-post-trained build, which DeepSeek
-# benchmarks above V4-Pro-Preview on agent tasks. These interactive lanes — and
-# Pi's pds above — stay on V4-Pro. Do not "resync" the model ids; revisit both
+# benchmarks above V4-Pro-Preview on agent tasks. These interactive lanes stay on
+# V4-Pro. Do not "resync" the model ids; revisit both
 # when the official V4-Pro ships ("coming soon" per the 2026-07-31 changelog).
 
 # Haiku / small-fast (background) tier → deepseek-v4-flash: 3x cheaper miss
@@ -734,8 +696,8 @@ dshl(){ (( $# )) || { echo 'Usage: dshl "<prompt>"'; return 1; }; CLAUDE_CODE_EF
 # MiMo (via Claude Code, Anthropic-compatible endpoint)
 # =============================================================================
 # Routes Claude Code at Xiaomi MiMo per-invocation via the MiMo pay-per-token API
-# endpoint (api.xiaomimimo.com/anthropic, MIMO_API_KEY_INT), while default `c`/`cc`
-# use the managed SuperRelay Opus 4.8 lane. mimo-v2.5-pro exposes no effort tiers on this
+# endpoint (api.xiaomimimo.com/anthropic, MIMO_API_KEY_INT), so default `c`/`cc`
+# keep using the Claude subscription. mimo-v2.5-pro exposes no effort tiers on this
 # Anthropic/Claude Code endpoint (the model's OpenAI-style low/medium/high
 # reasoning_effort isn't surfaced here), so CLAUDE_CODE_EFFORT_LEVEL is a no-op —
 # unlike DeepSeek's high/max. mimo-v2.5-pro is 1M-context-native, so no suffix is
@@ -774,8 +736,8 @@ mmhl(){ (( $# )) || { echo 'Usage: mmhl "<prompt>"'; return 1; }; _mimo -p --dan
 # =============================================================================
 # GLM (via Claude Code, Anthropic-compatible endpoint)
 # =============================================================================
-# Routes Claude Code at Zhipu/z.ai GLM per-invocation, while default `c`/`cc` use
-# the managed SuperRelay Opus 4.8 lane. glm-5.3 supports a graded reasoning_effort
+# Routes Claude Code at Zhipu/z.ai GLM per-invocation, so default `c`/`cc` keep
+# using the Claude subscription. glm-5.3 supports a graded reasoning_effort
 # (max/xhigh/high/medium/low/minimal/none, default max); we pin max here — the
 # same level the relay/prism registry pins (peers.json extra_env). Model id keeps
 # its dot and takes no `[1m]` suffix: z.ai documents a `glm-5.3[1m]` long-context
@@ -813,8 +775,8 @@ glmhl(){ (( $# )) || { echo 'Usage: glmhl "<prompt>"'; return 1; }; CLAUDE_CODE_
 # Kimi (via Claude Code, Kimi-for-Coding subscription plan) — aliases: km/kmc/kmr/kmhl
 # =============================================================================
 # Routes Claude Code at Moonshot's Kimi-for-Coding subscription endpoint
-# (api.kimi.com/coding/) per-invocation, while default `c`/`cc` use the managed
-# SuperRelay Opus 4.8 lane. Getting K2.7 Coding needs BOTH the plan's own model id
+# (api.kimi.com/coding/) per-invocation, so default `c`/`cc` keep using the Claude
+# subscription. Getting K2.7 Coding needs BOTH the plan's own model id
 # (`kimi-for-coding`; see `GET /v1/models` — the display name "Kimi K2.7 Code"
 # and the old `kimi-k2.7-code` string are NOT valid ids here) and thinking on,
 # which the wrappers pin via CLAUDE_CODE_EFFORT_LEVEL. The endpoint never

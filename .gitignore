@@ -7,4 +7,3 @@ agents/claude/plugins/installed_plugins.json
 .relay/
 run.log
 .goals/
-.pi-subagents/

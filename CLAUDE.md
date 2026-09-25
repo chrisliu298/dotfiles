@@ -6,17 +6,16 @@ Personal dotfiles and AI agent configurations for macOS with zsh, managed by `do
 
 ## Project Structure & Module Organization
 
-Four `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`CLAUDE.md`, `settings.json` — copied, not symlinked — keybindings, statusline, themes), `codex/` → `~/.codex/`, `grok/` → `~/.grok/` (relay/prism dispatch target), `pi/` → `~/.pi/agent/`. The rest are not agent homes:
+Three `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`CLAUDE.md`, `settings.json` — copied, not symlinked — keybindings, statusline, themes), `codex/` → `~/.codex/`, `grok/` → `~/.grok/` (relay/prism dispatch target). The rest are not agent homes:
 
 - `agents/eval/` — instruction-following harness for the shared agent doc (prompts, rubric, runner scripts).
 - `agents/hooks/` — shared Claude/Codex destructive-command guard and tests.
-- `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` symlinks each into the agent dirs the `SKILLS` table selects (most to Claude/Codex/Grok/Pi; some are Claude-only). Pi (`~/.pi/agent/skills/`) mirrors the Codex/Grok set and additionally loads its own native npm extensions declared in `agents/pi/settings.json`.
+- `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` symlinks each into the agent dirs the `SKILLS` table selects (most to Claude/Codex/Grok; some are Claude-, Codex-, or Grok-only). Manual skills install only when listed in `agents/skills/manual-skills.enabled`.
 
 Elsewhere:
 
-- `.claude/skills/` holds project-local skills available only when working in this repo.
 - `.config/ghostty`: Ghostty/cmux terminal config — tracked in-repo (not fetched from the standalone `chrisliu298/ghostty-config` repo), symlinked like the rest of `.config/`.
-- The four global instruction files (`agents/claude/CLAUDE.md` + `agents/{codex,grok,pi}/AGENTS.md`) are one canonical, agent-read text copied to all four paths, **identical except the H1** (which just names each file — `# CLAUDE.md` vs `# AGENTS.md`). Edit one, copy to the other three (keeping each H1); `./dotfiles.sh lint` asserts the bodies match. Behavior parity across models when the text changes is checked by the harness in `agents/eval/`.
+- The three global instruction files (`agents/claude/CLAUDE.md` + `agents/{codex,grok}/AGENTS.md`) are one canonical, agent-read text copied to all three paths, **identical except the H1** (which just names each file — `# CLAUDE.md` vs `# AGENTS.md`). Edit one, copy to the other two (keeping each H1); `./dotfiles.sh lint` asserts the bodies match. Behavior parity across models when the text changes is checked by the harness in `agents/eval/`.
 
 ## Build, Test, and Development Commands
 
@@ -28,11 +27,11 @@ Elsewhere:
 ## Conventions
 
 - **Shell load order**: `shell/.zshenv` (platform detection, env, PATH) → `shell/.zshrc` (plugins, sources `.aliases` + `.functions`)
-- **Themes**: Ghostty, Starship, btop, tmux, Codex, pi, and Claude Code (GitHub Light ↔ GitHub Dark), toggled with `theme light|dark|toggle|status`; use `theme --all <mode>` to apply the same mode on this host plus every peer in `_dotfiles_peers` (`shell/.functions`), the one list `theme --all` and `dfs` share. The active choice is **host-local** — a single `mode` file under `~/.local/state/dotfiles-theme/` (never tracked, so switching never dirties git); definitions stay in-repo. `shell/theme-apply` materializes each tool's live config from `mode` (Ghostty/tmux via optional `config-file`/`source-file -q` includes; btop/Starship as generated files, since neither supports includes; Codex by rewriting only `[tui].theme` in the host-local `~/.codex/config.toml`), and `dotfiles.sh` seeds/re-applies it per host. Codex Desktop follows macOS through its own user-controlled appearance setting. Codex, pi, and Claude Code need explicit handling because their terminal automatic modes do not reliably follow the host-local `mode`: Codex's short terminal-background probe can time out over SSH and fall back to its dark theme; pi resolves from terminal background detection rather than from `mode`; and Claude Code's built-in light palette paints user messages `rgb(240,240,240)` — invisible on the `#fafafa` canvas at 1.09:1. Codex pins the same Catppuccin Latte/Mocha syntax themes it would choose adaptively; pi and Claude Code pin their custom theme `dotfiles`, whose live definition `theme-apply` swaps by copying `agents/{pi,claude}/themes/<mode>.json` to `~/.pi/agent/themes/dotfiles.json` / `~/.claude/themes/dotfiles.json`. The latter two watch that file, so running sessions repaint without a restart; their rationale and Claude's contrast values are in `shell/theme-apply` and `agents/claude/README.md`.
+- **Themes**: Ghostty, Starship, btop, tmux, Codex, and Claude Code (GitHub Light ↔ GitHub Dark), toggled with `theme light|dark|toggle|status`; use `theme --all <mode>` to apply the same mode on this host plus every peer in `_dotfiles_peers` (`shell/.functions`), the one list `theme --all` and `dfs` share. The active choice is **host-local** — a single `mode` file under `~/.local/state/dotfiles-theme/` (never tracked, so switching never dirties git); definitions stay in-repo. `shell/theme-apply` materializes each tool's live config from `mode` (Ghostty/tmux via optional `config-file`/`source-file -q` includes; btop/Starship as generated files, since neither supports includes; Codex by rewriting only `[tui].theme` in the host-local `~/.codex/config.toml`), and `dotfiles.sh` seeds/re-applies it per host. Codex Desktop follows macOS through its own user-controlled appearance setting. Codex and Claude Code need explicit handling because their terminal automatic modes do not reliably follow the host-local `mode`: Codex's short terminal-background probe can time out over SSH and fall back to its dark theme, and Claude Code's built-in light palette paints user messages `rgb(240,240,240)` — invisible on the `#fafafa` canvas at 1.09:1. Codex pins the same Catppuccin Latte/Mocha syntax themes it would choose adaptively; Claude Code pins its custom theme `dotfiles`, whose live definition `theme-apply` swaps by copying `agents/claude/themes/<mode>.json` to `~/.claude/themes/dotfiles.json`. Claude watches that file, so running sessions repaint without a restart; the rationale and Claude's contrast values are in `shell/theme-apply` and `agents/claude/README.md`.
 
 ## Skills, MCP Servers & Plugins
 
-Never edit in `~/.claude/skills/`, `~/.codex/skills/`, `~/.grok/skills/`, or `~/.pi/agent/skills/` — those are symlinks. Check `agents/skills/README.md` for source.
+Never edit in `~/.claude/skills/`, `~/.codex/skills/`, or `~/.grok/skills/` — those are symlinks. Check `agents/skills/README.md` for source.
 
 Run `./dotfiles.sh` after changes to installation logic, skill wiring, or managed configuration. Instruction-only edits use the existing symlinks; run `./dotfiles.sh lint` and verify the affected links resolve instead.
 
@@ -59,7 +58,7 @@ Run `./dotfiles.sh` after changes to installation logic, skill wiring, or manage
 ## Maintaining Docs
 
 - **Sync root docs**: keep root `CLAUDE.md` and root `AGENTS.md` aligned — same facts and section order, diverging only in the H1, the project-level pointer, and Claude's `<important>` wrappers.
-- **Sync global instructions**: edit one of the four global instruction files, copy the body to the other three (keeping each H1), commit together — see Project Structure above for the rule and `agents/eval/` for the parity check.
+- **Sync global instructions**: edit one of the three global instruction files, copy the body to the other two (keeping each H1), commit together — see Project Structure above for the rule and `agents/eval/` for the parity check.
 - **Update docs**: after structural changes (adding, removing, or renaming files/directories, skills, or configs), check whether `README.md`, `CLAUDE.md`, or `AGENTS.md` reference the affected paths and update them.
 
 </important>
