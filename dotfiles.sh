@@ -34,7 +34,7 @@ LINKS=(
 # source: ./path (local) or owner/repo[/subpath] (GitHub)
 SKILLS=(
     # The wildcard installs every skill to Claude and Codex; the explicit entries below narrow
-    # that (claude-only: relay, prism, crons, recall, codex-first, skill-creator; codex-only: claude-subagent, session-history, gpt-pro-relay).
+    # that (claude-only: relay, prism, crons, recall, codex-first, skill-creator; codex-only: claude-subagent, session-history).
     "*|./agents/skills|claude,codex"
     # Relay: claude-only caller; targets GPT via the script.
     # MANUAL (below); explicit entry keeps it claude-only when enabled (the wildcard would install it everywhere).
@@ -56,8 +56,6 @@ SKILLS=(
     # session-history: Codex-only; searches Codex rollout transcripts on demand.
     # Claude keeps its separate transcript-store-specific recall skill.
     "session-history|./agents/skills/session-history|codex"
-    # GPT Pro relay is available to Codex; shell/.zshenv exposes the Codex CLI copy.
-    "gpt-pro-relay|./agents/skills/gpt-pro-relay|codex"
     "pdf|anthropics/skills/skills/pdf|claude"
     "skill-creator|anthropics/skills/skills/skill-creator|claude"
     "pdf|openai/skills/skills/.curated/pdf|codex"

@@ -31,7 +31,7 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 |-------|:-:|:-:|----------------------|
 | arxiv-reader            | ✓ | ✓ | local — Read arxiv via TeX / HF markdown / HTML fallback |
 | claude-subagent         | — | ✓ | local — Read-only Claude review helper for Codex |
-| gpt-pro-relay           | — | ✓ | local — SSH to ChatGPT Pro Extended on macmini (CLI on PATH from the Codex copy) |
+| gpt-pro-relay           | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini (the `gpt-pro` CLI is on PATH from the Codex copy) |
 | pdf                     | ✓ | ✓ | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex) — PDF read/edit |
 | push                    | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
 | session-history         | — | ✓ | local — Retrieve exact, redacted turns from past Codex tasks and pre-compaction history |
