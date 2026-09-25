@@ -4,7 +4,7 @@ Config for [Claude Code](https://claude.com/claude-code). Everything here target
 
 | Path | Installed as | Notes |
 |------|--------------|-------|
-| `CLAUDE.md` | symlink | One of the four canonical global instruction files — see root `CLAUDE.md`. |
+| `CLAUDE.md` | symlink | One of the three canonical global instruction files — see root `CLAUDE.md`. |
 | `keybindings.json` | symlink | Custom key and chord bindings. |
 | `settings.json` | **copied** by `dotfiles.sh` | `~/` is expanded to an absolute path on copy, which Claude Code requires. Includes the `"theme": "custom:dotfiles"` pin. |
 | `statusline-command.sh` | symlink | Status line renderer. ANSI *named* colors only, so it follows the terminal palette — see below. |
@@ -20,7 +20,7 @@ Anthropic's, not this repo's — and its light palette paints user messages `rgb
 invisible on the `#fafafa` canvas at 1.09:1. Selecting any custom theme pins the light/dark base,
 so `settings.json` pins `theme` to `custom:dotfiles` and `shell/theme-apply` copies
 `themes/<mode>.json` over `~/.claude/themes/dotfiles.json`. Claude watches that directory, so
-running sessions repaint without a restart. Same mechanism as pi.
+running sessions repaint without a restart.
 
 Both files set `base` (`light`/`dark`) and override exactly two tokens: the user-message band
 and its hover. Everything else stays on Anthropic's palette for that base — the repo's own

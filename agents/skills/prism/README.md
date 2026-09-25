@@ -303,7 +303,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
 | `grok-build` | Grok 4.5 | xAI | `high` | independent of Anthropic/OpenAI |
 | `glm` | GLM-5.3 | Zhipu / z.ai (Anthropic-compatible endpoint) | pinned `max` | `reasoning_effort: max`, like DeepSeek |
 | `kimi` | Kimi K2.7 Coding | Moonshot (Kimi-for-Coding plan, `api.kimi.com/coding/`) | thinking pinned | model id `kimi-for-coding`; `CLAUDE_CODE_EFFORT_LEVEL=high` (K2.7 is thinking-only and exposes no graded effort — the level only has to be non-off); ignores `--effort` |
-| `deepseek` | DeepSeek V4-Flash | DeepSeek (open-weight) | `max` (DeepThink) | agent-post-trained `0731` build; the interactive `ds` family and Pi's `pds` stay on V4-Pro |
+| `deepseek` | DeepSeek V4-Flash | DeepSeek (open-weight) | `max` (DeepThink) | agent-post-trained `0731` build; the interactive `ds` family stays on V4-Pro |
 | `mimo` | MiMo-V2.5-Pro | Xiaomi (open-weight) | — | |
 
 Each peer is its **own lineage** for lens-assignment and synthesis weighting. Web: every peer effectively has WebFetch + WebSearch — the two native gaps (MiMo WebSearch, GLM WebFetch) each have a verified Jina fallback. `relay/peers.json` is the single source of truth for endpoints, effort knobs, and launcher-template style.
