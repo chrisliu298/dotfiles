@@ -61,21 +61,21 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
 │  │  Claude × N  │                   │   (peers × N)    │                          │
 │  │  (Agent tool)│                   └─────────┬────────┘                          │
 │  └──────────────┘                             │ one backgrounded fan-out          │
-│   same model →          ┌─────┬──────────┬────────┬────┬────┐                     │
-│   shared blind spots,   ▼     ▼          ▼        ▼    ▼    ▼                     │
-│   so convergence here   GPT   Grok-Build GLM  Kimi DeepSeek MiMo                  │
-│   is DISCOUNTED        (OpenAI) (xAI)  (z.ai) (Moon) (V4-Flash)(Xiaomi)           │
-│                         └─────┴──────────┴────────┴────┴────┘                     │
+│   same model →          ┌─────────┬───────┬───────┬───────────┐                   │
+│   shared blind spots,   ▼         ▼       ▼       ▼           ▼                   │
+│   so convergence here   GPT       GLM     Kimi    DeepSeek    MiMo                │
+│   is DISCOUNTED         (OpenAI)  (z.ai)  (Moon)  (V4-Flash)  (Xiaomi)            │
+│                         └─────────┴───────┴───────┴───────────┘                   │
 │                              independent lineages → catch the blind spots the     │
 │                              others share → dissent here carries OUTSIZED weight  │
 └───────────────────────────────────────────────────────────────────────────────────┘
-     Default N=1, M=0:  7×1+0 = 7 dispatched + self = 8 perspectives   (general: 7N+M dispatched, 7N+M+1 perspectives)
+     Default N=1, M=0:  6×1+0 = 6 dispatched + self = 7 perspectives   (general: 6N+M dispatched, 6N+M+1 perspectives)
 ```
 
 * **Subagents** are dispatched with the **Agent tool** (only Claude can).
 * **Parallax** peers are dispatched through **`relay`**, which runs each model in
-  the Claude Code harness (GPT via `codex exec`, Grok via its CLI, GLM/Kimi/DeepSeek/MiMo
-  via `claude -p` with the weights swapped). A peer is a *full agent*, not an API call.
+  the Claude Code harness (GPT via `codex exec`, GLM/Kimi/DeepSeek/MiMo via
+  `claude -p` with the weights swapped). A peer is a *full agent*, not an API call.
 
 ---
 
@@ -85,19 +85,19 @@ Convergence across diverse lenses = confidence. Divergence = a tradeoff to resol
    prism  [N|Nns]  [M]  <question>
           │         │
           │         └─ M gpt-pro lenses (optional second number; default 0)
-          └─ how many of EACH of the seven standard tiers (default 1; the full 7
+          └─ how many of EACH of the six standard tiers (default 1; the full 6
              is the floor — a partial fan needs an explicit exclusion). Dispatched
-             = 7N+M; perspectives = 7N+M+1. 0 = drop all seven (gpt-pro-only), M ≥ 1.
-             Nns (e.g. 1ns) = no-subagents: drop the Claude tier, keep 6 parallax at
-             N → dispatched 6N+M, perspectives 6N+M+1. Same as "<q> no subagents".
+             = 6N+M; perspectives = 6N+M+1. 0 = drop all six (gpt-pro-only), M ≥ 1.
+             Nns (e.g. 1ns) = no-subagents: drop the Claude tier, keep 5 parallax at
+             N → dispatched 5N+M, perspectives 5N+M+1. Same as "<q> no subagents".
 
-   No reasoning-effort knob — GPT always xhigh, Grok-Build always high.
+   No reasoning-effort knob — GPT always xhigh.
 
    prism Why does X happen?             → auto-sized (anchor: 1 of each)
    prism 2 Which architecture?          → 2 of each, no gpt-pro
    prism 2 3 Bet-the-company call?      → 2 of each + 3 gpt-pro lenses
    prism 0 4 Which approach?            → gpt-pro-only: 4 lenses + self (no standard tiers)
-   prism 1ns 1 Why does X?              → no-subagents: 6 parallax + 1 gpt-pro + self (/8)
+   prism 1ns 1 Why does X?              → no-subagents: 5 parallax + 1 gpt-pro + self (/7)
    prism no deepseek, why X?            → natural-language deviations (exclude/count)
    prism no subagents, why X?           → no-subagents (external-only) via natural language
 ```
@@ -120,7 +120,7 @@ backgrounded process. The Integrator stays in the loop for the judgment.
                                       (verbatim, safe)      the script — not you)
 
  2  scaffold (stdout) ─► Write ►  /tmp/prism-<id>.dispatch  one record per lens
-    (--preset pre-fills 8 lenses)         Type/To/Lens
+    (--preset pre-fills 6 lenses)         Type/To/Lens
     scaffold = copy-from template; author the dispatch with the Write tool
     (never `scaffold > file` then edit — a shell-made file forces a wasted Read)
 
@@ -135,9 +135,8 @@ backgrounded process. The Integrator stays in the loop for the judgment.
        ├─ Agent call × N (zero in a no-subagents run) ──────────►  Claude subagents
        │                                                               │
        └─ parallax (bg) ─► ┌── relay ──► gpt ─────────┐                │
-                           ├── relay ──► grok-build   ├─► <id>-result.json
-                           ├── relay ──► glm          │   + .relay/…res.md (×peer)
-                           ├── relay ──► kimi         │                │
+                           ├── relay ──► glm          ├─► <id>-result.json
+                           ├── relay ──► kimi         │   + .relay/…res.md (×peer)
                            ├── relay ──► deepseek     │                │
                            └── relay ──► mimo ────────┘                │
                                                                        ▼
@@ -168,10 +167,10 @@ backgrounded process. The Integrator stays in the loop for the judgment.
               └ print a fill-in dispatch skeleton (the Prism-Mode: full / Prism-N / Prism-M
                 roster contract + records in canonical order; effort is CLI-derived, never authored).
                 --preset review|design|diagnosis|compare|research|decision|writing
-                pre-fills seven lenses by task type (N=1). --m M adds M gpt-pro records.
+                pre-fills six lenses by task type (N=1). --m M adds M gpt-pro records.
                 --out writes a prepare-ready file (needs --preset + --packet). --no-subagents
                 emits the external-only shape (Prism-Mode: partial + Variant: no-subagents,
-                6 parallax at N, zero subagents); with --out add --partial-user-quote.
+                5 parallax at N, zero subagents); with --out add --partial-user-quote.
 
   prepare   --dispatch <file>     (or --config <json>)  [--expect-n N] [--expect-m M]
               └ validate, render every launcher from templates, write the manifest,
@@ -182,7 +181,7 @@ backgrounded process. The Integrator stays in the loop for the judgment.
                 Prism-Mode: partial + a verbatim Partial-User-Quote (recorded in manifest
                 .shape). The "drop only the Claude subagent tier, keep the parallax fan"
                 case is the recognized Prism-Mode: partial + Variant: no-subagents shape
-                (carries Prism-N/Prism-M; floor-checks 6 parallax at N + 0 subagents;
+                (carries Prism-N/Prism-M; floor-checks 5 parallax at N + 0 subagents;
                 scaffold --no-subagents emits it). --config stays lenient. CLI --expect-n/-m
                 override the contract's N/M on full/unchecked runs only — ignored on any
                 partial run (incl. Variant: no-subagents), which floor-check off their own Prism-N/M.
@@ -255,7 +254,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
   └── templates/
       ├── launcher-subagent.tmpl       Claude subagent prompt (plain markdown)
       ├── launcher-relay-codex.tmpl    GPT — <goal> style
-      ├── launcher-relay-costar.tmpl   Grok/GLM/Kimi/DeepSeek/MiMo — CO-STAR XML
+      ├── launcher-relay-costar.tmpl   GLM/Kimi/DeepSeek/MiMo — CO-STAR XML
       ├── lens-catalog.json            single source: lens descriptions, axis
       │                                families, and --preset sets (scaffold reads it)
       ├── shared-constraints.md        canonical read-only / anti-recursion block
@@ -288,7 +287,7 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
   │                             RELAY_PEER guard refuses a nested launch/relay/gpt-pro.
   ├─ Read-only agents ───────── produce analysis only (one .res.md write); may use their
   │                             own same-model subagents, never a nested prism / other model.
-  └─ Effort (fixed, CLI-derived) ─ GPT xhigh · Grok-Build high, derived from peers.json — never authored.
+  └─ Effort (fixed, CLI-derived) ─ GPT xhigh, derived from peers.json — never authored.
 ```
 
 ---
@@ -300,7 +299,6 @@ a long header may instead render as a two-column `Verdict | Confidence | …` ta
 | Peer | Model | Lineage | Effort | Notes |
 |---|---|---|---|---|
 | `gpt` | GPT | OpenAI | `xhigh` | agentic code-review strength |
-| `grok-build` | Grok 4.5 | xAI | `high` | independent of Anthropic/OpenAI |
 | `glm` | GLM-5.3 | Zhipu / z.ai (Anthropic-compatible endpoint) | pinned `max` | `reasoning_effort: max`, like DeepSeek |
 | `kimi` | Kimi K2.7 Coding | Moonshot (Kimi-for-Coding plan, `api.kimi.com/coding/`) | thinking pinned | model id `kimi-for-coding`; `CLAUDE_CODE_EFFORT_LEVEL=high` (K2.7 is thinking-only and exposes no graded effort — the level only has to be non-off); ignores `--effort` |
 | `deepseek` | DeepSeek V4-Flash | DeepSeek (open-weight) | `max` (DeepThink) | agent-post-trained `0731` build; the interactive `ds` family stays on V4-Pro |
@@ -310,7 +308,7 @@ Each peer is its **own lineage** for lens-assignment and synthesis weighting. We
 
 ### Manifest count caveat
 
-`7N+M` is the orchestrator-level dispatched count. The manifest's `counts.dispatched_total` is the **standard-tier subtotal only** (parallax + subagents — `= 7N` on a full symmetric run, the actual record count on a partial); gpt-pro is tracked separately in `counts."gpt-pro"` (`prism-launch` does not dispatch gpt-pro — the orchestrator does). So on a full run a `grep` of `dispatched_total` yields `7N`, not `7N+M` — add `counts."gpt-pro"` for the full figure.
+`6N+M` is the orchestrator-level dispatched count. The manifest's `counts.dispatched_total` is the **standard-tier subtotal only** (parallax + subagents — `= 6N` on a full symmetric run, the actual record count on a partial); gpt-pro is tracked separately in `counts."gpt-pro"` (`prism-launch` does not dispatch gpt-pro — the orchestrator does). So on a full run a `grep` of `dispatched_total` yields `6N`, not `6N+M` — add `counts."gpt-pro"` for the full figure.
 
 ### gpt-pro lane (architecture + recovery)
 
@@ -320,20 +318,20 @@ gpt-pro is **orchestrator-direct** — not a relay peer and not in the `parallax
 
 Starting points — every lens still answers the full question. The **authoritative ordered arrays live in `templates/lens-catalog.json` (`.presets`)** (heaviest-reasoning-first for tier placement); edit a preset there. The italicized adversarial-family slot is a *candidate*, not a default — keep it only if stress-testing is the binding constraint for the question.
 
-- **Code review**: *Adversarial* + Correctness + Simplicity + Depth-Weighted + Temporal + Outsider + Stakeholder
-- **Architecture / design**: First-Principles + *Adversarial* + Simplicity + Stakeholder + Temporal + Empirical + Breadth-Weighted
-- **Implementation** (no preset — compose by hand): Correctness + Pragmatist + *Adversarial* + Depth-Weighted + Outsider + Temporal + Stakeholder
-- **Diagnosis / root cause**: Causal + *Falsification* + Empirical + Depth-Weighted + Temporal + Outsider + Stakeholder
-- **Option comparison**: First-Principles + Empirical + Simplicity + Stakeholder + Temporal + *Disconfirming* + Breadth-Weighted
-- **Writing / communication**: Clarity + Audience + *Adversarial* + Simplicity + Outsider + Empirical + Depth-Weighted
-- **Research / exploration**: First-Principles + Breadth-Weighted + Depth-Weighted + Outsider + Empirical + Lateral-Generative + Temporal
-- **Decision / strategy**: First-Principles + Empirical + Stakeholder + Temporal + Pragmatist + *Disconfirming* + Breadth-Weighted
+- **Code review**: *Adversarial* + Correctness + Depth-Weighted + Temporal + Outsider + Stakeholder
+- **Architecture / design**: First-Principles + *Adversarial* + Stakeholder + Temporal + Empirical + Breadth-Weighted
+- **Implementation** (no preset — compose by hand): Correctness + Pragmatist + *Adversarial* + Depth-Weighted + Outsider + Temporal
+- **Diagnosis / root cause**: Causal + *Falsification* + Depth-Weighted + Temporal + Outsider + Stakeholder
+- **Option comparison**: First-Principles + Empirical + Stakeholder + Temporal + *Disconfirming* + Breadth-Weighted
+- **Writing / communication**: Clarity + *Adversarial* + Simplicity + Outsider + Empirical + Depth-Weighted
+- **Research / exploration**: First-Principles + Breadth-Weighted + Outsider + Empirical + Lateral-Generative + Temporal
+- **Decision / strategy**: First-Principles + Empirical + Temporal + Pragmatist + *Disconfirming* + Breadth-Weighted
 
 The lens menu (descriptions, axis families) is also single-sourced in `lens-catalog.json` and stays open — mint a task-specific lens when you can name its axis in one sentence.
 
 ### Adding a peer / standard tier
 
-Transport + launcher-template style is one `relay/peers.json` stanza (a standard tier also sets `order` + `lineage` — scaffold order, peershape, and digest lineage all derive from it). For a new **standard tier**, additionally add one lens to each `--preset` set in `templates/lens-catalog.json` (the scaffold count-guard fails closed until they match) and update the "7 tiers" / `7N` counts in `SKILL.md`.
+Transport + launcher-template style is one `relay/peers.json` stanza (a standard tier also sets `order` + `lineage` — scaffold order, peershape, and digest lineage all derive from it). For a new **standard tier**, additionally add one lens to each `--preset` set in `templates/lens-catalog.json` (the scaffold count-guard fails closed until they match) and update the "6 tiers" / `6N` counts in `SKILL.md`.
 
 ---
 

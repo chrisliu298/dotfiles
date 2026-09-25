@@ -215,7 +215,7 @@ recover_codex_response() {
 
 # Auto-detect caller and peer from the skill directory this script lives in.
 # Caller is always Claude under the current one-direction protocol; the default
-# peer is gpt. Use --to grok-build, --to glm, --to kimi, --to deepseek, or --to mimo to route elsewhere.
+# peer is gpt. Use --to glm, --to kimi, --to deepseek, or --to mimo to route elsewhere.
 # Returns "from to" (e.g. "claude gpt") or empty string if unknown.
 detect_peers() {
   local script_dir
@@ -261,8 +261,8 @@ cmd_req() {
 
   ensure_relay_dir
 
-  # Build effort line (codex consumes it via request frontmatter, grok-build via its
-  # --effort CLI flag; glm/kimi/deepseek/mimo have no effort knob and ignore it).
+  # Build effort line (codex consumes it via request frontmatter; glm/kimi/deepseek/mimo
+  # have no effort knob and ignore it).
   # effort is non-empty only for effort-bearing peers (cmd_call blanks it otherwise).
   local effort_line=""
   if [ -n "$effort" ]; then
@@ -348,7 +348,7 @@ cmd_call() {
   local model
   model=$(jq -r '.model' <<<"$peer_json")
 
-  # Effort applies only to peers that declare effort_values (gpt, grok-build). Validate it
+  # Effort applies only to peers that declare effort_values (gpt). Validate it
   # for those; blank it for every other peer so it is neither emitted into the
   # request frontmatter nor passed to the peer (keeps cmd_req registry-driven too).
   if jq -e 'has("effort_values")' <<<"$peer_json" >/dev/null; then
@@ -378,13 +378,10 @@ cmd_call() {
 
   # Preflight: peer binary + required API key. claude-env peers piggyback on the
   # claude CLI with an env envelope routing to their Anthropic-compatible
-  # endpoint; codex and grok use their own CLI (grok carries its own cached auth,
-  # so no key_env). The transport comes from the registry.
+  # endpoint; codex uses its own CLI. The transport comes from the registry.
   local peer_bin key_env="" auth_token="" base="" auth_style=""
   if [ "$transport" = "codex" ]; then
     peer_bin="codex"
-  elif [ "$transport" = "grok" ]; then
-    peer_bin="grok"
   elif [ "$transport" = "claude-env" ]; then
     peer_bin="claude"
     key_env=$(jq -r '.key_env' <<<"$peer_json")
@@ -427,8 +424,8 @@ EOF
   sanitized_path="${sanitized_path#:}"
   sanitized_path="${sanitized_path%:}"
 
-  # Build peer invocation from the registry row — three transports, not N peers.
-  # codex and grok each use their own CLI; claude-env wraps `claude -p` in an
+  # Build peer invocation from the registry row — two transports, not N peers.
+  # codex uses its own CLI; claude-env wraps `claude -p` in an
   # Anthropic-compatible envelope whose endpoint/key/model/extras all come from the
   # registry. The six model vars all take the same model id (harness-required) —
   # incl. ANTHROPIC_SMALL_FAST_MODEL, else background calls fall back to a hardcoded
@@ -442,27 +439,6 @@ EOF
       --disable plugins
       --add-dir "$RELAY_DIR"
       "$peer_prompt")
-  elif [ "$transport" = "grok" ]; then
-    # grok's own CLI in headless mode; the peer writes its .res.md like any other.
-    # bypassPermissions = unattended auto-approve; --no-subagents blocks subagent
-    # spawning (defense in depth atop the RELAY_PEER guard — note: --disallowed-tools
-    # Agent instead breaks agent-build, since disabling background conflicts with
-    # run_terminal_cmd's default). --effort is appended only for peers that declare
-    # effort_values (gpt and grok-build).
-    # GROK_CLAUDE_*_ENABLED=false: disable the full Claude-compat suite explicitly
-    # here (not only via .zshenv) so a dispatched peer stays isolated even from a
-    # reset/cron/non-zsh shell that never sourced .zshenv — no Claude skills, global
-    # CLAUDE.md, rules, ~/.claude.json MCP servers, or settings.json hooks. grok uses
-    # its own ~/.grok/{skills,AGENTS.md}. (Claude *plugin* hooks under ~/.claude/
-    # plugins are a separate mechanism, not gated by these toggles.)
-    peer_cmd=(env "PATH=$sanitized_path" "RELAY_PEER=$to"
-      "GROK_CLAUDE_SKILLS_ENABLED=false" "GROK_CLAUDE_AGENTS_ENABLED=false"
-      "GROK_CLAUDE_RULES_ENABLED=false" "GROK_CLAUDE_MCPS_ENABLED=false"
-      "GROK_CLAUDE_HOOKS_ENABLED=false"
-      grok -p "$peer_prompt" -m "$model"
-      --output-format plain --permission-mode bypassPermissions
-      --no-auto-update --no-subagents)
-    [ -n "$effort" ] && peer_cmd+=(--effort "$effort")
   else
     # base / auth_style were resolved in the claude-env preflight above.
     # Auth header style: most claude-env peers send
@@ -700,11 +676,11 @@ Subcommands:
 
 Call options:
   --name <slug>      Call identifier
-  --effort <level>   Reasoning effort: gpt (low/medium/high/xhigh/max/ultra), grok-build (low/medium/high).
+  --effort <level>   Reasoning effort: gpt (low/medium/high/xhigh/max/ultra).
                      Ignored for glm, deepseek (always max), kimi (thinking pinned), and mimo (no knob).
   --body-only        Strip frontmatter from response output
   --from <peer>      Override caller detection (normally claude)
-  --to <peer>        Override peer detection (gpt, grok-build, glm, kimi, deepseek, mimo; default gpt)
+  --to <peer>        Override peer detection (gpt, glm, kimi, deepseek, mimo; default gpt)
 USAGE
 }
 
