@@ -25,6 +25,7 @@
     "enabled": true
   },
   "skipAutoPermissionPrompt": true,
+  "agentPushNotifEnabled": true,
   "permissions": {
     "defaultMode": "bypassPermissions"
   },
