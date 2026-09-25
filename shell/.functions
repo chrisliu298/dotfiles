@@ -542,6 +542,59 @@ ch(){  CLAUDE_CODE_EFFORT_LEVEL=high   _claude --dangerously-skip-permissions "$
 cx(){  CLAUDE_CODE_EFFORT_LEVEL=xhigh  _claude --dangerously-skip-permissions "$@"; }
 cmx(){ CLAUDE_CODE_EFFORT_LEVEL=max    _claude --dangerously-skip-permissions "$@"; }
 
+# Sequentially scout every awesome-list repo's Scholar Inbox feed with Claude
+# Code (Opus, high effort), printing only each run's final message.
+scout-papers-scholar-inbox-all() {
+    local root="$HOME/Developer/GitHub" repo result_file log_file rc
+    local repos=(
+        awesome-llm-unlearning
+        awesome-on-policy-distillation
+        awesome-rl-for-video-generation
+        awesome-rm-for-video-generation
+        awesome-rubric-rewards
+    )
+    # The skill drives the shared scholar_inbox.py client, which lives outside
+    # each list repo; grant it as a working directory when it is present.
+    # `--add-dir` is variadic, so the prompt needs a `--` terminator after it.
+    local scout_lib="${SCOUT_LIB:-$root/scout-lib}"
+    local -a extra_dirs=()
+    [[ -d "$scout_lib" ]] && extra_dirs=(--add-dir "$scout_lib")
+
+    for repo in "${repos[@]}"; do
+        [[ -d "$root/$repo/.git" ]] || {
+            printf 'Missing repository: %s\n' "$root/$repo" >&2
+            return 1
+        }
+        printf '\n==> %s\n' "$repo"
+        result_file="$(mktemp "${TMPDIR:-/tmp}/scout-papers-result.XXXXXX")" || return 1
+        log_file="$(mktemp "${TMPDIR:-/tmp}/scout-papers-log.XXXXXX")" || {
+            command rm -f -- "$result_file"
+            return 1
+        }
+        (
+            cd "$root/$repo" || exit 1
+            CLAUDE_CODE_EFFORT_LEVEL=high _claude -p \
+                --dangerously-skip-permissions \
+                --model opus \
+                "${extra_dirs[@]}" \
+                -- '/scout-papers-scholar-inbox'
+        ) </dev/null >"$result_file" 2>"$log_file"
+        rc=$?
+
+        if (( rc )); then
+            printf 'Scholar Inbox scout failed in %s; stopping.\n' "$repo" >&2
+            tail -n 40 "$result_file" "$log_file" >&2
+            command rm -f -- "$result_file" "$log_file"
+            return 1
+        fi
+
+        [[ ! -s "$result_file" ]] || sed -n '1,$p' "$result_file"
+        command rm -f -- "$result_file" "$log_file"
+    done
+
+    printf '\nAll Scholar Inbox scouts completed.\n'
+}
+
 xn(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=none "$@"; }
 x(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=medium "$@"; }
 xl(){ command codex --yolo -m gpt-5.6-sol --config model_reasoning_effort=low "$@"; }
@@ -566,49 +619,6 @@ xc(){ _codex_resume_effort --last "$@"; }
 xr(){ _codex_resume_effort "$@"; }
 xu(){ npm install -g @openai/codex@latest "$@"; }
 xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-5.6-sol --config model_reasoning_effort=high "${*}"; }
-scout-papers-scholar-inbox-all() {
-    local root="$HOME/Developer/GitHub" repo result_file log_file rc
-    local repos=(
-        awesome-llm-unlearning
-        awesome-on-policy-distillation
-        awesome-rl-for-video-generation
-        awesome-rm-for-video-generation
-        awesome-rubric-rewards
-    )
-
-    for repo in "${repos[@]}"; do
-        [[ -d "$root/$repo/.git" ]] || {
-            printf 'Missing repository: %s\n' "$root/$repo" >&2
-            return 1
-        }
-        printf '\n==> %s\n' "$repo"
-        result_file="$(mktemp "${TMPDIR:-/tmp}/scout-papers-result.XXXXXX")" || return 1
-        log_file="$(mktemp "${TMPDIR:-/tmp}/scout-papers-log.XXXXXX")" || {
-            command rm -f -- "$result_file"
-            return 1
-        }
-        command codex exec \
-            --cd "$root/$repo" \
-            --yolo \
-            -m gpt-5.6-sol \
-            --config model_reasoning_effort=medium \
-            --output-last-message "$result_file" \
-            '$scout-papers-scholar-inbox' >"$log_file" 2>&1
-        rc=$?
-
-        if (( rc )); then
-            printf 'Scholar Inbox scout failed in %s; stopping.\n' "$repo" >&2
-            tail -n 40 "$log_file" >&2
-            command rm -f -- "$result_file" "$log_file"
-            return 1
-        fi
-
-        [[ ! -s "$result_file" ]] || sed -n '1,$p' "$result_file"
-        command rm -f -- "$result_file" "$log_file"
-    done
-
-    printf '\nAll Scholar Inbox scouts completed.\n'
-}
 
 # Pi defaults to GPT-5.6 through the OpenAI Codex subscription provider. This
 # intentionally uses Pi's `openai-codex` OAuth token in ~/.pi/agent/auth.json,
