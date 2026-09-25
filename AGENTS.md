@@ -14,7 +14,6 @@ Four `agents/<name>/` directories target one agent's home each: `claude/` → `~
 
 Elsewhere:
 
-- `.claude/skills/` holds project-local skills available only when working in this repo.
 - `.config/ghostty`: Ghostty/cmux terminal config — tracked in-repo (not fetched from the standalone `chrisliu298/ghostty-config` repo), symlinked like the rest of `.config/`.
 - The four global instruction files (`agents/claude/CLAUDE.md` + `agents/{codex,grok,pi}/AGENTS.md`) are one canonical, agent-read text copied to all four paths, **identical except the H1** (which just names each file — `# CLAUDE.md` vs `# AGENTS.md`). Edit one, copy to the other three (keeping each H1); `./dotfiles.sh lint` asserts the bodies match. Behavior parity across models when the text changes is checked by the harness in `agents/eval/`.
 
@@ -34,7 +33,7 @@ Elsewhere:
 
 Never edit in `~/.claude/skills/`, `~/.codex/skills/`, `~/.grok/skills/`, or `~/.pi/agent/skills/` — those are symlinks. Check `agents/skills/README.md` for source.
 
-Wiring details — where each kind of skill is edited, the `SKILLS`/`MCP_SERVERS`/`PLUGINS` tables, manual-skill toggling, and the universal-skill authoring rules — live in the `skill-wiring` skill in `.claude/skills/`. Run `./dotfiles.sh` after any change to re-sync symlinks.
+Run `./dotfiles.sh` after changes to installation logic, skill wiring, or managed configuration. Instruction-only edits use the existing symlinks; run `./dotfiles.sh lint` and verify the affected links resolve instead.
 
 ## Testing Guidelines
 
