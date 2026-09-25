@@ -6,7 +6,7 @@
 ## Location & cwd encoding
 
 ```
-~/.claude/projects/<encoded-cwd>/<session-uuid>.jsonl
+~/.claude/projects/<encoded-cwd>/<session-uuid>.jsonl      ($CLAUDE_CONFIG_DIR/projects/... when set)
 ```
 
 Encoding: replace **both** `/` and `.` with `-` on the absolute cwd. The leading `/` becomes a
@@ -48,14 +48,15 @@ Seen `type` values: `user`, `assistant`, `attachment`, `system`, `permission-mod
   clean (the confirmation line says "you decided" only for real user turns).
 - **Injected user-role turns are dropped from the corpus** (they share the user role but aren't the
   user speaking): skill-load preambles (`Base directory for this skill:`), slash-command echoes
-  (`<command-name>`), `<system-reminder>` blocks, the compaction summary
+  (`<command-name>`, `<command-message>`), background-task notices (`<task-notification>`), local
+  command output (`<local-command-stdout>`, `<local-command-caveat>`), `<system-reminder>` blocks, the compaction summary
   (`isCompactSummary:true`, "This session is being continued…"), and relay request bodies. These
   were the dominant wrong-match source before filtering.
 
 ## Interactive vs. relay/headless sessions (recall scope filter)
 
 recall searches only **user-spawned interactive** sessions by default — not relay/headless
-(`claude -p`, sdk-cli) runs (`--all` includes them). The structural discriminator (verified
+(`claude -p`, sdk-cli) runs (`--include-headless` includes them). The structural discriminator (verified
 2026-06-12, 2.1.175): a real interactive session emits **TUI-only record types** — `mode`,
 `permission-mode`, `file-history-snapshot`, `ai-title` (`mode` is typically record #1).
 Relay/headless transcripts ("Read and execute this relay request: …", first record

@@ -14,18 +14,18 @@ ONE confirmation line; it never reads raw JSONL itself (re-reading a 500MB corpu
 the window). The script is the filter; the model is the integrator.
 
 Subcommands:
-  search   rank past exchanges matching a query                              -> JSON
+  search   rank past exchanges matching a query (this project, or --scope all) -> JSON
   show     fetch the redacted surrounding turns at a session + line anchor    -> JSON
   doctor   diagnostics: encoded cwd, file counts, a sample of candidates      -> text
 
 Run with uv (zero deps, stdlib only):
-  uv run ~/dotfiles/agents/skills/recall/scripts/recall.py search --cwd "$PWD" --q "auth retry"
+  uv run <skill-dir>/scripts/recall.py search --cwd "$PWD" --q "auth retry"
 
 Retrieval is LEXICAL (BM25 over normalized events), not semantic — by design: it stays stdlib-only
 and its failure mode is a clean miss (-> ask the user) rather than a confident wrong match. The
 transcript-reading primitives (iter_lines, redact/clip, encode_cwd, events, is_interactive) are
 carried over verbatim from the former `rehydrate` skill; the storage-format notes live in
-references/{claude,schema}.md. Detection of the user-vs-tool-result split and sidechain filtering
+references/{transcript-store,schema}.md. Detection of the user-vs-tool-result split and sidechain filtering
 is STRUCTURAL (record type/flag), never a lexical guess.
 """
 from __future__ import annotations
@@ -56,11 +56,14 @@ DEFAULT_MAX_FILES = 150
 # `confident` (silent-load OK) vs `ambiguous` (ask) vs `no_match` (don't fabricate).
 BM25_K1, BM25_B = 1.5, 0.75
 # Gate thresholds (calibrated on eval/gold.jsonl). Raw BM25 score is UNNORMALIZED — scores run
-# ~10-40 on a real corpus — so it is NOT a usable floor; the real signal is how many distinct query
-# terms matched and what fraction of the query they cover. The top/2nd margin is only a weak
-# tiebreak (at corpus scale there is almost always a near-scoring runner-up), so it nudges confident,
-# never gates no_match.
-CAND_MIN_COVERAGE = 0.4            # multi-term hit below this (or <2 matched terms) is incidental ⇒ no_match
+# ~10-40 on a real corpus — so it is NOT a usable floor; the real signal is how many query CONCEPTS
+# (words; a compound identifier counts once) matched and what fraction of the query they cover. The
+# top/2nd margin is only a weak tiebreak (at corpus scale there is almost always a near-scoring
+# runner-up), so it nudges confident, never gates no_match. 2026-09-25 recalibration (per-concept
+# coverage + dropping incidental hits before picking the top): floor 0.6 took the full-history gold
+# run from r@1 3/14, r@5 7/14, 1 false-confident to 7/14, 10/14, 0 — with 4/5 negatives still
+# no_match; 0.55 was within one r@1 of it, 0.67+ traded recall for the last negative.
+CAND_MIN_COVERAGE = 0.6            # multi-concept hit below this (or <2 matched) is incidental — dropped
 CONFIDENT_COVERAGE = 0.6           # a confident silent-load must cover at least this much of the query
 CONFIDENT_MARGIN = 1.15            # …and lead the best DISTINCT runner-up by at least this ratio
 USER_BOOST = 1.6                   # a user-authored turn is what "what did *we* decide" wants
@@ -69,20 +72,25 @@ PHRASE_BOOST = 1.4                 # the normalized query appears verbatim
 RECENCY_MAX_BOOST = 0.15           # newest session gets +15%, oldest +0%
 
 # ---------------------------------------------------------------------------- redaction
-# (verbatim from rehydrate: the single output-side secret choke point — every emitted snippet
-# flows through clip(), so a secret can't survive by being split across a clip boundary.)
+# Best-effort, pattern-based: the single output-side secret choke point — every emitted snippet flows through clip(), so a
+# secret can't survive by being split across a clip boundary. Pattern set shared with the Codex
+# build of recall (case-insensitive Bearer, quoted env assignments, data: URLs, long opaque blobs).
 _SECRET_PATTERNS = [
     (re.compile(r"\bsk-[A-Za-z0-9_\-]{12,}"), "openai-key"),
     (re.compile(r"\bxai-[A-Za-z0-9_\-]{12,}"), "xai-key"),
     (re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}"), "github-token"),
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "aws-key"),
-    (re.compile(r"\bBearer\s+[A-Za-z0-9._\-]{16,}"), "bearer"),
+    (re.compile(r"\bBearer\s+[A-Za-z0-9._\-]{16,}", re.I), "bearer"),
     (re.compile(r"\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{6,}"), "jwt"),
-    (re.compile(r"(?i)\b[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PLAN_KEY)[A-Z0-9_]*\s*[:=]\s*[^\s\"']+"), "env-secret"),
+    (re.compile(r"(?i)[\"']?\b[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PLAN_KEY)[A-Z0-9_]*[\"']?\s*[:=]\s*[\"']?[^\s\"']+"), "env-secret"),
     (re.compile(r"\bAIza[0-9A-Za-z_\-]{20,}"), "google-key"),
     (re.compile(r"\bxox[baprs]-[0-9A-Za-z\-]{10,}"), "slack-token"),
     (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.S), "private-key"),
-    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"), "private-key"),
+    # an unterminated block (END clipped or never pasted) is redacted to the end of the text, so
+    # the key body can't leak past a header-only match
+    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*\Z", re.S), "private-key"),
+    (re.compile(r"data:[^;,\s]+;base64,[A-Za-z0-9+/=_\-]{80,}"), "data-url"),
+    (re.compile(r"(?<![A-Za-z0-9+/=_\-])[A-Za-z0-9+/=_\-]{500,}"), "long-blob"),
 ]
 _redaction_count = 0
 
@@ -114,6 +122,7 @@ class Event:
     text: str = ""       # already truncated/redacted snippet
     ts: str | None = None
     sidechain: bool = False
+    cwd: str = ""        # the record's own cwd (provenance for --scope all)
 
 
 @dataclass
@@ -126,10 +135,11 @@ class Doc:
     text: str
     date: str            # YYYY-MM-DD
     tokens: list[str] = field(default_factory=list)
+    project: str = ""    # cwd the session ran in
     session_rank: float = 0.0   # 0=oldest session in scan .. 1=newest (recency boost input)
     score: float = 0.0
-    coverage: float = 0.0       # fraction of distinct query terms matched
-    matched: int = 0            # count of distinct query terms matched
+    coverage: float = 0.0       # fraction of query words matched
+    matched: int = 0            # count of query words matched
 
 
 # ---------------------------------------------------------------------------- helpers
@@ -220,14 +230,25 @@ def encode_cwd(cwd: str) -> str:
     return cwd.replace("/", "-").replace(".", "-")
 
 
+def projects_root() -> Path:
+    # Claude Code honors CLAUDE_CONFIG_DIR as its config home; transcripts live under it.
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or HOME / ".claude").expanduser() / "projects"
+
+
 def project_dir(cwd: str) -> Path:
-    return HOME / ".claude" / "projects" / encode_cwd(cwd)
+    return projects_root() / encode_cwd(cwd)
 
 
-def candidates(cwd: str):
-    proj = project_dir(cwd)
-    files = sorted(proj.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True) if proj.is_dir() else []
-    return proj, files
+def candidates(cwd: str, scope: str = "project"):
+    """(root, transcripts newest-first). scope=project → this cwd's encoded dir; scope=all → every
+    project dir under the store (one flat mtime order, so the recency window spans projects)."""
+    if scope == "all":
+        root = projects_root()
+        files = list(root.glob("*/*.jsonl")) if root.is_dir() else []
+    else:
+        root = project_dir(cwd)
+        files = list(root.glob("*.jsonl")) if root.is_dir() else []
+    return root, sorted(files, key=safe_mtime, reverse=True)
 
 
 def current_session_id() -> str | None:
@@ -264,6 +285,7 @@ def events(path):
             continue          # the "session is being continued…" summary is not a genuine turn
         sc = bool(rec.get("isSidechain"))
         ts = rec.get("timestamp")
+        cwd = rec.get("cwd") if isinstance(rec.get("cwd"), str) else ""
         msg = rec.get("message") or {}
         content = msg.get("content")
         text_parts, tool_out, paths, command = [], [], [], None
@@ -291,16 +313,16 @@ def events(path):
                         tool_out.append(rc)
         if t == "assistant":
             if any(text_parts):
-                yield Event(ln, "assistant", "assistant_message", clip(" ".join(text_parts)), ts, sc)
+                yield Event(ln, "assistant", "assistant_message", clip(" ".join(text_parts)), ts, sc, cwd)
             elif command:
-                yield Event(ln, "assistant", "command", clip(command, 400), ts, sc)
+                yield Event(ln, "assistant", "command", clip(command, 400), ts, sc, cwd)
             elif paths:
-                yield Event(ln, "assistant", "file_op", clip(" ".join(paths), 400), ts, sc)
+                yield Event(ln, "assistant", "file_op", clip(" ".join(paths), 400), ts, sc, cwd)
         else:  # user record
             if tool_out and not any(p.strip() for p in text_parts):
-                yield Event(ln, "tool", "command_output", clip(" ".join(tool_out)), ts, sc)
+                yield Event(ln, "tool", "command_output", clip(" ".join(tool_out)), ts, sc, cwd)
             elif any(text_parts):
-                yield Event(ln, "user", "user_message", clip(" ".join(text_parts)), ts, sc)
+                yield Event(ln, "user", "user_message", clip(" ".join(text_parts)), ts, sc, cwd)
 
 
 # ---------------------------------------------------------------------------- retrieval
@@ -343,9 +365,27 @@ _INJECTED_PREFIXES = (
     "caveat: the messages below were generated by the user",
     "<system-reminder>",
     "<command-name>",
+    "<command-message>",
+    "<task-notification>",
+    "<local-command-caveat>",
+    "<local-command-stdout>",
     "this session is being continued from a previous conversation",
     "read and execute this relay request",
 )
+
+
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?。！？])\s*")
+
+
+def is_question(text: str) -> bool:
+    """A turn whose final sentence ends in '?' records an open question, not a settled answer — it
+    must not be silent-loaded as what the user established. A decision cue overrides that only when
+    it sits in a declarative sentence (one not ending in '?'): "Should we prefer X?" stays a question;
+    "We decided on X. Any objections?" is a statement."""
+    sentences = [s.strip() for s in _SENTENCE_SPLIT.split(text) if s.strip()]
+    if not sentences or not sentences[-1].endswith(("?", "？")):
+        return False
+    return not any(_DECISION_ATTRIB.search(s) for s in sentences if not s.endswith(("?", "？")))
 
 
 def is_injected(text: str) -> bool:
@@ -353,42 +393,77 @@ def is_injected(text: str) -> bool:
     return any(t.startswith(p) for p in _INJECTED_PREFIXES) or "<command-name>" in t[:200]
 
 
+_CJK = "ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿"
+_CJK_RE = re.compile(f"[{_CJK}]+")
+_WORD_RE = re.compile(f"[A-Za-z0-9_./\\-]+|[{_CJK}]+")
+
+
+def _keep(t: str) -> bool:
+    return t not in _STOPWORDS and (len(t) >= 2 or bool(_CJK_RE.fullmatch(t)))
+
+
+def word_tokens(w: str) -> list[str]:
+    """Tokens for one surface word. Latin: the whole word plus identifier sub-parts (camelCase,
+    snake_case, kebab, dotted paths) so 'authRetry' / 'auth_retry' / 'auth-retry' all reach
+    'auth'+'retry'. CJK has no spaces: a run yields its characters, adjacent bigrams, and (if short)
+    the whole run."""
+    if _CJK_RE.fullmatch(w):
+        out = list(w) + [w[i:i + 2] for i in range(len(w) - 1)]
+        if 1 < len(w) <= 8:
+            out.append(w)
+        return out
+    wl = w.lower()
+    out = [wl]
+    for cam in re.findall(r"[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])", w):
+        cl = cam.lower()
+        if cl != wl:
+            out.append(cl)
+    for part in re.split(r"[_./\-]+", wl):
+        if part and part != wl:
+            out.append(part)
+    return out
+
+
 def tokenize(text: str) -> list[str]:
-    """Lowercase word tokens, with identifier-aware sub-splitting (camelCase, snake_case, kebab,
-    dotted paths) so 'authRetry' / 'auth_retry' / 'auth-retry' all reach the terms 'auth'+'retry'.
-    Stopwords dropped; tokens shorter than 2 chars dropped."""
-    out = []
-    for w in re.findall(r"[A-Za-z0-9_./\-]+", text):
-        wl = w.lower()
-        out.append(wl)
-        for cam in re.findall(r"[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])", w):
-            cl = cam.lower()
-            if cl != wl:
-                out.append(cl)
-        for part in re.split(r"[_./\-]+", wl):
-            if part and part != wl:
-                out.append(part)
-    return [t for t in out if len(t) >= 2 and t not in _STOPWORDS]
+    """Lowercase tokens over all words (see word_tokens). Stopwords and <2-char Latin tokens dropped."""
+    return [t for w in _WORD_RE.findall(text) for t in word_tokens(w) if _keep(t)]
 
 
-def normalize_query(q: str) -> tuple[str, list[str]]:
-    """Strip recall boilerplate, return (cleaned_text, content_terms). Tokenize the CLEANED text so
-    boilerplate words not in _STOPWORDS (e.g. 'decision', 'made') don't leak in as query terms and
-    pull up generic decision-chatter; trigger phrases strip as prefixes, so identifiers after them
-    survive into `cleaned`."""
+def query_groups(cleaned: str) -> list[frozenset[str]]:
+    """One group per query CONCEPT — the unit coverage is measured in. A Latin word is one group
+    (its whole form + sub-parts), so 'claude-in-chrome' counts once, not three times; a CJK run
+    contributes one group per bigram (a lone character is its own group)."""
+    groups = []
+    for w in _WORD_RE.findall(cleaned):
+        if _CJK_RE.fullmatch(w):
+            grams = [w[i:i + 2] for i in range(len(w) - 1)] or [w]
+            groups.extend(frozenset([g]) for g in grams)
+            continue
+        g = frozenset(t for t in word_tokens(w) if _keep(t))
+        if g:
+            groups.append(g)
+    return list(dict.fromkeys(groups))
+
+
+def normalize_query(q: str) -> tuple[str, list[str], list[frozenset[str]]]:
+    """Strip recall boilerplate, return (cleaned_text, content_terms, concept_groups). Tokenize the
+    CLEANED text so boilerplate words not in _STOPWORDS (e.g. 'decision', 'made') don't leak in as
+    query terms and pull up generic decision-chatter; trigger phrases strip as prefixes, so
+    identifiers after them survive into `cleaned`."""
     ql = " " + q.lower().strip() + " "
     for ph in sorted(_TRIGGER_PHRASES, key=len, reverse=True):
         ql = ql.replace(" " + ph + " ", " ")
     cleaned = re.sub(r"\s+", " ", ql).strip()
-    return cleaned, tokenize(cleaned)
+    return cleaned, list(dict.fromkeys(tokenize(cleaned))), query_groups(cleaned)
 
 
-def build_corpus(cwd, *, include_all, since_secs, max_files, exclude_session):
-    """Scan the project's transcripts (interactive-only by default, newest-first) into Docs.
-    Returns (docs, stats). Stateless: no persistent index — the searchable user/assistant text is a
-    thin sliver of the on-disk bytes. The CURRENT session is excluded by default (its content is
-    already in live context, and its just-typed query echo would otherwise self-match)."""
-    proj, files = candidates(cwd)
+def build_corpus(cwd, *, include_all, since_secs, max_files, exclude_session, scope="project"):
+    """Scan the project's transcripts (or every project's, scope=all; interactive-only by default,
+    newest-first) into Docs. Returns (docs, stats). Stateless: no persistent index — the searchable
+    user/assistant text is a thin sliver of the on-disk bytes. The CURRENT session is excluded by
+    default (its content is already in live context, and its just-typed query echo would otherwise
+    self-match)."""
+    proj, files = candidates(cwd, scope)
     now = time.time()
     selected = []
     skipped_noninteractive = skipped_old = excluded_current = 0
@@ -421,18 +496,21 @@ def build_corpus(cwd, *, include_all, since_secs, max_files, exclude_session):
             toks = tokenize(e.text)
             if not toks:
                 continue
-            docs.append(Doc(sid, str(f), e.line, e.role, e.text, iso_date(e.ts, f), toks, rank))
-    stats = {"files_total": len(files), "files_scanned": nfiles, "docs": len(docs),
+            docs.append(Doc(sid, str(f), e.line, e.role, e.text, iso_date(e.ts, f), toks,
+                            e.cwd or f.parent.name, rank))
+    stats = {"scope": scope, "files_total": len(files), "files_scanned": nfiles, "docs": len(docs),
              "skipped_noninteractive": skipped_noninteractive, "skipped_old": skipped_old,
              "excluded_current": excluded_current, "truncated": truncated}
     return docs, stats
 
 
-def bm25_rank(docs, query_terms, cleaned_query):
+def bm25_rank(docs, query_terms, cleaned_query, groups=None):
     """Score every Doc with BM25 + user/cue/phrase/recency boosts. Returns scored Docs sorted
-    desc, each annotated with .score and .coverage (fraction of distinct query terms matched)."""
+    desc, each annotated with .score and .coverage (fraction of query concept groups matched —
+    per word, so a compound identifier's sub-parts can't inflate coverage)."""
     if not docs or not query_terms:
         return []
+    groups = groups or [frozenset([t]) for t in dict.fromkeys(query_terms)]
     N = len(docs)
     df = Counter()
     for d in docs:
@@ -447,11 +525,10 @@ def bm25_rank(docs, query_terms, cleaned_query):
     for d in docs:
         tf = Counter(d.tokens)
         dl = len(d.tokens)
-        base, matched = 0.0, 0
+        base = 0.0
         for t in qset:
             if t not in idf or tf[t] == 0:
                 continue
-            matched += 1
             f = tf[t]
             base += idf[t] * (f * (BM25_K1 + 1)) / (f + BM25_K1 * (1 - BM25_B + BM25_B * dl / avgdl))
         if base <= 0:
@@ -464,21 +541,28 @@ def bm25_rank(docs, query_terms, cleaned_query):
         if cleaned_query and len(cleaned_query.split()) >= 2 and cleaned_query in d.text.lower():
             boost *= PHRASE_BOOST   # real multi-word phrase, not a spurious substring ("auth"⊂"author")
         boost *= 1.0 + RECENCY_MAX_BOOST * d.session_rank
+        matched = sum(1 for g in groups if any(tf[t] for t in g))
         d.score = base * boost
-        d.coverage = matched / len(qset)
+        d.coverage = matched / len(groups)
         d.matched = matched
         scored.append(d)
     scored.sort(key=lambda x: x.score, reverse=True)
     return scored
 
 
-def dedupe(scored, limit):
+def incidental(d, n_groups) -> bool:
+    """A multi-concept query hit matching <2 concepts or <CAND_MIN_COVERAGE of them is incidental."""
+    return n_groups > 1 and (d.matched < 2 or d.coverage < CAND_MIN_COVERAGE)
+
+
+def dedupe(scored, limit, n_groups=0):
     """Keep the highest-scoring hit per (session, first-80-chars) so adjacent duplicate turns and
-    re-pastes don't crowd out distinct candidates."""
+    re-pastes don't crowd out distinct candidates. Incidental hits are dropped outright, so a
+    high-scoring one-concept overlap can't mask a real multi-concept match ranked below it."""
     seen, out = set(), []
     for d in scored:
         key = (d.session, d.text[:80].lower())
-        if key in seen:
+        if key in seen or incidental(d, n_groups):
             continue
         seen.add(key)
         out.append(d)
@@ -488,7 +572,7 @@ def dedupe(scored, limit):
 
 
 def classify(top, second_score, n_terms):
-    """confident | ambiguous | no_match — gated on matched-term count + query coverage (raw BM25
+    """confident | ambiguous | no_match — gated on matched-concept count + query coverage (raw BM25
     score is unnormalized and not a usable floor; thresholds calibrated on eval/gold.jsonl).
     `second_score` is the best DISTINCT competitor from the FULL ranked list (not the post-dedupe/
     `--k` slice), so a `--k 1` call or a deduped near-tie can't widen the margin.
@@ -496,10 +580,10 @@ def classify(top, second_score, n_terms):
       - no hit / nothing covered          → no_match
       - 1-term query                      → at most ambiguous (a lone lexical term is too thin to
                                              silent-load; surface it, ask)
-      - multi-term, <2 matched OR <40% cov → no_match (incidental overlap — don't fabricate; this is
+      - multi-term, <2 matched OR <60% cov → no_match (incidental overlap — don't fabricate; this is
                                              what rejects off-topic queries that share one stray word)
       - ≥60% cov AND clear lead           → confident; else ambiguous
-    (an assistant-role top is additionally capped at ambiguous by the caller.)"""
+    (an assistant-role or question-only top is additionally capped at ambiguous by the caller.)"""
     if not top or top.coverage == 0:
         return "no_match"
     if n_terms <= 1:
@@ -517,19 +601,21 @@ def run_query(docs, q, k):
     (status, ordered hit Docs, query terms). Build the corpus ONCE and call this per query to score
     many queries cheaply. Margin is judged against the best DISTINCT competitor in the FULL ranked
     list (not the post-dedupe/`--k` slice), so a k=1 call or a deduped near-tie can't widen it; an
-    assistant-role top is capped at ambiguous so a past agent proposal is never silent-loaded."""
-    cleaned, terms = normalize_query(q)
+    assistant-role or question-only top is capped at ambiguous so a past agent proposal or an open
+    user question is never silent-loaded as a settled answer.
+    A query with no content terms left after boilerplate stripping is `empty_query`."""
+    cleaned, terms, groups = normalize_query(q)
     if not terms:
-        return "no_match", [], terms
-    scored = bm25_rank(docs, terms, cleaned)
-    hits = dedupe(scored, k)
+        return "empty_query", [], terms
+    scored = bm25_rank(docs, terms, cleaned, groups)
+    hits = dedupe(scored, k, len(groups))
     if not hits:
         return "no_match", [], terms
     top = hits[0]
     top_key = (top.session, top.text[:80].lower())
     second_score = next((d.score for d in scored if (d.session, d.text[:80].lower()) != top_key), 0.0)
-    status = classify(top, second_score, len(set(terms)))
-    if status == "confident" and top.role != "user":
+    status = classify(top, second_score, len(groups))
+    if status == "confident" and (top.role != "user" or is_question(top.text)):
         status = "ambiguous"
     return status, hits, terms
 
@@ -538,75 +624,88 @@ def gist_of(d: Doc) -> str:
     return clip(d.text, GIST_CHARS)
 
 
-def confirmation_line(d: Doc, status: str) -> str:
-    """One-line, role-aware. 'you' for user turns; agent turns are flagged unconfirmed so a past
-    model statement is never recalled as the user's ground truth."""
-    anchor = f" L{d.line}"
+def confirmation_line(d: Doc) -> str:
+    """The one line printed before acting — `recall: <date> · <session prefix> · <gist>`, the format
+    shared with the Codex build. The gist is role-aware: 'you' for user turns; agent turns are
+    flagged unconfirmed so a past model statement is never recalled as the user's ground truth."""
     if d.role == "user":
-        verb = "you decided" if _DECISION_ATTRIB.search(d.text) else "you said"
+        if is_question(d.text):
+            verb = "you asked"
+        else:
+            verb = "you decided" if _DECISION_ATTRIB.search(d.text) else "you said"
     else:
-        verb = "I noted (agent turn — unconfirmed by you)"
-    prefix = "Recalled" if status == "confident" else "Best guess (ambiguous)"
-    return f"{prefix} ({d.date}, session {d.session[:8]}{anchor}): {verb}: {gist_of(d)}"
+        verb = "agent turn, unconfirmed by you"
+    return f"recall: {d.date} · {d.session[:8]} · {verb}: {gist_of(d)}"
 
 
-def doc_json(d: Doc, rank: int, status: str) -> dict:
+def doc_json(d: Doc, rank: int) -> dict:
     return {
         "rank": rank, "score": round(d.score, 2), "coverage": round(d.coverage, 2),
         "session": d.session, "session_short": d.session[:8], "date": d.date,
-        "transcript": d.transcript, "line": d.line, "anchor": f"L{d.line}", "role": d.role,
+        "project": d.project, "transcript": d.transcript, "line": d.line, "anchor": f"L{d.line}",
+        "role": d.role, "kind": "question" if is_question(d.text) else "statement",
         "gist": gist_of(d),
-        "confirmation": confirmation_line(d, status),   # per-candidate, so agent-rerank prints THIS one
+        "confirmation": confirmation_line(d),   # per-candidate, so agent-rerank prints THIS one
         "context_hint": f"show --session {d.session[:8]} --line {d.line} for surrounding turns",
     }
 
 
+def escalation(args, stats) -> str | None:
+    """The next wider search to try after a miss: full project history, then every project."""
+    if args.scope == "project" and stats["truncated"]:
+        return "--max-files 0"
+    if args.scope == "project":
+        return "--scope all"
+    if stats["truncated"]:
+        return "--scope all --max-files 0"
+    return None
+
+
 # ---------------------------------------------------------------------------- commands
+EXIT_CODES = {"confident": 0, "ambiguous": 11, "empty_query": 12, "no_match": 13}
+
+
 def cmd_search(args):
     exclude = None if args.include_current else current_session_id()
-    docs, stats = build_corpus(args.cwd, include_all=args.all, exclude_session=exclude,
-                               since_secs=parse_duration(args.since), max_files=args.max_files)
+    docs, stats = build_corpus(args.cwd, include_all=args.include_headless, exclude_session=exclude,
+                               since_secs=parse_duration(args.since), max_files=args.max_files,
+                               scope=args.scope)
     status, hits, terms = run_query(docs, args.q, args.k)
-    if not terms:
-        print(json.dumps({"status": "no_match", "query": redact(args.q), "cwd": args.cwd,
-                          "reason": "no content terms left after stripping recall boilerplate — "
-                                    "pass a more specific topic", "stats": stats,
-                          "candidates": []}, indent=2))
-        return 13
-    if not hits:
-        print(json.dumps({"status": "no_match", "query": redact(args.q), "cwd": args.cwd,
-                          "stats": stats, "candidates": []}, indent=2))
-        return 13
-    top = hits[0]
-    out = {
-        "status": status,
-        "query": redact(args.q),
-        "cwd": args.cwd,
-        "encoded_cwd": encode_cwd(args.cwd),
-        "confirmation": confirmation_line(top, status),
-        "stats": stats,
-        "candidates": [doc_json(d, i + 1, status) for i, d in enumerate(hits)],
-    }
+    out = {"status": status, "query": redact(args.q), "cwd": args.cwd,
+           "encoded_cwd": encode_cwd(args.cwd), "stats": stats}
+    if status == "empty_query":
+        out["reason"] = ("no content terms left after stripping recall boilerplate — retry with "
+                         "concrete names, values, or identifiers")
+    elif status == "confident":
+        out["confirmation"] = confirmation_line(hits[0])
+    elif status == "no_match":
+        out["escalate"] = escalation(args, stats)
+    out["candidates"] = [doc_json(d, i + 1) for i, d in enumerate(hits)]
     if _redaction_count:
         out["redactions"] = _redaction_count
-    print(json.dumps(out, indent=2))
-    return 0 if status == "confident" else (11 if status == "ambiguous" else 13)
+    print(json.dumps(out, indent=2, ensure_ascii=False))
+    return EXIT_CODES[status]
 
 
 def cmd_show(args):
     """Fetch the redacted surrounding turns at a session + line anchor (the agent's surgical
-    deep-read, so it never reads the whole JSONL)."""
-    proj, files = candidates(args.cwd)
-    exact = [f for f in files if f.stem == args.session]
-    pref = exact or [f for f in files if f.stem.startswith(args.session)]
+    deep-read, so it never reads the whole JSONL). Looks in this project first, then — for a hit
+    found with --scope all — every project (session ids are globally unique)."""
+    pref = []
+    for scope in ("project", "all"):
+        proj, files = candidates(args.cwd, scope)
+        exact = [f for f in files if f.stem == args.session]
+        pref = exact or [f for f in files if f.stem.startswith(args.session)]
+        if pref:
+            break
     if not pref:
         print(json.dumps({"status": "not_found",
-                          "reason": f"no session {args.session} under {proj}"}, indent=2))
+                          "reason": f"no session {args.session} under {projects_root()}"}, indent=2, ensure_ascii=False))
         return 11
     if len(pref) > 1:                                  # ambiguous prefix — don't silently pick one
         print(json.dumps({"status": "ambiguous_session",
                           "reason": f"{len(pref)} sessions match prefix {args.session!r} — pass a "
-                                    f"longer id", "candidates": [f.stem for f in pref[:5]]}, indent=2))
+                                    f"longer id", "candidates": [f.stem for f in pref[:5]]}, indent=2, ensure_ascii=False))
         return 11
     path = pref[0]
     lo, hi = args.line - args.before, args.line + args.after
@@ -625,7 +724,7 @@ def cmd_show(args):
            "range": f"L{lo}-L{hi}", "turns": window}
     if _redaction_count:
         out["redactions"] = _redaction_count
-    print(json.dumps(out, indent=2))
+    print(json.dumps(out, indent=2, ensure_ascii=False))
     return 0 if window else 13
 
 
@@ -659,7 +758,10 @@ def main():
     s.add_argument("--max-files", type=int, default=DEFAULT_MAX_FILES,
                    help=f"cap files scanned, newest-first (default {DEFAULT_MAX_FILES} for latency; "
                         f"0 = every past session — escalate here on a miss)")
-    s.add_argument("--all", action="store_true", help="include relay/headless sessions too")
+    s.add_argument("--scope", choices=("project", "all"), default="project",
+                   help="project = this cwd's sessions (default); all = every project's sessions")
+    s.add_argument("--include-headless", action="store_true",
+                   help="include relay/headless (`claude -p`) sessions too")
     s.add_argument("--include-current", action="store_true",
                    help="also search the current session (default: excluded — it's in live context)")
 

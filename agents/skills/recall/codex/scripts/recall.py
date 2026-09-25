@@ -3,11 +3,12 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""Search exact user/assistant turns in local Codex rollout transcripts.
+"""recall: search exact user/assistant turns in local Codex rollout transcripts.
 
-The transcript store is read-only. Search is intentionally stateless: narrower
-current-task/project scopes are tried before the full history, and no persistent
-content index or background service is created.
+The transcript store is read-only. Search is intentionally stateless: the
+current project is tried before the full history, the current task is excluded
+unless explicitly requested, and no persistent content index or background
+service is created.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from typing import Iterator
 LINE_CAP = 2_000_000
 TEXT_CAP = 100_000
 GIST_CAP = 360
+CONFIRMATION_GIST_CAP = 160
 DEFAULT_LIMIT = 5
 BM25_K1 = 1.5
 BM25_B = 0.75
@@ -42,6 +44,9 @@ RECENCY_BOOST = 0.15
 
 _CJK_RE = re.compile(r"[\u1100-\u11ff\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff]+")
 _WORD_RE = re.compile(r"[A-Za-z0-9_./\-]+|[\u1100-\u11ff\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff]+")
+_SENTENCE_RE = re.compile(r"[^.!?\n]+[.!?]*")
+_CAMEL_RE = re.compile(r"[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])")
+_SPLIT_RE = re.compile(r"[_./\-]+")
 _UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I)
 
 _STOPWORDS = {
@@ -92,8 +97,8 @@ _SECRET_PATTERNS = (
     (re.compile(r"(?i)[\"']?\b[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PLAN_KEY)[A-Z0-9_]*[\"']?\s*[:=]\s*[\"']?[^\s\"']+"), "env-secret"),
     (re.compile(r"\bAIza[0-9A-Za-z_\-]{20,}"), "google-key"),
     (re.compile(r"\bxox[baprs]-[0-9A-Za-z\-]{10,}"), "slack-token"),
-    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.S), "private-key"),
-    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"), "private-key"),
+    # An unterminated block is redacted to the end of the turn, not just its header.
+    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----(?:.*?-----END [A-Z ]*PRIVATE KEY-----|.*\Z)", re.S), "private-key"),
     (re.compile(r"data:[^;,\s]+;base64,[A-Za-z0-9+/=_\-]{80,}"), "data-url"),
     (re.compile(r"(?<![A-Za-z0-9+/=_\-])[A-Za-z0-9+/=_\-]{500,}"), "long-blob"),
 )
@@ -150,7 +155,7 @@ class Turn:
 
 
 def session_root() -> Path:
-    override = os.environ.get("CODEX_SESSION_HISTORY_ROOT")
+    override = os.environ.get("CODEX_RECALL_ROOT")
     if override:
         return Path(override).expanduser().resolve()
     codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
@@ -371,7 +376,7 @@ def extract_turns(path: Path, *, include_non_human: bool = False) -> tuple[list[
         stats.redactions += redactions
         truncated = len(text) > TEXT_CAP
         if truncated:
-            text = text[:TEXT_CAP] + "\n[… turn truncated by session-history …]"
+            text = text[:TEXT_CAP] + "\n[… turn truncated by recall …]"
         item_id = payload.get("id")
         if not isinstance(item_id, str) or not item_id:
             item_id = f"{path.name}:L{line_no}"
@@ -440,11 +445,11 @@ def tokenize(text: str) -> list[str]:
             continue
         lowered = word.lower()
         tokens.append(lowered)
-        for camel in re.findall(r"[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])", word):
+        for camel in _CAMEL_RE.findall(word):
             value = camel.lower()
             if value != lowered:
                 tokens.append(value)
-        for part in re.split(r"[_./\-]+", lowered):
+        for part in _SPLIT_RE.split(lowered):
             if part and part != lowered:
                 tokens.append(part)
     return [token for token in tokens if token not in _STOPWORDS and (len(token) >= 2 or _CJK_RE.fullmatch(token))]
@@ -471,12 +476,20 @@ def _turn_order(turn: Turn) -> tuple:
     return (epoch, turn.ordinal, str(turn.path), turn.line)
 
 
-def load_turns(metas: list[FileMeta]) -> tuple[list[Turn], Stats]:
+def load_turns(
+    metas: list[FileMeta], cache: dict[Path, tuple[list[Turn], Stats]] | None = None
+) -> tuple[list[Turn], Stats]:
+    """Parse ``metas``; ``cache`` lets a wider scope reuse a narrower scope's parse."""
     combined: list[Turn] = []
     total = Stats()
     seen: set[tuple[str, str]] = set()
     for meta in metas:
-        turns, stats = extract_turns(meta.path)
+        if cache is not None and meta.path in cache:
+            turns, stats = cache[meta.path]
+        else:
+            turns, stats = extract_turns(meta.path)
+            if cache is not None:
+                cache[meta.path] = (turns, stats)
         total.add(stats)
         for turn in turns:
             key = (turn.session_id, turn.item_id)
@@ -488,10 +501,17 @@ def load_turns(metas: list[FileMeta]) -> tuple[list[Turn], Stats]:
     return combined, total
 
 
-def exclude_invoking_turn(turns: list[Turn], session_id: str, query: str) -> tuple[list[Turn], str, str]:
+def exclude_current_task(
+    turns: list[Turn], session_id: str, query: str, *, whole_session: bool, now: float | None = None
+) -> tuple[list[Turn], str, str, str]:
+    """Drop the current task, or only its invoking turn when ``whole_session`` is false.
+
+    Returns the remaining turns, the excluded session, the invoking item, and
+    how the current task was resolved.
+    """
     current_users = [turn for turn in turns if turn.session_id == session_id and turn.role == "user"] if session_id else []
-    resolution = "session-id" if current_users else ""
-    if not current_users and not session_id:
+    resolution = "session-id" if session_id else ""
+    if not session_id:
         normalized_query = _collapse(query, TEXT_CAP).lower()
         possible = [
             turn
@@ -500,18 +520,36 @@ def exclude_invoking_turn(turns: list[Turn], session_id: str, query: str) -> tup
         ]
         if possible:
             newest = max(possible, key=_turn_order)
-            newest_file_time = max((turn.mtime for turn in turns), default=0.0)
-            if newest_file_time - newest.mtime <= 300:
+            # Recent means written within the last five minutes of wall-clock time.
+            if (time.time() if now is None else now) - newest.mtime <= 300:
                 current_users = [newest]
+                session_id = newest.session_id
                 resolution = "recent-query-match"
-    if not current_users:
-        return turns, "", "unavailable"
-    latest = max(current_users, key=_turn_order)
-    return [turn for turn in turns if turn is not latest], latest.item_id, resolution
+    if not session_id:
+        return turns, "", "", "unavailable"
+    latest = max(current_users, key=_turn_order) if current_users else None
+    if whole_session:
+        kept = [turn for turn in turns if turn.session_id != session_id]
+    else:
+        kept = [turn for turn in turns if turn is not latest]
+    return kept, session_id, latest.item_id if latest else "", resolution
 
 
 def _distinct_key(turn: Turn) -> tuple[str, str]:
     return turn.session_id, re.sub(r"\s+", " ", turn.text).strip().lower()
+
+
+def turn_kind(turn: Turn) -> str:
+    """A turn whose final sentence asks something is a question, not a settled answer.
+
+    A decision cue overrides that only inside a declarative sentence.
+    """
+    sentences = [part.strip() for part in _SENTENCE_RE.findall(turn.text) if part.strip()]
+    if not sentences or not sentences[-1].endswith("?"):
+        return "statement"
+    if any(not sentence.endswith("?") and _CUE.search(sentence) for sentence in sentences):
+        return "statement"
+    return "question"
 
 
 def rank_turns(turns: list[Turn], query: str, limit: int) -> tuple[str, list[Turn], list[str]]:
@@ -522,7 +560,8 @@ def rank_turns(turns: list[Turn], query: str, limit: int) -> tuple[str, list[Tur
     if not turns:
         return "no_match", [], terms
     for turn in turns:
-        turn.tokens = tokenize(turn.text)
+        if not turn.tokens:
+            turn.tokens = tokenize(turn.text)
     searchable = [turn for turn in turns if turn.tokens]
     if not searchable:
         return "no_match", [], terms
@@ -587,7 +626,13 @@ def rank_turns(turns: list[Turn], query: str, limit: int) -> tuple[str, list[Tur
     )
     margin_ok = second <= 0 or top.score >= CONFIDENT_MARGIN * second
     status = "ambiguous"
-    if len(qset) > 1 and top.coverage >= CONFIDENT_COVERAGE and margin_ok and top.role == "user":
+    if (
+        len(qset) > 1
+        and top.coverage >= CONFIDENT_COVERAGE
+        and margin_ok
+        and top.role == "user"
+        and turn_kind(top) == "statement"
+    ):
         status = "confident"
     return status, distinct, terms
 
@@ -599,6 +644,22 @@ def _relative_transcript(path: Path, root: Path) -> str:
         return str(path)
 
 
+def _local_date(turn: Turn) -> str:
+    try:
+        moment = datetime.fromisoformat(turn.timestamp.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        moment = datetime.fromtimestamp(turn.mtime)
+    return moment.astimezone().date().isoformat()
+
+
+def confirmation_line(turn: Turn) -> str:
+    """The one line printed before acting, so the user can catch a wrong match."""
+    gist = _collapse(turn.text, CONFIRMATION_GIST_CAP)
+    if turn.role != "user":
+        gist = "agent turn, unconfirmed by user: " + gist
+    return f"recall: {_local_date(turn)} · {turn.session_id[:8]} · {gist}"
+
+
 def turn_json(turn: Turn, root: Path, rank: int) -> dict:
     return {
         "rank": rank,
@@ -606,8 +667,10 @@ def turn_json(turn: Turn, root: Path, rank: int) -> dict:
         "coverage": round(turn.coverage, 3),
         "matched_terms": turn.matched,
         "role": turn.role,
+        "kind": turn_kind(turn),
         "timestamp": turn.timestamp,
         "excerpt": _collapse(turn.text),
+        "confirmation": confirmation_line(turn),
         "locator": {
             "session_id": turn.session_id,
             "item_id": turn.item_id,
@@ -638,22 +701,28 @@ def search_history(
     started = time.monotonic()
     inventory = file_inventory(root)
     session_id = current_session_id(explicit_session_id)
-    scopes = [scope] if scope != "auto" else ["current-task", "current-project", "all"]
+    scopes = [scope] if scope != "auto" else ["current-project", "all"]
     attempts = []
-    results: list[tuple[str, list[Turn], list[str], Stats, str, str, str]] = []
+    results: list[tuple[str, list[Turn], list[str], Stats, str, str, str, str]] = []
+    parsed: dict[Path, tuple[list[Turn], Stats]] = {}
     for chosen_scope in scopes:
         metas = files_for_scope(inventory, chosen_scope, cwd=cwd, session_id=session_id)
         if not metas:
             attempts.append({"scope": chosen_scope, "files": 0, "status": "unavailable"})
             continue
-        turns, stats = load_turns(metas)
-        turns, excluded_item, exclusion_resolution = exclude_invoking_turn(turns, session_id, query)
+        turns, stats = load_turns(metas, parsed)
+        turns, excluded_session, excluded_item, exclusion_resolution = exclude_current_task(
+            turns, session_id, query, whole_session=chosen_scope != "current-task"
+        )
         if roles != "both":
             turns = [turn for turn in turns if turn.role == roles]
         status, hits, terms = rank_turns(turns, query, limit)
         attempts.append({"scope": chosen_scope, "files": len(metas), "turns": len(turns), "status": status})
-        results.append((status, hits, terms, stats, chosen_scope, excluded_item, exclusion_resolution))
-        if status == "confident" or status == "empty_query":
+        results.append((status, hits, terms, stats, chosen_scope, excluded_session, excluded_item, exclusion_resolution))
+        # Widen only when the narrower scope found nothing: BM25 scores from
+        # different corpora are not comparable, and a project hit is the more
+        # likely referent. The caller can rerun with --scope all.
+        if status != "no_match":
             break
     if not results:
         return {
@@ -662,30 +731,34 @@ def search_history(
             "query": redact(query)[0],
             "scope_attempts": attempts,
             "current_session_id": session_id or None,
+            "current_task_exclusion": "resolved" if session_id else "unresolved",
             "candidates": [],
             "elapsed_ms": round((time.monotonic() - started) * 1000),
         }
-    confident = next((result for result in results if result[0] == "confident"), None)
-    ambiguous = [result for result in results if result[0] == "ambiguous" and result[1]]
-    if confident:
-        final = confident
-    elif ambiguous:
-        final = max(ambiguous, key=lambda result: (result[1][0].coverage, result[1][0].score))
-    else:
-        final = results[-1]
-    status, hits, terms, stats, used_scope, excluded_item, exclusion_resolution = final
+    status, hits, terms, stats, used_scope, excluded_session, excluded_item, exclusion_resolution = results[-1]
     output = {
         "status": status,
         "query": redact(query)[0],
         "scope_used": used_scope,
         "scope_attempts": attempts,
         "current_session_id": session_id or None,
+        "excluded_current_task": (excluded_session or None) if used_scope != "current-task" else None,
+        # inferred: guessed from a recent user turn containing the query text.
+        # unresolved: the current task could not be identified, so a very recent
+        # hit may be this task's own earlier turn.
+        "current_task_exclusion": (
+            "unresolved"
+            if not excluded_session
+            else "inferred" if exclusion_resolution == "recent-query-match" else "resolved"
+        ),
         "excluded_latest_user_item": excluded_item or None,
         "invoking_turn_resolution": exclusion_resolution,
         "stats": stats.as_dict(),
         "candidates": [turn_json(turn, root, index + 1) for index, turn in enumerate(hits)],
         "elapsed_ms": round((time.monotonic() - started) * 1000),
     }
+    if hits:
+        output["confirmation"] = output["candidates"][0]["confirmation"]
     if status == "empty_query":
         output["reason"] = "the query contained no searchable terms; retry with concrete names, values, or identifiers"
     return output
@@ -819,7 +892,12 @@ def parser() -> argparse.ArgumentParser:
     search = commands.add_parser("search", help="search historical conversational turns")
     search.add_argument("--query", "-q", required=True)
     search.add_argument("--cwd", default=os.getcwd())
-    search.add_argument("--scope", choices=("auto", "current-task", "current-project", "all"), default="auto")
+    search.add_argument(
+        "--scope",
+        choices=("auto", "current-task", "current-project", "all"),
+        default="auto",
+        help="auto: this project, then all history (current task excluded); current-task: this task only, e.g. after compaction",
+    )
     search.add_argument("--session-id", default="")
     search.add_argument("--roles", choices=("both", "user", "assistant"), default="both")
     search.add_argument("--limit", type=int, choices=range(1, 21), default=DEFAULT_LIMIT)

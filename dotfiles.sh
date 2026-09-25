@@ -34,21 +34,21 @@ LINKS=(
 # source: ./path (local) or owner/repo[/subpath] (GitHub)
 SKILLS=(
     # The wildcard installs every skill to Claude and Codex; the explicit entries below narrow
-    # that (claude-only: relay, prism, recall, skill-creator; codex-only: claude-subagent, session-history).
+    # that (claude-only: relay, prism, skill-creator; codex-only: claude-subagent; recall has a separate build per agent).
     "*|./agents/skills|claude,codex"
     # Relay: claude-only caller; targets GPT via the script.
     # MANUAL (below); explicit entry keeps it claude-only when enabled (the wildcard would install it everywhere).
     "relay|./agents/skills/relay|claude"
     # prism: claude-only caller (dispatches parallax to GPT via relay). MANUAL (below).
     "prism|./agents/skills/prism|claude"
-    # recall: claude-only; searches THIS project's past Claude transcripts (~/.claude/projects) for
-    # an earlier user statement. The store is Claude-specific, so it has no meaning on Codex. MANUAL (below).
-    "recall|./agents/skills/recall|claude"
+    # recall: one skill name, two harness-specific implementations (like pdf). Each searches its own
+    # agent's transcript store — Claude's ~/.claude/projects, Codex's ~/.codex/sessions rollouts — so
+    # they share a name and contract but not code. agents/skills/recall/ has no SKILL.md, so the
+    # wildcard skips it; these two entries install each subdir as `recall`.
+    "recall|./agents/skills/recall/claude|claude"
+    "recall|./agents/skills/recall/codex|codex"
     # claude-subagent: Codex-only caller; installing it into Claude would enable recursive self-dispatch.
     "claude-subagent|./agents/skills/claude-subagent|codex"
-    # session-history: Codex-only; searches Codex rollout transcripts on demand.
-    # Claude keeps its separate transcript-store-specific recall skill.
-    "session-history|./agents/skills/session-history|codex"
     "pdf|anthropics/skills/skills/pdf|claude"
     "skill-creator|anthropics/skills/skills/skill-creator|claude"
     "pdf|openai/skills/skills/.curated/pdf|codex"
@@ -57,7 +57,6 @@ SKILLS=(
 # Skills not auto-installed (opt-in). Toggle with: ./dotfiles.sh enable/disable <name>.
 MANUAL_SKILLS=(
     prism
-    recall
     relay
 )
 

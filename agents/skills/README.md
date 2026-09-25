@@ -23,7 +23,7 @@ Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via
 
 Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
-> The Claude-only orchestration skills (relay, prism, skill-creator) — plus recall, which reads Claude's own transcript store — stay off Codex; relay and prism are additionally guarded so a dispatched peer can't trigger them.
+> The Claude-only orchestration skills (relay, prism, skill-creator) stay off Codex. `recall` ships as two harness-specific builds under one name — `recall/claude` reads Claude's transcript store, `recall/codex` reads Codex's rollouts — installed like `pdf`; relay and prism are additionally guarded so a dispatched peer can't trigger them.
 
 **Enabled** (✓ auto-installed):
 
@@ -34,7 +34,7 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 | gpt-pro-relay           | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini (the `gpt-pro` CLI is on PATH from the Codex copy) |
 | pdf                     | ✓ | ✓ | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex) — PDF read/edit |
 | push                    | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
-| session-history         | — | ✓ | local — Retrieve exact, redacted turns from past Codex tasks and pre-compaction history |
+| recall                  | ✓ | ✓ | local — Recall a detail from past sessions of the same agent (separate Claude and Codex builds: `recall/claude`, `recall/codex`) |
 | skill-creator           | ✓ | — | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
 
 **Disabled** (✱ manual, opt-in via `./dotfiles.sh enable <name>`):
@@ -42,7 +42,6 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 | Skill | C | X | Source · Description |
 |-------|:-:|:-:|----------------------|
 | prism                   | ✱ | — | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to GPT via relay) |
-| recall                  | ✱ | — | local — Search this project's past Claude sessions for an earlier user statement/decision (Claude-only; lexical BM25 over the transcript store) |
 | relay                   | ✱ | — | local — Cross-agent relay from Claude to GPT (Claude-only caller) |
 
 > Note: SKILL.md supports an optional Claude-only `effort` frontmatter (`medium` / `high` / `max`) to set thinking budget per skill. Currently unset on every skill in this repo — they all inherit the session default.

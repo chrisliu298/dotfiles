@@ -1,7 +1,7 @@
 # Codex transcript store
 
 This reference documents the local, undocumented schema used by
-`scripts/session_history.py`. Re-check it after a Codex update if `doctor`
+`scripts/recall.py`. Re-check it after a Codex update if `doctor`
 reports files but few or no recognized messages.
 
 ## Location and source of truth
@@ -38,7 +38,20 @@ first `session_meta.payload.id`, which owns the physical rollout. A structural
 subagent rollout can contain a later replayed parent `session_meta`; that replay
 does not change the file's ownership. Item IDs plus transcript-relative line
 numbers provide result anchors. `CODEX_THREAD_ID` and `CODEX_SESSION_ID` are
-used, when available, to resolve the current task.
+used, when available, to resolve the current task; otherwise a user turn in a
+file modified within the last five minutes of wall-clock time that contains
+the query text verbatim identifies it. The task is excluded from `auto`, `current-project`, and `all`
+searches; `current-task` searches only it, excluding just the invoking turn.
+`current_task_exclusion` reports `resolved`, `inferred` (the verbatim-query
+guess), or `unresolved`. The fallback applies only when no thread id is
+available, and it misses the current task whenever the query was reworded
+(e.g. boilerplate stripped), so `unresolved` is expected outside Codex.
+
+`auto` widens from the current project to all history only on `no_match`:
+BM25 scores depend on corpus statistics, so hits ranked against different
+corpora are not compared. Files parsed for the project pass are reused by the
+`all` pass. `CODEX_RECALL_ROOT` (or `--root`) overrides the
+sessions directory for tests.
 
 Machine-injected pseudo-user blocks are excluded. For response annotations, the
 parser retains only the user's annotation comments and trailing request, not the
@@ -54,6 +67,8 @@ retrieval.
 
 ## Privacy
 
-Only short, redacted result excerpts leave the parser. Common API keys, bearer
-tokens, JWTs, private-key headers, environment-secret assignments, and long
-data/base64 runs are replaced with `[REDACTED:<kind>]` before output.
+Only short, redacted result excerpts leave the parser. Redaction is best-effort
+and pattern-based: common API keys, bearer tokens, JWTs, private-key blocks
+(to the end of the turn when the END line is missing), environment-secret
+assignments, and long data/base64 runs are replaced with `[REDACTED:<kind>]`
+before output. Secrets in unrecognized formats can pass through.
