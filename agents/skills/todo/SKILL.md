@@ -1,14 +1,7 @@
 ---
 effort: low
-description: |
-  Maintain a single TODO.md at the project root so task state survives session
-  boundaries, compaction, and multi-day gaps. Use only for work large or complex
-  enough that the native in-session checklist can't track it well — multi-day
-  refactors, migrations, or anything spanning several sessions. Also trigger on
-  "/todo", "track this", "checkpoint", or "save for next time". Do NOT trigger on
-  small one-shot tasks (a single bug fix, rename, or one-liner), work the native
-  checklist handles fine, in-session-only todo tracking, or when there's no clear
-  project root.
+description: >-
+  Maintain one project-root TODO.md for multi-session work or when the user asks to track, checkpoint, or save work. Do not use for small one-shot tasks or in-session-only planning.
 user-invocable: true
 ---
 

@@ -2,18 +2,15 @@
 effort: medium
 name: push
 description: |
-  Commit and push changes to the remote ("commit and push", "push this", "ship it",
-  "save and push", "push"). The agent inspects the diff and picks single-commit
-  or atomic mode automatically: atomic when changes span unrelated units (mixed
-  categories, multiple distinct areas), single commit for one focused change.
-  Do NOT create a pull request.
+  Commit and push the requested changes when the user asks to push, ship, or save
+  and push. Does not create a pull request.
 user-invocable: true
 allowed-tools: Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(git branch:*)
 ---
 
 # Push
 
-Commit the current working tree's changes and push them to the remote.
+Commit the changes within the user’s requested scope and push them to the remote. Preserve unrelated staged and unstaged work; inspect the index as well as the working tree before committing.
 
 ## Mode selection
 
@@ -37,13 +34,13 @@ Match the repo's existing commit style exactly — study `git log --oneline -10`
 
 ## Workflow — single commit (default)
 
-1. **Stage changes** — review the diff for secrets, credentials, or junk files (.env, *.log, node_modules, etc.). If any are present, stage only the safe files with `git add <paths>`. Otherwise, `git add -A` is fine.
+1. **Stage changes** — review the scoped diff for secrets, credentials, or junk files (.env, *.log, node_modules, etc.). Stage only explicitly scoped paths with `git add <paths>`, then inspect `git diff --cached` to confirm the commit contains only intended changes. If unrelated changes share a file or are already staged, isolate the intended change without discarding the user’s work; ask only if ownership or scope is unclear.
 2. **Commit** — write a concise message that follows the repo's convention. Focus on *what changed and why*, not listing every file. Use a HEREDOC for the message to preserve formatting.
 3. **Push** — run `git push`. If no upstream is set, use `git push -u origin HEAD`.
 
 ## Workflow — atomic
 
-1. **Group** all changes into logical units (feature/fix/refactor/docs/etc.).
+1. **Group** the requested changes into logical units (feature/fix/refactor/docs/etc.).
 2. For each unit:
    - Stage only the relevant files (`git add <paths>`). Do NOT use `git add -p` — it requires interactive input.
    - Sanity-check the staged diff (`git diff --cached`).
