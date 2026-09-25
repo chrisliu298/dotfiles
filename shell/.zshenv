@@ -21,6 +21,7 @@ export STARSHIP_CONFIG="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme/sta
 # =============================================================================
 # PATH
 # =============================================================================
+export GPT_PRO_HOST=local  # gpt-pro-relay engine runs on this Mac (was: macmini over SSH)
 export PATH="$HOME/.claude/skills/relay/scripts:$HOME/.claude/skills/prism/scripts:$HOME/.codex/skills/gpt-pro-relay/scripts:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/.local/bin:$PATH"
 if (( IS_MACOS )); then
     eval "$(/opt/homebrew/bin/brew shellenv)"

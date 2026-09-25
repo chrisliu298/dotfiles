@@ -32,9 +32,10 @@ VERSION=2
 
 # Override with GPT_PRO_HOST to pick a different SSH route to the same box — e.g.
 # GPT_PRO_HOST=macmini-fast when Tailscale is down or slow (see ~/.ssh/config).
+# GPT_PRO_HOST=local runs the engine on this machine (no SSH).
 HOST=${GPT_PRO_HOST:-macmini}
 RELAY_BIN=gpt-pro-relay
-RELAY_VENV=/Users/chrisliu298/Developer/GitHub/gpt-pro/.venv/bin/gpt-pro-relay
+RELAY_VENV=/Users/chrisliu298/Developer/GitHub/gpt-pro-relay/.venv/bin/gpt-pro-relay
 SSH_OPTS=(-S none -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
 MAX_BYTES=5000000   # engine's 5 MB submission cap
 
@@ -124,7 +125,7 @@ MAX_WAIT=$((10#$MAX_WAIT))                       # normalize so e.g. 08 isn't re
 
 # ---- transport detection ----
 LOCAL=false
-[ "$(hostname -s 2>/dev/null)" = "$HOST" ] && LOCAL=true
+{ [ "$HOST" = local ] || [ "$(hostname -s 2>/dev/null)" = "$HOST" ]; } && LOCAL=true
 if $LOCAL; then RUN=(); else RUN=(ssh "${SSH_OPTS[@]}" "$HOST"); fi
 
 # ---- prompt spool + run-id ----
