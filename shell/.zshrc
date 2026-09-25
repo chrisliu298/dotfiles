@@ -139,6 +139,3 @@ fi
 
 # merlin-cli
 export PATH="$HOME/.merlin-cli/bin:$PATH"
-
-# kimi-code
-export PATH="/Users/bytedance/.kimi-code/bin:$PATH"

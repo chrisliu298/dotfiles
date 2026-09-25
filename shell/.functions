@@ -793,7 +793,7 @@ glmhl(){ (( $# )) || { echo 'Usage: glmhl "<prompt>"'; return 1; }; CLAUDE_CODE_
 # cumulative message cap (that cap is why the K3 lane needed 400000 rather than
 # its nominal 1M). The endpoint
 # authenticates with ANTHROPIC_API_KEY (x-api-key), NOT ANTHROPIC_AUTH_TOKEN.
-# Requires KIMI_PLAN_KEY_CN (a Kimi Code Console key for the coding plan, distinct
+# Requires KIMI_PLAN_KEY_CN (a Kimi-for-Coding plan key, distinct
 # from the old Moonshot pay-per-token key; see ~/.zshenv.local).
 _kimi(){
     [[ -n "${KIMI_PLAN_KEY_CN:-}" ]] || { echo 'KIMI_PLAN_KEY_CN not set (see ~/.zshenv.local)' >&2; return 1; }
