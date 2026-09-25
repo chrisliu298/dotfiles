@@ -4,7 +4,7 @@ name: gpt-pro-relay
 description: |
   Send a prompt to ChatGPT Pro when the user requests GPT-Pro, a Pro take,
   or a second opinion from ChatGPT Pro.
-allowed-tools: Bash(gpt-pro:*), Bash(~/.claude/skills/gpt-pro-relay/scripts/gpt-pro:*), Bash(ssh:*), Read, Write
+allowed-tools: Bash(gpt-pro:*), Bash(~/.codex/skills/gpt-pro-relay/scripts/gpt-pro:*), Bash(ssh:*), Read, Write
 user-invocable: true
 ---
 
