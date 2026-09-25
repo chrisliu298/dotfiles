@@ -3,7 +3,7 @@
     "order": 1,
     "lineage": "gpt",
     "transport": "codex",
-    "model": "gpt-5.6-sol",
+    "model": "gpt-6-sol",
     "effort_values": ["low", "medium", "high", "xhigh", "max", "ultra"],
     "default_effort": "medium",
     "prism_effort": "xhigh",
