@@ -42,6 +42,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared"))
+from file_cache import get_or_build
+
 HOME = Path.home()
 PER_EVENT_TEXT_CAP = 1600          # truncate any single event's text before it enters the corpus
 HUGE_LINE = 2_000_000              # bytes; above this, peek the record type, don't full-parse
@@ -459,8 +462,8 @@ def normalize_query(q: str) -> tuple[str, list[str], list[frozenset[str]]]:
 
 def build_corpus(cwd, *, include_all, since_secs, max_files, exclude_session, scope="project"):
     """Scan the project's transcripts (or every project's, scope=all; interactive-only by default,
-    newest-first) into Docs. Returns (docs, stats). Stateless: no persistent index — the searchable
-    user/assistant text is a thin sliver of the on-disk bytes. The CURRENT session is excluded by
+    newest-first) into Docs. Returns (docs, stats). An optional per-file cache stores
+    only redacted searchable turns. The CURRENT session is excluded by
     default (its content is already in live context, and its just-typed query echo would otherwise
     self-match)."""
     proj, files = candidates(cwd, scope)
@@ -487,17 +490,21 @@ def build_corpus(cwd, *, include_all, since_secs, max_files, exclude_session, sc
     for idx, f in enumerate(selected):
         # session_rank: 1.0 for the newest selected file .. ~0 for the oldest
         rank = 1.0 - (idx / nfiles) if nfiles > 1 else 1.0
-        sid = f.stem
-        for e in events(f):
-            if e.sidechain or e.role not in ("user", "assistant") or not e.text:
-                continue
-            if is_injected(e.text):
-                continue
-            toks = tokenize(e.text)
-            if not toks:
-                continue
-            docs.append(Doc(sid, str(f), e.line, e.role, e.text, iso_date(e.ts, f), toks,
-                            e.cwd or f.parent.name, rank))
+        def build():
+            rows = []
+            for e in events(f):
+                if e.sidechain or e.role not in ("user", "assistant") or not e.text:
+                    continue
+                if is_injected(e.text):
+                    continue
+                toks = tokenize(e.text)
+                if toks:
+                    rows.append([e.line, e.role, e.text, iso_date(e.ts, f), toks, e.cwd or f.parent.name])
+            return rows
+
+        rows = get_or_build(f, "claude", 1, build)
+        docs.extend(Doc(f.stem, str(f), line, role, text, date, toks, project, rank)
+                    for line, role, text, date, toks, project in rows)
     stats = {"scope": scope, "files_total": len(files), "files_scanned": nfiles, "docs": len(docs),
              "skipped_noninteractive": skipped_noninteractive, "skipped_old": skipped_old,
              "excluded_current": excluded_current, "truncated": truncated}

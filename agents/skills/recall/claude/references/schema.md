@@ -87,14 +87,11 @@ in one global mtime order, so the same recency window spans projects, and each h
 Each run ranks one corpus; BM25 scores are never compared across runs/scopes — widening happens only
 on `no_match`, and the narrower scope's hit is preferred.
 
-Retrieval is **stateless** — every `search` re-scans transcripts; there is no persistent index.
-Justification: the searchable user/assistant text is a thin sliver of the on-disk bytes, but parsing
-is still CPU-bound, so the cost scales with **files scanned** (~2.5s at the default 150-file recency
-window; ~9s for the full ~530-interactive-file corpus on this machine). The default window covers the
-dominant "as I mentioned earlier" case fast; the agent escalates to a full scan only on a miss. If a
-measured window scan ever climbs past a few seconds, a persistent `(path, mtime, size)`-keyed sqlite
-index (stdlib `sqlite3`, redacted at write time) is the documented tier-2 escape hatch — deferred
-until a real latency number justifies its invalidation/concurrency/secrets-at-rest cost.
+The shared entrypoint sets `RECALL_CACHE_DIR` and searches the complete selected
+store. It keeps one private JSON cache file per transcript with only the redacted,
+searchable turns. Source size and nanosecond mtime invalidate the file's cache;
+new transcripts are parsed on the next search. The native script can still run
+without a cache when called directly. There is no daemon or database.
 
 ## Redaction
 
@@ -105,8 +102,9 @@ AWS/Google/Slack keys, `Bearer` tokens (any case), JWTs, PEM private keys, `*_AP
 with no END line is redacted to the end of the turn. This is **best-effort** pattern matching — a
 secret in an unrecognized shape passes through. The pattern set matches the
 Codex build's. Never the raw
-value. The script only ever reads the stores; redaction is output-side. (If a persistent index is
-ever added, redact at write time so secrets never persist to disk.)
+value. The script only ever reads the transcript stores; the optional cache
+contains the already redacted snippets. Redaction is best-effort, so the cache
+directory and files are created with owner-only permissions.
 
 ## Failure / drift policy
 

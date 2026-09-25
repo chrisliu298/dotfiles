@@ -1,9 +1,10 @@
 ---
 name: recall
 description: |
-  Recall a detail from this user's PAST Codex tasks — a fact, value, name,
+  Recall a detail from this user's PAST conversations — a fact, value, name,
   decision, preference, or constraint stated in an earlier conversation (or lost
-  to compaction) — by searching the local Codex rollout transcripts and printing
+  to compaction) — by searching all local Codex tasks by default, or Claude Code
+  sessions when explicitly requested, and printing
   ONE provenance line (date + session + gist) with the answer so a wrong match
   is visible. Invoked as $recall or by this description; also trigger when the user
   types the literal text "/recall", or on natural references to something
@@ -19,17 +20,18 @@ metadata:
 
 # Recall
 
-Retrieve old Codex conversation context from the local rollout JSONL store. The
-bundled script searches raw user and assistant turns without modifying Codex's
-sessions, configuration, or databases, and returns a small ranked JSON result;
-never read the rollout files yourself.
+Retrieve old conversation context from local transcript stores. Search every
+Codex task, across projects, by default. Search Claude Code history only when
+the user asks for it; search both only when the user asks for both. The shared
+entrypoint returns a small ranked result without changing transcript stores.
+Never read raw JSONL yourself.
 
 ## Workflow
 
 Set the helper path once:
 
 ```bash
-RECALL="${CODEX_HOME:-$HOME/.codex}/skills/recall/scripts/recall.py"
+RECALL="$(dirname "$(realpath "${CODEX_HOME:-$HOME/.codex}/skills/recall")")/shared/global_recall.py"
 ```
 
 1. **Live-context check.** If the requested detail is still visible in the
@@ -38,46 +40,50 @@ RECALL="${CODEX_HOME:-$HOME/.codex}/skills/recall/scripts/recall.py"
    decide about":
 
    ```bash
-   uv run --quiet --script "$RECALL" search --cwd "$PWD" --query "auth retry cap"
+   uv run --quiet --script "$RECALL" search --agent codex --cwd "$PWD" --query "auth retry cap"
    ```
 
-   The default `auto` scope checks this working directory's past tasks and
-   widens to all Codex tasks only when the project has no match; if a project
-   result looks wrong, rerun with `--scope all`. The current task is excluded, except with `--scope current-task`,
-   which searches only this task — use it when the detail was said earlier in
-   this task but has been lost to compaction. Use `--scope current-project` or
-   `all` when the intended boundary is already clear.
+   Add `--source other` when asked to search Claude Code, or `--source all`
+   when asked to search both. These modes search all projects and past sessions
+   of the selected source. The current Codex task is excluded; use the Codex
+   source script's `--scope current-task` when recovering this task's own
+   pre-compaction detail:
+
+   ```bash
+   uv run --quiet --script "$(realpath "${CODEX_HOME:-$HOME/.codex}/skills/recall")/scripts/recall.py" \
+     search --scope current-task --cwd "$PWD" --query "auth retry cap"
+   ```
 3. **Expand** the chosen candidate with surrounding turns when exact wording
    matters:
 
    ```bash
-   uv run --quiet --script "$RECALL" show \
-     --session-id <session-id> --item-id <item-id>
+   uv run --quiet --script "$RECALL" show --source codex \
+     --session <session-id> --item-id <item-id>
    ```
+
+   For a Claude hit use `show --source claude --session <session-id> --line <line>`.
 
 4. **Cite.** With the answer, print exactly one provenance line — the chosen
    candidate's `confirmation` field — so the user can spot a wrong match:
 
    ```text
-   recall: <YYYY-MM-DD> · <session-id prefix> · <gist>
+   recall [codex]: <YYYY-MM-DD> · <session-id prefix> · <gist>
    ```
 
-   If you pick a lower-ranked candidate because it fits the user's intent
-   better, print that candidate's own `confirmation` line. Continue without
+   The source tag is `[codex]` or `[claude]`. If you pick a lower-ranked
+   candidate because it fits the user's intent better, print that candidate's
+   own `confirmation` line. Continue without
    waiting unless the status is `ambiguous` or the match looks uncertain.
 5. **Act on the status.**
    - `confident`: a strong retrieval match, not proof the statement is still
      true. A `kind: question` candidate is never `confident`; it records what
      was asked, not what was settled.
-   - `ambiguous`: if `auto` stopped at an ambiguous `current-project` result
-     and no candidate clearly answers the question, run once more with
-     `--scope all` before asking. Then present the best two or three dated
-     snippets (from both runs, labelled by scope; don't compare their scores
-     across runs) and ask which one the user means. Don't act on any of them
-     until the user answers.
+   - `ambiguous`: present the best two or three dated snippets and ask which
+     one the user means. Do not compare scores from different sources or act
+     on an uncertain match.
    - `empty_query`: retry with concrete names, values, or identifiers.
-   - `no_match`: widen the scope if it was narrowed; then say so plainly. Never
-     invent missing context.
+   - `no_match`: say so plainly. Do not search the other agent's history unless
+     asked, and never invent missing context.
 
    Inside Codex, `CODEX_THREAD_ID` is normally set and `current_task_exclusion`
    is `resolved`. Without a thread id, the helper falls back to finding a recent
@@ -89,9 +95,9 @@ RECALL="${CODEX_HOME:-$HOME/.codex}/skills/recall/scripts/recall.py"
    recalled claims about files, branches, services, or current decisions, check
    the live state. A current user instruction always wins.
 
-Use `sessions --cwd "$PWD"` to inspect candidate tasks when the user remembers
-the task but not searchable wording. Use `doctor` when the transcript store or
-current-task resolution appears unavailable.
+The Codex source script's `sessions` and `doctor` commands remain available for
+diagnosis. Read [references/transcript-store.md](references/transcript-store.md)
+only when diagnosing schema drift or changing the parser.
 
 ## Evidence and safety
 
@@ -106,6 +112,6 @@ current-task resolution appears unavailable.
   recover a `[REDACTED:<kind>]` value.
 - The helper ignores developer/system instructions, tool traffic, reasoning,
   images, compaction payloads, and structural subagent sessions.
-- Search is stateless by design: no daemon or persistent content index is
-  created. Read [references/transcript-store.md](references/transcript-store.md)
-  only when diagnosing schema drift or changing the parser.
+- The shared entrypoint caches redacted turns per transcript under
+  `~/.cache/recall/`; size and mtime changes invalidate that file's cache.
+  The source transcript remains authoritative, and no background process runs.
