@@ -2,6 +2,11 @@
 
 emulate -L zsh
 
+if [[ "${CODEX_REVIEW_SUBAGENT_ACTIVE:-}" == 1 ]]; then
+    print -u2 'cursor-subagent: recursive Codex subagent delegation is blocked'
+    exit 126
+fi
+
 cursor_agent_bin="${CURSOR_AGENT_BIN:-cursor-agent}"
 
 if [[ "$cursor_agent_bin" == */* ]]; then
@@ -72,6 +77,8 @@ for arg in "${cursor_args[@]}"; do
         break
     fi
 done
+
+export CODEX_REVIEW_SUBAGENT_ACTIVE=1
 
 if [[ "$custom_output" == false ]] && (( $+commands[jq] )); then
     "$cursor_agent_bin" --print --model "gpt-5.6-sol-$effort" \

@@ -6,12 +6,27 @@ description: |
   the user requests this skill, asks both agents, or the applicable delegation
   rules route a read-only task here. Tasks requiring file or external-state
   changes belong to native subagents.
+metadata:
+  surfaces:
+    - codex
 ---
 
 # Dual Subagent
 
 Use Claude Code and Cursor Agent as two independent one-shot collaborators. They
 run concurrently in the command's working directory and receive the same prompt.
+
+Each contributor may delegate bounded parts of the assignment to its own
+subagents when useful. Carry this permission into the shared prompt; do not add
+a blanket "do not delegate" or "do everything yourself" restriction unless the
+user explicitly requests it. Any further delegation inherits the same task
+scope and read-only boundary. Each contributor remains responsible for checking
+the evidence, synthesizing its findings, and identifying unresolved gaps.
+Keep the two contributions independent, including their child assignments:
+do not share the other contributor's response with either contributor's children.
+Judge each result by its evidence and coverage, not by whether subagents were
+used. A child failure matters when it leaves an unresolved gap; it does not
+automatically invalidate a contribution completed through other means.
 
 ## Run both read-only contributors
 
@@ -23,9 +38,8 @@ run concurrently in the command's working directory and receive the same prompt.
    `scripts/dual-subagent` helper beside this `SKILL.md` from the target working
    directory, piping the prompt on stdin. The helper starts the existing Claude
    and Cursor subagent helpers concurrently and waits for both.
-3. Use `--effort high` by default. Use `--effort xhigh` for difficult problems;
-   the helper maps the same choice to both subagents. Do not use other effort
-   levels.
+3. The helper fixes effort per peer: Claude runs at `high` and Cursor at
+   `xhigh`. It accepts no effort option.
 4. Pass `--trust` only after confirming the current workspace is one the user
    intends Cursor to access. This affects Cursor Workspace Trust only.
 5. On macOS, Cursor Agent reads its login from Keychain. If the command runner
@@ -46,7 +60,7 @@ run concurrently in the command's working directory and receive the same prompt.
 Example command shape:
 
 ```bash
-"${CODEX_HOME:-$HOME/.codex}/skills/dual-subagent/scripts/dual-subagent" --effort high --trust < /tmp/dual-subagent-prompt.md
+"${CODEX_HOME:-$HOME/.codex}/skills/dual-subagent/scripts/dual-subagent" --trust < /tmp/dual-subagent-prompt.md
 ```
 
 The helper prints separate `CLAUDE` and `CURSOR` sections and succeeds only when
@@ -98,6 +112,11 @@ permission to modify project artifacts, configuration, or external resources.
 The lead may handle simple tasks directly; delegation is not a mandatory stage.
 
 ## Safety
+
+Each launched peer inherits a recursion sentinel from its individual helper. If
+either peer tries to invoke `claude-subagent`, `cursor-subagent`, or
+`dual-subagent`, that nested helper exits 126. The peers may still use their own
+native subagents within the inherited read-only scope.
 
 The Claude helper can use write and shell tools even when the prompt says
 read-only; Cursor is forced into `--mode ask`. The user's authorization remains

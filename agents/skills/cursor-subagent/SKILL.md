@@ -7,12 +7,25 @@ description: |
   second opinion. Do not use this skill to implement, complete, advance, or
   operate a task; use Codex's native subagents when delegated execution is
   requested.
+metadata:
+  surfaces:
+    - codex
 ---
 
 # Cursor Subagent
 
 Use Cursor Agent as a one-shot, read-only reviewer. Cursor runs in the command's
 working directory, so it can inspect that workspace directly.
+
+Cursor may delegate bounded parts of the review to its own subagents when
+useful. Carry this permission into the review prompt; do not add a blanket
+"do not delegate" or "do everything yourself" restriction unless the user
+explicitly requests it. Any further delegation inherits the same task scope
+and read-only boundary. Cursor remains responsible for checking the evidence,
+synthesizing the findings, and identifying unresolved gaps in its final response.
+Judge the result by its evidence and coverage, not by whether subagents were
+used. A child failure matters when it leaves an unresolved gap; it does not
+automatically invalidate a review Cursor completes through other means.
 
 ## Run a review
 
@@ -83,6 +96,11 @@ ID, run `cursor-agent models`, report that the configured model is unavailable,
 and ask before changing the skill's default. Do not silently fall back to Auto.
 
 ## Safety and verification
+
+The helper marks the launched Cursor process with a recursion sentinel. If
+Cursor tries to invoke `claude-subagent`, `cursor-subagent`, or `dual-subagent`,
+that nested helper exits 126. Cursor may still use its own native subagents
+within the inherited read-only scope.
 
 Cursor's plain `--print` mode can use write and shell tools. This skill always
 uses a read-only mode: keep Cursor inside the current task, do not pass secrets

@@ -1,5 +1,10 @@
 #!/usr/bin/env zsh
 
+if [[ "${CODEX_REVIEW_SUBAGENT_ACTIVE:-}" == 1 ]]; then
+    print -u2 'claude-subagent: recursive Codex subagent delegation is blocked'
+    exit 126
+fi
+
 functions_file="${HOME}/.functions"
 
 if [[ ! -r "$functions_file" ]]; then
@@ -20,4 +25,5 @@ if [[ -t 0 && $# -eq 0 ]]; then
     exit 2
 fi
 
+export CODEX_REVIEW_SUBAGENT_ACTIVE=1
 c -p "$@"

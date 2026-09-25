@@ -6,12 +6,25 @@ description: |
   obtain an independent Claude review or second opinion. Do not use this skill
   to implement, complete, advance, or operate a task; use Codex's native
   subagents when delegated execution is requested.
+metadata:
+  surfaces:
+    - codex
 ---
 
 # Claude Subagent
 
 Use Claude Code as a one-shot, read-only reviewer. Claude runs in the command's
 working directory, so it can inspect that workspace directly.
+
+Claude may delegate bounded parts of the review to its own subagents when
+useful. Carry this permission into the review prompt; do not add a blanket
+"do not delegate" or "do everything yourself" restriction unless the user
+explicitly requests it. Any further delegation inherits the same task scope
+and read-only boundary. Claude remains responsible for checking the evidence,
+synthesizing the findings, and identifying unresolved gaps in its final response.
+Judge the result by its evidence and coverage, not by whether subagents were
+used. A child failure matters when it leaves an unresolved gap; it does not
+automatically invalidate a review Claude completes through other means.
 
 ## Run a review
 
@@ -80,6 +93,11 @@ Pass ordinary Claude CLI flags after the helper name when useful, for example
 `--effort high` or `--effort xhigh` as described above.
 
 ## Safety and verification
+
+The helper marks the launched Claude process with a recursion sentinel. If
+Claude tries to invoke `claude-subagent`, `cursor-subagent`, or `dual-subagent`,
+that nested helper exits 126. Claude may still use its own native subagents
+within the inherited read-only scope.
 
 The helper deliberately inherits `c`'s `--dangerously-skip-permissions`. This
 does not broaden the user's authorization: keep Claude inside the current task,
