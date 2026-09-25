@@ -10,7 +10,7 @@ if [ -n "${RELAY_PEER:-}" ]; then
 fi
 
 # gpt-pro — caller-side wrapper for ChatGPT Pro Extended via the gpt-pro-relay
-# engine on macmini. One prompt on stdin, one response on stdout.
+# engine on this Mac (default) or macmini over SSH. One prompt on stdin, one response on stdout.
 #
 # Usage:
 #   gpt-pro [--max-wait <sec>] [--dry-run] < prompt.md   # new run, prompt on stdin
@@ -30,10 +30,10 @@ fi
 
 VERSION=2
 
-# Override with GPT_PRO_HOST to pick a different SSH route to the same box — e.g.
-# GPT_PRO_HOST=macmini-fast when Tailscale is down or slow (see ~/.ssh/config).
-# GPT_PRO_HOST=local runs the engine on this machine (no SSH).
-HOST=${GPT_PRO_HOST:-macmini}
+# The engine runs on this machine by default. Set GPT_PRO_HOST to an SSH host to
+# relay to a remote engine instead — e.g. GPT_PRO_HOST=macmini (or macmini-fast
+# when Tailscale is down or slow; see ~/.ssh/config).
+HOST=${GPT_PRO_HOST:-local}
 RELAY_BIN=gpt-pro-relay
 RELAY_VENV=/Users/chrisliu298/Developer/GitHub/gpt-pro-relay/.venv/bin/gpt-pro-relay
 SSH_OPTS=(-S none -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
@@ -53,7 +53,7 @@ die() { echo "gpt-pro: $2" >&2; exit "$1"; }
 
 usage() {
   cat <<'USAGE'
-gpt-pro — send one prompt to ChatGPT Pro Extended (via macmini)
+gpt-pro — send one prompt to ChatGPT Pro Extended (local engine, or GPT_PRO_HOST over SSH)
 
 Usage:
   gpt-pro [-f <path>]... [--max-wait <sec>] [--dry-run] < prompt.md   # new run
@@ -209,7 +209,7 @@ echo "gpt-pro: recover_with=gpt-pro --run-id $RUN_ID" >&2
 # rc 0 with an empty body is a real anomaly (extraction failure), not an answer.
 emit() {  # <outfile> <errfile>
   [ -s "$2" ] && cat "$2" >&2                  # surface the engine's terminal JSONL
-  [ -s "$1" ] || die 1 "engine rc=0 but empty response for $RUN_ID (inspect run_dir on macmini)"
+  [ -s "$1" ] || die 1 "engine rc=0 but empty response for $RUN_ID (inspect run_dir on the engine host)"
   cat "$1"
   exit 0
 }

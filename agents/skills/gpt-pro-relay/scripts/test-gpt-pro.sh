@@ -108,7 +108,10 @@ run_case() {  # <name> <mode ssh|local> <scenario> <expected-exit> <wrapper-extr
   local sd; sd="$(mktemp -d "$TMP/st.XXXXXX")"
   local path; [ "$mode" = local ] && path="$TMP/binlocal:$TMP/binssh:$PATH" || path="$TMP/binssh:$PATH"
   local out rc
-  out="$(printf 'PROMPT BODY\n' | env PATH="$path" GPRT_SCN="$scn" GPRT_STATE="$sd" bash "$WRAP" $extra 2>"$sd/err")"; rc=$?
+  # Pin the route explicitly so an inherited GPT_PRO_HOST can't flip a case:
+  # local cases exercise the default (unset → local); SSH cases name a remote host.
+  local hostenv; [ "$mode" = local ] && hostenv=(-u GPT_PRO_HOST) || hostenv=(GPT_PRO_HOST=macmini)
+  out="$(printf 'PROMPT BODY\n' | env "${hostenv[@]}" PATH="$path" GPRT_SCN="$scn" GPRT_STATE="$sd" bash "$WRAP" $extra 2>"$sd/err")"; rc=$?
   local err; err="$(cat "$sd/err")"
   local ok=1 why=""
   [ "$rc" -eq "$exp_exit" ] || { ok=0; why+="exit got=$rc want=$exp_exit; "; }
@@ -131,7 +134,7 @@ EXP_ERR="needs_reauth";                      run_case "poll terminal error → e
 EXP_ERR="still pending";                     run_case "deadline while pending → exit 124"   ssh deadline_pending   124 "--max-wait 3"
 EXP_ERR="transport unknown";                 run_case "deadline all-transport → exit 255"   ssh deadline_transport 255 "--max-wait 3"
 
-echo "── local (macmini) path ──"
+echo "── local (default) path ──"
 EXP_OUT="LOCAL ANSWER";                      run_case "local blocking ask → ok"             local local_success    0   ""
 EXP_ERR="empty response";                    run_case "local empty body → exit 1"           local local_empty      1   ""
 EXP_OUT="LOCAL REATTACH";                    run_case "local --run-id blocking fetch → ok"  local local_reattach   0   "--run-id ask-20260530T000000Z-abc"

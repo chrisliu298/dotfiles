@@ -10,8 +10,9 @@ user-invocable: true
 
 # gpt-pro-relay
 
-Send one self-contained prompt through `gpt-pro` on macmini and return its verified
-answer. The wrapper chooses local or SSH transport, submits once, and waits through
+Send one self-contained prompt through `gpt-pro` and return its verified answer.
+The engine runs on this Mac by default (`GPT_PRO_HOST=<ssh-host>` relays to a remote
+one instead). The wrapper chooses local or SSH transport, submits once, and waits through
 network drops. Each invocation starts a fresh ChatGPT conversation.
 
 ## Prepare the prompt

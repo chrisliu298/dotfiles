@@ -2,7 +2,7 @@
 
 ## Background and timeout
 
-On a remote machine `gpt-pro` runs its own poll loop for up to `--max-wait` (default 120 min); on macmini it blocks on the engine directly (the engine's cap and the Bash-tool `timeout` bound it there). The default is deliberately generous — a queued or long Pro run killed by a tight timeout wastes the tokens it already spent, so favor completion. For a Bash tool supporting background and timeout fields, wrap the invocation in:
+The engine runs on this Mac by default, where `gpt-pro` blocks on it directly (the Bash-tool `timeout` bounds it there); with `GPT_PRO_HOST` set to an SSH host (e.g. `macmini`) it instead runs its own poll loop for up to `--max-wait` (default 120 min). The default is deliberately generous — a queued or long Pro run killed by a tight timeout wastes the tokens it already spent, so favor completion. For a Bash tool supporting background and timeout fields, wrap the invocation in:
 
 - `run_in_background: true`
 - `timeout: 7260000` — Bash-tool timeout in **milliseconds** = **121 min**, 60 s of slack over the default `--max-wait 7200` (= 120 min) so the tool doesn't preempt the wrapper's final diagnostic. If you change `--max-wait`, set this to at least `(--max-wait + 60) × 1000`.
@@ -15,17 +15,17 @@ Wait for the completion notification. Do NOT poll from the agent side — the wr
 
 ## Recovery
 
-`gpt-pro` prints `run_id=<id>` and a ready-to-run `recover_with=gpt-pro --run-id <id>` line to stderr at the start — both land in the background task's output file. Capture the **literal** id from there; a `$RUN_ID` shell variable does **not** survive into a later Bash-tool call. If the caller dies, or the wrapper exits 124 (timed out, still pending) or 255 (SSH transport unknown), the worker on macmini keeps running. Reattach with the same id, inside the same envelope (`run_in_background: true`, `timeout: 7260000`) — this is recovery, not the forbidden polling:
+`gpt-pro` prints `run_id=<id>` and a ready-to-run `recover_with=gpt-pro --run-id <id>` line to stderr at the start — both land in the background task's output file. Capture the **literal** id from there; a `$RUN_ID` shell variable does **not** survive into a later Bash-tool call. If the caller dies, or the wrapper exits 124 (timed out, still pending) or 255 (SSH transport unknown), the engine's worker keeps running. Reattach with the same id, inside the same envelope (`run_in_background: true`, `timeout: 7260000`) — this is recovery, not the forbidden polling:
 
 ```bash
 gpt-pro --run-id ask-20260611T002710Z-…    # the literal id, not "$RUN_ID"
 ```
 
-This skips submit and waits for the existing run to complete (blocking fetch on macmini, poll loop over SSH). If the run already finished but you lost the output, read it off macmini directly — but **read `result.json` FIRST: only `status: "ok"` makes `response.md` usable.** Quote the remote command so `~` expands on macmini, not locally:
+This skips submit and waits for the existing run to complete (blocking fetch locally, poll loop over SSH). If the run already finished but you lost the output, read it from the run_dir directly — but **read `result.json` FIRST: only `status: "ok"` makes `response.md` usable.** With the default local engine:
 
 ```bash
-ssh macmini "jq -r '.status, .reason, .model_audit' ~/.gpt-pro/runs/<run_id>/result.json"   # gate — must print ok
-ssh macmini "cat ~/.gpt-pro/runs/<run_id>/response.md"                                      # ONLY when status == ok
+jq -r '.status, .reason, .model_audit' ~/.gpt-pro/runs/<run_id>/result.json   # gate — must print ok
+cat ~/.gpt-pro/runs/<run_id>/response.md                                      # ONLY when status == ok
 ```
 
 **On `status: "error"` any extracted body is QUARANTINED — diagnostic only, never an answer.** A rejected turn can be complete, fluent, and on-topic, so "the text looks fine" is not a reason to use it. Model-audit failures publish `response.rejected.md`; an attachment acknowledgement instead of completed work publishes `response.incomplete.md`; a failure before adjudication may leave `response.pending.md`. None is `response.md`, and all are void. Recovery is a fresh run (new quota → the user decides) or an honest failure report — never a `cat`.
@@ -41,7 +41,7 @@ gpt-pro --stop ask-20260611T002710Z-…    # the literal id, not "$RUN_ID"
 It's **graceful and worker-driven**: the command writes a stop signal into the run_dir and the owning worker consumes it at its next phase gate. If the prompt **hasn't been sent yet**, the run is **dequeued** (no Pro quota spent). If it **was already sent**, the worker **clicks ChatGPT's Stop button** on the live turn to halt generation. Either way the run finalizes `status: stopped` and **no response is returned** (the partial is discarded, not published). All output is JSONL on stderr.
 
 - **`stopped` / `already_finished` / `pending` → exit 0.** `pending` means the worker is alive and will consume the stop; poll `fetch` to confirm.
-- **`no_live_worker` → exit 2.** No live worker consumed the signal (the worker process itself died, rare — workers survive SSH drops). Server-side generation may still be running; use the manual teardown path if you must halt it: `ssh macmini gpt-pro-relay close-chrome --force` is a blunt last resort (kills all tabs).
+- **`no_live_worker` → exit 2.** No live worker consumed the signal (the worker process itself died, rare — workers survive SSH drops). Server-side generation may still be running; use the manual teardown path if you must halt it: `gpt-pro-relay close-chrome --account all --force` is a blunt last resort (kills all tabs).
 - **`not_found` → exit 4.** Unknown run-id.
 
 Stop is **not** resubmit-safe cover for a mistake: a dequeued run spent no quota, but a run stopped after send already burned its reasoning up to the interrupt. Don't stop-then-resubmit reflexively.
@@ -53,12 +53,12 @@ Up to `GPT_PRO_MAX_PARALLEL` (default **6**, clamped to a ceiling of **10**) `gp
 **A backgrounded call with no exit code is not a failed call.** Empty output + no completion notification = **still running**. Never diagnose it as lost, and never fresh-submit over it — that double-submits a live run and double-burns quota. Confirm liveness from the stage trace before concluding anything:
 
 ```bash
-ssh macmini "tail -5 ~/.gpt-pro/runs/<run_id>/worker.stderr"
+tail -5 ~/.gpt-pro/runs/<run_id>/worker.stderr
 ```
 
 `slot_queued` with no `slot_acquired` = queued, waiting its turn. `sent` with no `finished` = generating. Either way: **wait.**
 
-Chrome stays alive between runs (no per-call launch cost after the first) — an invoking agent never needs to tear it down. `ssh macmini gpt-pro-relay close-chrome` is **operator maintenance only** (it refuses by default if any worker is in flight; `--force` kills anyway) — don't run it as part of normal use or recovery. Raising `GPT_PRO_MAX_PARALLEL` above the default is a knob, not a free upgrade: parallel bursts on one ChatGPT Pro session are an account-side anti-abuse signal. If `network.json` starts showing 429s, captcha redirects, or unexplained `needs_reauth` after parallel use, drop it back to `1`.
+Chrome stays alive between runs (no per-call launch cost after the first) — an invoking agent never needs to tear it down. `gpt-pro-relay close-chrome` is **operator maintenance only** (it refuses by default if any worker is in flight; `--force` kills anyway) — don't run it as part of normal use or recovery. Raising `GPT_PRO_MAX_PARALLEL` above the default is a knob, not a free upgrade: parallel bursts on one ChatGPT Pro session are an account-side anti-abuse signal. If `network.json` starts showing 429s, captcha redirects, or unexplained `needs_reauth` after parallel use, drop it back to `1`.
 
 ## If it fails
 
@@ -70,7 +70,7 @@ The wrapper's **exit code** is the agent's decision key — every code maps to o
 | 1 | engine error, or rc 0 with an empty body (extraction failure) | read the `reason` in stderr → reason table below; if none, inspect `run_dir`. Do **not** blindly resubmit (would re-burn quota) |
 | 2 | usage error (empty/oversized prompt, bad run-id, bad flag) — no quota burned | fix the call from the stderr message; do **not** reattach |
 | 3 | worker hit the engine's 60-min cap (`status: "timeout"`) | terminal — don't reattach (a re-fetch just re-times-out); inspect `streaming-*.png`, surface to the user |
-| 4 | run_dir not found (reattach to a run that never landed) | the submit never reached macmini — start a **fresh** run (drop `--run-id`) |
+| 4 | run_dir not found (reattach to a run that never landed) | the submit never reached the engine — start a **fresh** run (drop `--run-id`) |
 | 124 | `--max-wait` elapsed, run still pending | reattach: `gpt-pro --run-id <id>` (same envelope) |
 | 255 | SSH transport state unknown | reattach **first**: `gpt-pro --run-id <id>`; only if *that* exits 4 did the submit never land — then resubmit. Never start a fresh run before reattaching (risks a duplicate, double-quota run) |
 
@@ -82,7 +82,7 @@ The **`sent?`** column is the resubmit-safety key: **pre-send** = the failure ha
 
 | reason | exit | sent? | meaning | what to do |
 |---|---|---|---|---|
-| `needs_reauth` | 1 | pre-send | session cookie missing or expired | user runs `gpt-pro-relay login` on macmini, then resubmit |
+| `needs_reauth` | 1 | pre-send | session cookie missing or expired | user runs `gpt-pro-relay login --account <N>` on the engine host, then resubmit |
 | `model_select_failed` | 1 | pre-send | couldn't get Pro selected in the picker | selectors drifted; surface `run_dir` to the user |
 | `model_drift_before_send` | 1 | pre-send | chip stopped reading `"Pro"` between verify and click — fails closed *before* the send | safe to resubmit (no quota burned); if it repeats, selectors drifted |
 | `instruction_boundary_lost_before_send` | 1 | pre-send | a large paste became attachment-only and the relay could not prove a non-empty ordinary execution instruction before Send | no quota burned; surface `run_dir`. Safe to retry after updating/fixing the relay; repeated failures mean composer selectors or behavior drifted |
@@ -100,7 +100,7 @@ The **`sent?`** column is the resubmit-safety key: **pre-send** = the failure ha
 | `empty_prompt` / `prompt_too_large` | 2 | pre-send | empty stdin, or >5 MB | fix the call; no quota burned |
 | `run_id_conflict` | 2 | pre-send | reattach id collided with a *different* prompt | pick a fresh run (drop `--run-id`) |
 | `run_id_conflict_no_sha` | 2 | pre-send | run_dir exists but `meta.json` lacks a prompt hash (a prior `ask` was killed mid-write) | delete the run_dir and retry, or use a fresh `--run-id` |
-| `not_found` | 4 | — | reattached to a run that never landed | the submit never reached macmini — start a **fresh** run |
+| `not_found` | 4 | — | reattached to a run that never landed | the submit never reached the engine — start a **fresh** run |
 | `wait_timeout` / `fetch_timeout` | 124 | — | `--max-wait` elapsed, **worker still alive** (`status: pending`, not an error) | reattach: `gpt-pro --run-id <id>` |
 
 `model_audit` also appears in a **successful** result — these are the fail-**open** verdicts, not errors: `verified` (slug present and allowlisted — the normal case), `model_ok_slug_missing` (slug absent but the menu confirms Sol; model confirmed, effort unverified), `unverified_missing_slug` (slug absent *and* menu unreadable — a double selector break degrades rather than bricking the tool). The two FATAL verdicts (`slug_mismatch`, `menu_mismatch`) never reach a `status: ok`; they surface as the two mismatch reasons above.
@@ -109,7 +109,7 @@ Reasons you may see in `worker.stderr`'s stage trace but **never** as a caller-v
 
 ## Run artifacts
 
-`run_dir` lives on macmini at `~/.gpt-pro/runs/<run_id>/`:
+`run_dir` lives on the engine host (this Mac by default) at `~/.gpt-pro/runs/<run_id>/`:
 
 - `prompt.md`, `meta.json`, `result.json`
 - **the answer body — under exactly one name, and the name is the verdict.** `response.md` **only** when `result.json` says `status: "ok"`; otherwise `response.rejected.md` (a model-audit reject), `response.incomplete.md` (the attached task was acknowledged rather than executed), `response.partial.md` (timed out — never passed the completion gate), or `response.pending.md` (the run died before any verdict, so the body was never adjudicated at all). A failure before extraction publishes none of them. Only `response.md` is ever an answer; the other four are diagnostics that may look plausible — that is precisely why they are not named `response.md`.
@@ -118,4 +118,4 @@ Reasons you may see in `worker.stderr`'s stage trace but **never** as a caller-v
 - `worker.stdout` — detached worker's stdout (usually empty)
 - `worker.stderr` — **structured JSONL stage trace**: one line per stage (`start`, `slot_queued`/`slot_acquired`, `chrome_cdp_ready`/`chrome_connected`/`chrome_activated`, `logged_in`, `model_verified`, `prompt_typed`, `sent`, `extracted`, `finished`, plus `error` / `orphan_kill_*` / `*_skipped`). When something fails mid-run, this is the fastest path to the failure point — the last stage before the `error` line tells you where it died.
 
-Reach for them via `ssh macmini cat <run_dir>/<file>` or `ssh macmini ls <run_dir>` when diagnosing.
+Read them directly when diagnosing (prefix `ssh "$GPT_PRO_HOST"` if you relay to a remote engine).
