@@ -27,7 +27,7 @@ Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via
 
 Columns: **C**laude · Code**x** · **G**rok · **P**i. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
-> GLM, Kimi, DeepSeek, and MiMo are all reached **through** Claude Code as the harness (each is a `claude` session pointed at that model's endpoint) via the `glm`/`km`/`ds`/`mm` aliases (see `shell/.functions`), so they inherit the Claude column directly (no separate skill dir). **Grok** is a relay/prism dispatch target (no interactive alias) with its own `~/.grok/skills/` mirror of the Codex set, and **Pi** is a standalone harness with its own `~/.pi/agent/skills/` mirror — so both columns equal Code**x** except for the Codex-only subagent callers. The Claude-only orchestration skills (relay, prism, goal-loop, keep-warm, crons, codex-first, skill-creator) — plus recall, which reads Claude's own transcript store — stay off Codex/Grok/Pi; `claude-subagent`, `cursor-subagent`, and `dual-subagent` are Codex-only, and relay and prism are additionally guarded so a dispatched peer can't trigger them.
+> GLM, Kimi, DeepSeek, and MiMo are all reached **through** Claude Code as the harness (each is a `claude` session pointed at that model's endpoint) via the `glm`/`km`/`ds`/`mm` aliases (see `shell/.functions`), so they inherit the Claude column directly (no separate skill dir). **Grok** is a relay/prism dispatch target (no interactive alias) with its own `~/.grok/skills/` mirror of the Codex set, and **Pi** is a standalone harness with its own `~/.pi/agent/skills/` mirror — so both columns equal Code**x** except for the Codex-only subagent callers and `session-history`. The Claude-only orchestration skills (relay, prism, goal-loop, keep-warm, crons, codex-first, skill-creator) — plus recall, which reads Claude's own transcript store — stay off Codex/Grok/Pi; `claude-subagent`, `cursor-subagent`, `dual-subagent`, and `session-history` are Codex-only, and relay and prism are additionally guarded so a dispatched peer can't trigger them. `gpt-pro-relay` runs the other way round — off **Claude** by request, on Codex/Grok/Pi — and `shell/.zshenv` puts its `scripts/` dir on PATH from the Codex copy, so the `gpt-pro` command (which prism's gpt-pro tier shells out to) still resolves.
 
 **Enabled** (✓ auto-installed):
 
@@ -41,7 +41,7 @@ Columns: **C**laude · Code**x** · **G**rok · **P**i. Legend: ✓ auto-install
 | defuddle                | ✓ | ✓ | ✓ | ✓ | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
 | digest                  | ✓ | ✓ | ✓ | ✓ | local — Re-layer a dense reply into a fast-to-skim form |
 | exec-status             | ✓ | ✓ | ✓ | ✓ | local — Maintain a plain-English STATUS.md executive briefing for long autonomous runs |
-| gpt-pro-relay           | ✓ | ✓ | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini |
+| gpt-pro-relay           | — | ✓ | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini (off Claude by request; the `gpt-pro` CLI stays on PATH from the Codex copy) |
 | humanizer               | ✓ | ✓ | ✓ | ✓ | [blader/humanizer][c-hu] — Remove AI signatures from text |
 | jina                    | ✓ | ✓ | ✓ | ✓ | local — Fetch web content / search via Jina AI |
 | keep-warm               | ✓ | — | — | — | local — Cache heartbeat (uses Claude-only scheduling tools) |
@@ -51,8 +51,8 @@ Columns: **C**laude · Code**x** · **G**rok · **P**i. Legend: ✓ auto-install
 | push                    | ✓ | ✓ | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
 | recall                  | ✓ | — | — | — | local — Search this project's past Claude sessions for an earlier user statement/decision (Claude-only; lexical BM25 over the transcript store) |
 | relay                   | ✓ | — | — | — | local — Cross-agent relay from Claude to GPT/Grok/GLM/Kimi/DeepSeek/MiMo (Claude-only caller) |
+| session-history         | — | ✓ | — | — | local — Retrieve exact, redacted turns from past Codex tasks and pre-compaction history |
 | skill-creator           | ✓ | — | — | — | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
-| todo                    | ✓ | ✓ | ✓ | ✓ | local — TODO.md tracking across sessions |
 | xurl                    | ✓ | ✓ | ✓ | ✓ | local — X/Twitter via the `xurl` CLI |
 
 **Disabled** (✱ manual, opt-in via `./dotfiles.sh enable <name>`):
@@ -67,6 +67,7 @@ Columns: **C**laude · Code**x** · **G**rok · **P**i. Legend: ✓ auto-install
 | goal-loop               | ✱ | — | — | — | local — Stepped elicit→review→fix loop (composes goal-elicit/goal-drive/prism; default review is prism, Claude-only) |
 | interviewer             | ✱ | ✱ | ✱ | ✱ | local — Mock AI/ML technical interviews |
 | prompt-engineer         | ✱ | ✱ | ✱ | ✱ | local — Prompt writing per-vendor best practices |
+| todo                    | ✱ | ✱ | ✱ | ✱ | local — TODO.md tracking across sessions |
 
 > Note: SKILL.md supports an optional Claude-only `effort` frontmatter (`medium` / `high` / `max`) to set thinking budget per skill. Currently unset on every skill in this repo — they all inherit the session default.
 

@@ -72,6 +72,9 @@ SKILLS=(
     "cursor-subagent|./agents/skills/cursor-subagent|codex"
     # dual-subagent: Codex-only caller; concurrently consults the two Codex-only subagent helpers.
     "dual-subagent|./agents/skills/dual-subagent|codex"
+    # session-history: Codex-only; searches Codex rollout transcripts on demand.
+    # Claude keeps its separate transcript-store-specific recall skill.
+    "session-history|./agents/skills/session-history|codex"
     # Off claude+codex by request, kept on grok+pi. digest/exec-status/jina/mental-seal/xurl are
     # otherwise wildcard-sourced; these explicit grok,pi entries override the wildcard's agents set.
     "defuddle|kepano/obsidian-skills/skills/defuddle|grok,pi"
@@ -101,6 +104,7 @@ MANUAL_SKILLS=(
     prompt-engineer
     recall
     relay
+    todo
 )
 
 # Which manual skills are currently enabled — a committed declarative set, one
