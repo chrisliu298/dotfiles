@@ -537,7 +537,7 @@ install_tools() {
 }
 
 install_fonts() {
-    [[ "$(uname -s)" == "Darwin" ]] || return
+    [[ "$(uname -s)" == "Darwin" ]] || return 0
     command -v brew >/dev/null 2>&1 || { warn "brew not found; skipping fonts"; return; }
     local cask
     for cask in "${FONTS[@]}"; do
