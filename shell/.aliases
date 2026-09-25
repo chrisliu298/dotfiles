@@ -82,6 +82,12 @@ alias csu="cswap upgrade"                 # upgrade cswap
 # =============================================================================
 # Defined as functions in shell/.functions to support shared base args.
 
+# Account switching (codex-auth). Restart Codex CLI/App after switching.
+alias cal="codex-auth list"    # accounts + usage
+alias cas="codex-auth status"  # auto-switch and API settings
+alias caw="codex-auth switch"  # interactive, or caw email/alias
+alias caa="codex-auth login"   # sign in and add the current account
+
 # =============================================================================
 # macOS-Only
 # =============================================================================
