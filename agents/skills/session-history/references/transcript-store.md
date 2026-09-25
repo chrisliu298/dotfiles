@@ -1,0 +1,59 @@
+# Codex transcript store
+
+This reference documents the local, undocumented schema used by
+`scripts/session_history.py`. Re-check it after a Codex update if `doctor`
+reports files but few or no recognized messages.
+
+## Location and source of truth
+
+Codex rollout transcripts are append-oriented JSONL files under:
+
+```text
+${CODEX_HOME:-$HOME/.codex}/sessions/YYYY/MM/DD/rollout-*.jsonl
+```
+
+The helper is strictly read-only. It does not use or modify Codex-owned SQLite
+databases, and it never rewrites transcript files.
+
+## Observed records
+
+Verified locally on 2026-09-09 with Codex CLI 0.153.4:
+
+- Envelope: `timestamp`, `ordinal`, `type`, `payload`.
+- `session_meta`: `payload.id`, `cwd`, `originator`, `thread_source`, optional
+  `git.branch`, and `context_window.window_id`.
+- Conversation: `type=response_item`, `payload.type=message`, role `user` or
+  `assistant`, and content blocks `input_text` or `output_text`.
+- Compaction: `type=compacted`, with window lineage and replacement history.
+  Original pre-compaction turns normally remain in the rollout store; the
+  helper searches originals and does not index replacement history.
+
+Developer messages, tool calls/results, encrypted reasoning, images,
+`event_msg`, `world_state`, token records, and compaction records are excluded.
+Structural sources whose `thread_source` identifies a subagent, automation,
+headless exec, or inter-agent run are excluded from ordinary searches.
+
+One logical task can span multiple rollout files. Files are grouped using the
+first `session_meta.payload.id`, which owns the physical rollout. A structural
+subagent rollout can contain a later replayed parent `session_meta`; that replay
+does not change the file's ownership. Item IDs plus transcript-relative line
+numbers provide result anchors. `CODEX_THREAD_ID` and `CODEX_SESSION_ID` are
+used, when available, to resolve the current task.
+
+Machine-injected pseudo-user blocks are excluded. For response annotations, the
+parser retains only the user's annotation comments and trailing request, not the
+selected assistant text or annotation boilerplate.
+
+## Bounded parsing
+
+The store can contain extremely large one-line payloads such as image data or
+tool output. The parser caps each physical `readline`, drains oversized records
+without decoding them, and reports omission counts. Malformed or incomplete
+records are skipped and surfaced in search statistics rather than crashing the
+retrieval.
+
+## Privacy
+
+Only short, redacted result excerpts leave the parser. Common API keys, bearer
+tokens, JWTs, private-key headers, environment-secret assignments, and long
+data/base64 runs are replaced with `[REDACTED:<kind>]` before output.

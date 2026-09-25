@@ -1,0 +1,4 @@
+interface:
+  display_name: "Session History"
+  short_description: "Retrieve exact context from past Codex tasks"
+  default_prompt: "Use $session-history to retrieve relevant context from an earlier Codex task."

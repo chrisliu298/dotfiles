@@ -65,6 +65,11 @@ SKILLS=(
     # specs + reviews; a Codex/Grok session self-delegating to Codex is meaningless. MANUAL (below),
     # so it's off until `./dotfiles.sh enable codex-first`. The explicit entry overrides the wildcard.
     "codex-first|./agents/skills/codex-first|claude"
+    # claude-subagent: Codex-only caller; installing it into Claude would enable recursive self-dispatch.
+    "claude-subagent|./agents/skills/claude-subagent|codex"
+    # session-history: Codex-only; searches Codex rollout transcripts on demand.
+    # Claude keeps its separate transcript-store-specific recall skill.
+    "session-history|./agents/skills/session-history|codex"
     "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex,grok,pi"
     "humanizer|blader/humanizer|claude,codex,grok,pi"
     "pdf|anthropics/skills/skills/pdf|claude"
