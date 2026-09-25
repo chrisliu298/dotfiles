@@ -436,9 +436,6 @@ CLI_TOOLS=(
 # prompt through; already-installed casks are skipped, so it only prompts once.
 FONTS=(
     font-sf-pro
-    font-sf-mono
-    font-sf-compact
-    font-new-york
     font-noto-sans
 )
 
