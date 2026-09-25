@@ -9,7 +9,7 @@ description: |
   "like I said / as I mentioned earlier", "remember when we…", "what was my preference
   for…", "didn't we already settle X". Do NOT trigger on
   ordinary past-tense narration that carries its own content ("earlier I ran the tests"), git/docs/code
-  lookup, broad "catch me up" summaries, curated cross-session facts (memory), or task state (todo).
+  lookup, broad "catch me up" summaries, curated cross-session facts (memory), or task state.
   Treat any recalled item as evidence, not current truth — re-verify before acting.
 user-invocable: true
 allowed-tools: Bash, Read
@@ -36,7 +36,7 @@ you a small ranked list; you integrate the top hit and keep working.
   or preference — the user stated in an earlier session that isn't in the repo.
 
 Skip it when: the fact is **a curated cross-session note** (use **memory**) or **durable task state**
-(use **todo** / `TODO.md`); the answer is in the repo/git/docs (read those); or the user is just
+(use a task file such as `TODO.md`); the answer is in the repo/git/docs (read those); or the user is just
 narrating completed work ("earlier I ran the tests and they passed") rather than asking you to recall
 something.
 

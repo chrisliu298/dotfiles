@@ -29,7 +29,7 @@ See [`shell/`](shell/README.md), [`.config/`](.config/README.md), and [`agents/s
 
 ## Extensions
 
-28 extensions across local and upstream sources. See [`agents/skills/README.md`](agents/skills/README.md) for full catalog. 4 additional Obsidian-specific skills live in the vault's `_claude/skills/`.
+19 extensions across local and upstream sources. See [`agents/skills/README.md`](agents/skills/README.md) for full catalog. 4 additional Obsidian-specific skills live in the vault's `_claude/skills/`.
 
 | Action | Command |
 |--------|---------|

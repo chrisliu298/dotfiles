@@ -34,24 +34,16 @@ LINKS=(
 # source: ./path (local) or owner/repo[/subpath] (GitHub)
 SKILLS=(
     # The wildcard installs every skill to Claude and Codex; the explicit entries below narrow
-    # that (claude-only: relay, prism, keep-warm, crons, goal-loop, recall, codex-first,
-    # skill-creator; codex-only: claude-subagent, session-history, gpt-pro-relay).
+    # that (claude-only: relay, prism, crons, recall, codex-first, skill-creator; codex-only: claude-subagent, session-history, gpt-pro-relay).
     "*|./agents/skills|claude,codex"
     # Relay: claude-only caller; targets GPT via the script.
     # MANUAL (below); explicit entry keeps it claude-only when enabled (the wildcard would install it everywhere).
     "relay|./agents/skills/relay|claude"
-    # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup). MANUAL (below).
-    "keep-warm|./agents/skills/keep-warm|claude"
     # crons: claude-only durable manifest + re-arm for the recurring /loop + CronCreate fleet
-    # (CronCreate/CronList/CronDelete are Claude-only); preparer-not-actuator, no docmaint freshness gate. MANUAL (below).
+    # (CronCreate/CronList/CronDelete are Claude-only); preparer-not-actuator, no freshness gate. MANUAL (below).
     "crons|./agents/skills/crons|claude"
     # prism: claude-only caller (dispatches parallax to GPT via relay). MANUAL (below).
     "prism|./agents/skills/prism|claude"
-    # goal-loop: default review backend is prism (claude-only); built on the Skill/AskUserQuestion
-    # tooling. Off-Claude it only degrades to external/local/none, so keep it claude-only. MANUAL
-    # (below), so it's off until `./dotfiles.sh enable goal-loop`; the explicit entry keeps it
-    # claude-only when enabled (the wildcard would otherwise install it to codex).
-    "goal-loop|./agents/skills/goal-loop|claude"
     # recall: claude-only; searches THIS project's past Claude transcripts (~/.claude/projects) for
     # an earlier user statement. The store is Claude-specific, so it has no meaning on Codex. MANUAL (below).
     "recall|./agents/skills/recall|claude"
@@ -73,20 +65,11 @@ SKILLS=(
 
 # Skills not auto-installed (opt-in). Toggle with: ./dotfiles.sh enable/disable <name>.
 MANUAL_SKILLS=(
-    autoresearch
     codex-first
     crons
-    deslop
-    goal-drive
-    goal-elicit
-    goal-loop
-    interviewer
-    keep-warm
     prism
-    prompt-engineer
     recall
     relay
-    todo
 )
 
 # Which manual skills are currently enabled — a committed declarative set, one

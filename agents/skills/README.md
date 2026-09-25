@@ -23,7 +23,7 @@ Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via
 
 Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
-> The Claude-only orchestration skills (relay, prism, goal-loop, keep-warm, crons, codex-first, skill-creator) — plus recall, which reads Claude's own transcript store — stay off Codex; relay and prism are additionally guarded so a dispatched peer can't trigger them.
+> The Claude-only orchestration skills (relay, prism, crons, codex-first, skill-creator) — plus recall, which reads Claude's own transcript store — stay off Codex; relay and prism are additionally guarded so a dispatched peer can't trigger them.
 
 **Enabled** (✓ auto-installed):
 
@@ -41,20 +41,11 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 
 | Skill | C | X | Source · Description |
 |-------|:-:|:-:|----------------------|
-| autoresearch            | ✱ | ✱ | local — Karpathy-faithful experiment loop |
 | codex-first             | ✱ | — | local — Route hands-on work to `codex exec` while Claude specs + reviews (Claude-only) |
 | crons                   | ✱ | — | local — Durable manifest + re-arm for the recurring /loop cron fleet (Claude-only; preparer-not-actuator, no false assurance) |
-| deslop                  | ✱ | ✱ | local — Strip AI-slop from code changes |
-| goal-drive              | ✱ | ✱ | local — Drive a goal artifact (GOAL.md / checklist / phased doc) to verified done |
-| goal-elicit             | ✱ | ✱ | local — Multi-round interview → verifiable Goal Contract |
-| goal-loop               | ✱ | — | local — Stepped elicit→review→fix loop (composes goal-elicit/goal-drive/prism; default review is prism, Claude-only) |
-| interviewer             | ✱ | ✱ | local — Mock AI/ML technical interviews |
-| keep-warm               | ✱ | — | local — Cache heartbeat (uses Claude-only scheduling tools) |
 | prism                   | ✱ | — | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to GPT via relay) |
-| prompt-engineer         | ✱ | ✱ | local — Prompt writing per-vendor best practices |
 | recall                  | ✱ | — | local — Search this project's past Claude sessions for an earlier user statement/decision (Claude-only; lexical BM25 over the transcript store) |
 | relay                   | ✱ | — | local — Cross-agent relay from Claude to GPT (Claude-only caller) |
-| todo                    | ✱ | ✱ | local — TODO.md tracking across sessions |
 
 > Note: SKILL.md supports an optional Claude-only `effort` frontmatter (`medium` / `high` / `max`) to set thinking budget per skill. Currently unset on every skill in this repo — they all inherit the session default.
 

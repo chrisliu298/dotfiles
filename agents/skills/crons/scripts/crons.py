@@ -19,7 +19,7 @@ THE LOAD-BEARING CONTRACT — PREPARER, NEVER ACTUATOR:
   actually armed. The Claude agent is the sole actuator: it runs CronList, pipes the output
   to `reconcile`, and executes the emitted CronCreate/CronDelete calls itself.
 
-NO FALSE ASSURANCE (the cardinal rule, the inverse of the docmaint freshness gate):
+NO FALSE ASSURANCE (the cardinal rule, the inverse of a derived-doc freshness gate):
   Because the tool cannot see live state, it NEVER says a cron is "armed". `check` validates
   only that the SOURCE files and CRONS.md agree ("source consistent"), and `reconcile`
   reports only presence-BY-PURPOSE (the armed prompt/schedule are unverifiable). A green

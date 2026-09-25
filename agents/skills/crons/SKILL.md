@@ -10,7 +10,7 @@ description: >-
   /loop crons in one project; or on "crons", "manage my crons", "re-arm crons", "are my crons still
   running", "cron manifest". It is a preparer, not an actuator: it never calls the Cron* tools and never
   claims a cron is "armed" (no false assurance) — you run CronList and execute the emitted calls. Do NOT
-  use for a one-off cron (use CronCreate directly) or a cache heartbeat (use keep-warm).
+  use for a one-off cron (use CronCreate directly) or a cache heartbeat.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, CronCreate, CronList, CronDelete
 user-invocable: true
 ---
@@ -43,7 +43,7 @@ calls to run**. It cannot call `CronCreate`/`CronList`/`CronDelete` (those are C
 **cannot verify what is actually armed**. *You* are the sole actuator. Consequently the tool **never says a cron
 is "armed"** — `check` only asserts the source files and `CRONS.md` agree; `reconcile` reports only
 presence-**by-purpose**. A green check over zero armed crons is the exact trap this avoids. (This is the deliberate
-inverse of the `docmaint` freshness model: there the doc is a derived view of reality; here the
+inverse of a derived-doc freshness model: there the doc is a derived view of reality; here the
 manifest *is* the source of truth and the harness is the lossy projection — so do **not** add a freshness/attest gate.)
 
 ## The `.cron` format
@@ -110,8 +110,6 @@ the armed prompt, so a plain reconcile would report it merely "present").
 ## When NOT to use
 
 - A single one-off or short-lived cron → use `CronCreate` directly; a manifest is overkill.
-- A cache heartbeat → use **keep-warm**.
-- Human task docs → that is **todo** (a derived-view skill with a freshness gate); this is the opposite polarity (source-of-truth manifest, no freshness gate).
 
 ## Rules
 

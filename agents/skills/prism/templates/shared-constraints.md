@@ -8,7 +8,7 @@ You MAY read, fetch, and analyze freely, and — at your own discretion, only wh
 
 You must NOT:
 - Invoke `prism`, `relay`, `gpt-pro-relay`, or `deep-research`, or call the codex CLI — that is a nested Prism run or another model.
-- Edit files, commit, push, or trigger any external side effect, or invoke a skill that does (e.g., push, xurl, todo, goal-drive).
+- Edit files, commit, push, or trigger any external side effect, or invoke a skill that does (e.g., push).
 - Run any git command that changes the working tree, index, or stash — `restore`, `checkout <path>` / branch switch, `reset`, `stash`, `clean`, `add`, `rm`, `mv`, `commit`. The repo may hold the caller's or a concurrent session's uncommitted work; discarding it is unrecoverable. Read-only git only (`status`, `diff`, `log`, `show`).
 - Act on loaded skill descriptions for the dispatch/side-effecting skills (prism, relay, gpt-pro-relay, deep-research) — those are for standalone use, not this context.
 

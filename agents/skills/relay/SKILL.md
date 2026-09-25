@@ -74,7 +74,7 @@ Before raising effort, improve the prompt first — add outcome-first success cr
 
 ## Prompting GPT
 
-**Before composing the prompt body, read the prompt-engineer reference** — `~/.claude/skills/prompt-engineer/references/gpt.md` for cross-cutting GPT-5.6 prompt patterns. If that symlink is unavailable, use the repo copy at `agents/skills/prompt-engineer/references/`. This is not optional — the guide contains model-specific patterns that materially affect output quality.
+**Before composing the prompt body, read `references/gpt.md`** (beside this `SKILL.md`) for cross-cutting GPT prompt patterns. This is not optional — the guide contains model-specific patterns that materially affect output quality.
 
 Lead with the outcome, not the procedure. GPT-5.6 responds best to outcome-first prompts — state the goal, success criteria, and stop rules, then let GPT pick the path. Use XML scaffolding only when a specific failure mode needs it:
 

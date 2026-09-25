@@ -3,7 +3,7 @@
 How to write a `SKILL.md` that is shared across both agents (marked C/X in the
 [skill matrix](../README.md)) so one file works — or degrades cleanly — on each. Read this
 before editing a skill wired to more than `claude`. Claude-only skills (relay, prism,
-keep-warm, goal-loop) are exempt.
+crons, recall, codex-first) are exempt.
 
 ## The one idea
 
@@ -47,7 +47,7 @@ as dead text and the parameter is silently lost. `prism` is the model to copy �
 4. **No bare harness-tool imperatives.** Never instruct "invoke `Skill(x,…)`" or "use the
    `AskUserQuestion` tool" as the *only* path. Either pair it with a plain-text fallback (rule 2)
    or — if there is no equivalent — **scope the skill** (rule 5). For skill-to-skill handoff,
-   describe intent ("hand off to the `goal-drive` skill"), don't name a tool API.
+   describe intent ("hand off to the `push` skill"), don't name a tool API.
 
 5. **Scope when degradation would change the outcome.** Litmus: *remove the harness feature —
    does the skill still do what its `description` promises?* **Yes → degrade. No → scope** it
@@ -60,7 +60,7 @@ Plus two hygiene rules:
 6. **Invocation is a one-line gloss, never the contract.** Rely on the `description` trigger (the
    only universal invocation path). If you mention a slash command, keep it to one line and don't
    hard-reference another command's *behavior* (`/goal launches the guardrail`) — Codex has no
-   auto per-name slash, so prose like "run `/deslop`" invokes nothing there.
+   auto per-name slash, so prose like "run `/push`" invokes nothing there.
 7. **No hardcoded `~/.claude/` (or `~/.codex/`) skill paths in the body.** They point
    at the wrong directory on the other harness. Reference scripts relative to the skill dir
    ("the `gpt-pro` script beside this `SKILL.md`"). Frontmatter (`allowed-tools`) may keep
@@ -68,9 +68,6 @@ Plus two hygiene rules:
 
 ## What's already right (copy these)
 
-- `goal-elicit` — "never detects its runtime"; `AskUserQuestion` → numbered plain-text
-  degradation; one `/goal` handoff message with the plain-text body as the artifact.
-- `goal-drive` — core loop uses only universal tools (Read/Write/Edit/Bash/Grep/Glob).
 - `prism` — parses its config from the natural-language tail, no `$ARGUMENTS`.
 
 ## Mechanical gate
