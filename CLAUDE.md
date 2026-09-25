@@ -34,11 +34,11 @@ Elsewhere:
 
 Never edit in `~/.claude/skills/`, `~/.codex/skills/`, `~/.grok/skills/`, or `~/.pi/agent/skills/` — those are symlinks. Check `agents/skills/README.md` for source.
 
-Run `./dotfiles.sh` after any change to re-sync symlinks.
+Run `./dotfiles.sh` after changes to installation logic, skill wiring, or managed configuration. Instruction-only edits use the existing symlinks; run `./dotfiles.sh lint` and verify the affected links resolve instead.
 
 ## Testing Guidelines
 
-- Primary validation is functional: run `./dotfiles.sh` and verify symlinks resolve correctly.
+- Validate installation, wiring, and managed configuration changes with `./dotfiles.sh` and affected symlink checks. For instruction-only edits, use `./dotfiles.sh lint`, `git diff --check`, and affected symlink checks.
 - Run `./dotfiles.sh lint` when editing universal skills or skill-install logic.
 - For skills with Python scripts, run `uv run pytest` on the relevant test file.
 - If you add scripts, include at least one runnable verification path (a test or a documented command).
