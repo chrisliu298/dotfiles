@@ -136,6 +136,3 @@ if [[ -n "$CMUX_SHELL_INTEGRATION" ]]; then
         [[ -o zle ]] && zle && zle reset-prompt
     }
 fi
-
-# merlin-cli
-export PATH="$HOME/.merlin-cli/bin:$PATH"
