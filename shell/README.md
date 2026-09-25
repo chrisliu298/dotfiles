@@ -35,7 +35,7 @@ Effort suffixes follow one convention — `n`=none, `l`=low, `m`=medium, `h`=hig
 
 | tier | suffix | Claude `c` | Codex `x` | GLM `glm` | Kimi `km` | DeepSeek `ds` | MiMo `mm` |
 |------|:------:|:----------:|:---------:|:---------:|:----------:|:-------------:|:---------:|
-| *bare (default)* | — | `c` (xhigh) | `x` (medium) | `glm` (max) | `km` (K2.7) | `ds` (max) | `mm` (default) |
+| *bare (default)* | — | `c` (high) | `x` (medium) | `glm` (max) | `km` (K2.7) | `ds` (max) | `mm` (default) |
 | none | `n` | — | `xn` | — | — | — | — |
 | low | `l` | `cl` | `xl` | — | — | → high | — |
 | medium | `m` | `cm` | `xm` | — | — | → high | — |
