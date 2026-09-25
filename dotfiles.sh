@@ -68,6 +68,8 @@ SKILLS=(
     # session-history: Codex-only; searches Codex rollout transcripts on demand.
     # Claude keeps its separate transcript-store-specific recall skill.
     "session-history|./agents/skills/session-history|codex"
+    # GPT Pro relay is available to Codex and Grok; shell/.zshenv exposes the Codex CLI copy.
+    "gpt-pro-relay|./agents/skills/gpt-pro-relay|codex,grok"
     # Off claude+codex by request, kept on grok. digest/exec-status/jina/mental-seal/xurl are
     # otherwise wildcard-sourced; these explicit grok entries override the wildcard's agents set.
     "defuddle|kepano/obsidian-skills/skills/defuddle|grok"

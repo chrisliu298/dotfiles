@@ -35,7 +35,7 @@ Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ 
 | defuddle                | — | — | ✓ | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
 | digest                  | — | — | ✓ | local — Re-layer a dense reply into a fast-to-skim form |
 | exec-status             | — | — | ✓ | local — Maintain a plain-English STATUS.md executive briefing for long autonomous runs |
-| gpt-pro-relay           | ✓ | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini |
+| gpt-pro-relay           | — | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini (CLI on PATH from the Codex copy) |
 | humanizer               | — | — | ✓ | [blader/humanizer][c-hu] — Remove AI signatures from text |
 | jina                    | — | — | ✓ | local — Fetch web content / search via Jina AI |
 | mental-seal             | — | — | ✓ | local — Hold ONE supreme priority front-of-mind via a visible user-owned SEAL.md vow (hook-free) |
