@@ -21,10 +21,13 @@ import re
 import sys
 import time
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Iterator
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared"))
+from file_cache import get_or_build
 
 
 LINE_CAP = 2_000_000
@@ -487,7 +490,19 @@ def load_turns(
         if cache is not None and meta.path in cache:
             turns, stats = cache[meta.path]
         else:
-            turns, stats = extract_turns(meta.path)
+            if os.environ.get("RECALL_CACHE_DIR"):
+                def build() -> dict:
+                    parsed, parsed_stats = extract_turns(meta.path)
+                    return {
+                        "turns": [{**asdict(turn), "path": str(turn.path)} for turn in parsed],
+                        "stats": parsed_stats.as_dict(),
+                    }
+
+                payload = get_or_build(meta.path, "codex", 1, build)
+                turns = [Turn(**{**row, "path": Path(row["path"])}) for row in payload["turns"]]
+                stats = Stats(**payload["stats"])
+            else:
+                turns, stats = extract_turns(meta.path)
             if cache is not None:
                 cache[meta.path] = (turns, stats)
         total.add(stats)

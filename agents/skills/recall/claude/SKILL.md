@@ -1,10 +1,10 @@
 ---
 name: recall
 description: |
-  Recall a detail from PAST Claude Code sessions (this harness's own transcript store) — a fact,
+  Recall a detail from PAST conversations — a fact,
   value, name, decision, preference, or constraint the user now refers back to but that was never
-  written into docs or code — by lexically searching prior session transcripts for this project
-  (widening to every project on a miss), loading the best match into your working context, and
+  written into docs or code — by lexically searching all local Claude Code sessions by default,
+  or all Codex tasks when explicitly requested, loading the best match into your working context, and
   printing ONE provenance line (date + session + gist) with the answer so a wrong match is visible.
   Trigger on "/recall" or natural references to something stated in a prior session you're expected
   to remember: "what did we say about X", "the value we used for X", "like I said / as I mentioned
@@ -22,13 +22,15 @@ allowed-tools: Bash, Read
 You often refer back to something stated in an **earlier conversation** — "the rate limit we landed
 on", "the port that server runs on", "use the retry cap we agreed on" — that was never written into
 docs or code. The detail is gone from your context but the **raw transcript is still on disk**. This
-skill searches past Claude sessions (this project first) for that statement, loads it into your working
+skill searches all past Claude sessions for that statement, loads it into your working
 context, and prints one provenance line alongside the answer so the user can spot a wrong match.
 
-The mechanism is a bundled script. **You never read the raw JSONL yourself** — this project's
+The mechanism is a bundled script. **You never read the raw JSONL yourself** — the local
 transcript store is hundreds of MB; re-reading it would overflow your window. The script does the
 megabyte-scale parsing and ranking deterministically (stdlib BM25 over normalized turns) and hands
 you a small ranked list; you integrate the top hit and keep working.
+The shared entrypoint caches redacted turns per transcript under `~/.cache/recall/`;
+changed files are re-parsed by size and mtime, and no background process runs.
 
 ## When to use
 
@@ -44,11 +46,10 @@ something.
 
 ## Workflow
 
-`$RECALL` below is `scripts/recall.py` in this skill's directory (the base directory shown when the
-skill loaded) — set it to that absolute path:
+`$RECALL` is the shared entrypoint beside the two source-specific implementations:
 
 ```bash
-RECALL=<this skill's directory>/scripts/recall.py
+RECALL="$(dirname "$(realpath "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/recall")")/shared/global_recall.py"
 ```
 
 1. **Live-context check first.** If the referenced thing was said **earlier in the current session**
@@ -58,13 +59,14 @@ RECALL=<this skill's directory>/scripts/recall.py
 2. **Search.** Build a query from the user's topic (strip the recall boilerplate yourself —
    "what did we say/decide about" — and pass the substantive nouns; expand obvious synonyms):
    ```bash
-   uv run "$RECALL" search --cwd "$PWD" --q "auth retry cap" --k 5
+   uv run "$RECALL" search --agent claude --cwd "$PWD" --query "auth retry cap"
    ```
-   It scans this project's most recent ~150 interactive sessions by default and returns JSON:
+   This scans all past Claude Code sessions across projects. Add `--source other`
+   only when asked to search Codex, or `--source all` when asked to search both.
+   It returns JSON:
    `status` ∈ `confident | ambiguous | empty_query | no_match`, ranked `candidates` (each with
    `score`, `role`, `date`, `session_short`, `project`, an `L<line>` anchor, and its own
-   `confirmation` line), a top-level `confirmation` only when `confident`, and an `escalate` hint on
-   `no_match`.
+   `confirmation` line), and a top-level `confirmation` only when `confident`.
 
 3. **`confident`** → load the top hit. You may act as a light re-ranker — if a *lower*-ranked
    candidate is the clearer semantic fit (BM25 ranks by term overlap, not meaning), load THAT one and
@@ -73,43 +75,35 @@ RECALL=<this skill's directory>/scripts/recall.py
    the chosen `gist` (and provenance) into context; if the action needs exact wording, fetch
    surrounding turns surgically — **never read the whole transcript**:
    ```bash
-   uv run "$RECALL" show --cwd "$PWD" --session <short> --line <N>
+   uv run "$RECALL" show --source claude --cwd "$PWD" --session <short> --line <N>
    ```
+   For a Codex hit use `show --source codex --session <id> --item-id <item-id>`.
    Print **exactly the chosen candidate's `confirmation` line** as provenance together with your
-   answer — `recall: <YYYY-MM-DD> · <session-id prefix> · <gist>` — then continue; no need to wait
+   answer — `recall [claude]: <YYYY-MM-DD> · <session-id prefix> · <gist>` — then continue; no need to wait
    for the user. Stop and ask only when the status is `ambiguous` or the match still looks uncertain
    to you. A candidate with `kind: question` (gist "you asked") records an open question, not a
    decision — the script never returns it as `confident`; look at the turns after it (`show`) for
    the answer before treating anything as settled.
-   **Window caveat:** the default scan is the recent window. If `stats.truncated` is true and you're
-   not certain — or the user's phrasing implies an *older* statement ("originally", "way back", "a
-   while ago") — re-run with `--max-files 0` (full history) before trusting it: a recent near-match can
-   outrank the real older statement that was never scanned, and that wrong hit will NOT trigger the
-   `no_match` escalation on its own. Scores from different runs (window vs full, project vs all) are
-   not comparable — prefer the narrower run's hit and widen only when it isn't clearly right.
 
-4. **`ambiguous`** (no clear winner) → do **not** silently pick. If this was a project-scope run and
-   none of the candidates clearly answers the question, run `--scope all` **once** before asking.
-   Then show the top 2–3 dated candidate gists — from both runs, each labelled by scope (this
-   project / all projects), never ranked against each other by score — and ask which one the user
+4. **`ambiguous`** (no clear winner) → do **not** silently pick.
+   Show the top 2–3 dated candidate gists with source names. Never compare
+   scores across sources. Ask which one the user
    means. Don't act on any until they say; once they pick, print that candidate's `confirmation`
    line.
 
 5. **`empty_query`** → nothing substantive was left after stripping the recall boilerplate. Retry
    with concrete names, values, or identifiers from the user's request (or ask for one).
 
-6. **`no_match`** → the scanned scope had nothing. **Escalate only on `no_match`**, along the
-   `escalate` hint: every past
-   session of this project, then every project (the statement may have been made while working in
-   another repo), then — only if still nothing and it might live in a relay/headless session (or
-   schema drift mis-classified an interactive one) — include those too:
+6. **`no_match`** → no matching interactive session was found. If it might live
+   in a Claude relay/headless session, search that source with the native helper:
    ```bash
-   uv run "$RECALL" search --cwd "$PWD" --q "auth retry cap" --max-files 0
-   uv run "$RECALL" search --cwd "$PWD" --q "auth retry cap" --scope all
-   uv run "$RECALL" search --cwd "$PWD" --q "auth retry cap" --scope all --max-files 0 --include-headless   # last resort
+   uv run "$(realpath "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/recall")/scripts/recall.py" \
+     search --cwd "$PWD" \
+     --q "auth retry cap" --scope all --max-files 0 --include-headless
    ```
-   A cross-project hit carries its `project` path — say which project it came from. Still nothing →
-   say so plainly and ask the user to remind you. **Never fabricate a recalled detail.**
+   A cross-project hit carries its `project` path — say which project it came from.
+   Do not search Codex unless asked. Still nothing → say so plainly and ask the
+   user to remind you. **Never fabricate a recalled detail.**
 
 7. **Evidence, not current truth.** A recalled statement is what *was* true at a past turn; files,
    branches, and decisions may have changed since. Before acting on any recalled claim — especially
@@ -117,7 +111,7 @@ RECALL=<this skill's directory>/scripts/recall.py
    user instruction always overrides a recalled one.
 
 8. **Wrong-match recovery.** The confirmation line's date + gist let the user say "no, not that." Re-run
-   with refined terms or a wider scope (`--max-files 0`), and don't re-surface the rejected hit.
+   with refined terms, and don't re-surface the rejected hit.
 
 9. **Optionally promote to memory (propose, don't auto-write).** After a *confirmed, durable* recall
    (a standing decision, preference, or fact, not a one-off), you may offer: "want me to save this to memory so

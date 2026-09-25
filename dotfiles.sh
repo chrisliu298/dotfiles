@@ -42,10 +42,10 @@ SKILLS=(
     "relay|./agents/skills/relay|claude"
     # prism: claude-only caller (dispatches parallax to GPT via relay). MANUAL (below).
     "prism|./agents/skills/prism|claude"
-    # recall: one skill name, two harness-specific implementations (like pdf). Each searches its own
-    # agent's transcript store — Claude's ~/.claude/projects, Codex's ~/.codex/sessions rollouts — so
-    # they share a name and contract but not code. agents/skills/recall/ has no SKILL.md, so the
-    # wildcard skips it; these two entries install each subdir as `recall`.
+    # recall: one skill name, two harness-specific implementations (like pdf). Both default to
+    # their own full transcript store, with an explicit cross-agent mode in a shared entrypoint.
+    # agents/skills/recall/ has no SKILL.md, so the wildcard skips it; these two entries install
+    # each subdir as `recall`.
     "recall|./agents/skills/recall/claude|claude"
     "recall|./agents/skills/recall/codex|codex"
     # claude-subagent: Codex-only caller; installing it into Claude would enable recursive self-dispatch.

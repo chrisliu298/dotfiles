@@ -23,7 +23,7 @@ Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via
 
 Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
-> The Claude-only orchestration skills (relay, prism, skill-creator) stay off Codex. `recall` ships as two harness-specific builds under one name — `recall/claude` reads Claude's transcript store, `recall/codex` reads Codex's rollouts — installed like `pdf`; relay and prism are additionally guarded so a dispatched peer can't trigger them.
+> The Claude-only orchestration skills (relay, prism, skill-creator) stay off Codex. `recall` ships as two harness-specific builds under one name; both default to their own complete history and can search the other agent's complete history on request through a shared entrypoint. Relay and prism are additionally guarded so a dispatched peer can't trigger them.
 
 **Enabled** (✓ auto-installed):
 
@@ -36,7 +36,7 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 | gpt-pro-relay           | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini (the `gpt-pro` CLI is on PATH from the Codex copy) |
 | pdf                     | ✓ | ✓ | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex) — PDF read/edit |
 | push                    | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
-| recall                  | ✓ | ✓ | local — Recall a detail from past sessions of the same agent (separate Claude and Codex builds: `recall/claude`, `recall/codex`) |
+| recall                  | ✓ | ✓ | local — Recall from all past sessions of this agent, or the other agent on request (separate Claude and Codex builds with a shared entrypoint) |
 | skill-creator           | ✓ | — | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
 
 **Disabled** (✱ manual, opt-in via `./dotfiles.sh enable <name>`):
