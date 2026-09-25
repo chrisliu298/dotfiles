@@ -58,22 +58,6 @@ unset DISABLE_TELEMETRY
 [[ -n "$TMUX" ]] && unset CLAUDECODE
 
 # =============================================================================
-# Grok (xAI Grok Build CLI — used as a relay/prism dispatch target)
-# =============================================================================
-# Isolate grok from ALL Claude-compat config: it gets its own Codex-mirrored
-# skills (~/.grok/skills) and working-principles file (~/.grok/AGENTS.md) via
-# dotfiles.sh — not Claude's ~/.claude/{skills, CLAUDE.md, rules, .claude.json
-# MCPs, settings.json hooks}. The relay grok transport sets this same suite
-# explicitly too, for non-.zshenv shells. (Claude *plugin* hooks under
-# ~/.claude/plugins are a separate mechanism, not gated by these.) Binary on
-# PATH via ~/.local/bin. Highest-precedence compat overrides.
-export GROK_CLAUDE_SKILLS_ENABLED=false
-export GROK_CLAUDE_AGENTS_ENABLED=false
-export GROK_CLAUDE_RULES_ENABLED=false
-export GROK_CLAUDE_MCPS_ENABLED=false
-export GROK_CLAUDE_HOOKS_ENABLED=false
-
-# =============================================================================
 # Local secrets (not version controlled)
 # =============================================================================
 [[ -f "$HOME/.zshenv.local" ]] && source "$HOME/.zshenv.local"

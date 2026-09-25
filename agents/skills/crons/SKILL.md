@@ -43,7 +43,7 @@ calls to run**. It cannot call `CronCreate`/`CronList`/`CronDelete` (those are C
 **cannot verify what is actually armed**. *You* are the sole actuator. Consequently the tool **never says a cron
 is "armed"** — `check` only asserts the source files and `CRONS.md` agree; `reconcile` reports only
 presence-**by-purpose**. A green check over zero armed crons is the exact trap this avoids. (This is the deliberate
-inverse of the `docmaint`/`exec-status` freshness model: there the doc is a derived view of reality; here the
+inverse of the `docmaint` freshness model: there the doc is a derived view of reality; here the
 manifest *is* the source of truth and the harness is the lossy projection — so do **not** add a freshness/attest gate.)
 
 ## The `.cron` format
@@ -111,8 +111,7 @@ the armed prompt, so a plain reconcile would report it merely "present").
 
 - A single one-off or short-lived cron → use `CronCreate` directly; a manifest is overkill.
 - A cache heartbeat → use **keep-warm**.
-- Human status / task / priority docs → those are **exec-status** / **todo** / **mental-seal** (derived-view skills with
-  a freshness gate); this is the opposite polarity (source-of-truth manifest, no freshness gate).
+- Human task docs → that is **todo** (a derived-view skill with a freshness gate); this is the opposite polarity (source-of-truth manifest, no freshness gate).
 
 ## Rules
 

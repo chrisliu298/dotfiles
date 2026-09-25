@@ -4,8 +4,7 @@ The single copy-paste message the **user** pastes to run the artifact to verifie
 exists on **both Claude Code and Codex** (it originated in Codex; Claude Code added a compatible
 command) — they are **different mechanisms**, but **one transcript-anchored message is portable to
 both**, so this file documents each mechanism, the single shared template, per-shape derivation, and
-caveats. **Grok has no `/goal`** (its closest analog is plan mode) — there, the user pastes the *same
-message without the `/goal` prefix*. goal-elicit emits the one message as advisory text in Phase 5;
+caveats. goal-elicit emits the one message as advisory text in Phase 5;
 it never runs `/goal` itself.
 
 - **Claude Code `/goal`** = *launch + guard in one paste*: setting the goal **starts a turn
@@ -32,7 +31,7 @@ auto-clears once the condition holds. Hard facts that dictate the design:
   (`--resume`/`--continue`) resets the turn count.
 - Requires Claude Code **v2.1.139+**. Unavailable under `disableAllHooks`, `allowManagedHooksOnly`,
   or an untrusted workspace — per the docs the command **tells you why** rather than silently
-  no-op'ing. (Codex has its **own** `/goal` — a different mechanism, see below; Grok has none.)
+  no-op'ing. (Codex has its **own** `/goal` — a different mechanism, see below.)
 
 ## When to emit it
 
@@ -51,7 +50,7 @@ Emit it **every time** an artifact is executable-ready, including Clear-domain o
 emit for a `draft` or `blocked` artifact — nothing to execute yet; say what's missing instead.
 **Bold/recommend** it when `commit_policy: per_unit` or the work is many-unit / high-autonomy —
 where premature "done" or runaway looping costs most. Emit the **one shared message** for both Claude
-Code and Codex; on **Grok** (no `/goal`) paste it without the `/goal` prefix.
+Code and Codex.
 
 ## The condition template
 
@@ -132,7 +131,7 @@ Caveats to state with it: this needs the **goal-loop** skill (Claude Code; degra
 `references/loop-protocol.md` § Autonomous mode); it auto-fixes **only** findings whose pre-signed acceptance
 oracle is currently RED, so with no oracles authored at sign-off it auto-fixes nothing and just hands back a
 decision queue (`.goals/<ID>.auto-report.md`). Use the **plain goal-drive** message (above) when you only
-want the artifact built, not reviewed-and-iterated. On **Codex/Grok** there is no goal-loop — emit the
+want the artifact built, not reviewed-and-iterated. On **Codex** there is no goal-loop — emit the
 goal-drive message; the autonomous variant is Claude-Code-only.
 
 ## Codex `/goal` — a native executor (the one shared message drives it too)
@@ -172,9 +171,6 @@ for Claude Code and Codex, never per-runtime variants:
 
     /goal "...filled transcript-anchored condition (drive <artifact> with goal-drive; done on GOAL-DRIVE COMPLETE: <id> + the real verification output; stop on GOAL-DRIVE STOPPED; TIMEOUT after N turns)..."
 ```
-
-*(On Grok, no `/goal`: paste the same text without the `/goal` prefix — same message, not a second
-version.)*
 
 Also state the **staleness and availability caveats** (below) in that handoff, so the user knows
 when to refresh the condition and when the command is unavailable.

@@ -5,7 +5,7 @@
 > repeat — stopping only by **exception**.
 >
 > **`SKILL.md` is the authoritative spec** — this README is the picture. One source of truth for
-> **Claude Code, Codex, and Grok**. The execution partner of [goal-elicit](../goal-elicit/).
+> **Claude Code and Codex**. The execution partner of [goal-elicit](../goal-elicit/).
 
 ---
 
@@ -71,7 +71,7 @@ the progress report.
 Every run ends with a machine-stable, human-readable marker — `GOAL-DRIVE COMPLETE: <id> — <n>/<n> verified`
 or `GOAL-DRIVE STOPPED: <id> — <reason>` — emitted on **every runtime**. Claude Code's optional `/goal`
 guardrail reads these to keep a session working until done; Codex has its own native `/goal`
-executor (point it at the artifact file); Grok has neither. See goal-elicit's
+executor (point it at the artifact file). See goal-elicit's
 `references/goal-guardrail.md`.
 
 ## Composition — owns the loop, may delegate the rest

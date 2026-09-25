@@ -21,10 +21,10 @@ that artifact (or any conforming one) and drives it. The two compose as a pipeli
 `goal-elicit → artifact → goal-drive` — but goal-drive also runs standalone on a
 **bring-your-own** artifact you wrote or generated with a script.
 
-**Runtime portability.** One source of truth for Claude Code, Codex, and Grok — the skill never
+**Runtime portability.** One source of truth for Claude Code and Codex — the skill never
 detects its runtime. Defaults are agent-neutral. The terminal markers are emitted on every runtime;
 Claude Code's `/goal` guardrail consumes them, while Codex has its own native `/goal` executor that
-can drive the artifact directly (point it at the file) and Grok has neither — see goal-elicit's
+can drive the artifact directly (point it at the file) — see goal-elicit's
 `references/goal-guardrail.md`.
 
 This skill is **modeless on purpose**. There is no "execution mode" you enter or exit. The

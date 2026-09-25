@@ -17,7 +17,7 @@ Interview the user and write a verifiable goal artifact. The deliverable is a si
 
 This skill never plans, edits other files, runs code, or invokes other skills. It writes one artifact and stops.
 
-**Runtime portability.** One source of truth for Claude Code, Codex, and Grok — the skill never detects its runtime. Defaults are agent-neutral. **One** `/goal` execution message (Phase 5) is **always** emitted for an executable, ready artifact and serves **both Claude Code and Codex** unchanged — the transcript-anchored form launches goal-drive *and* guards completion on Claude (its evaluator judges only the transcript, never files) and is a valid native objective on Codex (see `references/goal-guardrail.md`); on Grok, paste the same body without the `/goal` prefix. A Claude-only tool is used when present and degrades to plain text otherwise (e.g. `AskUserQuestion` → numbered plain-text options; see Phase 3).
+**Runtime portability.** One source of truth for Claude Code and Codex — the skill never detects its runtime. Defaults are agent-neutral. **One** `/goal` execution message (Phase 5) is **always** emitted for an executable, ready artifact and serves **both Claude Code and Codex** unchanged — the transcript-anchored form launches goal-drive *and* guards completion on Claude (its evaluator judges only the transcript, never files) and is a valid native objective on Codex (see `references/goal-guardrail.md`). A Claude-only tool is used when present and degrades to plain text otherwise (e.g. `AskUserQuestion` → numbered plain-text options; see Phase 3).
 
 ## What this skill produces
 
@@ -124,8 +124,7 @@ The transcript-anchored form is the **portable superset** — *required* by Clau
 *valid* for Codex; the Codex-minimal "verify the file's checks yourself" wording is **not** portable
 (Claude's evaluator can't open the file), so never emit it as the shared message. Build the one message
 from `references/goal-guardrail.md`. Emitting the text is **not** execution — goal-elicit never runs
-`/goal`. *(On Grok, no `/goal`: the user pastes the **same body without the `/goal` prefix** — same text,
-not a second version.)* The only carve-out: a `blocked`/`draft` artifact has nothing to execute yet —
+`/goal`. The only carve-out: a `blocked`/`draft` artifact has nothing to execute yet —
 emit no execution message and instead state what's missing (`blocking_unknowns`/blank fields).
 
 **Optional lint check (advisory text — goal-elicit never runs it).** For an *executable, ready*

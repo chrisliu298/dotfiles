@@ -5,7 +5,7 @@
 > and hands off (to [goal-drive](../goal-drive/), or any agent).
 >
 > **`SKILL.md` is the authoritative spec** — this README is the picture. One source of truth for
-> **Claude Code, Codex, and Grok** (no per-agent fork).
+> **Claude Code and Codex** (no per-agent fork).
 
 ---
 
@@ -52,7 +52,7 @@ Terminal states (frontmatter): **`ready`** (every `done_when` mapped to evidence
 - **Cynefin triage first** — Clear tasks get a fast lane (1 confirmation); Complicated get 3–5
   rounds; Complex get a probe contract. No interrogating a rename.
 - **Forced-choice questions** — 2–4 labelled options with consequences, never yes/no theater. Uses
-  Claude Code's `AskUserQuestion` when present; degrades to numbered plain text on Codex/Grok.
+  Claude Code's `AskUserQuestion` when present; degrades to numbered plain text on Codex.
 - **Hard gate on `done_when`** — every item names a command, file, metric, or observable behavior.
   No "looks good".
 - **Hard cap: 8 rounds** — then a complete contract *or* an honest `blocked` brief. Never fakes done.
@@ -68,8 +68,7 @@ text — goal-elicit never runs `/goal` itself):
 
 It's **transcript-anchored** on purpose: Claude Code's `/goal` evaluator reads only the conversation
 (never files), so completion keys on goal-drive's printed marker + output — and that same message is
-a valid objective for Codex's native executor. One message, no per-runtime variants. *(On Grok, no
-`/goal`: paste the same text without the prefix.)*
+a valid objective for Codex's native executor. One message, no per-runtime variants.
 
 Mechanism, template, and caveats: `references/goal-guardrail.md`.
 
@@ -101,6 +100,6 @@ iterate). Full comparison table: goal-loop's `README.md`.
 
 ## Invocation
 
-`/goal-elicit <vague ask>` on Claude Code; invoke the **goal-elicit** skill by name on Codex/Grok.
+`/goal-elicit <vague ask>` on Claude Code; invoke the **goal-elicit** skill by name on Codex.
 Or just describe a fuzzy goal and let the agent reach for it. Triggers: "clarify what I want",
 "define done/acceptance", "make this unambiguous", "plan this out", XY-problem requests.

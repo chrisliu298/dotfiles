@@ -6,21 +6,21 @@ Personal dotfiles and AI agent configurations for macOS with zsh, managed by `do
 
 ## Project Structure & Module Organization
 
-Three `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`CLAUDE.md`, `settings.json` — copied, not symlinked — keybindings, statusline, themes), `codex/` → `~/.codex/`, `grok/` → `~/.grok/` (relay/prism dispatch target). The rest are not agent homes:
+Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`CLAUDE.md`, `settings.json` — copied, not symlinked — keybindings, statusline, themes), `codex/` → `~/.codex/`. The rest are not agent homes:
 
 - `agents/eval/` — instruction-following harness for the shared agent doc (prompts, rubric, runner scripts).
 - `agents/hooks/` — shared Claude/Codex destructive-command guard and tests.
-- `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` symlinks each into the agent dirs the `SKILLS` table selects (most to Claude/Codex/Grok; some are Claude-, Codex-, or Grok-only). Manual skills install only when listed in `agents/skills/manual-skills.enabled`.
+- `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` symlinks each into the agent dirs the `SKILLS` table selects (most to both Claude and Codex; some are Claude- or Codex-only). Manual skills install only when listed in `agents/skills/manual-skills.enabled`.
 
 Elsewhere:
 
 - `.config/ghostty`: Ghostty/cmux terminal config — tracked in-repo (not fetched from the standalone `chrisliu298/ghostty-config` repo), symlinked like the rest of `.config/`.
-- The three global instruction files (`agents/claude/CLAUDE.md` + `agents/{codex,grok}/AGENTS.md`) are one canonical, agent-read text copied to all three paths, **identical except the H1** (which just names each file — `# CLAUDE.md` vs `# AGENTS.md`). Edit one, copy to the other two (keeping each H1); `./dotfiles.sh lint` asserts the bodies match. Behavior parity across models when the text changes is checked by the harness in `agents/eval/`.
+- The two global instruction files (`agents/claude/CLAUDE.md` + `agents/codex/AGENTS.md`) are one canonical, agent-read text copied to both paths, **identical except the H1** (which just names each file — `# CLAUDE.md` vs `# AGENTS.md`). Edit one, copy to the other (keeping each H1); `./dotfiles.sh lint` asserts the bodies match. Behavior parity across models when the text changes is checked by the harness in `agents/eval/`.
 
 ## Build, Test, and Development Commands
 
 - `./dotfiles.sh` — initialize submodules, sync skill repos, symlink files, install skills, and register MCP servers + Claude plugins + tmux plugins (TPM).
-- `./dotfiles.sh lint` — run skill portability checks (universal C/X/G skill mechanical violations), the docmaint/agent-doc identity guards, and the Claude theme drift-guard (asserts every token name and `base` in `agents/claude/themes/*.json` still exists in the installed Claude Code, since the loader drops unknown ones silently); also runs automatically at the end of a full `./dotfiles.sh`.
+- `./dotfiles.sh lint` — run skill portability checks (universal C/X skill mechanical violations), the agent-doc identity guard, and the Claude theme drift-guard (asserts every token name and `base` in `agents/claude/themes/*.json` still exists in the installed Claude Code, since the loader drops unknown ones silently); also runs automatically at the end of a full `./dotfiles.sh`.
 - `./dotfiles.sh skills` — list manual skills and whether each is enabled.
 - `./dotfiles.sh enable <name>` / `./dotfiles.sh disable <name>` — toggle a manual skill; rewrites the committed `agents/skills/manual-skills.enabled` set, so commit + `dfs` to propagate the change to every machine.
 
@@ -31,7 +31,7 @@ Elsewhere:
 
 ## Skills, MCP Servers & Plugins
 
-Never edit in `~/.claude/skills/`, `~/.codex/skills/`, or `~/.grok/skills/` — those are symlinks. Check `agents/skills/README.md` for source.
+Never edit in `~/.claude/skills/` or `~/.codex/skills/` — those are symlinks. Check `agents/skills/README.md` for source.
 
 Run `./dotfiles.sh` after changes to installation logic, skill wiring, or managed configuration. Instruction-only edits use the existing symlinks; run `./dotfiles.sh lint` and verify the affected links resolve instead.
 
@@ -58,7 +58,7 @@ Run `./dotfiles.sh` after changes to installation logic, skill wiring, or manage
 ## Maintaining Docs
 
 - **Sync root docs**: keep root `CLAUDE.md` and root `AGENTS.md` aligned — same facts and section order, diverging only in the H1, the project-level pointer, and Claude's `<important>` wrappers.
-- **Sync global instructions**: edit one of the three global instruction files, copy the body to the other two (keeping each H1), commit together — see Project Structure above for the rule and `agents/eval/` for the parity check.
+- **Sync global instructions**: edit one of the two global instruction files, copy the body to the other (keeping each H1), commit together — see Project Structure above for the rule and `agents/eval/` for the parity check.
 - **Update docs**: after structural changes (adding, removing, or renaming files/directories, skills, or configs), check whether `README.md`, `CLAUDE.md`, or `AGENTS.md` reference the affected paths and update them.
 
 </important>
