@@ -22,7 +22,6 @@ dotfiles/
 └── agents/                  # AI agent configurations
     ├── claude/              # Claude Code config (CLAUDE.md, settings, hooks, themes)
     ├── codex/               # Codex config (AGENTS.md)
-    ├── grok/                # Grok Build config (AGENTS.md)
     └── skills/              # Repo-owned skill sources + authoring references
 ```
 
@@ -30,7 +29,7 @@ See [`shell/`](shell/README.md), [`.config/`](.config/README.md), and [`agents/s
 
 ## Extensions
 
-37 extensions across local and upstream sources. See [`agents/skills/README.md`](agents/skills/README.md) for full catalog. 4 additional Obsidian-specific skills live in the vault's `_claude/skills/`.
+19 extensions across local and upstream sources. See [`agents/skills/README.md`](agents/skills/README.md) for full catalog. 4 additional Obsidian-specific skills live in the vault's `_claude/skills/`.
 
 | Action | Command |
 |--------|---------|

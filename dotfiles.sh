@@ -28,82 +28,39 @@ LINKS=(
     "agents/claude/keybindings.json:.claude/keybindings.json"
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
     "agents/codex/AGENTS.md:.codex/AGENTS.md"
-    "agents/grok/AGENTS.md:.grok/AGENTS.md"
 )
 
 # name|source|agents — name * = auto-discover subdirs with SKILL.md
 # source: ./path (local) or owner/repo[/subpath] (GitHub)
 SKILLS=(
-    # grok mirrors the Codex set (it dispatches as a relay/prism target), including
-    # side-effecting skills like gpt-pro-relay/push — those are allowed. Only the claude-only
-    # entries below (relay, prism, keep-warm, crons, goal-loop, recall, codex-first,
-    # skill-creator) are left off grok; relay and prism are additionally blocked from being
-    # triggered on grok (RELAY_PEER guard + PATH scrub of both script dirs + the GROK_CLAUDE_*_ENABLED=false
-    # compat suite set in .zshenv and the relay grok transport).
-    "*|./agents/skills|claude,codex,grok"
-    # Relay: claude-only caller; targets GPT, Grok, GLM, Kimi, DeepSeek, and MiMo via the script.
+    # The wildcard installs every skill to Claude and Codex; the explicit entries below narrow
+    # that (claude-only: relay, prism, skill-creator; codex-only: claude-subagent, cursor-subagent,
+    # dual-subagent; recall has a separate build per agent).
+    "*|./agents/skills|claude,codex"
+    # Relay: claude-only caller; targets GPT via the script.
     # MANUAL (below); explicit entry keeps it claude-only when enabled (the wildcard would install it everywhere).
     "relay|./agents/skills/relay|claude"
-    # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup). MANUAL (below).
-    "keep-warm|./agents/skills/keep-warm|claude"
-    # crons: claude-only durable manifest + re-arm for the recurring /loop + CronCreate fleet
-    # (CronCreate/CronList/CronDelete are Claude-only); preparer-not-actuator, no docmaint freshness gate. MANUAL (below).
-    "crons|./agents/skills/crons|claude"
-    # prism: claude-only caller (dispatches parallax to GPT + Grok + GLM + Kimi + DeepSeek + MiMo via relay). MANUAL (below).
+    # prism: claude-only caller (dispatches parallax to GPT via relay). MANUAL (below).
     "prism|./agents/skills/prism|claude"
-    # goal-loop: default review backend is prism (claude-only); built on the Skill/AskUserQuestion
-    # tooling. Off-Claude it only degrades to external/local/none, so keep it claude-only. MANUAL
-    # (below), so it's off until `./dotfiles.sh enable goal-loop`; the explicit entry keeps it
-    # claude-only when enabled (the wildcard would otherwise install it to codex/grok).
-    "goal-loop|./agents/skills/goal-loop|claude"
-    # recall: claude-only; searches THIS project's past Claude transcripts (~/.claude/projects) for
-    # an earlier user statement. The store is Claude-specific, so it has no meaning on Codex/Grok. MANUAL (below).
-    "recall|./agents/skills/recall|claude"
-    # codex-first: claude-only routing skill — delegates hands-on work to `codex exec` while Claude
-    # specs + reviews; a Codex/Grok session self-delegating to Codex is meaningless. MANUAL (below),
-    # so it's off until `./dotfiles.sh enable codex-first`. The explicit entry overrides the wildcard.
-    "codex-first|./agents/skills/codex-first|claude"
+    # recall: one skill name, two harness-specific implementations (like pdf). Each searches its own
+    # agent's transcript store — Claude's ~/.claude/projects, Codex's ~/.codex/sessions rollouts — so
+    # they share a name and contract but not code. agents/skills/recall/ has no SKILL.md, so the
+    # wildcard skips it; these two entries install each subdir as `recall`.
+    "recall|./agents/skills/recall/claude|claude"
+    "recall|./agents/skills/recall/codex|codex"
     # claude-subagent: Codex-only caller; installing it into Claude would enable recursive self-dispatch.
     "claude-subagent|./agents/skills/claude-subagent|codex"
-    # cursor-subagent: Codex-only caller; pins a strong GPT-5.6 Sol collaborator through Cursor Agent.
     "cursor-subagent|./agents/skills/cursor-subagent|codex"
-    # dual-subagent: Codex-only caller; concurrently consults the two Codex-only subagent helpers.
     "dual-subagent|./agents/skills/dual-subagent|codex"
-    # session-history: Codex-only; searches Codex rollout transcripts on demand.
-    # Claude keeps its separate transcript-store-specific recall skill.
-    "session-history|./agents/skills/session-history|codex"
-    # GPT Pro relay is available to Codex and Grok; shell/.zshenv exposes the Codex CLI copy.
-    "gpt-pro-relay|./agents/skills/gpt-pro-relay|codex,grok"
-    # Off claude+codex by request, kept on grok. digest/exec-status/jina/mental-seal/xurl are
-    # otherwise wildcard-sourced; these explicit grok entries override the wildcard's agents set.
-    "defuddle|kepano/obsidian-skills/skills/defuddle|grok"
-    "humanizer|blader/humanizer|grok"
-    "digest|./agents/skills/digest|grok"
-    "exec-status|./agents/skills/exec-status|grok"
-    "jina|./agents/skills/jina|grok"
-    "mental-seal|./agents/skills/mental-seal|grok"
-    "xurl|./agents/skills/xurl|grok"
     "pdf|anthropics/skills/skills/pdf|claude"
     "skill-creator|anthropics/skills/skills/skill-creator|claude"
-    "pdf|openai/skills/skills/.curated/pdf|codex,grok"
+    "pdf|openai/skills/skills/.curated/pdf|codex"
 )
 
 # Skills not auto-installed (opt-in). Toggle with: ./dotfiles.sh enable/disable <name>.
 MANUAL_SKILLS=(
-    autoresearch
-    codex-first
-    crons
-    deslop
-    goal-drive
-    goal-elicit
-    goal-loop
-    interviewer
-    keep-warm
     prism
-    prompt-engineer
-    recall
     relay
-    todo
 )
 
 # Which manual skills are currently enabled — a committed declarative set, one
@@ -388,14 +345,14 @@ _fetch_skills_repos() {
 }
 
 install_skills() {
-    mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills" "$HOME/.grok/skills"
+    mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills"
     local explicit_names=$'\n'
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name _ _ <<< "$entry"
         [[ "$name" != "*" ]] && explicit_names+="$name"$'\n'
     done
 
-    local claude_expected="" codex_expected="" grok_expected=""
+    local claude_expected="" codex_expected=""
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name source agents <<< "$entry"
         local base_dir; base_dir=$(_resolve_source "$source")
@@ -429,20 +386,18 @@ install_skills() {
             local sname="${se%%:*}" spath="${se#*:}"
             [[ "$agents" == *claude* ]] && { ensure_symlink "$spath" "$HOME/.claude/skills/$sname"; claude_expected+="$sname"$'\n'; }
             [[ "$agents" == *codex* ]]  && { ensure_symlink "$spath" "$HOME/.codex/skills/$sname";  codex_expected+="$sname"$'\n'; }
-            [[ "$agents" == *grok* ]]   && { ensure_symlink "$spath" "$HOME/.grok/skills/$sname";   grok_expected+="$sname"$'\n'; }
         done
     done
 
     # Clean stale skill symlinks
     local dir expected
-    for dir in "$HOME/.claude/skills" "$HOME/.codex/skills" "$HOME/.grok/skills"; do
+    for dir in "$HOME/.claude/skills" "$HOME/.codex/skills"; do
         [[ -d "$dir" ]] || continue
         # Exact-path match (not substring) so a $HOME containing an agent
         # token can't misclassify a dir and skip its prune set.
         case "$dir" in
             "$HOME/.claude/skills")   expected="$claude_expected" ;;
             "$HOME/.codex/skills")    expected="$codex_expected"  ;;
-            "$HOME/.grok/skills")     expected="$grok_expected"   ;;
         esac
         for entry in "$dir"/*; do
             [[ -L "$entry" ]] || continue
@@ -650,7 +605,6 @@ cmd_enable() {
         [[ -f "$base_dir/SKILL.md" ]] || { warn "skip $name (no SKILL.md at $source)"; continue; }
         [[ "$agents" == *claude* ]] && ensure_symlink "$base_dir" "$HOME/.claude/skills/$name"
         [[ "$agents" == *codex* ]]  && ensure_symlink "$base_dir" "$HOME/.codex/skills/$name"
-        [[ "$agents" == *grok* ]]   && ensure_symlink "$base_dir" "$HOME/.grok/skills/$name"
         found=true
     done
     # Fall back to wildcard discovery
@@ -663,7 +617,6 @@ cmd_enable() {
             [[ -f "$skill_dir/SKILL.md" ]] || continue
             [[ "$agents" == *claude* ]] && ensure_symlink "$skill_dir" "$HOME/.claude/skills/$name"
             [[ "$agents" == *codex* ]]  && ensure_symlink "$skill_dir" "$HOME/.codex/skills/$name"
-            [[ "$agents" == *grok* ]]   && ensure_symlink "$skill_dir" "$HOME/.grok/skills/$name"
             found=true
         done
     fi
@@ -676,7 +629,7 @@ cmd_disable() {
     local name="${1:?usage: dotfiles.sh disable <name>}"
     _is_manual "$name" || warn "'$name' is not a manual skill — next run will re-create it"
     local removed=false
-    for dir in "$HOME/.claude/skills/$name" "$HOME/.codex/skills/$name" "$HOME/.grok/skills/$name"; do
+    for dir in "$HOME/.claude/skills/$name" "$HOME/.codex/skills/$name"; do
         [[ -L "$dir" ]] && { rm "$dir"; log "removed ${dir/#$HOME/~}"; removed=true; }
     done
     if _is_manual "$name"; then
@@ -691,7 +644,7 @@ cmd_skills() {
     local m
     for m in "${MANUAL_SKILLS[@]}"; do
         local status="${_DIM}off${_RST}"
-        [[ -L "$HOME/.claude/skills/$m" || -L "$HOME/.codex/skills/$m" || -L "$HOME/.grok/skills/$m" ]] && status="on "
+        [[ -L "$HOME/.claude/skills/$m" || -L "$HOME/.codex/skills/$m" ]] && status="on "
         printf '    %-22s %s\n' "$m" "$status"
     done
     printf '\n'
@@ -699,7 +652,7 @@ cmd_skills() {
 
 # ── Skill portability lint ───────────────────────────────────────
 # Warn (non-fatal) when a universal (non-claude-only) OWN skill BODY embeds
-# harness-specific syntax that silently breaks on Codex/Grok. Frontmatter is
+# harness-specific syntax that silently breaks on Codex. Frontmatter is
 # exempt (allowed-tools etc. are additive and ignored off-Claude). Conservative
 # by design — flags only the two unambiguous hazards; tool-name degradation
 # (AskUserQuestion/Skill) needs human review. See
@@ -716,60 +669,32 @@ lint_skills() {
         [[ -f "$d/SKILL.md" ]] || continue
         [[ "$claude_only" == *$'\n'"$dname"$'\n'* ]] && continue
         m=$(awk 'NR==1&&/^---$/{f=1;next} f&&/^---$/{f=0;next} !f{print FNR": "$0}' "$d/SKILL.md" \
-            | grep -E '\$ARGUMENTS|~/\.(claude|codex|grok)/skills/' || true)
+            | grep -E '\$ARGUMENTS|~/\.(claude|codex)/skills/' || true)
         [[ -n "$m" ]] || continue
         warn "non-portable syntax in universal skill '$dname' (body):"
         printf '%s\n' "$m" | sed 's/^/        /'
         hits=1
     done
     (( hits )) && warn "fix per agents/skills/references/universal-skill-authoring.md, or scope the skill claude-only"
-    # docmaint + agentdocs + claude-theme statuses propagate: fatal for `./dotfiles.sh lint`,
+    # agentdocs + claude-theme statuses propagate: fatal for `./dotfiles.sh lint`,
     # advisory in a full run
-    local _dm=0 _ad=0 _ct=0
-    lint_docmaint     || _dm=$?
+    local _ad=0 _ct=0
     lint_agentdocs    || _ad=$?
     lint_claude_theme || _ct=$?
-    return $(( _dm || _ad || _ct ))
-}
-
-# ── docmaint drift-guard ─────────────────────────────────────────
-# The todo/exec-status/mental-seal skills each ship a copy of docmaint.py that MUST be
-# byte-identical except the one `DOC = "..."` line (todo|status|seal). Catch drift (a fix
-# landing in one copy but not the others) and a DOC value that doesn't match its skill dir.
-lint_docmaint() {
-    local -a copies=(
-        "todo:agents/skills/todo/scripts/docmaint.py"
-        "status:agents/skills/exec-status/scripts/docmaint.py"
-        "seal:agents/skills/mental-seal/scripts/docmaint.py"
-    )
-    local entry want path norm prev="" prev_name="" doc rc=0
-    for entry in "${copies[@]}"; do
-        want="${entry%%:*}"; path="${entry#*:}"
-        if [[ ! -f "$ROOT/$path" ]]; then warn "docmaint: missing copy $path"; rc=1; continue; fi
-        doc=$(sed -nE 's/^DOC = "(todo|status|seal)"$/\1/p' "$ROOT/$path" | head -1)
-        [[ "$doc" == "$want" ]] || { warn "docmaint: $path has DOC=\"$doc\", expected \"$want\""; rc=1; }
-        norm=$(sed -E 's/^DOC = "(todo|status|seal)"$/DOC = "X"/' "$ROOT/$path" | shasum | cut -d' ' -f1)
-        if [[ -n "$prev" && "$norm" != "$prev" ]]; then
-            warn "docmaint: $path drifted from $prev_name (copies must be identical except the DOC line) — re-sync them"
-            rc=1
-        fi
-        prev="$norm"; prev_name="$path"
-    done
-    return "$rc"
+    return $(( _ad || _ct ))
 }
 
 # ── agent-doc identity-guard ─────────────────────────────────────
-# The three global instruction files (claude/CLAUDE.md, codex/AGENTS.md, grok/AGENTS.md)
-# are one canonical, agent-read text copied to all three paths. They are
+# The two global instruction files (claude/CLAUDE.md, codex/AGENTS.md) are one
+# canonical, agent-read text copied to both paths. They are
 # identical BELOW the H1 (line 1), which only names each file (# CLAUDE.md vs # AGENTS.md) —
 # the sole per-file delta; effectiveness parity verified by the harness in agents/eval/.
 # Assert body identity; any diff means one copy was edited without propagating. To change
-# them: edit one, copy to the other two (keeping each H1), commit together.
+# them: edit one, copy to the other (keeping each H1), commit together.
 lint_agentdocs() {
     local -a docs=(
         "agents/claude/CLAUDE.md"
         "agents/codex/AGENTS.md"
-        "agents/grok/AGENTS.md"
     )
     local ref="${docs[0]}" f rc=0
     if [[ ! -f "$ROOT/$ref" ]]; then warn "agentdocs: missing canonical $ref"; return 1; fi

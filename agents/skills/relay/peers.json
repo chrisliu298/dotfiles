@@ -8,56 +8,5 @@
     "default_effort": "medium",
     "prism_effort": "xhigh",
     "template": "codex"
-  },
-  "grok-build": {
-    "order": 2,
-    "lineage": "grok",
-    "transport": "grok",
-    "model": "grok-4.5",
-    "effort_values": ["low", "medium", "high"],
-    "default_effort": "medium",
-    "template": "costar"
-  },
-  "glm": {
-    "order": 3,
-    "lineage": "glm",
-    "transport": "claude-env",
-    "base": "https://api.z.ai/api/anthropic",
-    "key_env": "GLM_PLAN_KEY_INT",
-    "model": "glm-5.3",
-    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max" },
-    "tmux_fallback": true,
-    "tmux_only": true,
-    "template": "costar"
-  },
-  "kimi": {
-    "order": 4,
-    "lineage": "kimi",
-    "transport": "claude-env",
-    "base": "https://api.kimi.com/coding/",
-    "key_env": "KIMI_PLAN_KEY_CN",
-    "auth_style": "api_key",
-    "model": "kimi-for-coding",
-    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "high", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "262144", "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "262144" },
-    "template": "costar"
-  },
-  "deepseek": {
-    "order": 5,
-    "lineage": "deepseek",
-    "transport": "claude-env",
-    "base": "https://api.deepseek.com/anthropic",
-    "key_env": "DEEPSEEK_API_KEY_INT",
-    "model": "deepseek-v4-flash",
-    "extra_env": { "CLAUDE_CODE_EFFORT_LEVEL": "max", "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1000000", "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1000000" },
-    "template": "costar"
-  },
-  "mimo": {
-    "order": 6,
-    "lineage": "mimo",
-    "transport": "claude-env",
-    "base": "https://api.xiaomimimo.com/anthropic",
-    "key_env": "MIMO_API_KEY_INT",
-    "model": "mimo-v2.5-pro",
-    "template": "costar"
   }
 }

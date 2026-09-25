@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fan a runner prompt out to the cross-model relay peers and collect cleaned answers.
+# Fan a runner prompt out to the cross-model relay peer(s) and collect cleaned answers.
 # Usage: run-peers.sh <runner.md> <label> [outdir]
 # Requires the `relay` skill on PATH. Claude and gpt-pro are NOT included here:
 #   - Claude: dispatch the runner via a Claude subagent (Agent tool), not relay.
@@ -11,7 +11,7 @@ outdir="${3:-.}"
 mkdir -p "$outdir"
 
 # peer:effort  (empty effort => no --effort flag; scales are vendor-specific)
-peers=( "gpt:xhigh" "grok-build:high" "glm:" "kimi:" "deepseek:" "mimo:" )
+peers=( "gpt:xhigh" )
 for pe in "${peers[@]}"; do
   peer="${pe%%:*}"; eff="${pe##*:}"
   args=( --to "$peer" --name "eval-$label-$peer" )

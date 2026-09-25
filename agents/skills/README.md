@@ -1,6 +1,6 @@
 # Skills
 
-This directory (`agents/skills/`) is the single source of truth for repo-owned **skills**, their **authoring references** (`references/`), and the manual-enabled set (`manual-skills.enabled`) — no MCP or plugin config lives here. It doubles as the catalog for all agent extensions across Claude, Codex, and Grok: **skills**, **MCP servers**, and a curated set of **plugins** are all managed by `dotfiles.sh`, but only skills are stored under this path — MCP servers and plugins are defined by the `MCP_SERVERS` and `PLUGINS` tables in `dotfiles.sh`, not here.
+This directory (`agents/skills/`) is the single source of truth for repo-owned **skills**, their **authoring references** (`references/`), and the manual-enabled set (`manual-skills.enabled`) — no MCP or plugin config lives here. It doubles as the catalog for all agent extensions across Claude and Codex: **skills**, **MCP servers**, and a curated set of **plugins** are all managed by `dotfiles.sh`, but only skills are stored under this path — MCP servers and plugins are defined by the `MCP_SERVERS` and `PLUGINS` tables in `dotfiles.sh`, not here.
 
 | Type | What it does | Managed by |
 |------|--------------|------------|
@@ -14,62 +14,40 @@ Single source of truth: own skills live in `agents/skills/`; community/third-par
 
 - Claude → `~/.claude/skills/`
 - Codex  → `~/.codex/skills/`
-- Grok   → `~/.grok/skills/` (relay/prism dispatch target; mirrors the Codex set)
 
-A shared/universal `SKILL.md` is written to work across all three agents; agent-specific scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., relay and prism are claude-only, so they never reach Codex/Grok). Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex and Grok.
+A shared/universal `SKILL.md` is written to work across both agents; agent-specific scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., relay and prism are claude-only, so they never reach Codex). Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex.
 
 Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via `./dotfiles.sh skills`.
 
 ### Skill matrix
 
-Columns: **C**laude · Code**x** · **G**rok. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
+Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
-> GLM, Kimi, DeepSeek, and MiMo are all reached **through** Claude Code as the harness (each is a `claude` session pointed at that model's endpoint) via the `glm`/`km`/`ds`/`mm` aliases (see `shell/.functions`), so they inherit the Claude column directly (no separate skill dir). **Grok** is a relay/prism dispatch target (no interactive alias) with its own `~/.grok/skills/` mirror of the Codex set — so its column equals Code**x** except for the Codex-only `claude-subagent`, `cursor-subagent`, `dual-subagent`, and `session-history`. Seven general-purpose skills (defuddle, digest, exec-status, humanizer, jina, mental-seal, xurl) are Grok-only by request. The Claude-only orchestration skills (relay, prism, goal-loop, keep-warm, crons, codex-first, skill-creator) — plus recall, which reads Claude's own transcript store — stay off Codex/Grok; relay and prism are additionally guarded so a dispatched peer can't trigger them.
+> The Claude-only orchestration skills (relay, prism, skill-creator) stay off Codex. `recall` ships as two harness-specific builds under one name — `recall/claude` reads Claude's transcript store, `recall/codex` reads Codex's rollouts — installed like `pdf`; relay and prism are additionally guarded so a dispatched peer can't trigger them.
 
 **Enabled** (✓ auto-installed):
 
-| Skill | C | X | G | Source · Description |
-|-------|:-:|:-:|:-:|----------------------|
-| arxiv-reader            | ✓ | ✓ | ✓ | local — Read arxiv via TeX / HF markdown / HTML fallback |
-| claude-subagent         | — | ✓ | — | local — Read-only Claude review helper for Codex |
-| cursor-subagent         | — | ✓ | — | local — Read-only Cursor helper pinned to GPT-5.6 Sol |
-| dual-subagent           | — | ✓ | — | local — Delegate read-only research, analysis, checks, and review to Claude and Cursor |
-| defuddle                | — | — | ✓ | [kepano/obsidian-skills][c-df] — Clean markdown extraction |
-| digest                  | — | — | ✓ | local — Re-layer a dense reply into a fast-to-skim form |
-| exec-status             | — | — | ✓ | local — Maintain a plain-English STATUS.md executive briefing for long autonomous runs |
-| gpt-pro-relay           | — | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini (CLI on PATH from the Codex copy) |
-| humanizer               | — | — | ✓ | [blader/humanizer][c-hu] — Remove AI signatures from text |
-| jina                    | — | — | ✓ | local — Fetch web content / search via Jina AI |
-| mental-seal             | — | — | ✓ | local — Hold ONE supreme priority front-of-mind via a visible user-owned SEAL.md vow (hook-free) |
-| pdf                     | ✓ | ✓ | ✓ | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex/Grok) — PDF read/edit |
-| push                    | ✓ | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
-| session-history         | — | ✓ | — | local — Retrieve exact, redacted turns from past Codex tasks and pre-compaction history |
-| skill-creator           | ✓ | — | — | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
-| xurl                    | — | — | ✓ | local — X/Twitter via the `xurl` CLI |
+| Skill | C | X | Source · Description |
+|-------|:-:|:-:|----------------------|
+| arxiv-reader            | ✓ | ✓ | local — Read arxiv via TeX / HF markdown / HTML fallback |
+| claude-subagent         | — | ✓ | local — Read-only Claude review helper for Codex |
+| cursor-subagent         | — | ✓ | local — Read-only Cursor review helper for Codex |
+| dual-subagent           | — | ✓ | local — Parallel Claude and Cursor review helper for Codex |
+| gpt-pro-relay           | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini (the `gpt-pro` CLI is on PATH from the Codex copy) |
+| pdf                     | ✓ | ✓ | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex) — PDF read/edit |
+| push                    | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
+| recall                  | ✓ | ✓ | local — Recall a detail from past sessions of the same agent (separate Claude and Codex builds: `recall/claude`, `recall/codex`) |
+| skill-creator           | ✓ | — | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
 
 **Disabled** (✱ manual, opt-in via `./dotfiles.sh enable <name>`):
 
-| Skill | C | X | G | Source · Description |
-|-------|:-:|:-:|:-:|----------------------|
-| autoresearch            | ✱ | ✱ | ✱ | local — Karpathy-faithful experiment loop |
-| codex-first             | ✱ | — | — | local — Route hands-on work to `codex exec` while Claude specs + reviews (Claude-only) |
-| crons                   | ✱ | — | — | local — Durable manifest + re-arm for the recurring /loop cron fleet (Claude-only; preparer-not-actuator, no false assurance) |
-| deslop                  | ✱ | ✱ | ✱ | local — Strip AI-slop from code changes |
-| goal-drive              | ✱ | ✱ | ✱ | local — Drive a goal artifact (GOAL.md / checklist / phased doc) to verified done |
-| goal-elicit             | ✱ | ✱ | ✱ | local — Multi-round interview → verifiable Goal Contract |
-| goal-loop               | ✱ | — | — | local — Stepped elicit→review→fix loop (composes goal-elicit/goal-drive/prism; default review is prism, Claude-only) |
-| interviewer             | ✱ | ✱ | ✱ | local — Mock AI/ML technical interviews |
-| keep-warm               | ✱ | — | — | local — Cache heartbeat (uses Claude-only scheduling tools) |
-| prism                   | ✱ | — | — | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to GPT + Grok + GLM + Kimi + DeepSeek + MiMo via relay) |
-| prompt-engineer         | ✱ | ✱ | ✱ | local — Prompt writing per-vendor best practices |
-| recall                  | ✱ | — | — | local — Search this project's past Claude sessions for an earlier user statement/decision (Claude-only; lexical BM25 over the transcript store) |
-| relay                   | ✱ | — | — | local — Cross-agent relay from Claude to GPT/Grok/GLM/Kimi/DeepSeek/MiMo (Claude-only caller) |
-| todo                    | ✱ | ✱ | ✱ | local — TODO.md tracking across sessions |
+| Skill | C | X | Source · Description |
+|-------|:-:|:-:|----------------------|
+| prism                   | ✱ | — | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to GPT via relay) |
+| relay                   | ✱ | — | local — Cross-agent relay from Claude to GPT (Claude-only caller) |
 
 > Note: SKILL.md supports an optional Claude-only `effort` frontmatter (`medium` / `high` / `max`) to set thinking budget per skill. Currently unset on every skill in this repo — they all inherit the session default.
 
-[c-df]: https://github.com/kepano/obsidian-skills
-[c-hu]: https://github.com/blader/humanizer
 [c-pdf-a]: https://github.com/anthropics/skills
 [c-pdf-o]: https://github.com/openai/skills
 [c-sc]: https://github.com/anthropics/skills

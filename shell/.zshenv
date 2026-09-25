@@ -21,6 +21,7 @@ export STARSHIP_CONFIG="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme/sta
 # =============================================================================
 # PATH
 # =============================================================================
+export GPT_PRO_HOST=local  # gpt-pro-relay engine runs on this Mac (was: macmini over SSH)
 export PATH="$HOME/.claude/skills/relay/scripts:$HOME/.claude/skills/prism/scripts:$HOME/.codex/skills/gpt-pro-relay/scripts:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/.local/bin:$PATH"
 if (( IS_MACOS )); then
     eval "$(/opt/homebrew/bin/brew shellenv)"
@@ -56,22 +57,6 @@ unset DISABLE_TELEMETRY
 
 # Unset CLAUDECODE inside tmux so claude can start fresh
 [[ -n "$TMUX" ]] && unset CLAUDECODE
-
-# =============================================================================
-# Grok (xAI Grok Build CLI — used as a relay/prism dispatch target)
-# =============================================================================
-# Isolate grok from ALL Claude-compat config: it gets its own Codex-mirrored
-# skills (~/.grok/skills) and working-principles file (~/.grok/AGENTS.md) via
-# dotfiles.sh — not Claude's ~/.claude/{skills, CLAUDE.md, rules, .claude.json
-# MCPs, settings.json hooks}. The relay grok transport sets this same suite
-# explicitly too, for non-.zshenv shells. (Claude *plugin* hooks under
-# ~/.claude/plugins are a separate mechanism, not gated by these.) Binary on
-# PATH via ~/.local/bin. Highest-precedence compat overrides.
-export GROK_CLAUDE_SKILLS_ENABLED=false
-export GROK_CLAUDE_AGENTS_ENABLED=false
-export GROK_CLAUDE_RULES_ENABLED=false
-export GROK_CLAUDE_MCPS_ENABLED=false
-export GROK_CLAUDE_HOOKS_ENABLED=false
 
 # =============================================================================
 # Local secrets (not version controlled)

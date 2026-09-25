@@ -1,7 +1,7 @@
 # agents/eval — instruction-following harness
 
 A minimal, targeted harness to check that a change to the global agent-instruction doc
-(`agents/{claude,codex,grok}/*.md`) preserves the behaviors the doc is supposed to drive.
+(`agents/{claude,codex}/*.md`) preserves the behaviors the doc is supposed to drive.
 Built to answer one question with data instead of vibes: **does this rewrite change how agents
 actually behave?** Use it before adopting an aggressive compression / de-formatting / restructuring
 of the doc.
@@ -47,7 +47,7 @@ compare. The relay-peer legs are scripted; the Claude leg and the judge need Cla
    ./build-runner.sh --none runner_base.md                  # model-default baseline
    ```
 2. **Dispatch each runner** to the agents:
-   - Cross-model peers (GPT/Grok/GLM/Kimi/DeepSeek/MiMo): `./run-peers.sh runner_cand.md cand ./out`
+   - Cross-model peer (GPT): `./run-peers.sh runner_cand.md cand ./out`
    - Claude: hand the runner file to a Claude subagent (Agent tool) — "read this file, follow it,
      output only the numbered replies."
    - (gpt-pro is intentionally excluded: slow + quota.)
@@ -93,7 +93,7 @@ behavior, compare the current doc, one narrowly edited candidate, and a model-de
 First used (2026-07) to clear an aggressive de-format + prune + four-file unification of the global
 doc: 8 model lineages × {current, pruned} + repeats, blind-judged — aggregate parity (pruned ≥
 current), so the pruned/unified doc was adopted. The `lint_agentdocs` guard in `dotfiles.sh` now just
-asserts the three files (Pi's copy was dropped with Pi) are identical below the H1 (each file keeps its own `# CLAUDE.md`/`# AGENTS.md` title).
+asserts the two files (the Pi and Grok copies were dropped with those agents) are identical below the H1 (each file keeps its own `# CLAUDE.md`/`# AGENTS.md` title).
 
 ## Delivery and delegation smoke cases
 

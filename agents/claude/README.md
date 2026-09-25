@@ -4,7 +4,7 @@ Config for [Claude Code](https://claude.com/claude-code). Everything here target
 
 | Path | Installed as | Notes |
 |------|--------------|-------|
-| `CLAUDE.md` | symlink | One of the three canonical global instruction files — see root `CLAUDE.md`. |
+| `CLAUDE.md` | symlink | One of the two canonical global instruction files — see root `CLAUDE.md`. |
 | `keybindings.json` | symlink | Custom key and chord bindings. |
 | `settings.json` | **copied** by `dotfiles.sh` | `~/` is expanded to an absolute path on copy, which Claude Code requires. Includes the `"theme": "custom:dotfiles"` pin. |
 | `statusline-command.sh` | symlink | Status line renderer. ANSI *named* colors only, so it follows the terminal palette — see below. |
