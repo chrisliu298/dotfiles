@@ -1647,7 +1647,7 @@ gpt_pro_recovery_hint() {
     255) echo "           exit 255 = SSH transport state unknown. Reattach FIRST: gpt-pro --run-id $run — only if THAT exits 4 did the submit never land." ;;
     126|127)
       echo "           exit $ec = the 'gpt-pro' wrapper could not be executed/found (PATH or permissions) — the lens NEVER RAN."
-      echo "           No quota burned and no run exists. Fix the invocation (fall back to ~/.claude/skills/gpt-pro-relay/scripts/gpt-pro), then relaunch."
+      echo "           No quota burned and no run exists. Fix the invocation (fall back to ~/.codex/skills/gpt-pro-relay/scripts/gpt-pro), then relaunch."
       ;;
     \?)
       echo "           the .exit sentinel is unparseable — the code is UNKNOWN, so no row applies. Do NOT guess one."

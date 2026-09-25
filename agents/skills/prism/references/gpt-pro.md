@@ -39,7 +39,7 @@ gpt-pro has two first-class families — **Deep-Reasoning** and **Research-Groun
 gpt-pro < /tmp/prism-<id>-gpt-pro-<slug>.md > /tmp/prism-<id>-gpt-pro-<slug>.res.md 2> /tmp/prism-<id>-gpt-pro-<slug>.log
 ```
 
-with `run_in_background: true`, `timeout: 7260000` (fall back to `~/.claude/skills/gpt-pro-relay/scripts/gpt-pro` if not on PATH). Each is its **own** completion notification — `prepare`'s printed count includes them.
+with `run_in_background: true`, `timeout: 7260000` (fall back to `~/.codex/skills/gpt-pro-relay/scripts/gpt-pro` if not on PATH). Each is its **own** completion notification — `prepare`'s printed count includes them.
 
 ## Collect + recover
 
