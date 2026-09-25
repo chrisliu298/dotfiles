@@ -10,5 +10,5 @@ This flow bypasses **every** mechanical guard (roster contract, floor check, inj
 2. **If repair is truly impossible**, render each launcher and dispatch by hand:
    - Render each launcher with
      `sed -e 's|{{SHARED_PACKET_PATH}}|...|g' -e 's|{{LENS_NAME}}|...|g' -e 's|{{LENS_DESC}}|...|g' templates/launcher-<kind>.tmpl`.
-   - Dispatch one `relay call --to <peer> --name prism-<slug>` heredoc per parallax tier (GPT `--effort xhigh`, no `--effort` on the rest; background each, `timeout: 3660000`).
+   - Dispatch one `relay call --to <peer> --name prism-<slug>` heredoc per parallax call (`--to gpt --effort xhigh`; background each, `timeout: 3660000`).
    - Issue one Agent call per subagent using the rendered subagent launcher.

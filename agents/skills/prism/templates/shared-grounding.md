@@ -7,7 +7,7 @@ you MUST use the web to ground the answer in what you find — do not answer ext
 time-sensitive questions from memory.
 
 Reach the web with whatever your harness provides. **In the Claude Code harness — Claude
-subagents and the GLM / Kimi / DeepSeek / MiMo relay peers — use the native `WebSearch` /
+subagents — use the native `WebSearch` /
 `WebFetch` tools; if one does not work (unavailable, errors, or returns no real results),
 use Jina instead** via Bash:
 - search (needs `JINA_API_KEY`): `curl -s 'https://s.jina.ai/<URL-encoded query>' -H 'Accept: application/json' -H "Authorization: Bearer $JINA_API_KEY"`

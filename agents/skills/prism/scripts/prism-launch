@@ -16,8 +16,7 @@ fi
 # all relay calls out as ONE backgrounded process that waits for every peer and
 # emits a single structured result. The same-model subagent half stays in the
 # conversation as Agent-tool calls — a shell script cannot (and must not) launch
-# Claude agents, and `claude -p` is never used for Claude here (it is only
-# relay's transport for GLM/Kimi/DeepSeek/MiMo).
+# Claude agents, and `claude -p` is never used here.
 #
 # Usage:
 #   prism-launch prepare --config <config.json>      # foreground: render + validate + manifest
@@ -312,7 +311,7 @@ cmd_prepare() {
   [ -z "$config" ] && [ -z "$dispatch" ] && die "prepare: --config <config.json> or --dispatch <dispatch-file> required"
   # Opt-in floor check: --expect-n N asserts the symmetric shape (every standard
   # tier + subagents at exactly N); --expect-m M additionally pins gpt-pro. Absent
-  # → today's lenient validation. This makes the "full 6-tier fan at N is the floor"
+  # → today's lenient validation. This makes the "full 2-tier fan at N is the floor"
   # invariant structural, not prose-only.
   case "$expect_n" in *[!0-9]*) die "prepare: --expect-n must be a non-negative integer, got: $expect_n" ;; esac
   case "$expect_m" in *[!0-9]*) die "prepare: --expect-m must be a non-negative integer, got: $expect_m" ;; esac
@@ -1316,7 +1315,7 @@ lens_desc_for() {
   if [ -n "$d" ]; then printf '%s\n' "$d"; else printf 'weigh the %s axis — refine this description\n' "$1"; fi
 }
 
-# Six distinct lenses for a task-type preset, read from the catalog's .presets —
+# Two distinct lenses for a task-type preset, read from the catalog's .presets —
 # in canonical tier order (heaviest-reasoning first, so it lands on the subagent/
 # gpt slots), each spread across distinct axis families. Returns 1 if unknown.
 preset_lenses() {
@@ -1327,7 +1326,7 @@ preset_lenses() {
 }
 
 # Emit a ready-to-fill dispatch skeleton for the symmetric default (N of every
-# model; GPT xhigh is fixed). With --preset <task-type>, pre-fill six lenses (N=1).
+# model; GPT xhigh is fixed). With --preset <task-type>, pre-fill two lenses (N=1).
 # Otherwise replace each "FILL" Lens / Lens-Desc, then Write it as the dispatch
 # file. Removes the mechanical Type/To/order boilerplate.
 
@@ -1438,7 +1437,7 @@ cmd_scaffold() {
         printf '# self (the orchestrator) is the lone Claude perspective; n/total = %sN + M + self.\n\n' "$npeers"
       else
         printf 'Prism-Mode: full\nPrism-N: 1\nPrism-M: %s\n\n' "$m"
-        printf '# Preset "%s": six lenses pre-filled in canonical tier order (GPT xhigh — CLI-derived at prepare).\n' "$preset"
+        printf '# Preset "%s": two lenses pre-filled in canonical tier order (GPT xhigh — CLI-derived at prepare).\n' "$preset"
         printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
         printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
         printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
@@ -1487,7 +1486,7 @@ cmd_scaffold() {
     printf '# (e.g. Adversarial) lens on gpt (xhigh). Write the Shared-Packet file before prepare.\n\n'
   else
     printf 'Prism-Mode: full\nPrism-N: %s\nPrism-M: %s\n\n' "$n" "$m"
-    printf '# Symmetric scaffold: N=%s of each of the six models (GPT xhigh — CLI-derived at prepare).\n' "$n"
+    printf '# Symmetric scaffold: N=%s of each of the two models (GPT xhigh — CLI-derived at prepare).\n' "$n"
     printf '# Prism-Mode: full enforces the whole roster — prepare fails closed if any tier is dropped.\n'
     printf '# To run a REDUCED roster (only on an EXPLICIT user request), set Prism-Mode: partial,\n'
     printf '# drop Prism-N/Prism-M, add Partial-User-Quote: "<the user'"'"'s exact words>", and remove the tiers.\n'
@@ -1976,11 +1975,11 @@ Usage:  (all subcommands require `jq` in PATH)
   prism-launch --help | --version  ·  prism-launch <subcommand> --help
 
 scaffold:  emit a ready-to-fill dispatch skeleton for the symmetric default (N of each of the
-           six models; GPT xhigh fixed). Emits the full-roster contract
+           two models; GPT xhigh fixed). Emits the full-roster contract
            (Prism-Mode: full / Prism-N / Prism-M) for you. Prints to stdout as a copy-from
            template — author the dispatch with the Write tool (do NOT redirect stdout into the
            file and then edit it: a shell-made file forces a wasted Read). Replace each "FILL".
-           --preset <review|design|diagnosis|compare|research|decision|writing> pre-fills six
+           --preset <review|design|diagnosis|compare|research|decision|writing> pre-fills two
            lenses by task type (N=1). --out <path> writes a prepare-READY dispatch directly
            (requires --preset + --packet, i.e. zero FILLs) so the agent skips Write/Edit
            entirely. --m <M> emits M ready Type: gpt-pro records (canonical Deep-Reasoning /
@@ -2008,7 +2007,7 @@ prepare:   validate the dispatch/config, render all launchers from templates, wr
            contract's N/M on full/unchecked runs (advanced/back-compat); they are IGNORED on any
            partial run (incl. Variant: no-subagents), which floor-checks off its own Prism-N/M.
            No-subagents: Prism-Mode: partial + Variant: no-subagents (or scaffold --no-subagents)
-           keeps the 5 parallax tiers at N and drops the Claude subagent tier (zero Agent calls);
+           keeps the 1 parallax tier at N and drops the Claude subagent tier (zero Agent calls);
            prepare floor-checks it and prints a calm note, not ⚠ PARTIAL. See the prism SKILL.md.
 parallax:  fan out every relay call as ONE backgrounded process, wait for all, write a structured
            result. Run with run_in_background: true. --only <name> retries a single failed peer.

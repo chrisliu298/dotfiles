@@ -2,23 +2,22 @@
 effort: medium
 name: relay
 description: |
-  The ONLY way to call GPT (a.k.a. Codex), GLM, Kimi, DeepSeek, or MiMo. Use whenever the
-  user wants to ask, delegate to, or get a second opinion from GPT, GLM,
-  Kimi, DeepSeek, or MiMo. Do NOT run the codex, glm, kimi (km), deepseek (ds), or
-  mimo (mm) CLI directly — from the main agent or a subagent; always use this
-  skill's relay call command. Triggers on "ask/have/send to/get/delegate to gpt/codex" or
-  the same with "glm"/"kimi"/"deepseek"/"mimo", "second opinion", "relay".
+  The ONLY way to call GPT (a.k.a. Codex). Use whenever the user wants to ask,
+  delegate to, or get a second opinion from GPT. Do NOT run the codex CLI
+  directly — from the main agent or a subagent; always use this skill's relay
+  call command. Triggers on "ask/have/send to/get/delegate to gpt/codex",
+  "second opinion", "relay".
 allowed-tools: Read, Write, Bash(relay:*), Bash(find:*), Bash(printf:*)
 user-invocable: true
 ---
 
 # Relay
 
-**Claude-only.** If `ANTHROPIC_BASE_URL` contains `z.ai`, `kimi.com`, `deepseek`, or `xiaomimimo`, this skill is unavailable — stop and tell the user: "relay is Claude-only; a non-Claude session cannot orchestrate other models." The relay script also refuses at the shell layer.
+**Claude-only.** Claude is the sole caller; a dispatched peer must never call relay back (the script refuses nested calls via `RELAY_PEER`).
 
-Call GPT, GLM, Kimi, DeepSeek, or MiMo like a function: one command generates the request, invokes the peer, and prints the response.
+Call GPT like a function: one command generates the request, invokes the peer, and prints the response.
 
-> **The peer is a full agent in the Claude Code harness — not a stateless API call.** Relay invokes each peer through its registered transport (GLM/Kimi/DeepSeek/MiMo via `claude -p` with the model weights swapped — GLM-5.3, Kimi-K2.7-Coding, V4-Flash, MiMo-V2.5-Pro; GPT via `codex exec`), so the peer has your core tools — Bash, file read/write, Grep/Glob, subagents, multi-step agentic loops. It can see this repo, run commands, and verify its own work; delegate file I/O and shell work directly. Do **not** treat it as a one-shot completion that "can't see the codebase." Web tools (WebFetch/WebSearch) are registered on every peer and broadly work — GPT does both (verified 2026-06-06). Re-verified 2026-06-19 for the claude-env peers by having each invoke the tools: DeepSeek does both; MiMo has native WebFetch but no live WebSearch; GLM has native WebSearch but no WebFetch. **Both remaining native gaps are covered by verified Jina fallbacks, so every peer effectively has both fetch and search:** a missing WebFetch falls back to the keyless Jina Reader (`r.jina.ai`) — or, on GLM, its own MCP `web_reader` — and MiMo's missing WebSearch falls back to Jina Search (`s.jina.ai`, end-to-end verified 2026-06-19 once `JINA_API_KEY` was provisioned; see *Prompting GLM, Kimi, DeepSeek, and MiMo* for the MiMo instruction). **Kimi K2.7 Coding** (via the Kimi-for-Coding plan, verified 2026-07-25) needs no Jina fallback at all: its native WebFetch **and** WebSearch both work (the web tools' thinking-off aux calls route to the plan's non-thinking model, which accepts them). The only constant difference from you is the model behind the harness.
+> **The peer is a full agent — not a stateless API call.** Relay invokes GPT through its registered transport (`codex exec`), so the peer has core agent tools — shell, file read/write, search, multi-step agentic loops, and web fetch/search (verified 2026-06-06). It can see this repo, run commands, and verify its own work; delegate file I/O and shell work directly. Do **not** treat it as a one-shot completion that "can't see the codebase." The only constant difference from you is the model behind the harness.
 
 ```
 relay call --name <slug> [--to <peer>] [--effort <level>] [--body-only] <<'BODY'
@@ -26,27 +25,23 @@ task
 BODY
 ```
 
-`relay` is in PATH. The caller is always Claude (this is a Claude-only skill); the peer defaults to GPT. Pass `--to glm`, `--to kimi`, `--to deepseek`, or `--to mimo` to route elsewhere.
+`relay` is in PATH. The caller is always Claude (this is a Claude-only skill); the peer is GPT (the only registered peer), so `--to` is never needed.
 
 If a bare `relay` ever returns "command not found" (a sandboxed/non-zsh/reset-env shell that didn't inherit the PATH entry), re-run the **identical** command with the absolute install path — `~/.claude/skills/relay/scripts/relay call …`. That is the whole recovery; do not reconstruct the call by hand.
 
-**All GPT, GLM, Kimi, DeepSeek, and MiMo interactions go through `relay call`.** Do not invoke `codex exec` or the `glm`/`km`/`ds`/`mm` aliases directly, do not spawn agents to run the codex or claude CLI for these purposes, and do not pass model flags (`-m`, `--model`) — the model and invocation method come from the peer registry (`peers.json`), not the call.
+**All GPT interactions go through `relay call`.** Do not invoke `codex exec` directly, do not spawn agents to run the codex CLI for this purpose, and do not pass model flags (`-m`, `--model`) — the model and invocation method come from the peer registry (`peers.json`), not the call.
 
 ## Peer selection
 
 | Peer | When to pick | How to invoke |
 |---|---|---|
 | **GPT** (default) | Code review, security review, refactoring, agentic coding. OpenAI lineage. Five exposed API effort tiers (`low` through `max`) plus Codex `ultra` orchestration. | `relay call --name ...` (no `--to` needed) |
-| **GLM** | An independent lineage (Zhipu/z.ai GLM-5.3), reached through z.ai's Anthropic-compatible endpoint. Use for another cross-vendor perspective. Pinned to `max` reasoning via the registry (like DeepSeek); ignores `--effort`. Text-only (no image input via relay). | `relay call --to glm --name ...` |
-| **Kimi** | An independent lineage (Moonshot Kimi K2.7 Coding, model id `kimi-for-coding`) via the **Kimi-for-Coding subscription plan** (`api.kimi.com/coding/`, auth via `ANTHROPIC_API_KEY`). Use for another cross-vendor perspective. Thinking pinned on via the registry (`CLAUDE_CODE_EFFORT_LEVEL=high` — K2.7 is thinking-only and exposes no graded effort, so the level only has to be non-off); ignores `--effort`. **Native WebFetch + WebSearch both work** (no Jina fallback needed). 256K context (vs 1M for DeepSeek/MiMo/GLM). Text-only (no image input via relay). | `relay call --to kimi --name ...` |
-| **DeepSeek** | Independent model family for true cross-vendor diversity, independent reasoning, multi-step analysis. Open-weight V4-Flash (284B MoE / 13B active), the agent-post-trained `0731` build. Always runs at `max` (DeepThink). Text-only (no image input via relay). | `relay call --to deepseek --name ...` |
-| **MiMo** | Another independent open-weight lineage (Xiaomi MiMo-V2.5-Pro, 1.02T MoE / 42B active, 1M context). Use for a further cross-vendor perspective. No effort knob. Text-only (no image input via relay). | `relay call --to mimo --name ...` |
 
-Pick GPT by default — it's the strongest general-purpose coding agent and integrates cleanly with the relay protocol. Pick GLM, Kimi, DeepSeek, or MiMo for a perspective from a model trained outside both the Anthropic and OpenAI lineages, or when running `/prism` Parallax. None of these has a graded effort knob — GLM, Kimi, DeepSeek, and MiMo ignore `--effort`, so omit it for them. GLM requires `GLM_PLAN_KEY_INT` (a z.ai GLM Coding Plan key), Kimi requires `KIMI_PLAN_KEY_CN` (a Kimi-for-Coding key), DeepSeek requires `DEEPSEEK_API_KEY_INT`, and MiMo requires `MIMO_API_KEY_INT` (a MiMo pay-per-token API key) in the environment.
+Pick GPT for code review, security review, refactoring, agentic coding, or a second opinion from outside the Anthropic lineage, and as the `/prism` Parallax peer.
 
 ### Peer registry
 
-Every model-family fact — transport (`codex` CLI vs a generic `claude-env` Anthropic-compatible envelope), endpoint, key variable, model id, effort knob, per-peer extras, and launcher template style — lives once in `peers.json` next to the script. `relay` and `prism-launch` both read it, so **adding a peer that reuses an existing transport is one stanza** there, not edits across the script, the prism launcher, and the docs. Two of the per-peer keys are **prism-consumed, not relay-consumed**: `order` (the standard-tier dispatch/display position) and `lineage` (the synthesis-weighting group — each peer is its own lineage). `relay` ignores them, but `prism-launch` derives its tier order, `peershape` display, and digest lineage from them, so keep them on each standard-tier stanza (a peer with no `order` is simply not a Prism standard tier). The `claude-env` peers share one code path that differs only by registry data; GPT has its own `codex` transport. Two deliberate exceptions stay in code, not data: a brand-new *transport* needs its own script branch, and a new `claude-env` peer should also get its endpoint added to the inbound Claude-only refusal at the top of the script (a one-line safety guard that must run before the registry is loaded). The interactive `glm`/`km`/`ds`/`mm` launchers in `shell/.functions` are a separate consumer and still carry their own copy — keep them in sync, with one **named exception**: since 2026-07-31 the relay/prism `deepseek` lane runs `deepseek-v4-flash` while the interactive `ds`/`dsh`/`dsc` family stays on `deepseek-v4-pro[1m]`. That divergence is deliberate and temporary — do not "resync" it; revisit both when the official V4-Pro ships.
+Every model-family fact — transport (`codex` CLI), model id, effort knob, and launcher template style — lives once in `peers.json` next to the script. `relay` and `prism-launch` both read it, so **adding a peer that reuses an existing transport is one stanza** there, not edits across the script, the prism launcher, and the docs. Two of the per-peer keys are **prism-consumed, not relay-consumed**: `order` (the standard-tier dispatch/display position) and `lineage` (the synthesis-weighting group — each peer is its own lineage). `relay` ignores them, but `prism-launch` derives its tier order, `peershape` display, and digest lineage from them, so keep them on each standard-tier stanza (a peer with no `order` is simply not a Prism standard tier). One deliberate exception stays in code, not data: a brand-new *transport* needs its own script branch.
 
 ### Common Mistakes
 - **Premature failure diagnosis**: If a relay call was launched with `run_in_background: true`, do not inspect `.relay` files or enter the failure flow until the background task's completion notification arrives. No notification means the peer is still running.
@@ -64,7 +59,7 @@ BODY
 
 ## Effort Levels
 
-`--effort` applies to GPT only. The GPT API supports `none`/`low`/`medium`/`high`/`xhigh`/`max`; relay exposes `low` through `max`, plus Codex-specific `ultra` orchestration. Relay defaults GPT to `medium`. `ultra` is not an OpenAI API `reasoning.effort` value: relay passes it through and Codex interprets it as maximum reasoning plus automatic task delegation. Level names follow OpenAI's own scale ([reasoning guide](https://developers.openai.com/api/docs/guides/reasoning)), which guarantees no fixed token progression across levels. DeepSeek, GLM, and Kimi run with reasoning pinned on via the registry (DeepSeek via DeepThink; GLM via `reasoning_effort: max`; Kimi via `CLAUDE_CODE_EFFORT_LEVEL=high` — K2.7 Coding is thinking-only and has no graded effort), and MiMo has no effort knob. None of them takes a graded `--effort`, so the flag is silently ignored or omitted on those calls.
+`--effort` applies to GPT only. The GPT API supports `none`/`low`/`medium`/`high`/`xhigh`/`max`; relay exposes `low` through `max`, plus Codex-specific `ultra` orchestration. Relay defaults GPT to `medium`. `ultra` is not an OpenAI API `reasoning.effort` value: relay passes it through and Codex interprets it as maximum reasoning plus automatic task delegation. Level names follow OpenAI's own scale ([reasoning guide](https://developers.openai.com/api/docs/guides/reasoning)), which guarantees no fixed token progression across levels.
 
 | Level | When to use |
 |-------|-------------|
@@ -109,53 +104,11 @@ Summary of changes, one per line, with file path and description.
 BODY
 ```
 
-## Prompting GLM, Kimi, DeepSeek, and MiMo
-
-These are all independent (non-Anthropic/OpenAI) models that respond well to XML-scaffolded, structured prompts. **Before composing a DeepSeek prompt body, read `~/.claude/skills/relay/references/deepseek.md`** (symlinked to the prompt-engineer reference) — it covers the CO-STAR framework, XML scaffolding conventions, thinking-mode quirks, and DeepThink failure modes. This is not optional — the guide contains model-specific patterns that materially affect output quality. MiMo-V2.5-Pro, GLM-5.3, and Kimi-K2.7-Coding have no dedicated reference; treat them like DeepSeek.
-
-Default to XML scaffolding (DeepSeek V4 was trained heavily on XML-tagged data; GLM, Kimi, and MiMo behave similarly). The CO-STAR sections — `<context>`, `<objective>`, `<style>`, `<tone>`, `<audience>`, `<response_format>` — give the cleanest results for non-trivial tasks. Use positive framing ("include X") over negative constraints ("don't omit X"). Their thinking is always on — so keep system-style meta-instructions out of the prompt body; they degrade under long system prompts. Lead with the outcome and success criteria, then let the model pick the path.
-
-**MiMo live web search → Jina Search.** MiMo's native WebSearch returns stale *training-data*, not live results — and silently (no error), so nothing auto-triggers a fallback. When a MiMo task needs current web information, state that in the prompt body and tell it to run Jina Search via Bash (`JINA_API_KEY` is provisioned in the peer env — end-to-end verified 2026-06-19):
-
-```bash
-curl -s 'https://s.jina.ai/<URL-ENCODED-QUERY>' -H 'Accept: application/json' -H "Authorization: Bearer $JINA_API_KEY"
-```
-
-Results return as JSON `data[]` with `title`, `url`, and full-page `content`. MiMo's native WebFetch works for plain URL fetches, so this fallback is only for *search*. Full options (headers, parsing, site-restriction) live in the `jina` skill.
-
-**Example** (swap `--to deepseek` for `--to glm`, `--to kimi`, or `--to mimo` to route elsewhere — the prompt shape is identical):
-
-```bash
-relay call --to deepseek --name pool-design <<'BODY'
-<context>
-We're hardening src/db/pool.py before a SOC 2 audit. Codebase is Python 3.12 +
-FastAPI. Tests live in tests/test_pool.py and run under pytest.
-</context>
-
-<objective>
-Add connection timeouts and stale-connection recovery to src/db/pool.py.
-</objective>
-
-<success_criteria>
-- ConnectionPool accepts a timeout_seconds parameter at construction
-- stale connections are auto-reconnected on use
-- a reclaim_stale() method exists for explicit cleanup
-- existing callers keep working without changes
-- pytest tests/test_pool.py passes; no new lint errors
-</success_criteria>
-
-<response_format>
-Summary of changes first (one line per change: file path + description),
-then the diffs grouped by file. Cap at 400 words excluding diffs.
-</response_format>
-BODY
-```
-
 ## Calibration handoff
 
 For **judgment tasks** — analysis, review, design, research, second opinions — ask the peer to end its answer with a reasons-based calibration block, then act on it when the response returns. **Skip it for mechanical or code-changing calls** (run-a-command, apply-a-defined-change): there the trust signal is tests, diffs, and the `verify:` frontmatter, not a self-report. Don't ask for a number — verbalized confidence from these models is poorly calibrated (clusters at round numbers, skews overconfident), so a `%` or `High/Med/Low` manufactures false precision the orchestrator can't discount.
 
-Add to the prompt body — inside `<output_contract>` for GPT, `<response_format>` for GLM/Kimi/DeepSeek/MiMo:
+Add to the prompt body, inside `<output_contract>`:
 
 ```text
 End with a ## Calibration block:
@@ -167,7 +120,7 @@ End with a ## Calibration block:
 No numeric %, probability, or High/Medium/Low label — this block is for routing and verification, not a calibrated probability.
 ```
 
-**On return, use it — otherwise it is decoration.** Verify the listed claims before passing the answer up; re-query with corrected context if a Key assumption conflicts with what you know; seek a tie-breaker (another peer or `/prism`) if "Most likely wrong because" attacks the core conclusion. Ignore any self-confidence score a peer volunteers anyway — the assumptions and failure mode are the signal, not a self-graded number.
+**On return, use it — otherwise it is decoration.** Verify the listed claims before passing the answer up; re-query with corrected context if a Key assumption conflicts with what you know; seek a tie-breaker (`/prism`) if "Most likely wrong because" attacks the core conclusion. Ignore any self-confidence score a peer volunteers anyway — the assumptions and failure mode are the signal, not a self-graded number.
 
 ## Output
 
@@ -204,22 +157,22 @@ When you have independent subagent work alongside a relay call, **never block on
 
 **Background the Bash call**: Use `run_in_background: true` on the Bash tool so the relay call runs concurrently with your subagents. The platform sends a completion notification when the background task finishes — do not poll, do not inspect `.relay` files, and do not enter the failure diagnosis flow before that notification arrives.
 
-**Give it a generous timeout.** Relay peers are full agents and can run long (GPT `max`, GLM at `max`, Kimi thinking, DeepSeek/MiMo DeepThink routinely take many minutes). A Bash-tool `timeout` that fires mid-run kills the peer and wastes every token it already spent — favor completion over a tight bound. Set `timeout: 3600000` (60 min) on the backgrounded Bash call; relay has no internal per-call cap, so this outer timeout is the only bound.
+**Give it a generous timeout.** Relay peers are full agents and can run long (GPT at `xhigh`/`max`/`ultra` routinely takes many minutes). A Bash-tool `timeout` that fires mid-run kills the peer and wastes every token it already spent — favor completion over a tight bound. Set `timeout: 3600000` (60 min) on the backgrounded Bash call; relay has no internal per-call cap, so this outer timeout is the only bound.
 
 **Rule: Launch relay calls and subagents concurrently. Never serialize independent work.**
 
-**Never wrap relay in a subagent.** If an Agent task calls `relay` with `run_in_background: true`, the subagent will complete before the peer (GPT, GLM, Kimi, DeepSeek, or MiMo) finishes, and the platform will kill the orphaned peer process. Always call `relay` from the main conversation. If a subagent must call relay (e.g., the skill was invoked before you could prevent it), the Bash call must run in foreground — omit `run_in_background` so the subagent blocks until the peer replies.
+**Never wrap relay in a subagent.** If an Agent task calls `relay` with `run_in_background: true`, the subagent will complete before the peer (GPT) finishes, and the platform will kill the orphaned peer process. Always call `relay` from the main conversation. If a subagent must call relay (e.g., the skill was invoked before you could prevent it), the Bash call must run in foreground — omit `run_in_background` so the subagent blocks until the peer replies.
 
 ## Prism / Parallax
 
-When Relay is used as the Parallax transport inside Prism, the relay call receives the **same full question and same context** as every local reviewer — only the lens (weighing posture) differs. Do not narrow the prompt for the Parallax agent. Prism dispatches each parallax tier independently — the relay calls run concurrently as separate Bash invocations.
+When Relay is used as the Parallax transport inside Prism, the relay call receives the **same full question and same context** as every local reviewer — only the lens (weighing posture) differs. Do not narrow the prompt for the Parallax agent. Prism dispatches each parallax call independently — the relay calls run concurrently as separate Bash invocations.
 
 Launch each relay Bash call with `run_in_background: true` in the same parallel dispatch step as the local reviewer subagents. Do not wrap Relay itself in another subagent layer.
 
-If a Parallax relay call fails (after its background completion notification has arrived), treat it as a recoverable transport problem. Check the relay script's Bash output for the diagnosed cause, fix the invocation, and retry once before declaring that peer unavailable — never read the `.log` sidecar (full stderr, token-heavy). A failure of one peer (e.g., GPT) does not affect the others.
+If a Parallax relay call fails (after its background completion notification has arrived), treat it as a recoverable transport problem. Check the relay script's Bash output for the diagnosed cause, fix the invocation, and retry once before declaring that peer unavailable — never read the `.log` sidecar (full stderr, token-heavy). A failed parallax call does not affect the other tiers.
 
 ## Utility Commands
 
 `relay --help` and `relay --version` print usage and version info.
 
-`--to` accepts `gpt` (default), `glm`, `kimi`, `deepseek`, or `mimo`. There is no relay-to-Claude direction — Claude is the sole caller in this protocol.
+`--to` accepts only `gpt` (the default). There is no relay-to-Claude direction — Claude is the sole caller in this protocol.
