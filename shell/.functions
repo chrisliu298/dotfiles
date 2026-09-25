@@ -525,7 +525,8 @@ szt() {
 
 # Unset TMUX for Claude Code so Bun's getColorDepth() doesn't short-circuit
 # to 256-color (the `if (env.TMUX) return 8` check fires before COLORTERM).
-_claude(){ env -u TMUX COLORTERM=truecolor "$(command -v claude)" "$@"; }
+# The launcher clears endpoint/model overrides and uses Claude's personal profile.
+_claude(){ "$HOME/.local/bin/claude-relay" "$@"; }
 c(){ _claude --dangerously-skip-permissions "$@"; }
 cc(){ _claude --dangerously-skip-permissions --continue "$@"; }
 cr(){ _claude --dangerously-skip-permissions --resume "$@"; }
@@ -534,7 +535,13 @@ cu(){ command claude update "$@"; }
 gu(){ command grok update "$@"; }
 cpu(){ local prompt="/push"; (( $# )) && prompt+=" ${*}"; _claude -p --dangerously-skip-permissions "$prompt"; }
 chl(){ (( $# )) || { echo 'Usage: chl "<prompt>"'; return 1; }; _claude -p --dangerously-skip-permissions "${*}"; }
-cch(){ tmux new-session -ds claude-channels "env -u TMUX COLORTERM=truecolor $(command -v claude) --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official $*" 2>/dev/null; tmux attach -t claude-channels; }
+cch(){
+    local _cmd="$HOME/.local/bin/claude-relay --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official"
+    local _arg
+    for _arg in "$@"; do _cmd+=" ${(q)_arg}"; done
+    tmux new-session -ds claude-channels "$_cmd" 2>/dev/null
+    tmux attach -t claude-channels
+}
 # Reasoning-effort tiers (CLAUDE_CODE_EFFORT_LEVEL); plain `c` keeps the default.
 cl(){  CLAUDE_CODE_EFFORT_LEVEL=low    _claude --dangerously-skip-permissions "$@"; }
 cm(){  CLAUDE_CODE_EFFORT_LEVEL=medium _claude --dangerously-skip-permissions "$@"; }

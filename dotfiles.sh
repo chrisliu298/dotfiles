@@ -11,6 +11,9 @@ LINKS=(
     "shell/.zshenv:.zshenv"
     "shell/.zshrc:.zshrc"
     "shell/theme-apply:.local/bin/theme-apply"
+    # claude-relay: launcher `_claude` (c/cc/cx/…) calls through. Clears inherited
+    # endpoint/model overrides so Claude Code uses its personal account profile.
+    "shell/claude-relay:.local/bin/claude-relay"
     ".config/starship:.config/starship"
     # btop has no config include and rewrites its own config, so its live
     # ~/.config/btop/btop.conf is host-local (generated, outside git). Only the
