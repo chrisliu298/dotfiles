@@ -10,7 +10,7 @@ Three `agents/<name>/` directories target one agent's home each: `claude/` → `
 
 - `agents/eval/` — instruction-following harness for the shared agent doc (prompts, rubric, runner scripts).
 - `agents/hooks/` — shared Claude/Codex destructive-command guard and tests.
-- `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` symlinks each into the agent dirs the `SKILLS` table selects (most to Claude/Codex/Grok; some are Claude-only or Codex-only).
+- `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` symlinks each into the agent dirs the `SKILLS` table selects (most to Claude/Codex/Grok; some are Claude-, Codex-, or Grok-only). Manual skills install only when listed in `agents/skills/manual-skills.enabled`.
 
 Elsewhere:
 

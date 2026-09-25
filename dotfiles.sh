@@ -37,18 +37,19 @@ SKILLS=(
     # grok mirrors the Codex set (it dispatches as a relay/prism target), including
     # side-effecting skills like gpt-pro-relay/push — those are allowed. Only the claude-only
     # entries below (relay, prism, keep-warm, crons, goal-loop, recall, codex-first,
-    # skill-creator) are left off grok; relay and prism are additionally blocked from being triggered on grok
-    # (RELAY_PEER guard + PATH scrub of both script dirs + the GROK_CLAUDE_*_ENABLED=false
+    # skill-creator) are left off grok; relay and prism are additionally blocked from being
+    # triggered on grok (RELAY_PEER guard + PATH scrub of both script dirs + the GROK_CLAUDE_*_ENABLED=false
     # compat suite set in .zshenv and the relay grok transport).
     "*|./agents/skills|claude,codex,grok"
-    # Relay: claude-only caller; targets GPT, Grok, GLM, Kimi, DeepSeek, and MiMo via the script
+    # Relay: claude-only caller; targets GPT, Grok, GLM, Kimi, DeepSeek, and MiMo via the script.
+    # MANUAL (below); explicit entry keeps it claude-only when enabled (the wildcard would install it everywhere).
     "relay|./agents/skills/relay|claude"
-    # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup)
+    # keep-warm relies on Claude-only scheduling tools (CronCreate, ScheduleWakeup). MANUAL (below).
     "keep-warm|./agents/skills/keep-warm|claude"
     # crons: claude-only durable manifest + re-arm for the recurring /loop + CronCreate fleet
-    # (CronCreate/CronList/CronDelete are Claude-only); preparer-not-actuator, no docmaint freshness gate
+    # (CronCreate/CronList/CronDelete are Claude-only); preparer-not-actuator, no docmaint freshness gate. MANUAL (below).
     "crons|./agents/skills/crons|claude"
-    # prism: claude-only caller (dispatches parallax to GPT + Grok + GLM + Kimi + DeepSeek + MiMo via relay)
+    # prism: claude-only caller (dispatches parallax to GPT + Grok + GLM + Kimi + DeepSeek + MiMo via relay). MANUAL (below).
     "prism|./agents/skills/prism|claude"
     # goal-loop: default review backend is prism (claude-only); built on the Skill/AskUserQuestion
     # tooling. Off-Claude it only degrades to external/local/none, so keep it claude-only. MANUAL
@@ -56,7 +57,7 @@ SKILLS=(
     # claude-only when enabled (the wildcard would otherwise install it to codex/grok).
     "goal-loop|./agents/skills/goal-loop|claude"
     # recall: claude-only; searches THIS project's past Claude transcripts (~/.claude/projects) for
-    # an earlier user statement. The store is Claude-specific, so it has no meaning on Codex/Grok.
+    # an earlier user statement. The store is Claude-specific, so it has no meaning on Codex/Grok. MANUAL (below).
     "recall|./agents/skills/recall|claude"
     # codex-first: claude-only routing skill — delegates hands-on work to `codex exec` while Claude
     # specs + reviews; a Codex/Grok session self-delegating to Codex is meaningless. MANUAL (below),
@@ -67,8 +68,15 @@ SKILLS=(
     # session-history: Codex-only; searches Codex rollout transcripts on demand.
     # Claude keeps its separate transcript-store-specific recall skill.
     "session-history|./agents/skills/session-history|codex"
-    "defuddle|kepano/obsidian-skills/skills/defuddle|claude,codex,grok"
-    "humanizer|blader/humanizer|claude,codex,grok"
+    # Off claude+codex by request, kept on grok. digest/exec-status/jina/mental-seal/xurl are
+    # otherwise wildcard-sourced; these explicit grok entries override the wildcard's agents set.
+    "defuddle|kepano/obsidian-skills/skills/defuddle|grok"
+    "humanizer|blader/humanizer|grok"
+    "digest|./agents/skills/digest|grok"
+    "exec-status|./agents/skills/exec-status|grok"
+    "jina|./agents/skills/jina|grok"
+    "mental-seal|./agents/skills/mental-seal|grok"
+    "xurl|./agents/skills/xurl|grok"
     "pdf|anthropics/skills/skills/pdf|claude"
     "skill-creator|anthropics/skills/skills/skill-creator|claude"
     "pdf|openai/skills/skills/.curated/pdf|codex,grok"
@@ -78,12 +86,18 @@ SKILLS=(
 MANUAL_SKILLS=(
     autoresearch
     codex-first
+    crons
     deslop
     goal-drive
     goal-elicit
     goal-loop
     interviewer
+    keep-warm
+    prism
     prompt-engineer
+    recall
+    relay
+    todo
 )
 
 # Which manual skills are currently enabled — a committed declarative set, one
