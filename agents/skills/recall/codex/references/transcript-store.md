@@ -53,9 +53,11 @@ corpora are not compared. Files parsed for the project pass are reused by the
 `all` pass. `CODEX_RECALL_ROOT` (or `--root`) overrides the
 sessions directory for tests.
 
-Machine-injected pseudo-user blocks are excluded. For response annotations, the
-parser retains only the user's annotation comments and trailing request, not the
-selected assistant text or annotation boilerplate.
+Machine-injected pseudo-user blocks are excluded. When a user turn begins with
+`## Referenced chats with Codex:` or `# Files mentioned by the user:`, the
+parser discards that injected preamble and keeps the text after `## My request:`.
+For response annotations, it retains only the user's annotation comments and
+trailing request, not the selected assistant text or annotation boilerplate.
 
 ## Bounded parsing
 

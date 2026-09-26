@@ -53,6 +53,18 @@ RECALL="$(dirname "$(realpath "${CODEX_HOME:-$HOME/.codex}/skills/recall")")/sha
    uv run --quiet --script "$(realpath "${CODEX_HOME:-$HOME/.codex}/skills/recall")/scripts/recall.py" \
      search --scope current-task --cwd "$PWD" --query "auth retry cap"
    ```
+
+   When recalling what the user said, add `--roles user`; remove that filter
+   when looking for an answer or surrounding discussion. Keep using the shared
+   entrypoint for these searches so they use the transcript cache.
+
+   If the first results do not answer the question, try two or three shorter,
+   complementary queries with `--limit 20`. Use the user's new clues and common
+   alternative wording, rather than combining every guessed term into one query.
+   Inspect plausible candidates with `show`. Do not invent a date cutoff or
+   filter the returned top-k by date/project: an empty filtered list says nothing
+   about candidates that ranked below k. Keep cross-project search available
+   when the remembered project may be imprecise.
 3. **Expand** the chosen candidate with surrounding turns when exact wording
    matters:
 
@@ -78,9 +90,10 @@ RECALL="$(dirname "$(realpath "${CODEX_HOME:-$HOME/.codex}/skills/recall")")/sha
    - `confident`: a strong retrieval match, not proof the statement is still
      true. A `kind: question` candidate is never `confident`; it records what
      was asked, not what was settled.
-   - `ambiguous`: present the best two or three dated snippets and ask which
-     one the user means. Do not compare scores from different sources or act
-     on an uncertain match.
+   - `ambiguous`: inspect plausible candidates and refine the query as above.
+     If the evidence still leaves multiple possible answers, present the best
+     two or three dated snippets and ask which one the user means. Do not
+     compare scores from different sources or act on an uncertain match.
    - `empty_query`: retry with concrete names, values, or identifiers.
    - `no_match`: say so plainly. Do not search the other agent's history unless
      asked, and never invent missing context.
@@ -115,3 +128,8 @@ only when diagnosing schema drift or changing the parser.
 - The shared entrypoint caches redacted turns per transcript under
   `~/.cache/recall/`; size and mtime changes invalidate that file's cache.
   The source transcript remains authoritative, and no background process runs.
+- Coverage is local saved user/assistant text in the supported stores. This is
+  lexical retrieval, not guaranteed semantic recall: images, omitted oversized
+  records, unavailable transcripts, and substantially different wording can
+  prevent a match. Report an unsuccessful search as "not found in the searched
+  records", not proof that the user never mentioned it.

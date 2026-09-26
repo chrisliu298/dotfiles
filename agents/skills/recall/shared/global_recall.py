@@ -39,11 +39,13 @@ def run_source(source: str, args: list[str]) -> dict:
     return result
 
 
-def search(query: str, cwd: str, sources: list[str], limit: int) -> dict:
+def search(query: str, cwd: str, sources: list[str], limit: int, roles: str = "both") -> dict:
     commands = {
         "codex": ["search", "--scope", "all", "--cwd", cwd, "--query", query, "--limit", str(limit)],
         "claude": ["search", "--scope", "all", "--max-files", "0", "--cwd", cwd, "--q", query, "--k", str(limit)],
     }
+    for command in commands.values():
+        command.extend(["--roles", roles])
     with ThreadPoolExecutor(max_workers=len(sources)) as executor:
         futures = {source: executor.submit(run_source, source, commands[source]) for source in sources}
         results = {source: futures[source].result() for source in sources}
@@ -96,7 +98,8 @@ def main(argv: list[str] | None = None) -> int:
     find.add_argument("--cwd", default=os.getcwd())
     find.add_argument("--agent", choices=("codex", "claude"), required=True)
     find.add_argument("--source", choices=("self", "other", "all"), default="self")
-    find.add_argument("--limit", type=int, default=5)
+    find.add_argument("--limit", type=int, choices=range(1, 21), default=5)
+    find.add_argument("--roles", choices=("both", "user", "assistant"), default="both")
     context = commands.add_parser("show")
     context.add_argument("--source", choices=("codex", "claude"), required=True)
     context.add_argument("--session", required=True)
@@ -110,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
             [args.agent] if args.source == "self" else
             ["claude" if args.agent == "codex" else "codex"]
         )
-        result = search(args.query, args.cwd, sources, args.limit)
+        result = search(args.query, args.cwd, sources, args.limit, args.roles)
     else:
         result = show(args.source, args)
     print(json.dumps(result, indent=2, ensure_ascii=False))

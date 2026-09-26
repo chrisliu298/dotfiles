@@ -677,6 +677,8 @@ def cmd_search(args):
     docs, stats = build_corpus(args.cwd, include_all=args.include_headless, exclude_session=exclude,
                                since_secs=parse_duration(args.since), max_files=args.max_files,
                                scope=args.scope)
+    if args.roles != "both":
+        docs = [doc for doc in docs if doc.role == args.roles]
     status, hits, terms = run_query(docs, args.q, args.k)
     out = {"status": status, "query": redact(args.q), "cwd": args.cwd,
            "encoded_cwd": encode_cwd(args.cwd), "stats": stats}
@@ -761,6 +763,7 @@ def main():
     s = sub.add_parser("search", parents=[common])
     s.add_argument("--q", required=True)
     s.add_argument("--k", type=int, default=DEFAULT_K)
+    s.add_argument("--roles", choices=("both", "user", "assistant"), default="both")
     s.add_argument("--since", default=None, help="recency floor, e.g. 30d/12h (default: no floor)")
     s.add_argument("--max-files", type=int, default=DEFAULT_MAX_FILES,
                    help=f"cap files scanned, newest-first (default {DEFAULT_MAX_FILES} for latency; "

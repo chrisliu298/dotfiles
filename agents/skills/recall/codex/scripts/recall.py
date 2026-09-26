@@ -290,6 +290,9 @@ def redact(text: str) -> tuple[str, int]:
 
 
 def _annotation_text(text: str) -> str:
+    if text.lstrip().lower().startswith(("## referenced chats with codex:", "# files mentioned by the user:")):
+        request = re.split(r"^## My request:\s*$", text, maxsplit=1, flags=re.M | re.I)
+        return request[1].strip() if len(request) == 2 else text
     if not text.lstrip().lower().startswith("# response annotations:"):
         return text
     match = re.search(r"<response-annotations>\s*(.*?)\s*</response-annotations>", text, re.S | re.I)
@@ -498,7 +501,7 @@ def load_turns(
                         "stats": parsed_stats.as_dict(),
                     }
 
-                payload = get_or_build(meta.path, "codex", 1, build)
+                payload = get_or_build(meta.path, "codex", 2, build)
                 turns = [Turn(**{**row, "path": Path(row["path"])}) for row in payload["turns"]]
                 stats = Stats(**payload["stats"])
             else:

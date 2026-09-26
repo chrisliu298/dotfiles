@@ -96,6 +96,15 @@ class RecallTests(unittest.TestCase):
             assistant("Done, prompt colors updated."),
         ])
 
+    def test_role_filter_applies_before_candidate_limit(self):
+        self.write(S_OLD, [
+            assistant("quartz retries"),
+            user("We decided the quartz service retries at most four times with a delay."),
+        ])
+        _, out = self.search("quartz retries", "--roles", "user", "--k", "1")
+        self.assertEqual(len(out["candidates"]), 1)
+        self.assertEqual(out["candidates"][0]["role"], "user")
+
     # ------------------------------------------------------------------ search statuses
     def test_confident_hit_prints_contract_confirmation(self):
         self.standard_store()

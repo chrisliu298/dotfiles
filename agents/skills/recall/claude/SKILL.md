@@ -68,6 +68,14 @@ RECALL="$(dirname "$(realpath "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/recall
    `score`, `role`, `date`, `session_short`, `project`, an `L<line>` anchor, and its own
    `confirmation` line), and a top-level `confirmation` only when `confident`.
 
+   Add `--roles user` when recalling what the user said; remove it when looking
+   for an answer or surrounding discussion. If results do not answer the question,
+   try two or three shorter, complementary queries with `--limit 20`, using the
+   user's clues and alternative wording. Keep using this cached entrypoint.
+   Inspect plausible candidates with `show`. Do not invent a date cutoff or
+   filter top-k results by date/project: an empty filtered list cannot establish
+   that the full history has no match. A remembered project can be imprecise.
+
 3. **`confident`** → load the top hit. You may act as a light re-ranker — if a *lower*-ranked
    candidate is the clearer semantic fit (BM25 ranks by term overlap, not meaning), load THAT one and
    print **its own** `confirmation` field (each candidate carries one). But if *no* candidate clearly
@@ -86,7 +94,9 @@ RECALL="$(dirname "$(realpath "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/recall
    the answer before treating anything as settled.
 
 4. **`ambiguous`** (no clear winner) → do **not** silently pick.
-   Show the top 2–3 dated candidate gists with source names. Never compare
+   Inspect plausible candidates and refine the query first. If the evidence
+   still leaves multiple possible answers, show the top 2–3 dated candidate
+   gists with source names. Never compare
    scores across sources. Ask which one the user
    means. Don't act on any until they say; once they pick, print that candidate's `confirmation`
    line.
@@ -134,6 +144,10 @@ RECALL="$(dirname "$(realpath "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/recall
   `--include-headless` to include relay/`claude -p` sessions if you're deliberately looking for one.
 - **No match means no match.** A `no_match` after escalation is a real answer — say it; do not invent
   a plausible-sounding detail to fill the gap.
+- **Coverage:** local saved user/assistant text in supported stores. Lexical
+  retrieval cannot guarantee recall across substantially different wording,
+  missing transcripts, images, or omitted oversized records. Say "not found in
+  the searched records"; do not conclude the user never mentioned it.
 
 ## How it works (pointers)
 

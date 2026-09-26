@@ -52,6 +52,13 @@ class GlobalRecallTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0], "claude")
         self.assertEqual(result["candidates"][0]["source"], "claude")
 
+    def test_roles_reaches_each_source_before_ranking(self) -> None:
+        for agent in ("codex", "claude"):
+            with self.subTest(agent=agent), mock.patch.object(recall, "run_source", return_value=hit(agent)) as run:
+                self.invoke("--agent", agent, "--roles", "user", "--limit", "20")
+                command = run.call_args.args[1]
+                self.assertEqual(command[command.index("--roles") + 1], "user")
+
     def test_both_sources_remain_separate_and_ambiguous(self) -> None:
         with mock.patch.object(recall, "run_source", side_effect=lambda source, _: hit(source)):
             result = self.invoke("--agent", "codex", "--source", "all")

@@ -498,6 +498,25 @@ class RecallTests(unittest.TestCase):
         self.assertIn("continue with the lighter design", turns[0].text)
         self.assertNotIn("assistant selection", turns[0].text)
 
+    def test_referenced_chats_wrapper_keeps_actual_user_request(self) -> None:
+        wrapped = (
+            '\n## Referenced chats with Codex:\n'
+            'These are live references to Codex tasks, not task contents.\n'
+            '[{"hostId":"local","threadId":"older-task"}]\n'
+            '## My request:\n'
+            'Which reasoning effort should CLF Training and CoT use with GPT-6 Sol?'
+        )
+        path = self.write_rollout(
+            f"rollout-{self.session}.jsonl",
+            [self.meta(), message("wrapped", "user", wrapped, 1, "2026-09-09T01:00:01Z")],
+        )
+        turns, _ = recall.extract_turns(path)
+        self.assertEqual(len(turns), 1)
+        self.assertEqual(
+            turns[0].text,
+            "Which reasoning effort should CLF Training and CoT use with GPT-6 Sol?",
+        )
+
     def test_empty_query_and_hangul_are_distinct(self) -> None:
         self.write_rollout(
             f"rollout-{self.session}.jsonl",
