@@ -124,8 +124,10 @@ vim.g.netrw_liststyle = 3      -- Tree-style directory listing
 -- Statusline (built-in, no plugin needed)
 -------------------------------------------------------------------------------
 
--- Colorscheme (github-dark matching Ghostty terminal palette, no plugin needed)
-vim.cmd.colorscheme('github-dark')
+-- Match the host-local mode that `theme` applies to Ghostty and the prompt.
+local theme_state = (vim.env.XDG_STATE_HOME or vim.fn.expand('~/.local/state')) .. '/dotfiles-theme/mode'
+local theme_mode = vim.fn.filereadable(theme_state) == 1 and vim.fn.readfile(theme_state)[1] or 'dark'
+vim.cmd.colorscheme(theme_mode == 'light' and 'openai-light' or 'openai-dark')
 
 -- %f=filepath %m=modified %r=readonly %==right-align %y=filetype %l=line %c=col %p=percent
 vim.o.statusline = ' %f%m%r%= %y  %l:%c  %p%% '

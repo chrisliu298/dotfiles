@@ -1,0 +1,31 @@
+# OpenAI Light — terminal adaptation of OpenAI's light developer docs.
+# Black/white/gray surfaces follow the site; red, blue, and purple draw from
+# its light code samples. The remaining ANSI hues are custom semantic colors,
+# chosen to stay readable on white. This is not an official OpenAI theme.
+
+# ANSI normal (0–7)
+palette = 0=#262626
+palette = 1=#bf1831
+palette = 2=#007a56
+palette = 3=#956000
+palette = 4=#005ed7
+palette = 5=#722ccc
+palette = 6=#007b87
+palette = 7=#5c5c5c
+
+# ANSI bright (8–15)
+palette = 8=#707070
+palette = 9=#d9233c
+palette = 10=#00855d
+palette = 11=#a26800
+palette = 12=#1769e5
+palette = 13=#892bda
+palette = 14=#00818d
+palette = 15=#333333
+
+background = #ffffff
+foreground = #1f1f1f
+selection-background = #e8e8e8
+selection-foreground = #1f1f1f
+cursor-color = #1f1f1f
+cursor-text = #ffffff

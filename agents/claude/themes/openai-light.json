@@ -1,0 +1,11 @@
+{
+  "name": "OpenAI Light",
+  "base": "light-ansi",
+  "overrides": {
+    "diffAdded": "#d4f1e2",
+    "diffRemoved": "#f9e0e5",
+    "selectionBg": "#dbeaf4",
+    "userMessageBackground": "#f3f3f3",
+    "userMessageBackgroundHover": "#e8e8e8"
+  }
+}

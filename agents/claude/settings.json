@@ -12,7 +12,7 @@
   "enabledPlugins": {
     "code-simplifier@claude-plugins-official": true
   },
-  "theme": "auto",
+  "theme": "custom:openai-dark",
   "effortLevel": "high",
   "autoMemoryEnabled": true,
   "cleanupPeriodDays": 3650000,

@@ -24,7 +24,11 @@ LINKS=(
     "agents/claude/CLAUDE.md:.claude/CLAUDE.md"
     "agents/claude/keybindings.json:.claude/keybindings.json"
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
+    "agents/claude/themes/openai-dark.json:.claude/themes/openai-dark.json"
+    "agents/claude/themes/openai-light.json:.claude/themes/openai-light.json"
     "agents/codex/AGENTS.md:.codex/AGENTS.md"
+    "agents/codex/themes/openai-dark.tmTheme:.codex/themes/openai-dark.tmTheme"
+    "agents/codex/themes/openai-light.tmTheme:.codex/themes/openai-light.tmTheme"
 )
 
 # name|source|agents — name * = auto-discover subdirs with SKILL.md
@@ -211,7 +215,7 @@ _ensure_source() {
 # ── Install functions ────────────────────────────────────────────
 
 # Host-local active theme, decoupled from git. The choice lives in a single
-# mode file under XDG state; theme-apply materializes the five tools' live config
+# mode file under XDG state; theme-apply materializes the tools' live config
 # from it (ghostty/tmux via optional includes; btop/Starship as generated
 # files; Codex by updating only its TUI theme).
 # MUST run before install_links: it converts a legacy whole-dir btop symlink into
@@ -238,6 +242,22 @@ setup_theme_state() {
         log "seed theme state: mode=$mode (run 'theme light' to switch)"
     fi
 
+    # Claude settings are copied before applying the mode so the generated
+    # theme selection is not overwritten later by the tracked template.
+    local claude_src="$ROOT/agents/claude/settings.json" claude_dest="$HOME/.claude/settings.json"
+    if [[ -f "$claude_src" ]]; then
+        local claude_content; claude_content=$(sed "s|~/|$HOME/|g" "$claude_src")
+        if [[ ! -f "$claude_dest" || -L "$claude_dest" || "$(cat "$claude_dest")" != "$claude_content" ]]; then
+            mkdir -p "$(dirname "$claude_dest")"
+            rm -f "$claude_dest"
+            printf '%s\n' "$claude_content" > "$claude_dest"
+            log "write ~/.claude/settings.json"
+        fi
+    fi
+    # The selected theme must exist when theme-apply updates Claude settings.
+    ensure_symlink "$ROOT/agents/claude/themes/openai-dark.json" "$HOME/.claude/themes/openai-dark.json"
+    ensure_symlink "$ROOT/agents/claude/themes/openai-light.json" "$HOME/.claude/themes/openai-light.json"
+
     # Materialize live config from the repo templates (symlinks may not exist yet).
     BTOP_TEMPLATE="$ROOT/.config/btop/btop.conf.template" \
     STARSHIP_TEMPLATE="$ROOT/.config/starship/starship.toml" \
@@ -254,15 +274,6 @@ install_links() {
         ensure_symlink "$src" "$HOME/${entry#*:}"
     done
     install_delete_hooks
-    # settings.json: copy with ~ expansion (Claude Code needs absolute paths)
-    local src="$ROOT/agents/claude/settings.json" dest="$HOME/.claude/settings.json"
-    [[ -f "$src" ]] || return
-    local content; content=$(sed "s|~/|$HOME/|g" "$src")
-    if [[ -f "$dest" && ! -L "$dest" ]] && [[ "$(cat "$dest")" == "$content" ]]; then return; fi
-    mkdir -p "$(dirname "$dest")"
-    rm -f "$dest"
-    printf '%s\n' "$content" > "$dest"
-    log "write ~/.claude/settings.json"
 }
 
 install_delete_hooks() {

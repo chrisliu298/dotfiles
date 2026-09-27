@@ -6,7 +6,7 @@ Personal dotfiles and AI agent configurations for macOS with zsh, managed by `do
 
 ## Project Structure & Module Organization
 
-Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`CLAUDE.md`, `settings.json` — copied, not symlinked — keybindings, statusline), `codex/` → `~/.codex/`. The rest are not agent homes:
+Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`CLAUDE.md`, `settings.json` — copied, not symlinked — keybindings, statusline, themes), `codex/` → `~/.codex/`. The rest are not agent homes:
 
 - `agents/eval/` — instruction-following harness for the shared agent doc (prompts, rubric, runner scripts).
 - `agents/hooks/` — shared Claude/Codex destructive-command guard and tests.
@@ -27,7 +27,7 @@ Elsewhere:
 ## Conventions
 
 - **Shell load order**: `shell/.zshenv` (platform detection, env, PATH) → `shell/.zshrc` (plugins, sources `.aliases` + `.functions`)
-- **Themes**: Ghostty, Starship, btop, tmux, and Codex (GitHub Light ↔ GitHub Dark), toggled with `theme light|dark|toggle|status`; use `theme --all <mode>` to apply the same mode on this host plus every peer in `_dotfiles_peers` (`shell/.functions`), the one list `theme --all` and `dfs` share. The active choice is **host-local** — a single `mode` file under `~/.local/state/dotfiles-theme/` (never tracked, so switching never dirties git); definitions stay in-repo. `shell/theme-apply` materializes each tool's live config from `mode` (Ghostty/tmux via optional `config-file`/`source-file -q` includes; btop/Starship as generated files, since neither supports includes; Codex by rewriting only `[tui].theme` in the host-local `~/.codex/config.toml`), and `dotfiles.sh` seeds/re-applies it per host. Codex Desktop follows macOS through its own user-controlled appearance setting. Codex pins Catppuccin Latte/Mocha syntax themes because its terminal-background probe can time out over SSH and fall back to dark on a light terminal. Claude Code uses its built-in `theme: auto` (set in `agents/claude/settings.json`), which follows the terminal background.
+- **Themes**: Ghostty, Starship, btop, tmux, Neovim, Codex TUI, and Claude Code (OpenAI Light ↔ OpenAI Dark), with fastfetch inheriting terminal ANSI colors, toggled with `theme light|dark|toggle|status`; use `theme --all <mode>` to apply the same mode on this host plus every peer in `_dotfiles_peers` (`shell/.functions`), the one list `theme --all` and `dfs` share. The active choice is **host-local** — a single `mode` file under `~/.local/state/dotfiles-theme/` (never tracked, so switching never dirties git); definitions stay in-repo. `shell/theme-apply` materializes each tool's live config from `mode` (Ghostty/tmux via optional `config-file`/`source-file -q` includes; btop/Starship as generated files, since neither supports includes; Codex by rewriting only `[tui].theme` in the host-local `~/.codex/config.toml`), and `dotfiles.sh` seeds/re-applies it per host. Neovim reads the mode at startup; fastfetch uses ANSI colors. Codex Desktop follows macOS through its own user-controlled appearance setting. Codex pins OpenAI Light/Dark syntax themes because its terminal-background probe can time out over SSH and fall back to dark on a light terminal. Claude Code selects `custom:openai-dark` or `custom:openai-light` via `shell/theme-apply`; each theme inherits Ghostty’s ANSI palette and customizes message, diff, and selection backgrounds. Its status line uses matching terminal colors.
 
 ## Skills, MCP Servers & Plugins
 

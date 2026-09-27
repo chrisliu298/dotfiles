@@ -50,6 +50,8 @@ _theme_local() {
     local ghostty_theme_dir="${GHOSTTY_THEME_DIR:-$HOME/.config/ghostty/themes}"
     local btop_theme_dir="${BTOP_THEME_DIR:-$HOME/.config/btop/themes}"
     local tmux_theme_dir="${TMUX_THEME_DIR:-$HOME/.config/tmux/themes}"
+    local codex_theme_dir="${CODEX_THEME_DIR:-$HOME/.codex/themes}"
+    local nvim_color_dir="${NVIM_COLOR_DIR:-$HOME/.config/nvim/colors}"
     local starship_template="${STARSHIP_TEMPLATE:-$HOME/.config/starship/starship.toml}"
     local ghostty_theme btop_theme tmux_theme starship_palette system_theme new_mode
 
@@ -73,8 +75,8 @@ _theme_local() {
     esac
 
     case "$new_mode" in
-        light) ghostty_theme="GitHub Light"; btop_theme="github_light"; tmux_theme="github_light"; starship_palette="github_light"; system_theme="Light" ;;
-        dark)  ghostty_theme="GitHub Dark";  btop_theme="github_dark";  tmux_theme="github_dark";  starship_palette="github_dark";  system_theme="Dark"  ;;
+        light) ghostty_theme="OpenAI Light"; btop_theme="openai_light"; tmux_theme="openai_light"; starship_palette="openai_light"; system_theme="Light" ;;
+        dark)  ghostty_theme="OpenAI Dark";  btop_theme="openai_dark";  tmux_theme="openai_dark";  starship_palette="openai_dark";  system_theme="Dark"  ;;
     esac
 
     # Validate tracked theme *definitions* exist before switching.
@@ -82,6 +84,9 @@ _theme_local() {
     [[ -f "${btop_theme_dir}/${btop_theme}.theme" ]] || { printf 'theme: missing btop theme: %s\n' "$btop_theme" >&2; return 1; }
     [[ -f "${tmux_theme_dir}/${tmux_theme}.conf" ]] || { printf 'theme: missing tmux theme: %s\n' "$tmux_theme" >&2; return 1; }
     grep -q "^\\[palettes\\.${starship_palette}\\]$" "$starship_template" || { printf 'theme: missing Starship palette: %s\n' "$starship_palette" >&2; return 1; }
+    [[ -f "${codex_theme_dir}/openai-${new_mode}.tmTheme" ]] || { printf 'theme: missing Codex theme: openai-%s\n' "$new_mode" >&2; return 1; }
+    [[ -f "$HOME/.claude/themes/openai-${new_mode}.json" ]] || { printf 'theme: missing Claude theme: openai-%s (run ./dotfiles.sh)\n' "$new_mode" >&2; return 1; }
+    [[ -f "${nvim_color_dir}/openai-${new_mode}.lua" ]] || { printf 'theme: missing Neovim theme: openai-%s\n' "$new_mode" >&2; return 1; }
 
     # Preserve the previous mode so a failed switch rolls back cleanly. All writes
     # land in host-local files (state dir + real ~/.config/btop/btop.conf), never git.
@@ -146,7 +151,9 @@ _theme_local() {
     printf '  btop:    %s (restart btop to apply)\n' "$btop_theme"
     printf '  tmux:    %s\n' "$tmux_theme"
     printf '  Prompt:  %s\n' "$starship_palette"
-    printf '  Codex:   %s\n' "$new_mode"
+    printf '  Neovim:  openai-%s (next start)\n' "$new_mode"
+    printf '  Codex:   openai-%s\n' "$new_mode"
+    printf '  Claude:  custom:openai-%s\n' "$new_mode"
 }
 
 theme() {

@@ -4,7 +4,7 @@
 # Single source of truth for turning a light/dark choice into live config,
 # shared by the `theme` shell function and dotfiles.sh so the two never drift.
 # Writes ONLY host-local files (XDG state dir + the real ~/.config/btop/btop.conf
-# plus ~/.codex/config.toml) — never a git-tracked file, so switching themes
+# plus ~/.codex/config.toml and ~/.claude/settings.json) — never a git-tracked file, so switching themes
 # can never dirty the tree.
 #
 # Usage: theme-apply <light|dark>
@@ -15,6 +15,7 @@
 #   $STATE_DIR/starship.toml       full config (STARSHIP_CONFIG target), palette applied
 #   ~/.config/btop/btop.conf       full config, generated from the tracked template
 #   ~/.codex/config.toml           existing config, TUI theme only
+#   ~/.claude/settings.json        existing config, matching OpenAI theme only
 #
 # Theme *definitions* stay tracked: ghostty/tmux theme files, btop themes/,
 # and the starship [palettes.*] tables inside the template.
@@ -29,10 +30,11 @@ btop_template="${BTOP_TEMPLATE:-$HOME/.config/btop/btop.conf.template}"
 starship_template="${STARSHIP_TEMPLATE:-$HOME/.config/starship/starship.toml}"
 btop_live="${BTOP_LIVE:-$HOME/.config/btop/btop.conf}"
 codex_config="${CODEX_CONFIG:-$HOME/.codex/config.toml}"
+claude_config="${CLAUDE_CONFIG:-$HOME/.claude/settings.json}"
 
 case "$mode" in
-    light) ghostty_theme="GitHub Light"; btop_theme="github_light"; tmux_theme="github_light"; starship_palette="github_light"; codex_tui_theme="catppuccin-latte" ;;
-    dark)  ghostty_theme="GitHub Dark";  btop_theme="github_dark";  tmux_theme="github_dark";  starship_palette="github_dark";  codex_tui_theme="catppuccin-mocha" ;;
+    light) ghostty_theme="OpenAI Light"; btop_theme="openai_light"; tmux_theme="openai_light"; starship_palette="openai_light"; codex_tui_theme="openai-light"; claude_theme="custom:openai-light" ;;
+    dark)  ghostty_theme="OpenAI Dark";  btop_theme="openai_dark";  tmux_theme="openai_dark";  starship_palette="openai_dark";  codex_tui_theme="openai-dark"; claude_theme="custom:openai-dark" ;;
     *) printf 'theme-apply: invalid mode: %s (want light|dark)\n' "$mode" >&2; exit 2 ;;
 esac
 
@@ -61,6 +63,20 @@ if [ -f "$btop_template" ]; then
     mv "$btop_live.tmp" "$btop_live"
 fi
 
+# The Claude themes inherit Ghostty's ANSI palette and tune message, diff, and
+# selection backgrounds. Change only this preference, preserving local settings.
+if [ -f "$claude_config" ]; then
+    claude_tmp="${claude_config}.theme.$$"
+    jq --arg theme "$claude_theme" 'if type == "object" then .theme = $theme else error("Claude settings must be a JSON object") end' \
+        "$claude_config" > "$claude_tmp" || {
+        rm -f "$claude_tmp"
+        printf 'theme-apply: failed to stage Claude settings from %s\n' "$claude_config" >&2
+        exit 1
+    }
+    chmod 600 "$claude_tmp"
+    mv "$claude_tmp" "$claude_config"
+fi
+
 # starship: no include mechanism — regenerate the STARSHIP_CONFIG target from the
 # tracked template with the palette rewritten. Palettes stay defined in the template.
 if [ -f "$starship_template" ]; then
@@ -76,10 +92,8 @@ if [ -f "$starship_template" ]; then
     mv "$STATE_DIR/starship.toml.tmp" "$STATE_DIR/starship.toml"
 fi
 
-# Codex's automatic TUI theme depends on a short terminal-background probe. That
-# can time out over SSH and fall back to the dark theme on a light terminal, so
-# pin the same light/dark defaults Codex would choose adaptively. Desktop follows
-# macOS independently, so leave its user-controlled appearance setting untouched.
+# Pin the matching custom syntax theme: terminal-background probing can time out
+# over SSH and pick the wrong mode. Codex Desktop follows macOS independently.
 if [ -f "$codex_config" ]; then
     codex_tmp="${codex_config}.theme.$$"
     awk \

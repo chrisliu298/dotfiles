@@ -1,0 +1,31 @@
+# OpenAI Dark — terminal adaptation of OpenAI's dark site and developer docs.
+# The pure black canvas and restrained grays follow the pages; red, blue, and
+# purple draw from dark code samples. The other ANSI hues are custom semantic
+# colors. This is not an official OpenAI theme.
+
+# ANSI normal (0–7)
+palette = 0=#3a3a3a
+palette = 1=#ff6177
+palette = 2=#00b889
+palette = 3=#f2be59
+palette = 4=#5aaeff
+palette = 5=#b17aff
+palette = 6=#3fd1df
+palette = 7=#dcdcdc
+
+# ANSI bright (8–15)
+palette = 8=#777777
+palette = 9=#ff8d9d
+palette = 10=#3bd5a4
+palette = 11=#ffd276
+palette = 12=#85c2ff
+palette = 13=#c997ff
+palette = 14=#70e3eb
+palette = 15=#ffffff
+
+background = #000000
+foreground = #f2f2f2
+selection-background = #303030
+selection-foreground = #ffffff
+cursor-color = #f2f2f2
+cursor-text = #000000

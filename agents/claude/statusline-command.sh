@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code status line — GitHub Light/Dark terminal palette (ANSI named colors only)
+# Claude Code status line — follows the terminal's light/dark ANSI palette
 # Model | project | branch* | 9m | $1.45 | +141/-25 | 5h 37% 2h41m | 7d 26% 4d3h | ctx 26% 38k/200k
 
 input=$(cat)
@@ -43,13 +43,12 @@ input=$(cat)
 #   ' "$usage_cache" 2>/dev/null)"
 # fi
 
-# ── Colors (GitHub Light/Dark terminal palette — ANSI named colors only) ──
+# ── Colors (terminal ANSI names; Ghostty supplies the OpenAI palette) ──
 reset='\033[0m'
 muted='\033[90m'
 bold='\033[1m'
-cyan='\033[36m'                      # branding: project, worktree
-magenta='\033[35m'                   # accent: branch, links
-green='\033[32m'                     # success, additions
+blue='\033[34m'                      # navigation: project, worktree
+green='\033[32m'                     # branch, success, additions
 red='\033[31m'                       # errors, deletions
 
 # ── Extract fields (single jq call) ─────────────────────────────
@@ -102,9 +101,9 @@ if [ -n "$branch" ]; then
     | sed 's|git@github.com:|https://github.com/|' | sed 's|\.git$||')
   if [ -n "$remote_url" ]; then
     clean_branch="${branch%\*}"
-    branch_segment="\033]8;;${remote_url}/tree/${clean_branch}\a${magenta}${branch}${reset}\033]8;;\a"
+    branch_segment="\033]8;;${remote_url}/tree/${clean_branch}\a${green}${branch}${reset}\033]8;;\a"
   else
-    branch_segment="${magenta}${branch}${reset}"
+    branch_segment="${green}${branch}${reset}"
   fi
 fi
 
@@ -183,16 +182,16 @@ if [ -n "$model" ]; then
   [ -n "$effort_level" ] && model_seg+=" ${effort_level}"
   parts+=("${model_seg}${reset}")
 fi
-[ -n "$project" ] && parts+=("${cyan}${project}${reset}")
+[ -n "$project" ] && parts+=("${blue}${project}${reset}")
 [ -n "$branch_segment" ] && parts+=("$branch_segment")
-[ -n "$wt_name" ] && parts+=("${cyan}[${wt_name}]${reset}")
+[ -n "$wt_name" ] && parts+=("${blue}[${wt_name}]${reset}")
 [ -n "$agent_name" ] && parts+=("${muted}${agent_name}${reset}")
 
 if [ -n "$vim_mode" ]; then
   if [ "$vim_mode" = "NORMAL" ]; then
     parts+=("${green}${vim_mode}${reset}")
   else
-    parts+=("${cyan}${vim_mode}${reset}")
+    parts+=("${blue}${vim_mode}${reset}")
   fi
 fi
 

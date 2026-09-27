@@ -26,7 +26,7 @@ $time\
 $line_break\
 $character"""
 
-palette = 'github_dark'
+palette = 'openai_dark'
 
 [fill]
 symbol = ' '
@@ -34,18 +34,18 @@ symbol = ' '
 # --- Identity (present but quiet, like p10k's tan user@host) ---
 [username]
 show_always = true
-style_user = "fg:gh_muted"
-style_root = "fg:gh_red"
+style_user = "fg:oa_muted"
+style_root = "fg:oa_red"
 format = '[$user]($style)'
 
 [hostname]
 ssh_only = true
-style = "fg:gh_muted"
+style = "fg:oa_muted"
 format = '[@$hostname]($style)'
 
-# --- Navigation (primary — blue, the most-read segment) ---
+# --- Navigation (blue, matching directory names in terminal output) ---
 [directory]
-style = "fg:gh_blue"
+style = "fg:oa_blue"
 format = ' [$path]($style)'
 truncate_to_repo = false
 truncation_length = 255
@@ -53,79 +53,79 @@ truncation_length = 255
 # --- Version control (green = clean, yellow = dirty) ---
 [git_branch]
 symbol = ""
-style = "fg:gh_green"
+style = "fg:oa_green"
 format = '[ $symbol$branch]($style)'
 
 [git_state]
-style = "fg:gh_yellow"
+style = "fg:oa_yellow"
 format = '\([$state( $progress_current/$progress_total)]($style)\)'
 
 [git_status]
-style = "fg:gh_yellow"
+style = "fg:oa_yellow"
 format = '[ $all_status$ahead_behind]($style)'
 
 # --- Language runtimes (muted cyan — visible but secondary) ---
 [c]
 symbol = ""
-style = "fg:gh_cyan"
+style = "fg:oa_cyan"
 format = ' [$symbol $version]($style)'
 
 [rust]
 symbol = ""
-style = "fg:gh_cyan"
+style = "fg:oa_cyan"
 format = ' [$symbol $version]($style)'
 
 [golang]
 symbol = ""
-style = "fg:gh_cyan"
+style = "fg:oa_cyan"
 format = ' [$symbol $version]($style)'
 
 [nodejs]
 symbol = ""
-style = "fg:gh_cyan"
+style = "fg:oa_cyan"
 format = ' [$symbol $version]($style)'
 
 [php]
 symbol = ""
-style = "fg:gh_cyan"
+style = "fg:oa_cyan"
 format = ' [$symbol $version]($style)'
 
 [java]
 symbol = ""
-style = "fg:gh_cyan"
+style = "fg:oa_cyan"
 format = ' [$symbol $version]($style)'
 
 [kotlin]
 symbol = ""
-style = "fg:gh_cyan"
+style = "fg:oa_cyan"
 format = ' [$symbol $version]($style)'
 
 [haskell]
 symbol = ""
-style = "fg:gh_cyan"
+style = "fg:oa_cyan"
 format = ' [$symbol $version]($style)'
 
 [python]
 symbol = ""
-style = "fg:gh_cyan"
+style = "fg:oa_cyan"
 format = ' [$symbol $version(\($virtualenv\))]($style)'
 
 # --- Infrastructure (purple — distinct from runtimes) ---
 [conda]
 symbol = ""
-style = "fg:gh_purple"
+style = "fg:oa_purple"
 format = ' [$symbol $environment]($style)'
 ignore_base = false
 
 [docker_context]
 symbol = ""
-style = "fg:gh_purple"
+style = "fg:oa_purple"
 format = ' [$symbol $context]($style)'
 
 # --- Meta (dimmed — shouldn't compete for attention) ---
 [cmd_duration]
 show_milliseconds = true
-style = "fg:gh_dimmed"
+style = "fg:oa_dimmed"
 format = ' [$duration]($style)'
 disabled = false
 show_notifications = true
@@ -134,45 +134,41 @@ min_time_to_notify = 45000
 [time]
 disabled = false
 time_format = "%I:%M %p"
-style = "fg:gh_dimmed"
+style = "fg:oa_dimmed"
 format = ' [$time]($style)'
 
 [line_break]
 disabled = false
 
-# --- Prompt character (only place saturated red/green appear) ---
+# --- Prompt character (green for success, red for error) ---
 [character]
 disabled = false
-success_symbol = '[>](bold fg:gh_green)'
-error_symbol = '[>](bold fg:gh_red)'
-vimcmd_symbol = '[❮](fg:gh_green)'
-vimcmd_replace_one_symbol = '[❮](fg:gh_purple)'
-vimcmd_replace_symbol = '[❮](fg:gh_purple)'
-vimcmd_visual_symbol = '[❮](fg:gh_yellow)'
+success_symbol = '[>](fg:oa_green)'
+error_symbol = '[>](bold fg:oa_red)'
+vimcmd_symbol = '[❮](fg:oa_green)'
+vimcmd_replace_one_symbol = '[❮](fg:oa_purple)'
+vimcmd_replace_symbol = '[❮](fg:oa_purple)'
+vimcmd_visual_symbol = '[❮](fg:oa_yellow)'
 
-# GitHub Dark palette — primer/github-vscode-theme
-# Hierarchy: blue (dir) > green/yellow (git) > cyan (langs) > purple (infra) > dimmed (meta)
-[palettes.github_dark]
-gh_red = "#ff7b72"       # root user, errors, prompt error
-gh_green = "#3fb950"     # git clean, prompt ok
-gh_yellow = "#d29922"    # git dirty/state, vim visual
-gh_blue = "#58a6ff"      # directory — primary navigation
-gh_cyan = "#39c5cf"      # language runtimes — secondary info
-gh_purple = "#bc8cff"    # infrastructure, vim replace
-gh_muted = "#8b949e"     # user@host — present but quiet
-gh_dimmed = "#6e7681"    # time, cmd_duration — ambient
+# OpenAI Dark — neutral metadata with restrained semantic accents.
+# Match Ghostty's OpenAI Dark ANSI colors.
+[palettes.openai_dark]
+oa_red = "#ff6177"       # root user, errors, prompt error
+oa_green = "#00b889"     # git clean, prompt ok
+oa_blue = "#5aaeff"      # directory path
+oa_yellow = "#f2be59"    # git dirty/state, vim visual
+oa_cyan = "#3fd1df"      # language runtimes — secondary info
+oa_purple = "#b17aff"    # infrastructure, vim replace
+oa_muted = "#9e9e9e"     # user@host — present but quiet
+oa_dimmed = "#777777"    # time, cmd_duration — ambient
 
-# GitHub Light palette — same semantic roles as github_dark, on Primer's light scale.
-# These track the Ghostty GitHub Light ANSI slots, so the prompt and the terminal
-# agree. Yellow is the exception: it takes Primer's attention fg #9a6700 (4.9:1 on
-# the #fafafa canvas) rather than the ANSI gold, which sits at 2.3:1 and is only
-# legible as a fill.
-[palettes.github_light]
-gh_red = "#cf222e"       # root user, errors, prompt error
-gh_green = "#1a7f37"     # git clean, prompt ok
-gh_yellow = "#9a6700"    # git dirty/state, vim visual
-gh_blue = "#0969da"      # directory — primary navigation
-gh_cyan = "#1b7c83"      # language runtimes — secondary info
-gh_purple = "#8250df"    # infrastructure, vim replace
-gh_muted = "#6e7781"     # user@host — present but quiet
-gh_dimmed = "#8c959f"    # time, cmd_duration — ambient
+# OpenAI Light — the same semantic roles, tuned for the white canvas.
+[palettes.openai_light]
+oa_red = "#bf1831"       # root user, errors, prompt error
+oa_green = "#007a56"     # git clean, prompt ok
+oa_blue = "#005ed7"      # directory path
+oa_yellow = "#956000"    # git dirty/state, vim visual
+oa_cyan = "#007b87"      # language runtimes — secondary info
+oa_purple = "#722ccc"    # infrastructure, vim replace
+oa_muted = "#5c5c5c"     # user@host — present but quiet
+oa_dimmed = "#707070"    # time, cmd_duration — ambient

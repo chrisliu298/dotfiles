@@ -4,8 +4,8 @@
   "display": {
     "separator": " ",
     "color": {
-      "title": "#d7af5f",
-      "separator": "#5f5f5f"
+      "title": "green",
+      "separator": "bright_black"
     }
   },
   "modules": [
@@ -17,30 +17,30 @@
     {
       "type": "os",
       "key": "os     ·",
-      "keyColor": "#878787",
+      "keyColor": "bright_black",
       "format": "{pretty-name}"
     },
     {
       "type": "kernel",
       "key": "kernel ·",
-      "keyColor": "#878787",
+      "keyColor": "bright_black",
       "format": "{sysname} {release}"
     },
     {
       "type": "uptime",
       "key": "uptime ·",
-      "keyColor": "#878787"
+      "keyColor": "bright_black"
     },
     {
       "type": "cpu",
       "key": "cpu    ·",
-      "keyColor": "#878787",
+      "keyColor": "bright_black",
       "format": "{name}"
     },
     {
       "type": "memory",
       "key": "memory ·",
-      "keyColor": "#878787",
+      "keyColor": "bright_black",
       "format": "{used} / {total} ({percentage})"
     }
   ]

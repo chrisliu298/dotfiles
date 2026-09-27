@@ -14,6 +14,13 @@ Run the dotfiles installer from the repo root:
 
 It symlinks this directory to `~/.config/ghostty`, including `config` and `themes/`.
 
+`theme light` and `theme dark` select the custom `OpenAI Light` and `OpenAI Dark`
+Ghostty themes. Their neutral surfaces follow the [OpenAI site](https://openai.com/)
+and [developer docs](https://developers.openai.com/api/docs); ANSI accents are
+adapted for terminal readability. These are personal themes, not official OpenAI
+assets. Starship, tmux, btop, Neovim, Codex TUI, and Claude Code use matching
+light/dark palettes; fastfetch follows Ghostty's ANSI colors.
+
 Or symlink this config directory directly:
 
 ```bash
