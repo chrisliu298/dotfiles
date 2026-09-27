@@ -242,28 +242,37 @@ setup_theme_state() {
         log "seed theme state: mode=$mode (run 'theme light' to switch)"
     fi
 
-    # Claude settings are copied before applying the mode so the generated
-    # theme selection is not overwritten later by the tracked template.
+    # Stage Claude settings, then publish them only after the active theme has
+    # been generated. A failed theme build must not leave a dangling selection.
     local claude_src="$ROOT/agents/claude/settings.json" claude_dest="$HOME/.claude/settings.json"
+    local claude_stage=""
     if [[ -f "$claude_src" ]]; then
-        local claude_content; claude_content=$(sed "s|~/|$HOME/|g" "$claude_src")
-        if [[ ! -f "$claude_dest" || -L "$claude_dest" || "$(cat "$claude_dest")" != "$claude_content" ]]; then
-            mkdir -p "$(dirname "$claude_dest")"
-            rm -f "$claude_dest"
-            printf '%s\n' "$claude_content" > "$claude_dest"
-            log "write ~/.claude/settings.json"
-        fi
+        mkdir -p "$(dirname "$claude_dest")"
+        claude_stage="${claude_dest}.install.$$"
+        sed "s|~/|$HOME/|g" "$claude_src" > "$claude_stage"
     fi
-    # The selected theme must exist when theme-apply updates Claude settings.
+    # The source variants must exist before theme-apply generates openai.json.
     ensure_symlink "$ROOT/agents/claude/themes/openai-dark.json" "$HOME/.claude/themes/openai-dark.json"
     ensure_symlink "$ROOT/agents/claude/themes/openai-light.json" "$HOME/.claude/themes/openai-light.json"
 
     # Materialize live config from the repo templates (symlinks may not exist yet).
-    BTOP_TEMPLATE="$ROOT/.config/btop/btop.conf.template" \
-    STARSHIP_TEMPLATE="$ROOT/.config/starship/starship.toml" \
-        "$ROOT/shell/theme-apply" "$mode" \
-        && log "apply theme: $mode" \
-        || warn "theme-apply failed for mode=$mode"
+    if ! BTOP_TEMPLATE="$ROOT/.config/btop/btop.conf.template" \
+        STARSHIP_TEMPLATE="$ROOT/.config/starship/starship.toml" \
+        CLAUDE_CONFIG="${claude_stage:-$claude_dest}" \
+        "$ROOT/shell/theme-apply" "$mode"; then
+        [[ -z "$claude_stage" ]] || rm -f "$claude_stage"
+        warn "theme-apply failed for mode=$mode"
+        return 1
+    fi
+    log "apply theme: $mode"
+    if [[ -n "$claude_stage" ]]; then
+        if [[ ! -f "$claude_dest" || -L "$claude_dest" ]] || ! cmp -s "$claude_stage" "$claude_dest"; then
+            mv "$claude_stage" "$claude_dest"
+            log "write ~/.claude/settings.json"
+        else
+            rm -f "$claude_stage"
+        fi
+    fi
 }
 
 install_links() {
