@@ -2,8 +2,8 @@
   "name": "OpenAI Dark",
   "base": "dark-ansi",
   "overrides": {
-    "diffAdded": "#103e2e",
-    "diffRemoved": "#3c1d25",
+    "diffAdded": "#005f00",
+    "diffRemoved": "#870000",
     "selectionBg": "#28475c",
     "userMessageBackground": "#1c1c1c",
     "userMessageBackgroundHover": "#262626"

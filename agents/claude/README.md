@@ -22,3 +22,5 @@ worktree names use blue, branches and additions use green, and deletions use red
 Claude Code uses `custom:openai-dark` / `custom:openai-light`, selected by
 `theme` via `shell/theme-apply`. Each theme inherits the corresponding built-in
 ANSI palette and tunes the message, diff, and selection backgrounds.
+The dark diff backgrounds use xterm 256 colors 22 and 88. Claude Code defaults
+to 256 colors in tmux, where the earlier RGB values both mapped to gray.
