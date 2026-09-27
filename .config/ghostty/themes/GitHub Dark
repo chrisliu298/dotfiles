@@ -30,7 +30,7 @@ palette = 14=#56d4dd
 palette = 15=#ffffff
 
 # Base colors
-background = #0d1117
+background = #000000
 foreground = #e6edf3
 selection-background = #1c2f45
 selection-foreground = #e6edf3
