@@ -1,0 +1,41 @@
+#!/usr/bin/env perl
+# Mirror a pane's bracketed-paste mode (DECSET 2004) into STATE_FILE as 1 or 0.
+# `tmux pipe-pane` feeds the pane's raw output here because released tmux has
+# no format for this mode (#{bracket_paste_flag} expands empty on tmux 3.6a).
+# The file is removed when the pane closes, so a missing file reads as not ready.
+use strict;
+use warnings;
+
+my $state_file = shift // die "usage: paste-mode-tracker STATE_FILE\n";
+my ($state, $pending) = ('0', '');
+
+sub publish {
+    my $tmp = "$state_file.tmp";
+    open my $fh, '>', $tmp or return;
+    print {$fh} "$state\n";
+    close $fh;
+    rename $tmp, $state_file;
+}
+
+sub finish {
+    unlink $state_file, "$state_file.tmp";
+    exit 0;
+}
+$SIG{$_} = \&finish for qw(HUP INT TERM PIPE);
+
+publish();
+while (sysread(STDIN, my $chunk, 65536)) {
+    my $data = $pending . $chunk;
+    my $next = $state;
+    while ($data =~ /\e\[\?([0-9;]*)([hl])/g) {
+        my ($params, $final) = ($1, $2);
+        $next = $final eq 'h' ? '1' : '0' if grep { $_ eq '2004' } split /;/, $params;
+    }
+    # Carry an unfinished private-mode sequence into the next read.
+    $pending = $data =~ /(\e(?:\[(?:\?[0-9;]*)?)?)\z/ ? $1 : '';
+    if ($next ne $state) {
+        $state = $next;
+        publish();
+    }
+}
+finish();

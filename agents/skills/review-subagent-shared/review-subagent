@@ -64,6 +64,17 @@ usage() {
     print -u2 "       model=$model, effort=high (fixed)"
 }
 
+tracker="${runner:h}/paste-mode-tracker"
+
+# Released tmux has no format for bracketed-paste mode, so start mirrors it
+# through pipe-pane into a state file; a missing or empty file means not ready.
+input_ready() {
+    local state_file value=0
+    state_file="$(tmux show-options -v -t "$session" @review_paste_state 2>/dev/null)" || true
+    [[ -n "$state_file" && -r "$state_file" ]] && read -r value < "$state_file"
+    print -r -- "${value:-0}"
+}
+
 action="${1:-start}"
 (( $# )) && shift
 
@@ -176,6 +187,15 @@ case "$action" in
             command rmdir -- "$scratch_dir" 2>/dev/null || true
             exit 1
         fi
+        if ! state_file="$(command mktemp "${TMPDIR:-/tmp}/${helper}-paste.XXXXXX")" || \
+            ! tmux set-option -t "$session" @review_paste_state "$state_file" || \
+            ! tmux pipe-pane -t "$pane" "exec ${(qq)tracker} ${(qq)state_file}"; then
+            tmux kill-session -t "=$session" 2>/dev/null || true
+            [[ -n "$state_file" ]] && command rm -f -- "$state_file"
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir" 2>/dev/null || true
+            exit 1
+        fi
         if ! : > "$scratch_dir/ready"; then
             tmux kill-session -t "=$session" 2>/dev/null || true
             command rm -f -- "$scratch_dir/prompt.md"
@@ -212,7 +232,7 @@ case "$action" in
                     command rm -f -- "$message_file"
                     exit 2
                 fi
-                if [[ "$(tmux display-message -p -t "$pane" '#{pane_dead}:#{bracket_paste_flag}')" != 0:1 ]]; then
+                if [[ "$(tmux display-message -p -t "$pane" '#{pane_dead}'):$(input_ready)" != 0:1 ]]; then
                     print -u2 "$helper: harness input is not ready; inspect the pane before sending"
                     command rm -f -- "$message_file"
                     exit 1
@@ -234,7 +254,7 @@ case "$action" in
                 tmux send-keys -t "$pane" Enter
                 ;;
             capture) tmux capture-pane -p -S -300 -t "$pane" ;;
-            status) tmux display-message -p -t "$pane" '#{session_name} pane=#{pane_id} dead=#{pane_dead} exit_code=#{pane_dead_status} input_ready=#{bracket_paste_flag}' ;;
+            status) print -r -- "$(tmux display-message -p -t "$pane" '#{session_name} pane=#{pane_id} dead=#{pane_dead} exit_code=#{pane_dead_status}') input_ready=$(input_ready)" ;;
             interrupt) tmux send-keys -t "$pane" Escape ;;
             stop) tmux kill-session -t "=$session" ;;
         esac

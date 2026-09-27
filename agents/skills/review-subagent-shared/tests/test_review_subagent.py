@@ -122,3 +122,63 @@ def test_default_tmux_lifecycle(harness):
     assert session not in run('list').stdout
     assert run('status', session).returncode == 1
     assert run('stop', 'unrelated-session').returncode == 2
+
+
+def test_paste_mode_tracker(tmp_path):
+    state = tmp_path / 'state'
+    proc = subprocess.Popen([str(SKILLS / 'review-subagent-shared' / 'paste-mode-tracker'), str(state)],
+                            stdin=subprocess.PIPE)
+    def feed(data, expected):
+        proc.stdin.write(data)
+        proc.stdin.flush()
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if state.exists() and state.read_text().strip() == expected:
+                return
+            time.sleep(.02)
+        pytest.fail(f'after {data!r}: expected {expected}, got {state.read_text() if state.exists() else None!r}')
+    feed(b'plain output', '0')
+    feed(b'\x1b[?1049;20', '0')  # Combined DECSET split across reads.
+    feed(b'04h prompt', '1')
+    feed(b'\x1b[?25l', '1')  # Unrelated private modes are ignored.
+    feed(b'\x1b[?2004l', '0')
+    feed(b'\x1b[?2004h', '1')
+    proc.stdin.close()
+    assert proc.wait(timeout=5) == 0
+    assert not state.exists()
+
+
+def test_cursor_tmux_lifecycle(tmp_path):
+    tmux = shutil.which('tmux')
+    if not tmux:
+        pytest.skip('tmux is required for lifecycle checks')
+    backend = tmp_path / 'cursor-agent'
+    backend.write_text(f'''#!{sys.executable}
+import sys
+print('\\x1b[?2004hMOCK_READY', flush=True)
+for line in sys.stdin:
+    print('RECEIVED:' + line.strip(), flush=True)
+''')
+    backend.chmod(0o755)
+    socket = 'review-test-' + uuid.uuid4().hex
+    shim = tmp_path / 'tmux'
+    shim.write_text(f'#!/bin/sh\nexec "{tmux}" -L {socket} -f /dev/null "$@"\n')
+    shim.chmod(0o755)
+    env = dict(os.environ, PATH=str(tmp_path) + os.pathsep + os.environ['PATH'], CURSOR_AGENT_BIN=str(backend))
+    env.pop('CODEX_REVIEW_SUBAGENT_ACTIVE', None)
+    env.pop('TMUX', None)
+    installed = tmp_path / 'installed'
+    installed.symlink_to(SKILLS / 'cursor-subagent', target_is_directory=True)
+    def run(*args, prompt='assignment'):
+        return subprocess.run([str(installed / 'scripts' / 'cursor-subagent-tmux'), *args], input=prompt,
+                              text=True, capture_output=True, env=env, timeout=15)
+    try:
+        r = run('start')
+        assert r.returncode == 0, r.stderr
+        session = r.stdout.strip()
+        wait_for(run, session, 'status', 'input_ready=1')
+        assert run('send', session, prompt='FOLLOWUP_456').returncode == 0
+        wait_for(run, session, 'capture', 'RECEIVED:FOLLOWUP_456')
+        assert run('stop', session).returncode == 0
+    finally:
+        subprocess.run([tmux, '-L', socket, 'kill-server'], capture_output=True)
