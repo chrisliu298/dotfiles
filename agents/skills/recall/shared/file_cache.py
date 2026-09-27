@@ -17,7 +17,7 @@ from typing import Callable, TypeVar
 T = TypeVar("T")
 
 
-def get_or_build(path: Path, namespace: str, version: int, build: Callable[[], T]) -> T:
+def get_or_build(path: Path, namespace: str, version: int | str, build: Callable[[], T]) -> T:
     root = os.environ.get("RECALL_CACHE_DIR")
     if not root:
         return build()

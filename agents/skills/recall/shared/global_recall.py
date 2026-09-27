@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import date
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -26,8 +27,10 @@ SCRIPTS = {
 def run_source(source: str, args: list[str]) -> dict:
     env = os.environ.copy()
     env.setdefault("RECALL_CACHE_DIR", str(Path.home() / ".cache" / "recall"))
+    command = ([sys.executable, str(Path(__file__).with_name("retrieve.py")), "--source", source, *args[1:]]
+               if args[0] == "search" else [sys.executable, str(SCRIPTS[source]), *args])
     process = subprocess.run(
-        [sys.executable, str(SCRIPTS[source]), *args],
+        command,
         capture_output=True, text=True, check=False, env=env,
     )
     try:
@@ -39,13 +42,16 @@ def run_source(source: str, args: list[str]) -> dict:
     return result
 
 
-def search(query: str, cwd: str, sources: list[str], limit: int, roles: str = "both") -> dict:
-    commands = {
-        "codex": ["search", "--scope", "all", "--cwd", cwd, "--query", query, "--limit", str(limit)],
-        "claude": ["search", "--scope", "all", "--max-files", "0", "--cwd", cwd, "--q", query, "--k", str(limit)],
-    }
-    for command in commands.values():
-        command.extend(["--roles", roles])
+def search(query: str | list[str], cwd: str, sources: list[str], limit: int, roles: str = "both",
+           since: str | None = None, until: str | None = None) -> dict:
+    queries = list(dict.fromkeys([query] if isinstance(query, str) else query))
+    command = ["search", "--cwd", cwd, "--limit", str(limit), "--roles", roles]
+    for value in queries:
+        command.extend(["--query", value])
+    for flag, value in (("--since", since), ("--until", until)):
+        if value:
+            command.extend([flag, value])
+    commands = {source: command for source in sources}
     with ThreadPoolExecutor(max_workers=len(sources)) as executor:
         futures = {source: executor.submit(run_source, source, commands[source]) for source in sources}
         results = {source: futures[source].result() for source in sources}
@@ -58,6 +64,9 @@ def search(query: str, cwd: str, sources: list[str], limit: int, roles: str = "b
             candidate["confirmation"] = candidate["confirmation"].replace(
                 "recall: ", f"recall [{source}]: ", 1
             )
+            for evidence in candidate.get("evidence", []):
+                evidence["source"] = source
+                evidence["confirmation"] = evidence["confirmation"].replace("recall: ", f"recall [{source}]: ", 1)
             candidates.append(candidate)
 
     statuses = [result.get("status") for result in results.values()]
@@ -72,7 +81,9 @@ def search(query: str, cwd: str, sources: list[str], limit: int, roles: str = "b
     else:
         status = "no_match"
 
-    output = {"status": status, "sources": results, "candidates": candidates}
+    output = {"status": status, "sources": {source: {key: value for key, value in result.items()
+               if key not in ("candidates", "confirmation")} for source, result in results.items()},
+              "candidates": candidates, "verification_required": bool(candidates)}
     if status == "confident":
         output["confirmation"] = candidates[0]["confirmation"]
     return output
@@ -87,6 +98,7 @@ def show(source: str, args: argparse.Namespace) -> dict:
         if args.line is None:
             return {"status": "error", "reason": "Claude results require --line"}
         command = ["show", "--cwd", args.cwd, "--session", args.session, "--line", str(args.line)]
+    command.extend(["--offset", str(args.offset), "--before", str(args.before), "--after", str(args.after), "--max-chars", str(args.max_chars)])
     return {"source": source, **run_source(source, command)}
 
 
@@ -94,13 +106,19 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     find = commands.add_parser("search")
-    find.add_argument("--query", "-q", required=True)
+    find.add_argument("--query", "-q", action="append", required=True, help="Repeat for up to six complementary phrasings")
     find.add_argument("--cwd", default=os.getcwd())
     find.add_argument("--agent", choices=("codex", "claude"), required=True)
     find.add_argument("--source", choices=("self", "other", "all"), default="self")
     find.add_argument("--limit", type=int, choices=range(1, 21), default=5)
     find.add_argument("--roles", choices=("both", "user", "assistant"), default="both")
+    find.add_argument("--since", type=date.fromisoformat, help="Inclusive message date YYYY-MM-DD")
+    find.add_argument("--until", type=date.fromisoformat, help="Inclusive message date YYYY-MM-DD")
     context = commands.add_parser("show")
+    context.add_argument("--offset", type=int, default=0, help="Character offset in the anchor message")
+    context.add_argument("--before", type=int, choices=range(21), default=3)
+    context.add_argument("--after", type=int, choices=range(21), default=5)
+    context.add_argument("--max-chars", type=int, choices=range(1000, 50001), default=12000)
     context.add_argument("--source", choices=("codex", "claude"), required=True)
     context.add_argument("--session", required=True)
     context.add_argument("--item-id")
@@ -108,16 +126,22 @@ def main(argv: list[str] | None = None) -> int:
     context.add_argument("--cwd", default=os.getcwd())
     args = parser.parse_args(argv)
     if args.command == "search":
+        if len(args.query) > 6:
+            parser.error("at most six query variants are supported")
+        if args.since and args.until and args.since > args.until:
+            parser.error("--since must be on or before --until")
         sources = (
             list(SCRIPTS) if args.source == "all" else
             [args.agent] if args.source == "self" else
             ["claude" if args.agent == "codex" else "codex"]
         )
-        result = search(args.query, args.cwd, sources, args.limit, args.roles)
+        result = search(args.query, args.cwd, sources, args.limit, args.roles,
+                        args.since.isoformat() if args.since else None,
+                        args.until.isoformat() if args.until else None)
     else:
         result = show(args.source, args)
     print(json.dumps(result, indent=2, ensure_ascii=False))
-    return 0 if result["status"] in ("confident", "ok") else 1
+    return 1 if result["status"] in ("error", "partial_error", "not_found", "ambiguous_session", "ambiguous_item") else 0
 
 
 if __name__ == "__main__":

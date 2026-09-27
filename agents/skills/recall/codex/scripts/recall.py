@@ -14,6 +14,7 @@ service is created.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -28,6 +29,8 @@ from typing import Iterator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared"))
 from file_cache import get_or_build
+
+PARSER_VERSION = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
 LINE_CAP = 2_000_000
@@ -97,7 +100,7 @@ _SECRET_PATTERNS = (
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "aws-key"),
     (re.compile(r"\bBearer\s+[A-Za-z0-9._\-]{16,}", re.I), "bearer"),
     (re.compile(r"\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{6,}"), "jwt"),
-    (re.compile(r"(?i)[\"']?\b[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PLAN_KEY)[A-Z0-9_]*[\"']?\s*[:=]\s*[\"']?[^\s\"']+"), "env-secret"),
+    (re.compile(r"(?i)[\"']?\b(?!(?:max_(?:new_)?tokens|tokenizer|token_count|token_limit|password_min_length|password_max_length)\b)[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PLAN_KEY)[A-Z0-9_]*[\"']?\s*[:=]\s*[\"']?[^\s\"']+"), "env-secret"),
     (re.compile(r"\bAIza[0-9A-Za-z_\-]{20,}"), "google-key"),
     (re.compile(r"\bxox[baprs]-[0-9A-Za-z\-]{10,}"), "slack-token"),
     # An unterminated block is redacted to the end of the turn, not just its header.
@@ -380,9 +383,6 @@ def extract_turns(path: Path, *, include_non_human: bool = False) -> tuple[list[
             continue
         text, redactions = redact(text.strip())
         stats.redactions += redactions
-        truncated = len(text) > TEXT_CAP
-        if truncated:
-            text = text[:TEXT_CAP] + "\n[… turn truncated by recall …]"
         item_id = payload.get("id")
         if not isinstance(item_id, str) or not item_id:
             item_id = f"{path.name}:L{line_no}"
@@ -417,7 +417,10 @@ def all_files(root: Path) -> list[Path]:
 
 
 def file_inventory(root: Path) -> list[FileMeta]:
-    return [read_file_meta(path) for path in all_files(root)]
+    files = all_files(root)
+    if root.name == "sessions":
+        files += all_files(root.parent / "archived_sessions")
+    return [read_file_meta(path) for path in files]
 
 
 def files_for_scope(
@@ -501,7 +504,7 @@ def load_turns(
                         "stats": parsed_stats.as_dict(),
                     }
 
-                payload = get_or_build(meta.path, "codex", 2, build)
+                payload = get_or_build(meta.path, "codex", PARSER_VERSION, build)
                 turns = [Turn(**{**row, "path": Path(row["path"])}) for row in payload["turns"]]
                 stats = Stats(**payload["stats"])
             else:
@@ -790,6 +793,7 @@ def show_context(
     before: int,
     after: int,
     max_chars: int,
+    offset: int = 0,
 ) -> dict:
     max_chars = min(max(max_chars, 1000), 50000)
     inventory = file_inventory(root)
@@ -816,7 +820,8 @@ def show_context(
     lo, hi = max(0, anchor - before), min(len(turns), anchor + after + 1)
     window_indexes = list(range(lo, hi))
     chosen: dict[int, tuple[str, bool]] = {}
-    anchor_text = turns[anchor].text[:max_chars]
+    offset = max(0, offset)
+    anchor_text = turns[anchor].text[offset:offset + max_chars]
     chosen[anchor] = (anchor_text, len(anchor_text) < len(turns[anchor].text))
     remaining = max_chars - len(anchor_text)
     for distance in range(1, max(before, after) + 1):
@@ -850,6 +855,7 @@ def show_context(
         "status": "ok",
         "session_id": session_ids[0],
         "anchor_item_id": turns[anchor].item_id,
+        "anchor_offset": offset,
         "turns": output,
         "truncated": truncated,
         "stats": stats.as_dict(),
@@ -923,6 +929,7 @@ def parser() -> argparse.ArgumentParser:
     show = commands.add_parser("show", help="show conversational turns around a search result")
     show.add_argument("--session-id", required=True)
     show.add_argument("--item-id", required=True)
+    show.add_argument("--offset", type=int, default=0)
     show.add_argument("--before", type=int, choices=range(0, 21), default=3)
     show.add_argument("--after", type=int, choices=range(0, 21), default=5)
     show.add_argument("--max-chars", type=int, default=12000)
@@ -959,6 +966,7 @@ def main(argv: list[str] | None = None) -> int:
                 before=args.before,
                 after=args.after,
                 max_chars=args.max_chars,
+                offset=args.offset,
             )
         elif args.command == "sessions":
             output = list_sessions(root, cwd=args.cwd, scope=args.scope, limit=args.limit)

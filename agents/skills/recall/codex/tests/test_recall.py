@@ -76,6 +76,29 @@ class RecallTests(unittest.TestCase):
             "2026-09-09T01:00:00Z",
         )
 
+    def test_archived_session_search_and_show(self):
+        path = self.write_rollout("archive.jsonl", [self.meta(),
+            message("old-fact", "user", "orchard budget seventeen", 1, "2026-09-09T01:00:01Z")])
+        archive = self.root.parent / "archived_sessions"
+        archive.mkdir()
+        path.rename(archive / path.name)
+        result = recall.search_history(self.root, "orchard budget", cwd=self.cwd, scope="all",
+                                       explicit_session_id="different-current-task")
+        self.assertEqual(result["candidates"][0]["locator"]["item_id"], "old-fact")
+        shown = recall.show_context(self.root, self.session, "old-fact", before=1, after=1, max_chars=1000)
+        self.assertIn("seventeen", shown["turns"][0]["text"])
+
+    def test_long_text_and_non_secret_settings_are_preserved(self):
+        text = "context words " * 8000 + "max_new_tokens = 512 tokenizer: sentencepiece"
+        path = self.write_rollout("long.jsonl", [self.meta(),
+            message("long", "user", text, 1, "2026-09-09T01:00:01Z")])
+        turns, _ = recall.extract_turns(path)
+        self.assertIn("max_new_tokens = 512", turns[0].text)
+        self.assertIn("tokenizer: sentencepiece", turns[0].text)
+        shown = recall.show_context(self.root, self.session, "long", before=0, after=0,
+                                    max_chars=1000, offset=len(text) - 100)
+        self.assertIn("max_new_tokens = 512", shown["turns"][0]["text"])
+
     def test_extracts_conversation_and_drops_injected_developer_and_images(self) -> None:
         path = self.write_rollout(
             f"rollout-{self.session}.jsonl",

@@ -283,6 +283,29 @@ class RecallTests(unittest.TestCase):
         for text, label in cases.items():
             self.assertIn(f"[REDACTED:{label}]", recall.redact(text), text)
 
+    def test_long_message_tail_remains_searchable(self):
+        self.write(S_OLD, [user("background words " * 200 + "orchard threshold is seventeen")])
+        _, result = self.search("orchard threshold")
+        self.assertTrue(result["candidates"])
+        _, shown = self.cli("show", "--cwd", self.cwd, "--session", S_OLD,
+                            "--line", "2", "--offset", "3100")
+        self.assertIn("seventeen", shown["turns"][0]["text"])
+
+    def test_non_secret_token_settings_survive_redaction(self):
+        text = "max_new_tokens = 512 tokenizer: sentencepiece password_min_length=12"
+        self.assertEqual(recall.redact(text), text)
+        self.assertIn("REDACTED", recall.redact("ACCESS_TOKEN=private-value"))
+        self.assertIn("REDACTED", recall.redact("AUTH_TOKENS=private-value"))
+
+    def test_question_tool_answers_are_user_evidence(self):
+        self.write(S_OLD, [assistant("Please choose"),
+            {"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "id": "ask1", "name": "AskUserQuestion", "input": {}}]}},
+            {"type": "user", "message": {"content": [
+                {"type": "tool_result", "tool_use_id": "ask1", "content": "orchard database Postgres 16"}]}}])
+        _, result = self.search("orchard database")
+        self.assertEqual(result["candidates"][0]["role"], "user")
+
     # ------------------------------------------------------------------ show
     def test_show_returns_surrounding_turns(self):
         self.standard_store()
@@ -294,6 +317,21 @@ class RecallTests(unittest.TestCase):
         roles = [t["role"] for t in shown["turns"]]
         self.assertIn("assistant", roles)
         self.assertTrue(any("8443" in t["text"] for t in shown["turns"]))
+
+    def test_show_counts_messages_across_tool_traffic(self):
+        records = [user("Choose orchard transport"), *[tool_result("log") for _ in range(30)],
+                   assistant("Use websocket")]
+        self.write(S_OLD, records)
+        rc, shown = self.cli("show", "--cwd", self.cwd, "--session", S_OLD,
+                             "--line", "2", "--after", "1")
+        self.assertEqual([t["role"] for t in shown["turns"]], ["user", "assistant"])
+        self.assertIn("websocket", shown["turns"][-1]["text"])
+
+    def test_shell_commands_are_not_agent_statements(self):
+        self.write(S_OLD, [user("hello"), {"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "name": "Bash", "input": {"command": "orchard websocket"}}]}}])
+        _, result = self.search("orchard websocket")
+        self.assertEqual(result["candidates"], [])
 
     def test_show_falls_back_to_other_projects(self):
         self.write(S_OTHER, [user("For the billing service we pinned postgres to 16.4.")],

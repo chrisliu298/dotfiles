@@ -12,6 +12,9 @@ Codex rollout transcripts are append-oriented JSONL files under:
 ${CODEX_HOME:-$HOME/.codex}/sessions/YYYY/MM/DD/rollout-*.jsonl
 ```
 
+Archived tasks under `${CODEX_HOME:-$HOME/.codex}/archived_sessions/` are also
+included in inventory, search, and `show`.
+
 The helper is strictly read-only. It does not use or modify Codex-owned SQLite
 databases, and it never rewrites transcript files.
 

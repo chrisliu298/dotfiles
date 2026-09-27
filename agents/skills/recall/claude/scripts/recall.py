@@ -31,6 +31,7 @@ is STRUCTURAL (record type/flag), never a lexical guess.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -45,8 +46,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared"))
 from file_cache import get_or_build
 
+PARSER_VERSION = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+
 HOME = Path.home()
-PER_EVENT_TEXT_CAP = 1600          # truncate any single event's text before it enters the corpus
+PER_EVENT_TEXT_CAP = 1600          # display/tool excerpt cap; searchable messages retain full text
 HUGE_LINE = 2_000_000              # bytes; above this, peek the record type, don't full-parse
 GIST_CHARS = 220                   # length of the recalled snippet shown in the confirmation line
 DEFAULT_K = 5                      # candidates returned to the agent
@@ -85,7 +88,7 @@ _SECRET_PATTERNS = [
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "aws-key"),
     (re.compile(r"\bBearer\s+[A-Za-z0-9._\-]{16,}", re.I), "bearer"),
     (re.compile(r"\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{6,}"), "jwt"),
-    (re.compile(r"(?i)[\"']?\b[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PLAN_KEY)[A-Z0-9_]*[\"']?\s*[:=]\s*[\"']?[^\s\"']+"), "env-secret"),
+    (re.compile(r"(?i)[\"']?\b(?!(?:max_(?:new_)?tokens|tokenizer|token_count|token_limit|password_min_length|password_max_length)\b)[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PLAN_KEY)[A-Z0-9_]*[\"']?\s*[:=]\s*[\"']?[^\s\"']+"), "env-secret"),
     (re.compile(r"\bAIza[0-9A-Za-z_\-]{20,}"), "google-key"),
     (re.compile(r"\bxox[baprs]-[0-9A-Za-z\-]{10,}"), "slack-token"),
     (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.S), "private-key"),
@@ -278,6 +281,7 @@ def events(path):
     rehydrate, minus the boundary cutoff — recall reads the FULL file). A type:"user" record
     carrying tool_result blocks is a TOOL OUTPUT turn, not a genuine user message: kept apart so
     the user-vs-agent attribution stays clean."""
+    question_tools = set()
     for ln, rec, head in iter_lines(path):
         if rec is None:
             continue
@@ -302,6 +306,8 @@ def events(path):
                 if bt == "text":
                     text_parts.append(b.get("text", ""))
                 elif bt == "tool_use":
+                    if b.get("name") == "AskUserQuestion" and b.get("id"):
+                        question_tools.add(b["id"])
                     inp = b.get("input") or {}
                     for k in ("file_path", "path", "notebook_path"):
                         if inp.get(k):
@@ -313,10 +319,13 @@ def events(path):
                     if isinstance(rc, list):
                         rc = " ".join(x.get("text", "") for x in rc if isinstance(x, dict))
                     if isinstance(rc, str) and rc:
-                        tool_out.append(rc)
+                        if b.get("tool_use_id") in question_tools:
+                            text_parts.append(rc)
+                        else:
+                            tool_out.append(rc)
         if t == "assistant":
             if any(text_parts):
-                yield Event(ln, "assistant", "assistant_message", clip(" ".join(text_parts)), ts, sc, cwd)
+                yield Event(ln, "assistant", "assistant_message", redact(" ".join(text_parts).strip()), ts, sc, cwd)
             elif command:
                 yield Event(ln, "assistant", "command", clip(command, 400), ts, sc, cwd)
             elif paths:
@@ -325,7 +334,7 @@ def events(path):
             if tool_out and not any(p.strip() for p in text_parts):
                 yield Event(ln, "tool", "command_output", clip(" ".join(tool_out)), ts, sc, cwd)
             elif any(text_parts):
-                yield Event(ln, "user", "user_message", clip(" ".join(text_parts)), ts, sc, cwd)
+                yield Event(ln, "user", "user_message", redact(" ".join(text_parts).strip()), ts, sc, cwd)
 
 
 # ---------------------------------------------------------------------------- retrieval
@@ -493,7 +502,7 @@ def build_corpus(cwd, *, include_all, since_secs, max_files, exclude_session, sc
         def build():
             rows = []
             for e in events(f):
-                if e.sidechain or e.role not in ("user", "assistant") or not e.text:
+                if e.sidechain or e.kind not in ("user_message", "assistant_message") or not e.text:
                     continue
                 if is_injected(e.text):
                     continue
@@ -502,7 +511,7 @@ def build_corpus(cwd, *, include_all, since_secs, max_files, exclude_session, sc
                     rows.append([e.line, e.role, e.text, iso_date(e.ts, f), toks, e.cwd or f.parent.name])
             return rows
 
-        rows = get_or_build(f, "claude", 1, build)
+        rows = get_or_build(f, "claude", PARSER_VERSION, build)
         docs.extend(Doc(f.stem, str(f), line, role, text, date, toks, project, rank)
                     for line, role, text, date, toks, project in rows)
     stats = {"scope": scope, "files_total": len(files), "files_scanned": nfiles, "docs": len(docs),
@@ -717,20 +726,33 @@ def cmd_show(args):
                                     f"longer id", "candidates": [f.stem for f in pref[:5]]}, indent=2, ensure_ascii=False))
         return 11
     path = pref[0]
-    lo, hi = args.line - args.before, args.line + args.after
-    window, used = [], 0
-    for e in events(path):
-        if e.sidechain or not e.text or is_injected(e.text) or not (lo <= e.line <= hi):
-            continue
-        s = clip(e.text, args.max_chars)
-        used += len(s)
-        window.append({"line": e.line, "anchor": f"L{e.line}", "role": e.role,
-                       "kind": e.kind, "date": iso_date(e.ts, path), "text": s})
-        if used > args.max_chars:
-            break
-    out = {"status": "ok" if window else "empty", "session": path.stem,
+    messages = [e for e in events(path) if not e.sidechain and e.text
+                and e.kind in ("user_message", "assistant_message") and not is_injected(e.text)]
+    anchor = next((i for i, e in enumerate(messages) if e.line == args.line), None)
+    if anchor is None:
+        print(json.dumps({"status": "not_found", "reason": "no searchable message at that line"}))
+        return 13
+    before, after = max(0, args.before), max(0, args.after)
+    lo, hi = max(0, anchor - before), min(len(messages), anchor + after + 1)
+    budget = min(50000, max(1000, args.max_chars))
+    chosen = {}
+    for distance in range(max(before, after) + 1):
+        for index in dict.fromkeys((anchor - distance, anchor + distance)):
+            if index < lo or index >= hi or budget <= 0:
+                continue
+            offset = max(0, args.offset) if index == anchor else 0
+            text = messages[index].text[offset:offset + budget]
+            chosen[index] = text
+            budget -= len(text)
+    window = [{"line": messages[i].line, "anchor": f"L{messages[i].line}",
+               "role": messages[i].role, "kind": messages[i].kind,
+               "date": iso_date(messages[i].ts, path), "text": chosen[i],
+               "is_anchor": i == anchor} for i in sorted(chosen)]
+    out = {"status": "ok", "session": path.stem,
            "session_short": path.stem[:8], "transcript": str(path),
-           "range": f"L{lo}-L{hi}", "turns": window}
+           "anchor_offset": max(0, args.offset),
+           "truncated": len(chosen) < hi - lo or any(len(chosen[i]) < len(messages[i].text) for i in chosen),
+           "turns": window}
     if _redaction_count:
         out["redactions"] = _redaction_count
     print(json.dumps(out, indent=2, ensure_ascii=False))
@@ -778,6 +800,7 @@ def main():
     sh = sub.add_parser("show", parents=[common])
     sh.add_argument("--session", required=True, help="session uuid or 8-char prefix")
     sh.add_argument("--line", type=int, required=True)
+    sh.add_argument("--offset", type=int, default=0)
     sh.add_argument("--before", type=int, default=3)
     sh.add_argument("--after", type=int, default=6)
     sh.add_argument("--max-chars", type=int, default=4000)
