@@ -19,6 +19,8 @@ theme = OpenAI Dark
 config-file = ?~/.local/state/dotfiles-theme/ghostty.conf
 background-blur = 16
 minimum-contrast = 1.1
+# Claude Code marks deleted diff text as faint; keep it readable in both modes.
+faint-opacity = 0.75
 
 font-family = Berkeley Mono
 # Pin the Han fallback. Ghostty reuses whichever fallback face it loaded first,

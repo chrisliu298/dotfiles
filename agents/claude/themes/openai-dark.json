@@ -3,7 +3,7 @@
   "base": "dark-ansi",
   "overrides": {
     "diffAdded": "#005f00",
-    "diffRemoved": "#870000",
+    "diffRemoved": "#5f0000",
     "selectionBg": "#28475c",
     "userMessageBackground": "#1c1c1c",
     "userMessageBackgroundHover": "#262626"
