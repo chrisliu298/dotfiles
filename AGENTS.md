@@ -6,7 +6,7 @@ Personal dotfiles and AI agent configurations for macOS with zsh, managed by `do
 
 ## Project Structure & Module Organization
 
-Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`CLAUDE.md`, `settings.json` — copied, not symlinked — keybindings, statusline, themes), `codex/` → `~/.codex/`. The rest are not agent homes:
+Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`CLAUDE.md`, `settings.json` — copied, not symlinked — keybindings, statusline), `codex/` → `~/.codex/`. The rest are not agent homes:
 
 - `agents/eval/` — instruction-following harness for the shared agent doc (prompts, rubric, runner scripts).
 - `agents/hooks/` — shared Claude/Codex destructive-command guard and tests.
@@ -20,14 +20,14 @@ Elsewhere:
 ## Build, Test, and Development Commands
 
 - `./dotfiles.sh` — initialize submodules, sync skill repos, symlink files, install skills, and register MCP servers + Claude plugins + tmux plugins (TPM).
-- `./dotfiles.sh lint` — run skill portability checks (universal C/X skill mechanical violations), the agent-doc identity guard, and the Claude theme drift-guard (asserts every token name and `base` in `agents/claude/themes/*.json` still exists in the installed Claude Code, since the loader drops unknown ones silently); also runs automatically at the end of a full `./dotfiles.sh`.
+- `./dotfiles.sh lint` — run skill portability checks (universal C/X skill mechanical violations) and the agent-doc identity guard; also runs automatically at the end of a full `./dotfiles.sh`.
 - `./dotfiles.sh skills` — list manual skills and whether each is enabled.
 - `./dotfiles.sh enable <name>` / `./dotfiles.sh disable <name>` — toggle a manual skill; rewrites the committed `agents/skills/manual-skills.enabled` set, so commit + `dfs` to propagate the change to every machine.
 
 ## Conventions
 
 - **Shell load order**: `shell/.zshenv` (platform detection, env, PATH) → `shell/.zshrc` (plugins, sources `.aliases` + `.functions`)
-- **Themes**: Ghostty, Starship, btop, tmux, Codex, and Claude Code (GitHub Light ↔ GitHub Dark), toggled with `theme light|dark|toggle|status`; use `theme --all <mode>` to apply the same mode on this host plus every peer in `_dotfiles_peers` (`shell/.functions`), the one list `theme --all` and `dfs` share. The active choice is **host-local** — a single `mode` file under `~/.local/state/dotfiles-theme/` (never tracked, so switching never dirties git); definitions stay in-repo. `shell/theme-apply` materializes each tool's live config from `mode` (Ghostty/tmux via optional `config-file`/`source-file -q` includes; btop/Starship as generated files, since neither supports includes; Codex by rewriting only `[tui].theme` in the host-local `~/.codex/config.toml`), and `dotfiles.sh` seeds/re-applies it per host. Codex Desktop follows macOS through its own user-controlled appearance setting. Codex and Claude Code need explicit handling because their terminal automatic modes do not reliably follow the host-local `mode`: Codex's short terminal-background probe can time out over SSH and fall back to its dark theme, and Claude Code's built-in light palette paints user messages `rgb(240,240,240)` — invisible on the `#fafafa` canvas at 1.09:1. Codex pins the same Catppuccin Latte/Mocha syntax themes it would choose adaptively; Claude Code pins its custom theme `dotfiles`, whose live definition `theme-apply` swaps by copying `agents/claude/themes/<mode>.json` to `~/.claude/themes/dotfiles.json`. Claude watches that file, so running sessions repaint without a restart; the rationale and Claude's contrast values are in `shell/theme-apply` and `agents/claude/README.md`.
+- **Themes**: Ghostty, Starship, btop, tmux, and Codex (GitHub Light ↔ GitHub Dark), toggled with `theme light|dark|toggle|status`; use `theme --all <mode>` to apply the same mode on this host plus every peer in `_dotfiles_peers` (`shell/.functions`), the one list `theme --all` and `dfs` share. The active choice is **host-local** — a single `mode` file under `~/.local/state/dotfiles-theme/` (never tracked, so switching never dirties git); definitions stay in-repo. `shell/theme-apply` materializes each tool's live config from `mode` (Ghostty/tmux via optional `config-file`/`source-file -q` includes; btop/Starship as generated files, since neither supports includes; Codex by rewriting only `[tui].theme` in the host-local `~/.codex/config.toml`), and `dotfiles.sh` seeds/re-applies it per host. Codex Desktop follows macOS through its own user-controlled appearance setting. Codex pins Catppuccin Latte/Mocha syntax themes because its terminal-background probe can time out over SSH and fall back to dark on a light terminal. Claude Code uses its built-in `theme: auto` (set in `agents/claude/settings.json`), which follows the terminal background.
 
 ## Skills, MCP Servers & Plugins
 

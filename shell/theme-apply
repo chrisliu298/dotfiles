@@ -4,9 +4,8 @@
 # Single source of truth for turning a light/dark choice into live config,
 # shared by the `theme` shell function and dotfiles.sh so the two never drift.
 # Writes ONLY host-local files (XDG state dir + the real ~/.config/btop/btop.conf
-# plus ~/.codex/config.toml and ~/.claude/themes/) — never a
-# git-tracked file — so switching
-# themes can never dirty the tree.
+# plus ~/.codex/config.toml) — never a git-tracked file, so switching themes
+# can never dirty the tree.
 #
 # Usage: theme-apply <light|dark>
 #
@@ -16,11 +15,9 @@
 #   $STATE_DIR/starship.toml       full config (STARSHIP_CONFIG target), palette applied
 #   ~/.config/btop/btop.conf       full config, generated from the tracked template
 #   ~/.codex/config.toml           existing config, TUI theme only
-#   ~/.claude/themes/dotfiles.json       full theme, copied from the tracked definition
 #
 # Theme *definitions* stay tracked: ghostty/tmux theme files, btop themes/,
-# agents/claude/themes/{light,dark}.json, and the starship [palettes.*]
-# tables inside the template.
+# and the starship [palettes.*] tables inside the template.
 set -eu
 
 mode=${1:?usage: theme-apply <light|dark>}
@@ -32,10 +29,6 @@ btop_template="${BTOP_TEMPLATE:-$HOME/.config/btop/btop.conf.template}"
 starship_template="${STARSHIP_TEMPLATE:-$HOME/.config/starship/starship.toml}"
 btop_live="${BTOP_LIVE:-$HOME/.config/btop/btop.conf}"
 codex_config="${CODEX_CONFIG:-$HOME/.codex/config.toml}"
-# Claude Code has no ~/.claude/themes symlink to read definitions through, so this
-# points straight at the repo (dotfiles.sh overrides it during a fresh install).
-claude_themes="${CLAUDE_THEMES:-$HOME/dotfiles/agents/claude/themes}"
-claude_live="${CLAUDE_LIVE_THEME:-$HOME/.claude/themes/dotfiles.json}"
 
 case "$mode" in
     light) ghostty_theme="GitHub Light"; btop_theme="github_light"; tmux_theme="github_light"; starship_palette="github_light"; codex_tui_theme="catppuccin-latte" ;;
@@ -120,37 +113,3 @@ if [ -f "$codex_config" ]; then
     chmod 600 "$codex_tmp"
     mv "$codex_tmp" "$codex_config"
 fi
-
-# Claude Code pins its `theme` setting to the custom theme "dotfiles" and lets
-# this script swap what that theme *is*. Unlike the btop and
-# starship templates — which can legitimately be absent mid-install — these
-# definitions live in the repo and the pinned setting references them
-# unconditionally, so a missing one is a hard error: the agent would fail to
-# load the theme and fall back to its own default palette while dotfiles.sh
-# still logged the apply as successful.
-install_agent_theme() {
-    src="$1" live="$2" label="$3"
-    if [ ! -f "$src" ]; then
-        printf 'theme-apply: %s theme definition missing: %s\n' "$label" "$src" >&2
-        exit 1
-    fi
-    mkdir -p "$(dirname "$live")"
-    cp "$src" "$live.tmp" || {
-        rm -f "$live.tmp"
-        printf 'theme-apply: failed to stage %s theme from %s\n' "$label" "$src" >&2
-        exit 1
-    }
-    mv "$live.tmp" "$live"
-}
-
-# claude: Claude Code's `theme = auto` does follow
-# the terminal, but it only picks between Anthropic's own palettes — and the
-# light one paints user messages rgb(240,240,240), indistinguishable from the
-# #fafafa canvas at 1.09:1. Fixing that needs a custom theme, and
-# selecting one pins the light/dark base, so settings.json pins `theme` to
-# "custom:dotfiles" and the mode picks which definition that slug resolves to.
-# Each file overrides only the user-message band and its hover, tinted to the
-# mode's family; everything else stays on Anthropic's palette. Claude watches
-# ~/.claude/themes and re-resolves base+overrides on change, so running sessions
-# repaint without a restart.
-install_agent_theme "$claude_themes/$mode.json" "$claude_live" claude

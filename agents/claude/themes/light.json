@@ -1,8 +1,0 @@
-{
-  "name": "dotfiles",
-  "base": "light",
-  "overrides": {
-    "userMessageBackground": "#ebedef",
-    "userMessageBackgroundHover": "#d0d7de"
-  }
-}
