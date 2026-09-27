@@ -28,7 +28,7 @@ LINKS=(
 )
 
 # name|source|agents — name * = auto-discover subdirs with SKILL.md
-# source: ./path (local) or owner/repo[/subpath] (GitHub)
+# source: ./path (local), ~/path (host-local, skipped when absent), or owner/repo[/subpath] (GitHub)
 SKILLS=(
     # The wildcard installs every skill to Claude and Codex; the explicit entries below narrow
     # that (claude-only: relay, prism, skill-creator, gpt-subagent; codex-only: claude-subagent, cursor-subagent,
@@ -53,6 +53,9 @@ SKILLS=(
     "pdf|anthropics/skills/skills/pdf|claude"
     "skill-creator|anthropics/skills/skills/skill-creator|claude"
     "pdf|openai/skills/skills/.curated/pdf|codex"
+    # Third-party skills installed per host by `npx skills` (e.g. lark-*, merlin-*). Codex reads
+    # ~/.agents/skills natively; Claude does not, so link them in (earlier entries win on name clashes).
+    "*|~/.agents/skills|claude"
 )
 
 # Skills not auto-installed (opt-in). Toggle with: ./dotfiles.sh enable/disable <name>.
@@ -183,6 +186,8 @@ _resolve_source() {
     local source="$1"
     if [[ "$source" == ./* ]]; then
         printf '%s' "$ROOT/${source#./}"
+    elif [[ "$source" == \~/* ]]; then
+        printf '%s' "$HOME/${source#\~/}"
     else
         local _rest="${source#*/}"
         local slug="${source%%/*}/${_rest%%/*}"
@@ -195,7 +200,7 @@ _resolve_source() {
 
 _ensure_source() {
     local source="$1"
-    [[ "$source" == ./* ]] && return
+    [[ "$source" == ./* || "$source" == \~/* ]] && return
     local _rest="${source#*/}"
     local slug="${source%%/*}/${_rest%%/*}"
     [[ -d "$SKILL_CACHE/${slug//\//__}/.git" ]] && return
@@ -323,7 +328,7 @@ _skills_repos() {
     local repos=() entry
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r _ source _ <<< "$entry"
-        [[ "$source" == ./* ]] && continue
+        [[ "$source" == ./* || "$source" == \~/* ]] && continue
         local _rest="${source#*/}"
         local slug="${source%%/*}/${_rest%%/*}"
         local already=false r
@@ -355,6 +360,7 @@ install_skills() {
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name source agents <<< "$entry"
         local base_dir; base_dir=$(_resolve_source "$source")
+        [[ "$source" == \~/* && ! -d "$base_dir" ]] && continue
         [[ -d "$base_dir" ]] || { warn "skip $name (source not found: $source)"; continue; }
         [[ "$name" != "*" ]] && _is_manual "$name" && ! _manual_enabled "$name" && continue
 
@@ -383,6 +389,10 @@ install_skills() {
         local se
         for se in ${skill_entries[@]+"${skill_entries[@]}"}; do
             local sname="${se%%:*}" spath="${se#*:}"
+            if [[ "$agents" == *claude* && $'\n'"$claude_expected" == *$'\n'"$sname"$'\n'* ]] \
+                || [[ "$agents" == *codex* && $'\n'"$codex_expected" == *$'\n'"$sname"$'\n'* ]]; then
+                warn "skip $sname from $source (already provided by an earlier entry)"; continue
+            fi
             [[ "$agents" == *claude* ]] && { ensure_symlink "$spath" "$HOME/.claude/skills/$sname"; claude_expected+="$sname"$'\n'; }
             [[ "$agents" == *codex* ]]  && { ensure_symlink "$spath" "$HOME/.codex/skills/$sname";  codex_expected+="$sname"$'\n'; }
         done

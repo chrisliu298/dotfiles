@@ -15,6 +15,8 @@ Single source of truth: own skills live in `agents/skills/`; community/third-par
 - Claude → `~/.claude/skills/`
 - Codex  → `~/.codex/skills/`
 
+Host-local third-party skills installed by `npx skills` into `~/.agents/skills/` (e.g. `lark-*`, `merlin-*`) are linked into `~/.claude/skills/` too, since Claude Code does not read that directory (Codex does natively). Hosts without it skip the entry, and repo skills win on name clashes.
+
 A shared/universal `SKILL.md` is written to work across both agents; agent-specific scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., relay and prism are claude-only, so they never reach Codex). Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex.
 
 `claude-subagent` and `gpt-subagent` share session management in `review-subagent-shared/` (not an installable skill). Their entrypoints resolve the source symlink to reach it. Run its regression checks with `uv run --with pytest pytest agents/skills/review-subagent-shared/tests`.
