@@ -529,10 +529,7 @@ szt() {
 # Claude Code / Codex
 # =============================================================================
 
-# Unset TMUX for Claude Code so Bun's getColorDepth() doesn't short-circuit
-# to 256-color (the `if (env.TMUX) return 8` check fires before COLORTERM).
-# The launcher clears endpoint/model overrides and uses Claude's personal profile.
-_claude(){ "$HOME/.local/bin/claude-relay" "$@"; }
+_claude(){ command claude "$@"; }
 c(){ _claude --dangerously-skip-permissions "$@"; }
 cc(){ _claude --dangerously-skip-permissions --continue "$@"; }
 cr(){ _claude --dangerously-skip-permissions --resume "$@"; }
@@ -541,7 +538,8 @@ cu(){ command claude update "$@"; }
 cpu(){ local prompt="/push"; (( $# )) && prompt+=" ${*}"; _claude -p --dangerously-skip-permissions "$prompt"; }
 chl(){ (( $# )) || { echo 'Usage: chl "<prompt>"'; return 1; }; _claude -p --dangerously-skip-permissions "${*}"; }
 cch(){
-    local _cmd="$HOME/.local/bin/claude-relay --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official"
+    local _claude_bin="$(command -v claude)" || return 127
+    local _cmd="${(q)_claude_bin} --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official"
     local _arg
     for _arg in "$@"; do _cmd+=" ${(q)_arg}"; done
     tmux new-session -ds claude-channels "$_cmd" 2>/dev/null
