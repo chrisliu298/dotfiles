@@ -50,6 +50,9 @@ bold='\033[1m'
 blue='\033[34m'                      # navigation: project, worktree
 green='\033[32m'                     # branch, success, additions
 red='\033[31m'                       # errors, deletions
+cyan='\033[36m'                      # elapsed time
+magenta='\033[35m'                   # context usage
+yellow='\033[33m'                    # cost
 
 # ── Extract fields (single jq call) ─────────────────────────────
 eval "$(echo "$input" | jq -r '
@@ -207,7 +210,7 @@ if [ -n "$duration_ms" ] && [ "$duration_ms" != "0" ]; then
   else
     dur="${total_s}s"
   fi
-  [ "$total_s" -gt 0 ] && parts+=("${muted}${dur}${reset}")
+  [ "$total_s" -gt 0 ] && parts+=("${cyan}${dur}${reset}")
 fi
 
 # Rate limits (text only, no bars)
@@ -232,17 +235,17 @@ pct="${used_pct%.*}"
 pct="${pct:-0}"
 (( pct > 100 )) && pct=100
 (( pct < 0 )) && pct=0
-ctx_seg="${muted}ctx ${pct}%"
+ctx_seg="${muted}ctx ${magenta}${pct}%"
 if [ -n "$cur_input" ] && [ -n "$ctx_size" ] && [ "$ctx_size" -gt 0 ]; then
   cur_tok=$(( ${cur_input:-0} + ${cur_output:-0} + ${cur_cache_create:-0} + ${cur_cache_read:-0} ))
-  ctx_seg+=" $(fmt_tokens "$cur_tok")/$(fmt_tokens "$ctx_size")"
+  ctx_seg+="${muted} $(fmt_tokens "$cur_tok")/$(fmt_tokens "$ctx_size")"
 fi
 parts+=("${ctx_seg}${reset}")
 
 # Cost
 if [ -n "$cost" ] && [ "$cost" != "0" ]; then
   cost_fmt=$(printf "%.2f" "$cost")
-  [ "$cost_fmt" != "0.00" ] && parts+=("${muted}\$${cost_fmt}${reset}")
+  [ "$cost_fmt" != "0.00" ] && parts+=("${yellow}\$${cost_fmt}${reset}")
 fi
 
 # Lines changed

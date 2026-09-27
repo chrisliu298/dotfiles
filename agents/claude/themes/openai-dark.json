@@ -2,10 +2,23 @@
   "name": "OpenAI Dark",
   "base": "dark-ansi",
   "overrides": {
+    "text": "#f2f2f2",
+    "inverseText": "#000000",
+    "inactive": "#999999",
+    "inactiveShimmer": "#c1c1c1",
+    "subtle": "#505050",
+    "promptBorder": "#888888",
+    "promptBorderShimmer": "#a6a6a6",
     "diffAdded": "#005f00",
     "diffRemoved": "#5f0000",
+    "diffAddedDimmed": "#233428",
+    "diffRemovedDimmed": "#332529",
     "selectionBg": "#28475c",
     "userMessageBackground": "#1c1c1c",
-    "userMessageBackgroundHover": "#262626"
+    "userMessageBackgroundHover": "#262626",
+    "composerSidebarBackground": "#262626",
+    "bashMessageBackgroundColor": "#292929",
+    "memoryBackgroundColor": "#26302c",
+    "rate_limit_empty": "#404040"
   }
 }

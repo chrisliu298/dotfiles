@@ -2,10 +2,23 @@
   "name": "OpenAI Light",
   "base": "light-ansi",
   "overrides": {
+    "text": "#1f1f1f",
+    "inverseText": "#ffffff",
+    "inactive": "#666666",
+    "inactiveShimmer": "#8e8e8e",
+    "subtle": "#afafaf",
+    "promptBorder": "#999999",
+    "promptBorderShimmer": "#b7b7b7",
     "diffAdded": "#d4f1e2",
     "diffRemoved": "#f9e0e5",
+    "diffAddedDimmed": "#edf5ef",
+    "diffRemovedDimmed": "#f8edf0",
     "selectionBg": "#dbeaf4",
     "userMessageBackground": "#f3f3f3",
-    "userMessageBackgroundHover": "#e8e8e8"
+    "userMessageBackgroundHover": "#e8e8e8",
+    "composerSidebarBackground": "#ebebeb",
+    "bashMessageBackgroundColor": "#f7f7f7",
+    "memoryBackgroundColor": "#edf4f1",
+    "rate_limit_empty": "#e4e4e4"
   }
 }
