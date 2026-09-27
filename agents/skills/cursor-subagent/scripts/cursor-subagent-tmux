@@ -1,0 +1,219 @@
+#!/usr/bin/env zsh
+
+emulate -L zsh
+setopt pipe_fail
+
+usage() {
+    print -u2 'usage: cursor-subagent-tmux start [--effort high|xhigh] [--trust] < prompt.md'
+    print -u2 '       cursor-subagent-tmux send SESSION < message.md'
+    print -u2 '       cursor-subagent-tmux list'
+    print -u2 '       cursor-subagent-tmux capture|status|interrupt|stop SESSION'
+}
+
+if (( $# < 1 )); then
+    usage
+    exit 2
+fi
+
+action="$1"
+shift
+
+if [[ "$action" == __run ]]; then
+    if [[ "${CURSOR_SUBAGENT_TMUX_RUNNER:-}" != 1 || $# -ne 3 ]]; then
+        exit 126
+    fi
+    scratch_dir="$1"
+    effort="$2"
+    trust="$3"
+    for _ in {1..100}; do
+        [[ -e "$scratch_dir/ready" ]] && break
+        sleep 0.05
+    done
+    if [[ ! -e "$scratch_dir/ready" ]]; then
+        print -u2 'cursor-subagent-tmux: startup handshake timed out'
+        exit 1
+    fi
+    prompt_file="$scratch_dir/prompt.md"
+    prompt="$(command cat "$prompt_file")" || exit 1
+    command rm -f -- "$prompt_file"
+    command rm -f -- "$scratch_dir/ready"
+    command rmdir -- "$scratch_dir" 2>/dev/null || true
+
+    cursor_agent_bin="${CURSOR_AGENT_BIN:-cursor-agent}"
+    if [[ ! -x "$cursor_agent_bin" ]]; then
+        print -u2 "cursor-subagent-tmux: cursor-agent is not executable: $cursor_agent_bin"
+        exit 127
+    fi
+    export CODEX_REVIEW_SUBAGENT_ACTIVE=1
+    unset CURSOR_SUBAGENT_TMUX_RUNNER
+    cursor_args=(--mode ask --model "gpt-5.6-sol-$effort")
+    [[ "$trust" == true ]] && cursor_args+=(--trust)
+    "$cursor_agent_bin" "${cursor_args[@]}" -- "$prompt"
+    exit $?
+fi
+
+if [[ "${CODEX_REVIEW_SUBAGENT_ACTIVE:-}" == 1 ]]; then
+    print -u2 'cursor-subagent-tmux: recursive Codex subagent delegation is blocked'
+    exit 126
+fi
+
+if (( ! $+commands[tmux] )); then
+    print -u2 'cursor-subagent-tmux: tmux is required'
+    exit 127
+fi
+
+case "$action" in
+    list)
+        if (( $# != 0 )); then
+            usage
+            exit 2
+        fi
+        tmux list-sessions -F '#S' 2>/dev/null | command grep '^cursor-review-' || true
+        ;;
+    start)
+        effort=high
+        trust=false
+        while (( $# > 0 )); do
+            case "$1" in
+                --effort)
+                    if (( $# < 2 )); then
+                        usage
+                        exit 2
+                    fi
+                    effort="$2"
+                    shift 2
+                    ;;
+                --trust)
+                    trust=true
+                    shift
+                    ;;
+                *)
+                    usage
+                    exit 2
+                    ;;
+            esac
+        done
+        if [[ "$effort" != high && "$effort" != xhigh ]]; then
+            print -u2 'cursor-subagent-tmux: effort must be high or xhigh'
+            exit 2
+        fi
+        cursor_agent_bin="${CURSOR_AGENT_BIN:-cursor-agent}"
+        if [[ -x "$cursor_agent_bin" ]]; then
+            cursor_agent_bin="${cursor_agent_bin:A}"
+        elif (( $+commands[$cursor_agent_bin] )); then
+            cursor_agent_bin="${commands[$cursor_agent_bin]}"
+        else
+            print -u2 "cursor-subagent-tmux: cursor-agent is not installed or not on PATH"
+            exit 127
+        fi
+        if [[ -t 0 ]]; then
+            usage
+            exit 2
+        fi
+        scratch_dir="$(command mktemp -d "${TMPDIR:-/tmp}/cursor-subagent-tmux.XXXXXX")" || exit 1
+        if ! command cat > "$scratch_dir/prompt.md"; then
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir" 2>/dev/null || true
+            exit 1
+        fi
+        if [[ ! -s "$scratch_dir/prompt.md" ]]; then
+            print -u2 'cursor-subagent-tmux: prompt is empty'
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir"
+            exit 2
+        fi
+        if (( $(command wc -c < "$scratch_dir/prompt.md") > 131072 )); then
+            print -u2 'cursor-subagent-tmux: initial prompt exceeds 128 KiB; shorten it and send further context later'
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir"
+            exit 2
+        fi
+        if ! uuid="$(command uuidgen)"; then
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir"
+            exit 1
+        fi
+        session="cursor-review-${uuid:l}"
+        if ! pane="$(tmux new-session -d -P -F '#{pane_id}' -s "$session" -c "$PWD" \
+            -e CODEX_REVIEW_SUBAGENT_ACTIVE=1 -e CURSOR_SUBAGENT_TMUX_RUNNER=1 \
+            -e "CURSOR_AGENT_BIN=$cursor_agent_bin" \
+            -- "$0" __run "$scratch_dir" "$effort" "$trust")"; then
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir"
+            exit 1
+        fi
+        if ! tmux set-window-option -t "$session" remain-on-exit failed || \
+            ! tmux set-option -t "$session" @review_pane "$pane"; then
+            tmux kill-session -t "=$session" 2>/dev/null || true
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir" 2>/dev/null || true
+            exit 1
+        fi
+        if ! : > "$scratch_dir/ready"; then
+            tmux kill-session -t "=$session" 2>/dev/null || true
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir" 2>/dev/null || true
+            exit 1
+        fi
+        print -r -- "$session"
+        ;;
+    send|capture|status|interrupt|stop)
+        if (( $# != 1 )) || [[ "$1" != cursor-review-* ]]; then
+            usage
+            exit 2
+        fi
+        session="$1"
+        if ! tmux has-session -t "=$session" 2>/dev/null; then
+            print -u2 "cursor-subagent-tmux: session is not running: $session"
+            exit 1
+        fi
+        pane="$(tmux show-options -v -t "$session" @review_pane)" || exit 1
+        if [[ "$pane" != %<-> ]]; then
+            print -u2 "cursor-subagent-tmux: review pane is missing: $session"
+            exit 1
+        fi
+        case "$action" in
+            send)
+                if [[ -t 0 ]]; then
+                    usage
+                    exit 2
+                fi
+                message_file="$(command mktemp "${TMPDIR:-/tmp}/cursor-subagent-message.XXXXXX")" || exit 1
+                command cat > "$message_file"
+                if [[ ! -s "$message_file" ]]; then
+                    print -u2 'cursor-subagent-tmux: message is empty'
+                    command rm -f -- "$message_file"
+                    exit 2
+                fi
+                if [[ "$(tmux display-message -p -t "$pane" '#{pane_dead}:#{bracket_paste_flag}')" != 0:1 ]]; then
+                    print -u2 'cursor-subagent-tmux: Cursor input is not ready; inspect the pane before sending'
+                    command rm -f -- "$message_file"
+                    exit 1
+                fi
+                if ! uuid="$(command uuidgen)"; then
+                    command rm -f -- "$message_file"
+                    exit 1
+                fi
+                buffer="cursor-review-${uuid:l}"
+                if ! tmux load-buffer -b "$buffer" "$message_file"; then
+                    command rm -f -- "$message_file"
+                    exit 1
+                fi
+                command rm -f -- "$message_file"
+                if ! tmux paste-buffer -pr -d -b "$buffer" -t "$pane"; then
+                    tmux delete-buffer -b "$buffer" 2>/dev/null || true
+                    exit 1
+                fi
+                tmux send-keys -t "$pane" Enter
+                ;;
+            capture) tmux capture-pane -p -S -300 -t "$pane" ;;
+            status) tmux display-message -p -t "$pane" '#{session_name} pane=#{pane_id} dead=#{pane_dead} input_ready=#{bracket_paste_flag}' ;;
+            interrupt) tmux send-keys -t "$pane" C-c ;;
+            stop) tmux kill-session -t "=$session" ;;
+        esac
+        ;;
+    *)
+        usage
+        exit 2
+        ;;
+esac

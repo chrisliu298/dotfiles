@@ -17,6 +17,8 @@ Single source of truth: own skills live in `agents/skills/`; community/third-par
 
 A shared/universal `SKILL.md` is written to work across both agents; agent-specific scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., relay and prism are claude-only, so they never reach Codex). Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex.
 
+`claude-subagent` and `gpt-subagent` share session management in `review-subagent-shared/` (not an installable skill). Their entrypoints resolve the source symlink to reach it. Run its regression checks with `uv run --with pytest pytest agents/skills/review-subagent-shared/tests`.
+
 Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via `./dotfiles.sh skills`.
 
 ### Skill matrix
@@ -30,9 +32,8 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 | Skill | C | X | Source · Description |
 |-------|:-:|:-:|----------------------|
 | arxiv-reader            | ✓ | ✓ | local — Read arxiv via TeX / HF markdown / HTML fallback |
-| claude-subagent         | — | ✓ | local — Read-only Claude review helper for Codex |
-| cursor-subagent         | — | ✓ | local — Read-only Cursor review helper for Codex |
-| dual-subagent           | — | ✓ | local — Parallel Claude and Cursor review helper for Codex |
+| claude-subagent         | — | ✓ | local — Read-only Claude review for Codex; tmux by default, explicit one-shot mode |
+| gpt-subagent            | ✓ | — | local — Read-only GPT review for Claude; tmux by default, explicit one-shot mode |
 | gpt-pro-relay           | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini (the `gpt-pro` CLI is on PATH from the Codex copy) |
 | pdf                     | ✓ | ✓ | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex) — PDF read/edit |
 | push                    | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
@@ -43,6 +44,8 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 
 | Skill | C | X | Source · Description |
 |-------|:-:|:-:|----------------------|
+| cursor-subagent         | — | ✱ | local — Read-only Cursor review helper for Codex, with optional interactive tmux mode |
+| dual-subagent           | — | ✱ | local — Parallel Claude and Cursor review helper for Codex |
 | prism                   | ✱ | — | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to GPT via relay) |
 | relay                   | ✱ | — | local — Cross-agent relay from Claude to GPT (Claude-only caller) |
 

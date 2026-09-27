@@ -1,0 +1,246 @@
+#!/usr/bin/env zsh
+
+emulate -L zsh
+setopt pipe_fail
+
+harness="$1"
+shift
+case "$harness" in
+    claude) model=opus ;;
+    gpt) model=gpt-6-astra ;;
+    *) print -u2 'unknown review harness'; exit 2 ;;
+esac
+helper="${harness}-subagent"
+prefix="${harness}-review-"
+runner="${0:A}"
+
+parse_options() {
+    output_format=text
+    while (( $# )); do
+        case "$1" in
+            --effort|--model|--output-format)
+                local option="$1" value="${2:-}"
+                if (( $# < 2 )); then usage; return 2; fi
+                case "$option" in
+                    --effort) [[ "$value" == high ]] || { print -u2 "$helper: effort is fixed to high"; return 2; } ;;
+                    --model) [[ "$value" == "$model" ]] || { print -u2 "$helper: model is fixed to $model"; return 2; } ;;
+                    --output-format) [[ "$action" == --once && ( "$value" == text || "$value" == json ) ]] || { usage; return 2; }; output_format="$value" ;;
+                esac
+                shift 2
+                ;;
+            *) usage; return 2 ;;
+        esac
+    done
+}
+
+launch() {
+    local mode="$1" prompt="$2"
+    export CODEX_REVIEW_SUBAGENT_ACTIVE=1
+    if [[ "$harness" == claude ]]; then
+        source "$HOME/.functions" || return 127
+        (( $+functions[c] )) || { print -u2 "$helper: c is not defined"; return 127; }
+        if [[ "$mode" == once ]]; then
+            print -rn -- "$prompt" | c -p --no-session-persistence --model opus --effort high
+        else
+            c --model opus --effort high -- "$prompt"
+        fi
+    else
+        (( $+commands[codex] )) || { print -u2 "$helper: codex is not on PATH"; return 127; }
+        local -a options=(--ask-for-approval never --sandbox read-only --model gpt-6-astra
+            -c 'model_reasoning_effort="high"' -c 'shell_environment_policy.inherit="all"')
+        if [[ "$mode" == once ]]; then
+            print -rn -- "$prompt" | command codex "${options[@]}" exec --ephemeral --skip-git-repo-check --color never -
+        else
+            command codex "${options[@]}" --no-alt-screen -- "$prompt"
+        fi
+    fi
+}
+
+usage() {
+    print -u2 "usage: $helper [start] < prompt.md  (default: tmux)"
+    print -u2 "       $helper --once [--output-format text|json] < prompt.md"
+    print -u2 "       $helper send SESSION < message.md"
+    print -u2 "       $helper list | capture|status|interrupt|stop SESSION"
+    print -u2 "       model=$model, effort=high (fixed)"
+}
+
+action="${1:-start}"
+(( $# )) && shift
+
+if [[ "$action" == __run ]]; then
+    if [[ "${REVIEW_SUBAGENT_TMUX_RUNNER:-}" != 1 || $# -ne 1 ]]; then
+        exit 126
+    fi
+    scratch_dir="$1"
+    for _ in {1..100}; do
+        [[ -e "$scratch_dir/ready" ]] && break
+        sleep 0.05
+    done
+    if [[ ! -e "$scratch_dir/ready" ]]; then
+        print -u2 "$helper: startup handshake timed out"
+        exit 1
+    fi
+    prompt_file="$scratch_dir/prompt.md"
+    prompt="$(command cat "$prompt_file")" || exit 1
+    command rm -f -- "$prompt_file"
+    command rm -f -- "$scratch_dir/ready"
+    command rmdir -- "$scratch_dir" 2>/dev/null || true
+
+    unset REVIEW_SUBAGENT_TMUX_RUNNER
+    launch interactive "$prompt"
+    exit $?
+fi
+
+if [[ "${CODEX_REVIEW_SUBAGENT_ACTIVE:-}" == 1 ]]; then
+    print -u2 "$helper: recursive Codex subagent delegation is blocked"
+    exit 126
+fi
+
+if [[ "$action" == --once ]]; then
+    parse_options "$@" || exit $?
+    [[ ! -t 0 ]] || { usage; exit 2; }
+    prompt="$(command cat)" || exit 1
+    [[ -n "${prompt//[[:space:]]/}" ]] || { print -u2 "$helper: prompt is empty"; exit 2; }
+    if [[ "$output_format" == json ]] && (( ! $+commands[jq] )); then
+        print -u2 "$helper: jq is required for JSON output"
+        exit 127
+    fi
+    result="$(launch once "$prompt")"
+    rc=$?
+    if (( rc == 0 )) && [[ -z "${result//[[:space:]]/}" ]]; then
+        print -u2 "$helper: harness returned an empty response"
+        rc=1
+    fi
+    if [[ "$output_format" == json ]]; then
+        print -rn -- "$result" | jq -Rs --argjson code "$rc" '{result: ., exit_code: $code, is_error: ($code != 0)}'
+    else
+        print -r -- "$result"
+    fi
+    exit "$rc"
+fi
+
+if (( ! $+commands[tmux] )); then
+    print -u2 "$helper: tmux is required"
+    exit 127
+fi
+
+case "$action" in
+    list)
+        if (( $# != 0 )); then
+            usage
+            exit 2
+        fi
+        tmux list-sessions -F '#S' 2>/dev/null | command grep "^$prefix" || true
+        ;;
+    start)
+        parse_options "$@" || exit $?
+        if [[ -t 0 ]]; then
+            usage
+            exit 2
+        fi
+        scratch_dir="$(command mktemp -d "${TMPDIR:-/tmp}/${helper}-tmux.XXXXXX")" || exit 1
+        if ! command cat > "$scratch_dir/prompt.md"; then
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir" 2>/dev/null || true
+            exit 1
+        fi
+        if [[ ! -s "$scratch_dir/prompt.md" ]]; then
+            print -u2 "$helper: prompt is empty"
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir"
+            exit 2
+        fi
+        if (( $(command wc -c < "$scratch_dir/prompt.md") > 131072 )); then
+            print -u2 "$helper: initial prompt exceeds 128 KiB; shorten it and send further context later"
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir"
+            exit 2
+        fi
+        if ! uuid="$(command uuidgen)"; then
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir"
+            exit 1
+        fi
+        session="${prefix}${uuid:l}"
+        if ! pane="$(tmux new-session -d -x 160 -y 48 -P -F '#{pane_id}' -s "$session" -c "$PWD" \
+            -e CODEX_REVIEW_SUBAGENT_ACTIVE=1 -e REVIEW_SUBAGENT_TMUX_RUNNER=1 \
+            -- "$runner" "$harness" __run "$scratch_dir")"; then
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir"
+            exit 1
+        fi
+        if ! tmux set-window-option -t "$session" remain-on-exit on || \
+            ! tmux set-option -t "$session" @review_pane "$pane"; then
+            tmux kill-session -t "=$session" 2>/dev/null || true
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir" 2>/dev/null || true
+            exit 1
+        fi
+        if ! : > "$scratch_dir/ready"; then
+            tmux kill-session -t "=$session" 2>/dev/null || true
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir" 2>/dev/null || true
+            exit 1
+        fi
+        print -r -- "$session"
+        ;;
+    send|capture|status|interrupt|stop)
+        if (( $# != 1 )) || [[ "$1" != "$prefix"* ]]; then
+            usage
+            exit 2
+        fi
+        session="$1"
+        if ! tmux has-session -t "=$session" 2>/dev/null; then
+            print -u2 "$helper: session is not running: $session"
+            exit 1
+        fi
+        pane="$(tmux show-options -v -t "$session" @review_pane)" || exit 1
+        if [[ "$pane" != %<-> ]]; then
+            print -u2 "$helper: review pane is missing: $session"
+            exit 1
+        fi
+        case "$action" in
+            send)
+                if [[ -t 0 ]]; then
+                    usage
+                    exit 2
+                fi
+                message_file="$(command mktemp "${TMPDIR:-/tmp}/${helper}-message.XXXXXX")" || exit 1
+                command cat > "$message_file"
+                if [[ ! -s "$message_file" ]]; then
+                    print -u2 "$helper: message is empty"
+                    command rm -f -- "$message_file"
+                    exit 2
+                fi
+                if [[ "$(tmux display-message -p -t "$pane" '#{pane_dead}:#{bracket_paste_flag}')" != 0:1 ]]; then
+                    print -u2 "$helper: harness input is not ready; inspect the pane before sending"
+                    command rm -f -- "$message_file"
+                    exit 1
+                fi
+                if ! uuid="$(command uuidgen)"; then
+                    command rm -f -- "$message_file"
+                    exit 1
+                fi
+                buffer="${prefix}${uuid:l}"
+                if ! tmux load-buffer -b "$buffer" "$message_file"; then
+                    command rm -f -- "$message_file"
+                    exit 1
+                fi
+                command rm -f -- "$message_file"
+                if ! tmux paste-buffer -pr -d -b "$buffer" -t "$pane"; then
+                    tmux delete-buffer -b "$buffer" 2>/dev/null || true
+                    exit 1
+                fi
+                tmux send-keys -t "$pane" Enter
+                ;;
+            capture) tmux capture-pane -p -S -300 -t "$pane" ;;
+            status) tmux display-message -p -t "$pane" '#{session_name} pane=#{pane_id} dead=#{pane_dead} exit_code=#{pane_dead_status} input_ready=#{bracket_paste_flag}' ;;
+            interrupt) tmux send-keys -t "$pane" Escape ;;
+            stop) tmux kill-session -t "=$session" ;;
+        esac
+        ;;
+    *)
+        usage
+        exit 2
+        ;;
+esac

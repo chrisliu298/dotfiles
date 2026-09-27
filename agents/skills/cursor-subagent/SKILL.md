@@ -4,9 +4,9 @@ description: |
   Obtain an independent read-only review from Cursor Agent using a pinned
   GPT-5.6 Sol model. Use when the user asks to "ask Cursor", "use Cursor as a
   reviewer", get a "Cursor take", or obtain an independent Cursor review or
-  second opinion. Do not use this skill to implement, complete, advance, or
-  operate a task; use Codex's native subagents when delegated execution is
-  requested.
+  second opinion. An optional tmux mode supports follow-up messages during a
+  long review. Do not use this skill to implement, complete, advance, or operate
+  a task; use Codex's native subagents when delegated execution is requested.
 metadata:
   surfaces:
     - codex
@@ -14,8 +14,10 @@ metadata:
 
 # Cursor Subagent
 
-Use Cursor Agent as a one-shot, read-only reviewer. Cursor runs in the command's
-working directory, so it can inspect that workspace directly.
+Use Cursor Agent as a read-only reviewer. Cursor runs in the command's working
+directory, so it can inspect that workspace directly. Use the one-shot mode for
+ordinary reviews. Use the tmux mode when the assignment is likely to need
+follow-up messages or a change of direction while Cursor is running.
 
 Cursor may delegate bounded parts of the review to its own subagents when
 useful. Carry this permission into the review prompt; do not add a blanket
@@ -80,6 +82,39 @@ By default, the helper uses Cursor's `stream-json` partial-output mode
 internally but returns only the final plain-text response. Explicitly passing
 `--output-format` or `--stream-partial-output` disables this recovery layer and
 passes Cursor's requested output through unchanged.
+
+## Interactive tmux review
+
+The `scripts/cursor-subagent-tmux` helper starts one interactive Cursor session
+in tmux and prints its unique session name. It pins the same GPT-5.6 Sol model
+as the one-shot helper and forces `--mode ask` for read-only work. It accepts
+`high` or `xhigh` effort; `high` is the default. Pass `--trust` only after
+confirming the workspace is one the user intends Cursor to access.
+
+```bash
+helper="${CODEX_HOME:-$HOME/.codex}/skills/cursor-subagent/scripts/cursor-subagent-tmux"
+session="$($helper start --effort high < /tmp/cursor-review-prompt.md)"
+$helper list
+$helper capture "$session"
+$helper send "$session" < /tmp/cursor-followup.md
+$helper capture "$session"
+$helper interrupt "$session"  # send Ctrl-C when an immediate interruption is needed
+$helper stop "$session"       # end only this review session
+# A person can also use: tmux attach -t "$session"
+```
+
+The macOS Keychain execution-context guidance above applies to this helper
+too: tmux and its child Cursor process must run in a context where Cursor can
+read its login. `status` reports the named review pane; `dead=1` means Cursor
+exited and the pane is retained for diagnosis. `send` refuses input until the
+pane has enabled bracketed paste (`input_ready=1`). A message sent while Cursor
+is busy may be processed only after its current action. For a decision change,
+send the correction and wait for Cursor to acknowledge it. Use `interrupt` only
+when the active run must stop immediately; Ctrl-C may close the process, so
+check `status` before sending a new message. `capture` shows 300 lines of
+terminal history plus the visible screen. If startup or a review fails, capture
+the retained pane, inspect the workspace, then apply the retry rules above.
+Stop only the named session after obtaining the result or diagnosis.
 
 ## Model choice
 

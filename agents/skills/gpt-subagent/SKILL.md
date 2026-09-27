@@ -1,16 +1,13 @@
 ---
-name: claude-subagent
-description: Obtain an independent read-only review or second opinion from Claude Code. Use when the user asks to ask Claude, get a Claude take, or use Claude as a reviewer. Defaults to persistent tmux with follow-ups and interruption; supports explicit one-shot mode. Not for delegated implementation or external operations.
-metadata:
-  surfaces:
-    - codex
+name: gpt-subagent
+description: Obtain an independent read-only review or second opinion from Codex CLI. Use when the user asks to ask GPT, get a GPT take, or use GPT as a reviewer. Defaults to persistent tmux with follow-ups and interruption; supports explicit one-shot mode. Not for delegated implementation or external operations.
 ---
 
-# Claude Subagent
+# GPT Subagent
 
-Use Claude Code as a read-only reviewer from Codex. Both review skills use the
+Use Codex CLI as a read-only reviewer from Claude. Both review skills use the
 same session manager at `../review-subagent-shared/review-subagent`; only their
-harness adapters and pinned models differ. Model is pinned to `opus`. Reasoning effort is fixed to
+harness adapters and pinned models differ. Model is pinned to `gpt-6-astra`. Reasoning effort is fixed to
 `high`. The helper runs in the current working directory using the user's
 existing login. Do not install software or change credentials during a review.
 
@@ -24,7 +21,7 @@ existing login. Do not install software or change credentials during a review.
    it creates a detached tmux session and prints its unique name:
 
    ```bash
-   helper="${CODEX_HOME:-$HOME/.codex}/skills/claude-subagent/scripts/claude-subagent"
+   helper="$HOME/.claude/skills/gpt-subagent/scripts/gpt-subagent"
    session="$($helper < /tmp/review-prompt.md)"
    $helper status "$session"
    $helper capture "$session"
@@ -54,7 +51,7 @@ existing login. Do not install software or change credentials during a review.
    panes are retained for diagnosis. Stop only the named review session when
    finished; never kill the tmux server or unrelated sessions.
 
-The `scripts/claude-subagent-tmux` entrypoint is an alias with the same interface.
+The `scripts/gpt-subagent-tmux` entrypoint is an alias with the same interface.
 Initial tmux prompts are limited to 128 KiB; send further context as follow-ups.
 Both helpers require tmux in this mode. Do not switch models or effort through
 interactive slash commands: the selected model/high combination is fixed for

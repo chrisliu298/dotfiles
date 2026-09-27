@@ -126,7 +126,7 @@ if [[ "$cursor_trust" == true ]]; then
     cursor_args+=(--trust)
 fi
 
-"$claude_helper" "${claude_args[@]}" < "$prompt_file" > "$claude_out" 2> "$claude_err" &
+"$claude_helper" --once "${claude_args[@]}" < "$prompt_file" > "$claude_out" 2> "$claude_err" &
 claude_pid=$!
 "$cursor_helper" "${cursor_args[@]}" < "$prompt_file" > "$cursor_out" 2> "$cursor_err" &
 cursor_pid=$!

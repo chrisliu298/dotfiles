@@ -34,7 +34,7 @@ LINKS=(
 # source: ./path (local) or owner/repo[/subpath] (GitHub)
 SKILLS=(
     # The wildcard installs every skill to Claude and Codex; the explicit entries below narrow
-    # that (claude-only: relay, prism, skill-creator; codex-only: claude-subagent, cursor-subagent,
+    # that (claude-only: relay, prism, skill-creator, gpt-subagent; codex-only: claude-subagent, cursor-subagent,
     # dual-subagent; recall has a separate build per agent).
     "*|./agents/skills|claude,codex"
     # Relay: claude-only caller; targets GPT via the script.
@@ -50,6 +50,7 @@ SKILLS=(
     "recall|./agents/skills/recall/codex|codex"
     # claude-subagent: Codex-only caller; installing it into Claude would enable recursive self-dispatch.
     "claude-subagent|./agents/skills/claude-subagent|codex"
+    "gpt-subagent|./agents/skills/gpt-subagent|claude"
     "cursor-subagent|./agents/skills/cursor-subagent|codex"
     "dual-subagent|./agents/skills/dual-subagent|codex"
     "pdf|anthropics/skills/skills/pdf|claude"
@@ -59,6 +60,8 @@ SKILLS=(
 
 # Skills not auto-installed (opt-in). Toggle with: ./dotfiles.sh enable/disable <name>.
 MANUAL_SKILLS=(
+    cursor-subagent
+    dual-subagent
     prism
     relay
 )
