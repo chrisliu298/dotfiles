@@ -4,45 +4,6 @@
 
 input=$(cat)
 
-# ── Rate limit usage (cached, fetched via OAuth API) ─────────────
-# usage_cache="/tmp/claude-statusline-usage.json"
-# usage_ttl=60
-#
-# fetch_usage() {
-#   local token
-#   # Try macOS Keychain first, then fall back to credentials file
-#   if [ "$(uname)" = "Darwin" ]; then
-#     token=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null \
-#       | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
-#   fi
-#   [ -z "$token" ] && token=$(jq -r '.claudeAiOauth.accessToken // empty' ~/.claude/.credentials.json 2>/dev/null)
-#   [ -z "$token" ] && return 1
-#   curl -sf --max-time 5 \
-#     -H "Authorization: Bearer $token" \
-#     -H "anthropic-beta: oauth-2025-04-20" \
-#     "https://api.anthropic.com/api/oauth/usage" > "$usage_cache.tmp" 2>/dev/null \
-#     && mv "$usage_cache.tmp" "$usage_cache"
-# }
-#
-# # Refresh cache if stale or missing
-# if [ -f "$usage_cache" ]; then
-#   file_mtime=$(stat -c %Y "$usage_cache" 2>/dev/null || stat -f %m "$usage_cache" 2>/dev/null || echo 0)
-#   cache_age=$(( $(date +%s) - file_mtime ))
-#   [ "$cache_age" -ge "$usage_ttl" ] && fetch_usage &
-# else
-#   fetch_usage &
-# fi
-#
-# # Read cached values
-# if [ -f "$usage_cache" ]; then
-#   eval "$(jq -r '
-#     @sh "rl_5h=\(.five_hour.utilization // "")",
-#     @sh "rl_5h_reset=\(.five_hour.resets_at // "")",
-#     @sh "rl_7d=\(.seven_day.utilization // "")",
-#     @sh "rl_7d_reset=\(.seven_day.resets_at // "")"
-#   ' "$usage_cache" 2>/dev/null)"
-# fi
-
 # ── Colors (terminal ANSI names; Ghostty supplies the OpenAI palette) ──
 reset='\033[0m'
 muted='\033[90m'
@@ -73,7 +34,11 @@ eval "$(echo "$input" | jq -r '
   @sh "wt_name=\(.worktree.name // "")",
   @sh "wt_branch=\(.worktree.branch // "")",
   @sh "agent_name=\(.agent.name // "")",
-  @sh "vim_mode=\(.vim.mode // "")"
+  @sh "vim_mode=\(.vim.mode // "")",
+  @sh "rl_5h=\(.rate_limits.five_hour.used_percentage // "")",
+  @sh "rl_5h_reset=\(.rate_limits.five_hour.resets_at // "")",
+  @sh "rl_7d=\(.rate_limits.seven_day.used_percentage // "")",
+  @sh "rl_7d_reset=\(.rate_limits.seven_day.resets_at // "")"
 ')"
 
 # ── Derived values ───────────────────────────────────────────────
@@ -157,9 +122,13 @@ rl_reset_fmt() {
   local ts="$1"
   [ -z "$ts" ] && return
   local reset_epoch now_epoch diff_s
-  reset_epoch=$(date -d "${ts%%.*}Z" +%s 2>/dev/null) \
-    || reset_epoch=$(TZ=UTC date -jf "%Y-%m-%dT%H:%M:%S" "${ts%%.*}" +%s 2>/dev/null) \
-    || return
+  if [[ "$ts" =~ ^[0-9]+$ ]]; then
+    reset_epoch=$ts
+  else
+    reset_epoch=$(date -d "${ts%%.*}Z" +%s 2>/dev/null) \
+      || reset_epoch=$(TZ=UTC date -jf "%Y-%m-%dT%H:%M:%S" "${ts%%.*}" +%s 2>/dev/null) \
+      || return
+  fi
   now_epoch=$(date +%s)
   diff_s=$((reset_epoch - now_epoch))
   [ "$diff_s" -le 0 ] && { echo "now"; return; }
