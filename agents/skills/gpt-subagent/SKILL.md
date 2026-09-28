@@ -21,7 +21,7 @@ existing login. Do not install software or change credentials during a review.
    it creates a detached tmux session and prints its unique name:
 
    ```bash
-   helper="$HOME/.claude/skills/gpt-subagent/scripts/gpt-subagent"
+   helper="${CLAUDE_SKILL_DIR}/scripts/gpt-subagent"
    session="$($helper < /tmp/review-prompt.md)"
    $helper status "$session"
    $helper capture "$session"
