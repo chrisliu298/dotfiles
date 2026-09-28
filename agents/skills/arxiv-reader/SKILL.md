@@ -1,7 +1,7 @@
 ---
 name: arxiv-reader
 user-invocable: true
-description: Read arxiv papers via their TeX source for full-fidelity math, tables, and figures. Use whenever the user shares an arxiv URL or paper ID and wants to discuss or understand the paper — even without "read". Triggers on arxiv URLs (abs, pdf, html), bare IDs like "2401.12345", or "explain this paper". Do NOT use for note generation (use note-gen).
+description: Read arxiv papers via their TeX source for full-fidelity math, tables, and figures. Use whenever the user shares an arxiv URL or paper ID and wants to discuss or understand the paper — even without "read". Triggers on arxiv URLs (abs, pdf, html), bare IDs like "2401.12345", or "explain this paper".
 allowed-tools: Bash(curl:*), Bash(file:*), Bash(tar:*), Bash(mkdir:*), Bash(mv:*), Bash(rm:*), Bash(head:*), Bash(defuddle:*), Read, Grep
 ---
 
@@ -41,6 +41,8 @@ If the user gives a vague reference (paper title, author name) instead of a URL/
 
 Use a cascading strategy — try each method in priority order and fall through on failure. Use the highest-fidelity method that yields validated, readable paper content.
 
+Paths below use `/tmp`; when the harness provides a session scratch directory, use it instead.
+
 **Rate limiting**: arxiv.org rate-limits automated requests. If you get a 429 response or an HTML "access denied" page, wait a few seconds and retry once, then fall through to the next method.
 
 #### Method 1: TeX Source (preferred)
@@ -65,7 +67,7 @@ TeX source gives the highest fidelity — math is in native LaTeX notation, tabl
    - Read the entrypoint `.tex` file
    - Follow `\input{}`, `\include{}`, `\subfile{}`, and `\import{}` directives to read referenced `.tex` files. Resolve relative paths from the including file's directory; try both the literal path and with `.tex` appended.
    - Read `.bib` or `.bbl` files if the user asks about references/citations
-   - Skip `.sty`, `.cls`, `.bst`, `.aux`, `.out`, `.log`, `.toc`, `.synctex`, `.blg`, and image files (`.png`, `.jpg`, `.pdf`, `.eps`, `.svg`) — these are style/build/binary files, not content
+   - Skip `.sty`, `.cls`, `.bst`, `.aux`, `.out`, `.log`, `.toc`, `.synctex`, and `.blg` build files. Don't read figure images up front; open one when a question depends on it
    - **Context budget**: If the combined `.tex` files are very large, prioritize: abstract, introduction, method, experiments/results, and conclusion. Defer appendices and supplementary material unless the user asks about them. For a targeted question, locate the relevant section first before loading everything.
 6. **Note the structure**: Track `\section{}`, `\subsection{}`, `\begin{theorem}`, `\begin{figure}`, etc. to navigate the paper when answering questions
 
@@ -127,7 +129,7 @@ Respond based on what the user asked:
 
 **Math notation**: When the source is TeX or clean markdown, reproduce key equations using `$inline$` and `$$block$$` notation. Define variables after equations. When the source is HTML or PDF, only reproduce equations that are clearly intact — otherwise paraphrase the mathematical structure and note that notation may be lossy.
 
-**Figures**: You can see figure captions and references in TeX source but cannot view actual images. When discussing figures, describe what the caption and surrounding text say. If the user needs to see a figure, point them to the arxiv HTML version or PDF.
+**Figures**: The TeX source includes the figure files referenced by `\includegraphics`. When a question depends on what a figure shows, open that image file instead of relying on the caption alone.
 
 ### Handling Multiple Papers
 
@@ -139,5 +141,4 @@ After the conversation with a paper is done, clean up temp files: `rm -rf /tmp/{
 
 ## What This Skill Does NOT Do
 
-- **Generate Obsidian notes** — use `note-gen` for that. If the user asks to turn the paper into notes, answer the reading/explanation part here, then suggest `note-gen` for the note.
 - **Read non-arxiv papers** — this skill is specifically for arxiv. For other PDFs, read them directly.
