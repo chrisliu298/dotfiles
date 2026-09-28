@@ -153,7 +153,7 @@ _theme_local() {
     printf '  Prompt:  %s\n' "$starship_palette"
     printf '  Neovim:  openai-%s (next start)\n' "$new_mode"
     printf '  Codex:   openai-%s\n' "$new_mode"
-    printf '  Claude:  custom:openai (running legacy sessions: select once in /theme)\n'
+    printf '  Claude:  custom:openai (legacy sessions: choose "OpenAI (follows theme)" in /theme once)\n'
 }
 
 theme() {

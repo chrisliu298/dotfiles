@@ -71,7 +71,7 @@ fi
 mkdir -p "$claude_theme_dir"
 claude_theme_src="$claude_theme_dir/openai-$mode.json"
 claude_theme_tmp="$claude_theme_dir/.openai.json.theme.$$"
-jq 'if type == "object" then . else error("Claude theme must be a JSON object") end' \
+jq 'if type == "object" then .name = "OpenAI (follows theme)" else error("Claude theme must be a JSON object") end' \
     "$claude_theme_src" > "$claude_theme_tmp" || {
     rm -f "$claude_theme_tmp"
     printf 'theme-apply: failed to stage Claude theme from %s\n' "$claude_theme_src" >&2
