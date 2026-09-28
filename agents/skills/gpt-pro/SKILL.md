@@ -1,6 +1,6 @@
 ---
 effort: low
-name: gpt-pro-relay
+name: gpt-pro
 description: |
   Send a prompt to ChatGPT Pro when the user requests GPT-Pro, a Pro take,
   or a second opinion from ChatGPT Pro.
@@ -8,7 +8,7 @@ allowed-tools: Bash(gpt-pro:*), Bash(${CLAUDE_SKILL_DIR}/scripts/gpt-pro:*), Bas
 user-invocable: true
 ---
 
-# gpt-pro-relay
+# gpt-pro
 
 Send one self-contained prompt through `gpt-pro` and return its verified answer.
 The engine runs on this Mac by default (`GPT_PRO_HOST=<ssh-host>` relays to a remote

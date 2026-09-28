@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # filectx — shared local-file context resolver/packer for the prism and
-# gpt-pro-relay CLIs. ONE source of truth for: expanding file specs (absolute
+# gpt-pro CLIs. ONE source of truth for: expanding file specs (absolute
 # paths, @base-relative paths, single-level globs, frozen lists, capped directory
 # trees), validating them fail-closed, scanning for secrets, and either emitting
 # the resolved absolute paths (for agents that read files themselves) or the

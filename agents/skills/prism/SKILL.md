@@ -141,7 +141,7 @@ Note the resolved shape and its source as a one-line status line as you launch �
 | Self | (none) | Your own analysis while agents run |
 | Subagents | **Agent** | Same-model agents (Claude), one Agent call each |
 | Parallax | **Bash** (`relay call --to gpt`) | Cross-model agent via relay: GPT |
-| GPT-Pro (opt-in) | **Bash** (`gpt-pro < prompt.md`) | Additive ChatGPT Pro Extended lenses via [[gpt-pro-relay]]; composed by `prepare`, fired orchestrator-direct; **not** a relay peer / not in the parallax fan; slow + quota-burning; off by default |
+| GPT-Pro (opt-in) | **Bash** (`gpt-pro < prompt.md`) | Additive ChatGPT Pro Extended lenses via [[gpt-pro]]; composed by `prepare`, fired orchestrator-direct; **not** a relay peer / not in the parallax fan; slow + quota-burning; off by default |
 
 ### Parallax (cross-model agents)
 
@@ -179,13 +179,13 @@ If `relay` is unavailable, replace the Parallax tier with same-model subagents a
 1. Put the anti-recursion warning at the top of every launcher prompt, before the file-read instruction.
 2. Preserve the Constraints section verbatim in the shared context file — do not summarize or abbreviate.
 3. Ensure the prohibition appears in both each launcher (short form) and the shared file (full form).
-4. Tell each peer to ignore loaded skill descriptions for the dispatching/side-effecting skills (prism, relay, gpt-pro-relay, deep-research) — read-only analysis skills stay available.
+4. Tell each peer to ignore loaded skill descriptions for the dispatching/side-effecting skills (prism, relay, gpt-pro, deep-research) — read-only analysis skills stay available.
 
 Without these redundant prohibitions, the peer treats the task as a fresh request and recurses. (`prepare` checks only that each rendered launcher's first line starts with `CRITICAL:` — the content above is guaranteed by the committed templates for the script path, and is yours to emit for any hand-built launcher.)
 
 ### Subagents
 
-Same-model agents dispatched via the Agent tool. Each gets a distinct lens. **Prism subagents may spawn their own same-model subagents at their discretion** (they're told they are spawned Prism agents; any child stays terminal — read-only, no further spawning, no cross-model dispatch, no response-file write) — but their prompts forbid starting a nested Prism run, invoking any cross-model dispatch skill (prism, relay, gpt-pro-relay, deep-research) or calling another model, and side effects, while permitting read-only analysis skills (see Constraints in the Shared Packet Template). Launch all agents concurrently before starting self-review.
+Same-model agents dispatched via the Agent tool. Each gets a distinct lens. **Prism subagents may spawn their own same-model subagents at their discretion** (they're told they are spawned Prism agents; any child stays terminal — read-only, no further spawning, no cross-model dispatch, no response-file write) — but their prompts forbid starting a nested Prism run, invoking any cross-model dispatch skill (prism, relay, gpt-pro, deep-research) or calling another model, and side effects, while permitting read-only analysis skills (see Constraints in the Shared Packet Template). Launch all agents concurrently before starting self-review.
 
 ### GPT-Pro tier (opt-in)
 
@@ -439,7 +439,7 @@ The menu stays **open** — mint a task-specific lens when you can name its axis
 
 ## Guards
 
-- **No cross-model recursion (HARD RULE):** Dispatched agents must never start a nested Prism run or invoke a cross-model dispatch skill (prism, relay, gpt-pro-relay, deep-research) or call another model — pulling in a different model destroys the lens's independence. They MAY, at their own discretion, spawn their own same-model subagents (kept terminal: read-only, no further spawning, no cross-model dispatch, no response-file write). Read-only analysis skills are permitted; side effects are not. The Constraints section and launcher prompts both enforce this — do not weaken or omit either. Keep the anti-recursion warning at the top of every heredoc; the orchestrator-composed gpt-pro launcher carries the same guard as its first line.
+- **No cross-model recursion (HARD RULE):** Dispatched agents must never start a nested Prism run or invoke a cross-model dispatch skill (prism, relay, gpt-pro, deep-research) or call another model — pulling in a different model destroys the lens's independence. They MAY, at their own discretion, spawn their own same-model subagents (kept terminal: read-only, no further spawning, no cross-model dispatch, no response-file write). Read-only analysis skills are permitted; side effects are not. The Constraints section and launcher prompts both enforce this — do not weaken or omit either. Keep the anti-recursion warning at the top of every heredoc; the orchestrator-composed gpt-pro launcher carries the same guard as its first line.
 - **No contamination:** Write the shared context file and compose all launcher prompts before any launch. Do not modify the shared file or revise prompts after seeing early agent outputs. Keep the packet neutrally framed — no orchestrator verdict, hypothesis ranking, or leading language priming the fan (see *Shared Context* → Neutral framing).
 - **No all-same-model dispatch (HARD RULE):** The dispatched parallax peers must equal the resolved parallax count — `N` by default, or `0` only if the user explicitly excluded GPT. Via `prism-launch` the manifest's `counts` derives this and the single `parallax` call emits exactly those peers. Zero relay **and** zero subagent calls together is legal only as the `N=0` gpt-pro-only shape (valid only when `M ≥ 1`). A **no-subagents** run (`Variant: no-subagents`) satisfies this trivially — it is `N` cross-model peers with zero subagents (maximally cross-model); but if relay then goes down it must **refuse or degrade to gpt-pro-only**, never substitute subagents (see Parallax → relay unavailable). A run with **no surviving external lane** (parallax down/empty **and** `M = 0`) is refused.
 - **No early synthesis (HARD RULE):** Do not synthesize until every dispatched agent has returned its completion notification. "Subagents are done, GPT relay is still running" is not a reason to proceed — it is the expected state. Proceeding without any tier's results voids the entire Prism run.

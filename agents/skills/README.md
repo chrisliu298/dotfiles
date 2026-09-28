@@ -27,20 +27,19 @@ Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via
 
 Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
-> The Claude-only orchestration skills (relay, prism, skill-creator) stay off Codex. `recall` ships as two harness-specific builds under one name; both default to their own complete history and can search the other agent's complete history on request through a shared entrypoint. Relay and prism are additionally guarded so a dispatched peer can't trigger them.
+> The Claude-only orchestration skills (relay, prism) stay off Codex. `recall` ships as two harness-specific builds under one name; both default to their own complete history and can search the other agent's complete history on request through a shared entrypoint. Relay and prism are additionally guarded so a dispatched peer can't trigger them.
 
-**Enabled** (✓ auto-installed):
+**Enabled** (✓ auto-installed). Claude gets `pdf` and `skill-creator` from the claude.ai-synced skills (`anthropic-skills:*`), not from this repo.
 
 | Skill | C | X | Source · Description |
 |-------|:-:|:-:|----------------------|
 | arxiv-reader            | ✓ | ✓ | local — Read arxiv via TeX / HF markdown / HTML fallback |
 | claude-subagent         | — | ✓ | local — Read-only Claude review for Codex; tmux by default, explicit one-shot mode |
 | gpt-subagent            | ✓ | — | local — Read-only GPT review for Claude; tmux by default, explicit one-shot mode |
-| gpt-pro-relay           | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini (the `gpt-pro` CLI is on PATH from the Codex copy) |
-| pdf                     | ✓ | ✓ | [anthropics/skills][c-pdf-a] (Claude) / [openai/skills][c-pdf-o] (Codex) — PDF read/edit |
+| gpt-pro                 | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini (the `gpt-pro` CLI is on PATH from the Codex copy) |
+| pdf                     | — | ✓ | [openai/skills][c-pdf-o] — PDF read/edit (Claude uses the claude.ai-synced `anthropic-skills:pdf`) |
 | push                    | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
 | recall                  | ✓ | ✓ | local — Recall from all past sessions of this agent, or the other agent on request (separate Claude and Codex builds with a shared entrypoint) |
-| skill-creator           | ✓ | — | [anthropics/skills][c-sc] — Create / edit / benchmark skills |
 
 **Disabled** (✱ manual, opt-in via `./dotfiles.sh enable <name>`):
 
@@ -53,9 +52,7 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 
 > Note: SKILL.md supports an optional Claude-only `effort` frontmatter (`medium` / `high` / `max`) to set thinking budget per skill. Currently unset on every skill in this repo — they all inherit the session default.
 
-[c-pdf-a]: https://github.com/anthropics/skills
 [c-pdf-o]: https://github.com/openai/skills
-[c-sc]: https://github.com/anthropics/skills
 
 ### Discovery quirks (not managed here)
 

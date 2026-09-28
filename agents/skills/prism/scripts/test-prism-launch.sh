@@ -1113,11 +1113,11 @@ expect_err "rejects a peer whose prism_effort is ultra" env PRISM_PEERS_JSON="$U
 # "gpt-pro: run_id=<id> ..." on stderr, and prism-launch greps '^gpt-pro: run_id=' (clean's
 # live-worker guard + results' reattach hint). A spelling/format drift on EITHER side
 # silently makes recovery find nothing → abandon/double-submit risk. Pin both sides.
-GPWRAP="$HERE/../../gpt-pro-relay/scripts/gpt-pro"
+GPWRAP="$HERE/../../gpt-pro/scripts/gpt-pro"
 if [ -f "$GPWRAP" ]; then
   grep -qF 'gpt-pro: run_id=' "$GPWRAP" \
     && ok "contract: gpt-pro wrapper emits the 'gpt-pro: run_id=' stderr prefix prism-launch greps" \
-    || bad "contract: 'gpt-pro: run_id=' prefix missing/renamed in gpt-pro-relay/scripts/gpt-pro (prism recovery would silently find nothing)"
+    || bad "contract: 'gpt-pro: run_id=' prefix missing/renamed in gpt-pro/scripts/gpt-pro (prism recovery would silently find nothing)"
 else
   echo "  SKIP: gpt-pro wrapper not found at $GPWRAP (cross-skill run_id contract unchecked)"
 fi

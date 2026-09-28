@@ -309,7 +309,7 @@ EOF
   # Also scrub prism's script dir so a peer can't resolve `prism-launch`: a dispatched
   # peer must never trigger relay OR prism. RELAY_PEER blocks a nested relay call;
   # dropping prism/scripts blocks prism-launch from even starting. Other skill dirs
-  # (gpt-pro-relay, etc.) stay — peers may use those.
+  # (gpt-pro, etc.) stay — peers may use those.
   local prism_dir="${SCRIPT_DIR%relay/scripts}prism/scripts"
   sanitized_path="${sanitized_path//:$prism_dir:/:}"
   sanitized_path="${sanitized_path#:}"

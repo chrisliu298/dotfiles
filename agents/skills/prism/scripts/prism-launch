@@ -47,10 +47,10 @@ PEERS_JSON="${PRISM_PEERS_JSON:-$SCRIPT_DIR/../../relay/peers.json}"   # PRISM_P
 CATALOG_JSON="$TEMPLATES_DIR/lens-catalog.json"
 
 # filectx — shared file-context resolver, a sibling-skill script (lives with
-# gpt-pro-relay, which prism already depends on). Resolves Include: dispatch specs
+# gpt-pro, which prism already depends on). Resolves Include: dispatch specs
 # and secret-scans every reference fed to the gpt-pro inliner. Same sibling-then-PATH
 # resolution prism uses for relay.
-FILECTX_BIN="$SCRIPT_DIR/../../gpt-pro-relay/scripts/filectx"
+FILECTX_BIN="$SCRIPT_DIR/../../gpt-pro/scripts/filectx"
 [ -x "$FILECTX_BIN" ] || FILECTX_BIN="$(command -v filectx 2>/dev/null || true)"
 
 # Standard-tier peer names that carry an .order, newline-separated in canonical
@@ -475,7 +475,7 @@ These belong in the .dispatch file (the one you pass to 'prepare --dispatch'), N
   # cannot coexist with a Reference: key or a hand-written packet ### Reference Materials.
   if [ "$(jq 'has("includes")' "$config")" = "true" ]; then
     [ -n "$FILECTX_BIN" ] && [ -x "$FILECTX_BIN" ] \
-      || die "prepare: Include: used but the 'filectx' helper was not found (expected at \$SCRIPT_DIR/../../gpt-pro-relay/scripts/filectx or on PATH). Reinstall via ./dotfiles.sh, or use a hand-written ### Reference Materials instead."
+      || die "prepare: Include: used but the 'filectx' helper was not found (expected at \$SCRIPT_DIR/../../gpt-pro/scripts/filectx or on PATH). Reinstall via ./dotfiles.sh, or use a hand-written ### Reference Materials instead."
     [ "$(jq 'has("references")' "$config")" = "true" ] \
       && die "prepare: both Include: and Reference: are set — pick one. Include: is the unified front door (it generates the gpt-pro inline list too); drop Reference:, or drop Include: to keep the legacy gpt-pro-only override."
     # Detect a hand-written ### Reference Materials OUTSIDE the managed region. Write the
@@ -972,7 +972,7 @@ EOF
       elif [ "${FILECTX_SECRETS:-deny}" = off ]; then
         echo "prism-launch: ⚠ filectx absent + FILECTX_SECRETS=off — gpt-pro references inlined WITHOUT a secret scan (by request)." >&2
       else
-        die "prepare: a gpt-pro lens would inline reference files, but the filectx helper needed to secret-scan them is missing (expected at \$SCRIPT_DIR/../../gpt-pro-relay/scripts/filectx). Reinstall via ./dotfiles.sh, or set FILECTX_SECRETS=off to inline WITHOUT a scan. No quota burned."
+        die "prepare: a gpt-pro lens would inline reference files, but the filectx helper needed to secret-scan them is missing (expected at \$SCRIPT_DIR/../../gpt-pro/scripts/filectx). Reinstall via ./dotfiles.sh, or set FILECTX_SECRETS=off to inline WITHOUT a scan. No quota burned."
       fi
     fi
 
@@ -1553,7 +1553,7 @@ cmd_clean() {
     for glog in "$base"-gpt-pro-*.log; do
       [ -f "$glog" ] || continue
       # CONTRACT: this prefix mirrors the gpt-pro wrapper's stderr namespace —
-      # gpt-pro-relay/scripts/gpt-pro prints "gpt-pro: run_id=<id> ...". Drift on either
+      # gpt-pro/scripts/gpt-pro prints "gpt-pro: run_id=<id> ...". Drift on either
       # side silently breaks recovery (no run_id → abandon/double-submit). Keep in sync;
       # pinned by the cross-file contract test in test-prism-launch.sh.
       # `|| true`: with `set -o pipefail`, sed on a missing .log (a lens never launched, or
@@ -1623,7 +1623,7 @@ gpt_pro_lane_state() {
 # the gap IS the bug: a hint that enumerated 124/255/4/2/3 but omitted exit 1 (the code
 # EVERY engine error returns) left the agent to improvise, and it improvised its way
 # into salvaging a failed run's response.md — a complete answer from the WRONG model —
-# into the synthesis. Print only the row for the code observed; gpt-pro-relay's SKILL.md
+# into the synthesis. Print only the row for the code observed; gpt-pro's SKILL.md
 # ("If it fails") stays the full reference for the `reason` behind an exit 1.
 gpt_pro_recovery_hint() {
   local ec="$1" run="${2:-<id>}" log="$3"
@@ -1631,7 +1631,7 @@ gpt_pro_recovery_hint() {
     1)
       echo "           exit 1 = ENGINE ERROR (the catch-all: every engine error returns 1) — the RUN is terminal."
       echo "           If a run_id exists the engine wrote result.json, so a reattach only re-reads the same error."
-      echo "           The 'reason' — not the exit code — is the decision key (gpt-pro-relay SKILL.md → 'If it fails'):"
+      echo "           The 'reason' — not the exit code — is the decision key (gpt-pro SKILL.md → 'If it fails'):"
       echo "             ssh macmini \"jq . ~/.gpt-pro/runs/$run/result.json\"     # no run_id? the wrapper failed pre-submit: read $log"
       echo "           Then branch on it: a PRE-SEND reason (needs_reauth, model_select_failed, model_drift_before_send)"
       echo "           burned no quota → resubmitting is safe. A POST-SEND/ambiguous reason (served_model_mismatch,"
@@ -1645,7 +1645,7 @@ gpt_pro_recovery_hint() {
     255) echo "           exit 255 = SSH transport state unknown. Reattach FIRST: gpt-pro --run-id $run — only if THAT exits 4 did the submit never land." ;;
     126|127)
       echo "           exit $ec = the 'gpt-pro' wrapper could not be executed/found (PATH or permissions) — the lens NEVER RAN."
-      echo "           No quota burned and no run exists. Fix the invocation (fall back to ~/.codex/skills/gpt-pro-relay/scripts/gpt-pro), then relaunch."
+      echo "           No quota burned and no run exists. Fix the invocation (fall back to ~/.codex/skills/gpt-pro/scripts/gpt-pro), then relaunch."
       ;;
     \?)
       echo "           the .exit sentinel is unparseable — the code is UNKNOWN, so no row applies. Do NOT guess one."
@@ -1657,7 +1657,7 @@ gpt_pro_recovery_hint() {
         echo "           macmini worker: it likely SURVIVED (that is the point of the detached worker). Reattach, don't resubmit:"
         echo "             gpt-pro --run-id $run"
       else
-        echo "           exit $ec is not a documented gpt-pro code — do not guess. Read $log and gpt-pro-relay SKILL.md → 'If it fails'."
+        echo "           exit $ec is not a documented gpt-pro code — do not guess. Read $log and gpt-pro SKILL.md → 'If it fails'."
       fi
       ;;
   esac
@@ -1737,7 +1737,7 @@ cmd_results() {
 
   # GPT-Pro lane (orchestrator-direct) — status read from each lens's recorded .exit
   # (authoritative when present), its .res.md, and its .log (surfaces the run_id).
-  # prism-launch does NOT own gpt-pro's recovery mechanics — gpt-pro-relay's SKILL.md is
+  # prism-launch does NOT own gpt-pro's recovery mechanics — gpt-pro's SKILL.md is
   # the full exit-code/reason reference — but it DOES own the decision key at the point of
   # failure: the action for the exit code observed, plus the quarantine rule. A hint that
   # reports a failure without the matching action is the middle that got a wrong-model
@@ -1751,7 +1751,7 @@ cmd_results() {
       gres=$(jq -r ".\"gpt-pro\"[$gi].res" "$manifest")
       glog=$(jq -r ".\"gpt-pro\"[$gi].log" "$manifest")
       gexit="${gres%.res.md}.exit"
-      # CONTRACT: prefix mirrors gpt-pro-relay/scripts/gpt-pro's stderr namespace (see clean's note).
+      # CONTRACT: prefix mirrors gpt-pro/scripts/gpt-pro's stderr namespace (see clean's note).
       # `|| true`: with `set -o pipefail`, sed on a missing .log (a lens never launched, or
       # launched without the 2> redirect) fails the whole substitution and `set -e` kills the
       # lane — printing "gpt-pro:" and NOTHING else. A silent empty lane at the moment of

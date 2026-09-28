@@ -35,7 +35,7 @@ LINKS=(
 # source: ./path (local), ~/path (host-local, skipped when absent), or owner/repo[/subpath] (GitHub)
 SKILLS=(
     # The wildcard installs every skill to Claude and Codex; the explicit entries below narrow
-    # that (claude-only: relay, prism, skill-creator, gpt-subagent; codex-only: claude-subagent, cursor-subagent,
+    # that (claude-only: relay, prism, gpt-subagent; codex-only: claude-subagent, cursor-subagent,
     # dual-subagent; recall has a separate build per agent).
     "*|./agents/skills|claude,codex"
     # Relay: claude-only caller; targets GPT via the script.
@@ -54,8 +54,6 @@ SKILLS=(
     "gpt-subagent|./agents/skills/gpt-subagent|claude"
     "cursor-subagent|./agents/skills/cursor-subagent|codex"
     "dual-subagent|./agents/skills/dual-subagent|codex"
-    "pdf|anthropics/skills/skills/pdf|claude"
-    "skill-creator|anthropics/skills/skills/skill-creator|claude"
     "pdf|openai/skills/skills/.curated/pdf|codex"
     # Third-party skills installed per host by `npx skills` (e.g. lark-*, merlin-*). Codex reads
     # ~/.agents/skills natively; Claude does not, so link them in (earlier entries win on name clashes).
