@@ -6,7 +6,7 @@ Config for [Claude Code](https://claude.com/claude-code). Everything here target
 |------|--------------|-------|
 | `CLAUDE.md` | symlink | One of the two canonical global instruction files — see root `CLAUDE.md`. |
 | `keybindings.json` | symlink | Custom key and chord bindings. |
-| `settings.json` | **copied** by `dotfiles.sh` | `~/` is expanded to an absolute path on copy, which Claude Code requires. `theme` is set to `custom:openai`. |
+| `settings.json` | **merged** by `dotfiles.sh` | Merged onto the live file so keys Claude Code writes (e.g. `/effort`'s `modelSettings`) survive; repo values win and arrays are replaced whole, so a key deleted here must also be deleted from `~/.claude/settings.json`. `~/` is expanded to an absolute path, which Claude Code requires. `theme` is set to `custom:openai`. |
 | `statusline-command.sh` | symlink | Status line renderer. ANSI *named* colors only, so it follows the terminal palette — see below. |
 | `themes/openai-{dark,light}.json` | symlinks | Claude themes based on the built-in ANSI variants, with tuned text hierarchy, surfaces, and diff backgrounds. |
 | `themes/openai.json` | generated file | Active theme, replaced by `theme` so running Claude sessions can reload its colors. |

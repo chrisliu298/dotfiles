@@ -249,7 +249,15 @@ setup_theme_state() {
     if [[ -f "$claude_src" ]]; then
         mkdir -p "$(dirname "$claude_dest")"
         claude_stage="${claude_dest}.install.$$"
-        sed "s|~/|$HOME/|g" "$claude_src" > "$claude_stage"
+        # Merge onto the live file so keys Claude Code writes itself (e.g. /effort's
+        # modelSettings) survive; repo values win, and arrays are replaced whole.
+        if [[ -f "$claude_dest" && ! -L "$claude_dest" ]] \
+            && jq -s '.[0] * .[1]' "$claude_dest" <(sed "s|~/|$HOME/|g" "$claude_src") \
+                > "$claude_stage" 2>/dev/null; then
+            :
+        else
+            sed "s|~/|$HOME/|g" "$claude_src" > "$claude_stage"
+        fi
     fi
     # The source variants must exist before theme-apply generates openai.json.
     ensure_symlink "$ROOT/agents/claude/themes/openai-dark.json" "$HOME/.claude/themes/openai-dark.json"

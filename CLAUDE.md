@@ -6,7 +6,7 @@ Personal dotfiles and AI agent configurations for macOS with zsh, managed by `do
 
 ## Project Structure & Module Organization
 
-Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`CLAUDE.md`, `settings.json` — copied, not symlinked — keybindings, statusline, themes), `codex/` → `~/.codex/`. The rest are not agent homes:
+Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`CLAUDE.md`, `settings.json` — merged into the live file, not symlinked — keybindings, statusline, themes), `codex/` → `~/.codex/`. The rest are not agent homes:
 
 - `agents/eval/` — instruction-following harness for the shared agent doc (prompts, rubric, runner scripts).
 - `agents/hooks/` — shared Claude/Codex destructive-command guard and tests.
