@@ -73,7 +73,7 @@ Plus two hygiene rules:
 ## Mechanical gate
 
 `./dotfiles.sh` (and `./dotfiles.sh lint` on demand) warns when a universal skill **body**
-contains `$ARGUMENTS` or a `~/.{claude,codex}/skills/` path. It is intentionally
+contains `$ARGUMENTS` or a `~/.{claude,codex}/skills/` path (also as `$HOME/` or `${HOME}/`). It is intentionally
 conservative — it does **not** catch un-degraded `AskUserQuestion`/`Skill()`/`Cron*` (those have
 legitimate degradation uses and need human review against rule 4). The warning is non-fatal:
 it surfaces the issue without breaking setup.

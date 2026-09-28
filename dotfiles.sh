@@ -703,7 +703,7 @@ lint_skills() {
         [[ -f "$d/SKILL.md" ]] || continue
         [[ "$claude_only" == *$'\n'"$dname"$'\n'* ]] && continue
         m=$(awk 'NR==1&&/^---$/{f=1;next} f&&/^---$/{f=0;next} !f{print FNR": "$0}' "$d/SKILL.md" \
-            | grep -E '\$ARGUMENTS|~/\.(claude|codex)/skills/' || true)
+            | grep -E '\$ARGUMENTS|(~|\$HOME|\$\{HOME\})/\.(claude|codex)/skills/' || true)
         [[ -n "$m" ]] || continue
         warn "non-portable syntax in universal skill '$dname' (body):"
         printf '%s\n' "$m" | sed 's/^/        /'
