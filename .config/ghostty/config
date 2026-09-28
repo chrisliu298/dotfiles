@@ -60,3 +60,6 @@ working-directory = home
 
 shell-integration = detect
 shell-integration-features = sudo,ssh-terminfo,ssh-env
+
+window-width = 112
+window-height = 43
