@@ -49,11 +49,13 @@ case "$sub" in
     esac ;;
   fetch)
     n=$(bump fetch)
+    case " ${args[*]} " in *" --recover "*) ;; *) echo 'fetch requires --recover'>&2; exit 99 ;; esac
     case "$GPRT_SCN" in
       success)            [ "$n" -lt 3 ] && exit 124; printf 'THE ANSWER\n'; echo '{"ok":true}'>&2; exit 0 ;;
       empty_body)         echo '{"ok":true}'>&2; exit 0 ;;            # rc 0 but empty stdout
       transport_recover)  [ "$n" -lt 2 ] && exit 255; printf 'RECOVERED\n'; echo '{"ok":true}'>&2; exit 0 ;;
       terminal_error)     echo '{"error":"needs_reauth"}'>&2; exit 1 ;;
+      orphan_no_url)      echo '{"status":"error","reason":"no_live_worker"}'>&2; exit 6 ;;
       deadline_pending)   sleep 1; exit 124 ;;                        # throttle the busy-spin
       deadline_transport) exit 255 ;;
       submit_drop_recover|submit_127) printf 'THE ANSWER\n'; echo '{"ok":true}'>&2; exit 0 ;;
@@ -86,15 +88,20 @@ chmod +x "$TMP/binssh/hostname"
 cat > "$TMP/binlocal/gpt-pro-relay" <<'FAKE'
 #!/usr/bin/env bash
 case "$1" in
-  ask)   cat >/dev/null
+  ask)   echo called > "$GPRT_STATE/ask"; cat >/dev/null
          # The wrapper must forward --max-wait as the engine's parent-side wait bound.
          case " $* " in *" --generation-timeout 3 "*)
            echo '{"status":"pending","reason":"wait_timeout"}'>&2; exit 124 ;; esac
          case "$GPRT_SCN" in
            local_empty) echo '{"ok":true}'>&2; exit 0 ;;
+           local_orphan_saved_url) echo '{"status":"error","reason":"no_live_worker","recoverable":true}'>&2; exit 6 ;;
            *)           printf 'LOCAL ANSWER\n'; echo '{"ok":true}'>&2; exit 0 ;;
          esac ;;
-  fetch) case " $* " in *" --timeout 3 "*)
+  fetch) echo fetch >> "$GPRT_STATE/calls"
+         case " $* " in *" --recover "*) ;; *) echo 'fetch requires --recover'>&2; exit 99 ;; esac
+         case "$GPRT_SCN" in
+           orphan_no_url) echo '{"status":"error","reason":"no_live_worker"}'>&2; exit 6 ;; esac
+         case " $* " in *" --timeout 3 "*)
            echo '{"status":"pending","reason":"fetch_timeout"}'>&2; exit 124 ;; esac
          printf 'LOCAL REATTACH\n'; echo '{"ok":true}'>&2; exit 0 ;;
   stop)  case "$GPRT_SCN" in
@@ -122,6 +129,15 @@ run_case() {  # <name> <mode ssh|local> <scenario> <expected-exit> <wrapper-extr
   [ "$rc" -eq "$exp_exit" ] || { ok=0; why+="exit got=$rc want=$exp_exit; "; }
   [ -z "$EXP_OUT" ] || grep -qF "$EXP_OUT" <<<"$out" || { ok=0; why+="stdout missing '$EXP_OUT' (got '${out:0:60}'); "; }
   [ -z "$EXP_ERR" ] || grep -qF "$EXP_ERR" <<<"$err" || { ok=0; why+="stderr missing '$EXP_ERR'; "; }
+  case " $extra " in *" --run-id "*)
+    [ ! -f "$sd/ask" ] || { ok=0; why+="recovery submitted a new prompt; "; } ;; esac
+  if [ "$scn" = orphan_no_url ]; then
+    [ -z "$out" ] || { ok=0; why+="orphan returned an answer; "; }
+    local fetches=0
+    if [ -f "$sd/fetch" ]; then fetches=$(cat "$sd/fetch")
+    elif [ -f "$sd/calls" ]; then fetches=$(wc -l < "$sd/calls" | tr -d ' '); fi
+    [ "$fetches" -eq 1 ] || { ok=0; why+="orphan fetch retried ($fetches calls); "; }
+  fi
   if [ "$ok" -eq 1 ]; then printf 'PASS  %s\n' "$name"; PASS=$((PASS+1))
   else printf 'FAIL  %s\n        %s\n' "$name" "$why"; FAIL=$((FAIL+1)); fi
   EXP_OUT=""; EXP_ERR=""
@@ -136,6 +152,8 @@ EXP_OUT="THE ANSWER";                        run_case "127 → venv fallback →
 EXP_ERR="run_id_conflict";                   run_case "submit usage error → exit 2"         ssh usage_conflict     2   ""
 EXP_OUT="RECOVERED"; EXP_ERR="ssh dropped";  run_case "poll transport drop → backoff → ok"  ssh transport_recover  0   ""
 EXP_ERR="needs_reauth";                      run_case "poll terminal error → exit 1"        ssh terminal_error     1   ""
+EXP_OUT="THE ANSWER";                       run_case "SSH reattach requests collector recovery" ssh success        0   "--run-id ask-20260530T000000Z-abc"
+EXP_ERR="cannot recover";                   run_case "SSH orphan without URL → exit 6 once" ssh orphan_no_url     6   "--run-id ask-20260530T000000Z-abc"
 EXP_ERR="still pending";                     run_case "deadline while pending → exit 124"   ssh deadline_pending   124 "--max-wait 3"
 EXP_ERR="transport unknown";                 run_case "deadline all-transport → exit 255"   ssh deadline_transport 255 "--max-wait 3"
 
@@ -143,6 +161,8 @@ echo "── local (default) path ──"
 EXP_OUT="LOCAL ANSWER";                      run_case "local blocking ask → ok"             local local_success    0   ""
 EXP_ERR="empty response";                    run_case "local empty body → exit 1"           local local_empty      1   ""
 EXP_OUT="LOCAL REATTACH";                    run_case "local --run-id blocking fetch → ok"  local local_reattach   0   "--run-id ask-20260530T000000Z-abc"
+EXP_ERR="cannot recover";                   run_case "local orphan without URL → exit 6 once" local orphan_no_url  6   "--run-id ask-20260530T000000Z-abc"
+EXP_ERR="check recoverable in engine stderr: true"; run_case "local ask dead collector → original-run recovery guidance" local local_orphan_saved_url 6 ""
 EXP_ERR="still pending";                     run_case "local --max-wait bounds ask → 124"   local local_success    124 "--max-wait 3"
 EXP_ERR="still pending";                     run_case "local --max-wait bounds fetch → 124" local local_reattach   124 "--run-id ask-20260530T000000Z-abc --max-wait 3"
 

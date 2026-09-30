@@ -13,7 +13,8 @@ user-invocable: true
 Send one self-contained prompt through `gpt-pro` and return its verified answer.
 The engine runs on this Mac by default (`GPT_PRO_HOST=<ssh-host>` relays to a remote
 one instead). The wrapper chooses local or SSH transport, submits once, and waits through
-network drops. Each invocation starts a fresh ChatGPT conversation.
+network drops. Each new prompt starts a fresh ChatGPT conversation; `--run-id`
+reattaches to the original one.
 
 ## Prepare the prompt
 
@@ -68,8 +69,15 @@ reference for grounding and judgment checks.
 ## Recovery and other operations
 
 - If the caller dies or exits 124/255, reattach with `gpt-pro --run-id <literal-id>`
-  in the same background envelope. This waits on the existing run without submitting
-  again. Empty output without a completion event means the call may still be running.
+  in the same background envelope. This waits on a live worker, or restores collection
+  from the saved original conversation URL if the worker died. Recovery never submits
+  again and finishes with the normal completion checks, model audit, and browser cleanup.
+  Without a usable saved URL, it exits 6; inspect the artifacts and report the failure.
+  Empty output without a completion event means the call may still be running.
+- To stop generation, use `gpt-pro --stop <literal-id>`. `TaskStop` or `kill` on a
+  background task can kill its detached collector while browser generation continues.
+  To end only the wait, let `--max-wait` expire or detach from the harness; preserve
+  the collector and do not kill the process tree. Reattach with `--run-id` afterward.
 - For any failure, read [Runtime, recovery, and diagnostics](references/operations.md#if-it-fails)
   before choosing a retry. Ambiguous or post-send failures must not trigger a blind
   resubmit; a fresh quota-consuming run after a terminal failure requires the user’s decision.

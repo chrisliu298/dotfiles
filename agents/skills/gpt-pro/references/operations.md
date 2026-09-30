@@ -15,13 +15,15 @@ Wait for the completion notification. Do NOT poll from the agent side — the wr
 
 ## Recovery
 
-`gpt-pro` prints `run_id=<id>` and a ready-to-run `recover_with=gpt-pro --run-id <id>` line to stderr at the start — both land in the background task's output file. Capture the **literal** id from there; a `$RUN_ID` shell variable does **not** survive into a later Bash-tool call. If the caller dies, or the wrapper exits 124 (timed out, still pending) or 255 (SSH transport unknown), the engine's worker keeps running. Reattach with the same id, inside the same envelope (`run_in_background: true`, `timeout: 7260000`) — this is recovery, not the forbidden polling:
+`gpt-pro` prints `run_id=<id>` and a ready-to-run `recover_with=gpt-pro --run-id <id>` line to stderr at the start — both land in the background task's output file. Capture the **literal** id from there; a `$RUN_ID` shell variable does **not** survive into a later Bash-tool call. Wrapper timeout (124) or SSH transport loss (255) normally leaves the detached worker running. Harness `TaskStop` or `kill` may kill the entire process tree, including that collector, while the original browser turn keeps generating. Reattach with the same id, inside the same envelope (`run_in_background: true`, `timeout: 7260000`) — this is recovery, not the forbidden polling:
 
 ```bash
 gpt-pro --run-id ask-20260611T002710Z-…    # the literal id, not "$RUN_ID"
 ```
 
-This skips submit and waits for the existing run to complete (blocking fetch locally, poll loop over SSH). If the run already finished but you lost the output, read it from the run_dir directly — but **read `result.json` FIRST: only `status: "ok"` makes `response.md` usable.** With the default local engine:
+This skips submit and calls `fetch --recover` (blocking locally, poll loop over SSH). A finished run returns its existing result; a live worker is left running. If the worker died and `conversation.json` contains a valid original conversation URL, the engine starts a collector for that same conversation, with the usual completion checks, model audit, and idle browser cleanup. It never types or sends the prompt again. A run without a usable saved URL cannot be recovered automatically: exit 6 (`reason: no_live_worker`) is terminal for this invocation, and repeating fetch will not repair missing evidence. Inspect `conversation.json` and `worker.stderr`; surface the failure rather than submitting again.
+
+If the run already finished but you lost the output, read it from the run_dir directly — but **read `result.json` FIRST: only `status: "ok"` makes `response.md` usable.** With the default local engine:
 
 ```bash
 jq -r '.status, .reason, .model_audit' ~/.gpt-pro/runs/<run_id>/result.json   # gate — must print ok
@@ -40,23 +42,25 @@ gpt-pro --stop ask-20260611T002710Z-…    # the literal id, not "$RUN_ID"
 
 It's **graceful and worker-driven**: the command writes a stop signal into the run_dir and the owning worker consumes it at its next phase gate. If the prompt **hasn't been sent yet**, the run is **dequeued** (no Pro quota spent). If it **was already sent**, the worker **clicks ChatGPT's Stop button** on the live turn to halt generation. Either way the run finalizes `status: stopped` and **no response is returned** (the partial is discarded, not published). All output is JSONL on stderr.
 
-- **`stopped` / `already_finished` / `pending` → exit 0.** `pending` means the worker is alive and will consume the stop; poll `fetch` to confirm.
-- **`no_live_worker` → exit 2.** No live worker consumed the signal (the worker process itself died, rare — workers survive SSH drops). Server-side generation may still be running; use the manual teardown path if you must halt it: `gpt-pro-relay close-chrome --account all --force` is a blunt last resort (kills all tabs).
+Use this command to stop generation. Do not use `TaskStop` or `kill` on the background invocation: that can kill the detached collector and leave server-side generation running. To stop only waiting, let `--max-wait` expire or detach from the harness while preserving the worker; do not kill the process tree. Use `--run-id` when ready to retrieve the answer.
+
+- **`stopped` / `already_finished` / `pending` → exit 0.** `pending` means the worker is alive and will consume the stop; reattach with `--run-id` to confirm.
+- **`no_live_worker` → exit 2.** No live worker consumed the signal. Server-side generation may still be running. If a valid original URL is saved, `gpt-pro --run-id <id>` restores the collector so it can consume that signal. Without a usable URL, inspect the original browser conversation and stop it there; browser teardown alone does not prove generation stopped.
 - **`not_found` → exit 4.** Unknown run-id.
 
 Stop is **not** resubmit-safe cover for a mistake: a dequeued run spent no quota, but a run stopped after send already burned its reasoning up to the interrupt. Don't stop-then-resubmit reflexively.
 
 ## Concurrency
 
-New runs rotate across the four ChatGPT accounts (1 → 2 → 3 → 4, persisted in `~/.gpt-pro/account-router.json`; the run's `account` is in `meta.json`). Each account has its own Chrome process and profile, and up to `GPT_PRO_MAX_PARALLEL` (default **6**, clamped to a ceiling of **10**) runs **per account** share it, each in its own tab. Beyond the cap, that account's additional workers queue on its file-lock semaphore (`~/.gpt-pro/slots/` for account 1, `~/.gpt-pro/account-<N>/slots/` for the others) and wait for a slot to free up (the worker logs `slot_queued`, then `slot_acquired` when it gets in). A queued run can wait **15+ min before it even reaches `sent`** (961 s observed), so total wall-clock = **queue wait + the run itself (5–20 min, up to 1–2 hours)** — don't set `--max-wait` (or the Bash-tool timeout) shorter than that.
+New runs rotate across the three ChatGPT accounts (1 → 2 → 3, persisted in `~/.gpt-pro/account-router.json`; the run's `account` is in `meta.json`). Each account has its own Chrome process and profile, and up to `GPT_PRO_MAX_PARALLEL` (default **6**, clamped to a ceiling of **10**) runs **per account** share it, each in its own tab. Beyond the cap, that account's additional workers queue on its file-lock semaphore (`~/.gpt-pro/slots/` for account 1, `~/.gpt-pro/account-<N>/slots/` for the others) and wait for a slot to free up (the worker logs `slot_queued`, then `slot_acquired` when it gets in). A queued run can wait **15+ min before it even reaches `sent`** (961 s observed), so total wall-clock = **queue wait + the run itself (5–20 min, up to 1–2 hours)** — don't set `--max-wait` (or the Bash-tool timeout) shorter than that.
 
-**A backgrounded call with no exit code is not a failed call.** Empty output + no completion notification = **still running**. Never diagnose it as lost, and never fresh-submit over it — that double-submits a live run and double-burns quota. Confirm liveness from the stage trace before concluding anything:
+**A backgrounded call with no exit code is not a failed call.** Empty output + no completion notification is insufficient to diagnose failure. Never fresh-submit over it — that may double-submit a live run and double-burn quota. Inspect the recent stage trace for progress:
 
 ```bash
 tail -5 ~/.gpt-pro/runs/<run_id>/worker.stderr
 ```
 
-`slot_queued` with no `slot_acquired` = queued, waiting its turn. `sent` with no `finished` = generating. Either way: **wait.**
+With a live worker, `slot_queued` with no `slot_acquired` = queued, waiting its turn, and `sent` with no `finished` = generating. Historical stage lines alone do not prove worker liveness; reattach with `--run-id` when the caller was interrupted so the engine can check and recover collection if needed.
 
 Each account's Chrome closes itself when its last run (or `login`/`doctor`) exits, and the next run on that account relaunches it automatically with the saved profile — an invoking agent never needs to manage it. `gpt-pro-relay close-chrome [--account N|all]` is **operator maintenance only** (it refuses by default if any worker is in flight; `--force` kills anyway) — don't run it as part of normal use or recovery. Raising `GPT_PRO_MAX_PARALLEL` above the default is a knob, not a free upgrade: parallel bursts on one ChatGPT Pro session are an account-side anti-abuse signal. If `network.json` starts showing 429s, captcha redirects, or unexplained `needs_reauth` after parallel use, drop it back to `1`.
 
@@ -71,6 +75,8 @@ The wrapper's **exit code** is the agent's decision key — every code maps to o
 | 2 | usage error (empty/oversized prompt, bad run-id, bad flag) — no quota burned | fix the call from the stderr message; do **not** reattach |
 | 3 | `status: "timeout"` — only from a worker started before the engine's generation cap was removed; current workers never time out | terminal — don't reattach (a re-fetch just re-times-out); inspect `streaming-*.png`, surface to the user |
 | 4 | run_dir not found (reattach to a run that never landed) | the submit never reached the engine — start a **fresh** run (drop `--run-id`) |
+| 5 | run was stopped; no answer body | terminal — report the stop; do not resubmit automatically |
+| 6 | no live worker; stderr includes `recoverable` | if `true`, reattach with `gpt-pro --run-id <id>` to restore collection from the original URL; if `false`, inspect `conversation.json` and `worker.stderr` and report the failure. Never submit again automatically. A local new-run `ask` can also return this code after its collector dies. |
 | 124 | `--max-wait` elapsed, run still pending | reattach: `gpt-pro --run-id <id>` (same envelope) |
 | 255 | SSH transport state unknown | reattach **first**: `gpt-pro --run-id <id>`; only if *that* exits 4 did the submit never land — then resubmit. Never start a fresh run before reattaching (risks a duplicate, double-quota run) |
 
@@ -111,7 +117,7 @@ Reasons you may see in `worker.stderr`'s stage trace but **never** as a caller-v
 
 `run_dir` lives on the engine host (this Mac by default) at `~/.gpt-pro/runs/<run_id>/`:
 
-- `prompt.md`, `meta.json`, `result.json`
+- `prompt.md`, `meta.json`, `conversation.json` (saved original conversation URL for collector recovery), `result.json`
 - **the answer body — under exactly one name, and the name is the verdict.** `response.md` **only** when `result.json` says `status: "ok"`; otherwise `response.rejected.md` (a model-audit reject), `response.incomplete.md` (the attached task was acknowledged rather than executed), `response.partial.md` (timed out — never passed the completion gate), or `response.pending.md` (the run died before any verdict, so the body was never adjudicated at all). A failure before extraction publishes none of them. Only `response.md` is ever an answer; the other four are diagnostics that may look plausible — that is precisely why they are not named `response.md`.
 - `pre-send.png`, `streaming-NNN.png`, `final.png`, `error-*.png`
 - `final.html`, `network.json`

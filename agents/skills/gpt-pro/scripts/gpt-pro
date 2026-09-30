@@ -68,7 +68,8 @@ Options:
   --files-from <file>   Inline every path listed in <file> (one per line; '#' comments ok). Repeatable.
   --include-tree <dir>  Inline a directory recursively (capped, skips hidden/vendor/binary/secrets). Repeatable.
   --allow-secret <path> Permit one file the secret scan would otherwise refuse. Repeatable.
-  --run-id <id>         Reattach to an existing run (recovery only); skips submit.
+  --run-id <id>         Reattach to an existing run; restore its collector if needed.
+                        Collector recovery needs a saved conversation URL; never submits again.
   --stop <id>           Interrupt a run: dequeue if it hasn't sent yet, else click ChatGPT's
                         Stop button on the live turn. Graceful; no response is returned.
   --max-wait <sec>      Caller-side wait deadline, local or SSH (default 7200 = 120 min); the run keeps going.
@@ -79,6 +80,7 @@ burned on rejection. Put only your question on stdin; pass files with -f instead
 
 Output: response on stdout; run-id + diagnostics + engine JSONL on stderr.
 Exit:   0 ok · 1 error/empty · 2 usage · 3 legacy worker timeout · 4 not found · 5 stopped (no body; via --run-id fetch)
+        · 6 no live worker (check stderr recoverable; recover the original run if true; do not resubmit)
         · 124 timed out, still pending (recover with --run-id) · 255 SSH transport unknown (reattach with --run-id)
         · stop: 0 stopped/already-finished/pending · 2 no live worker · 4 unknown run
 
@@ -219,7 +221,7 @@ emit() {  # <outfile> <errfile>
 # --max-wait bounds only this wait (engine exit 124); the detached worker keeps running.
 if $LOCAL; then
   run_local() {
-    if $REATTACH; then "$RELAY_BIN" fetch "$RUN_ID" --timeout "$MAX_WAIT" >"$OUT" 2>"$ERR"
+    if $REATTACH; then "$RELAY_BIN" fetch "$RUN_ID" --recover --timeout "$MAX_WAIT" >"$OUT" 2>"$ERR"
     else "$RELAY_BIN" ask --run-id "$RUN_ID" --generation-timeout "$MAX_WAIT" <"$PROMPT_FILE" >"$OUT" 2>"$ERR"; fi
   }
   set +e; run_local; rc=$?; set -e
@@ -228,6 +230,7 @@ if $LOCAL; then
   fi
   (( rc == 0 )) && emit "$OUT" "$ERR"
   cat "$ERR" >&2 2>/dev/null || true
+  (( rc == 6 )) && die 6 "no live worker for $RUN_ID; check recoverable in engine stderr: true → gpt-pro --run-id $RUN_ID; false → cannot recover automatically, inspect conversation.json and worker.stderr — do NOT submit again"
   (( rc == 124 )) && die 124 "timed out after ${MAX_WAIT}s, run still pending — recover with: gpt-pro --run-id $RUN_ID"
   exit "$rc"
 fi
@@ -272,9 +275,11 @@ deadline=$((SECONDS + MAX_WAIT)); delay=5; saw_pending=false
 while (( SECONDS < deadline )); do
   # Cap each blocking fetch to the time left, so --max-wait bounds wall-clock.
   remaining=$((deadline - SECONDS)); ftimeout=$(( remaining < 60 ? remaining : 60 ))
-  set +e; engine fetch "$RUN_ID" --timeout "$ftimeout" >"$OUT" 2>"$ERR"; rc=$?; set -e
+  set +e; engine fetch "$RUN_ID" --recover --timeout "$ftimeout" >"$OUT" 2>"$ERR"; rc=$?; set -e
   case $rc in
     0)   emit "$OUT" "$ERR" ;;                                  # done -> emit (non-empty guard inside)
+    6)   cat "$ERR" >&2 2>/dev/null || true
+         die 6 "no live worker for $RUN_ID; check recoverable in engine stderr: true → gpt-pro --run-id $RUN_ID; false → cannot recover automatically, inspect conversation.json and worker.stderr — do NOT submit again" ;;
     124) saw_pending=true; delay=5; continue ;;                 # engine still working
     255) echo "gpt-pro: ssh dropped, retry in ${delay}s" >&2
          remaining=$((deadline - SECONDS)); (( remaining > 0 )) || break  # don't sleep past the deadline
