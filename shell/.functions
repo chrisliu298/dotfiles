@@ -8,6 +8,17 @@ dock_autohide_test() {
     killall Dock
 }
 
+# Restart Clash Verge's service-managed Mihomo core (briefly disconnects traffic).
+clash-restart() {
+    local clash_socket="/var/run/clash-verge-service/users/$(id -u)/verge-mihomo.sock"
+    if [[ ! -S "$clash_socket" ]]; then
+        printf 'clash-restart: core socket not found; start Clash Verge first: %s\n' "$clash_socket" >&2
+        return 1
+    fi
+    curl --fail --silent --show-error --max-time 10 --noproxy '*' \
+        --unix-socket "$clash_socket" -X POST http://localhost/restart
+}
+
 # =============================================================================
 # Terminal
 # =============================================================================
