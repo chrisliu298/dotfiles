@@ -23,6 +23,12 @@ palette = 13=#892bda
 palette = 14=#00818d
 palette = 15=#333333
 
+# Claude Code's diff colors use these indices inside tmux.
+palette = 72=#4dac8d
+palette = 174=#c98190
+palette = 194=#dbeee5
+palette = 224=#fbe2e7
+
 background = #ffffff
 foreground = #1f1f1f
 selection-background = #e8e8e8

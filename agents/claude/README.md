@@ -28,16 +28,14 @@ reloads changes in running sessions. Sessions opened before this change with an
 old `custom:openai-dark` or `custom:openai-light` selection need one manual
 `/theme` selection of "OpenAI (follows theme)" (or a restart) to
 start following the stable file.
-Each variant inherits the corresponding built-in ANSI palette. Neutral text and
-surface roles are overridden because the ANSI preset maps some secondary text
-and light-mode surfaces to terminal colors with the wrong visual weight. The
+Both variants inherit Claude's ANSI syntax palette, with green added rows and
+red removed rows. Neutral text and surfaces are overridden to keep the hierarchy clear. The
 Claude mascot uses the closest 256-color match to its built-in coral; the ANSI
 preset would turn it bright red in the OpenAI terminal palette, while its RGB
 color quantizes to pink in tmux. The light-mode assistant label uses a darker
 orange for readable text, with a lighter spinner shimmer.
-Normal diff rows use the same 256-color red and green backgrounds as Claude
-Code's built-in themes. Word-level highlights use stronger shades instead of
-resetting to the terminal background. Rejected edits retain quieter backgrounds
-so they remain distinct. The empty usage-meter track stays neutral. Explicit
-256-color values preserve the normal diff colors in tmux; Ghostty's
-`faint-opacity = 0.75` helps dimmed deletion text remain legible.
+Word highlights use softer green/red shades than the built-in ANSI palette;
+the same theme tokens also color `+N` and `-N` counts. Inside tmux, Claude
+quantizes light RGB word colors to indices 72 and 174; Ghostty remaps those
+along with row colors to keep the appearance consistent. The empty usage-meter track stays neutral.
+Ghostty's `faint-opacity = 0.75` helps dimmed deletion text remain legible.
