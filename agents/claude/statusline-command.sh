@@ -100,23 +100,6 @@ join_parts() {
   printf '%s' "$out"
 }
 
-# Strip ANSI escape sequences to measure visible width
-# Handles: CSI (\e[...X), OSC (\e]...BEL/ST), stray ESC sequences
-strip_ansi() {
-  local str
-  str=$(printf '%b' "$1")
-  printf '%s' "$str" | sed \
-    -e $'s/\033][^\a]*\a//g' \
-    -e $'s/\033][^\033]*\033\\\\//g' \
-    -e $'s/\033\\[[0-9;]*[A-Za-z]//g'
-}
-
-visible_len() {
-  local stripped
-  stripped=$(strip_ansi "$1")
-  echo ${#stripped}
-}
-
 # ── Shared helpers ────────────────────────────────────────────────
 rl_reset_fmt() {
   local ts="$1"
@@ -150,7 +133,8 @@ parts=()
 
 # Session info
 if [ -n "$model" ]; then
-  model_seg="${muted}${model}"
+  # Context size is shown in the ctx segment; drop the redundant suffix
+  model_seg="${muted}${model% (1M context)}"
   [ -n "$effort_level" ] && model_seg+=" ${effort_level}"
   parts+=("${model_seg}${reset}")
 fi
@@ -229,33 +213,5 @@ if [ -n "$lines_add" ] || [ -n "$lines_rm" ]; then
   [ -n "$changes" ] && parts+=("${changes}")
 fi
 
-# ── Output (wrap to 2 lines if over 110 visible chars) ───────────
-max_width=110
-sep_vis=3  # visible width of " | "
-
-# Single pass: compute total visible width and find split point
-split=${#parts[@]}
-line1_vis=0
-total_vis=0
-for i in "${!parts[@]}"; do
-  plen=$(visible_len "${parts[$i]}")
-  if [ "$i" -eq 0 ]; then
-    total_vis=$plen
-    cand=$plen
-  else
-    total_vis=$((total_vis + sep_vis + plen))
-    cand=$((line1_vis + sep_vis + plen))
-  fi
-  if [ "$split" -eq "${#parts[@]}" ] && [ "$cand" -gt "$max_width" ]; then
-    split=$i
-  else
-    line1_vis=$cand
-  fi
-done
-
-if [ "$total_vis" -le "$max_width" ]; then
-  printf '%b' "$(join_parts "$sep" "${parts[@]}")"
-else
-  [ "$split" -eq 0 ] && split=1
-  printf '%b\n%b' "$(join_parts "$sep" "${parts[@]:0:$split}")" "$(join_parts "$sep" "${parts[@]:$split}")"
-fi
+# ── Output ────────────────────────────────────────────────────────
+printf '%b' "$(join_parts "$sep" "${parts[@]}")"
