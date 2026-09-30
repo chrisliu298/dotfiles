@@ -7,7 +7,7 @@ description: Obtain an independent read-only review or second opinion from Codex
 
 Use Codex CLI as a read-only reviewer from Claude. Both review skills use the
 same session manager at `../review-subagent-shared/review-subagent`; only their
-harness adapters and pinned models differ. Model is pinned to `gpt-6-astra`. Reasoning effort is fixed to
+harness adapters and pinned models differ. Model is pinned to `gpt-6.1-sol`. Reasoning effort is fixed to
 `high`. The helper runs in the current working directory using the user's
 existing login. Do not install software or change credentials during a review.
 

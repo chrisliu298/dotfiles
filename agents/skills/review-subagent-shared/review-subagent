@@ -7,7 +7,7 @@ harness="$1"
 shift
 case "$harness" in
     claude) model=opus ;;
-    gpt) model=gpt-6-astra ;;
+    gpt) model=gpt-6.1-sol ;;
     *) print -u2 'unknown review harness'; exit 2 ;;
 esac
 helper="${harness}-subagent"
@@ -46,7 +46,7 @@ launch() {
         fi
     else
         (( $+commands[codex] )) || { print -u2 "$helper: codex is not on PATH"; return 127; }
-        local -a options=(--ask-for-approval never --sandbox read-only --model gpt-6-astra
+        local -a options=(--ask-for-approval never --sandbox read-only --model gpt-6.1-sol
             -c 'model_reasoning_effort="high"' -c 'shell_environment_policy.inherit="all"')
         if [[ "$mode" == once ]]; then
             print -rn -- "$prompt" | command codex "${options[@]}" exec --ephemeral --skip-git-repo-check --color never -

@@ -62,7 +62,7 @@ def test_once_pins_and_json(harness):
     assert json.loads(result.stdout) == {'result': 'review result', 'exit_code': 0, 'is_error': False}
     call = json.loads((tmp / 'call.json').read_text())
     args = call['args']
-    assert args[args.index('--model') + 1] == ('opus' if name == 'claude' else 'gpt-6-astra')
+    assert args[args.index('--model') + 1] == ('opus' if name == 'claude' else 'gpt-6.1-sol')
     assert call['sentinel'] == '1'
     if name == 'claude':
         assert args[args.index('--effort') + 1] == 'high'
