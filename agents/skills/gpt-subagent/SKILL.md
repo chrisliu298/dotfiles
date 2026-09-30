@@ -22,7 +22,7 @@ existing login. Do not install software or change credentials during a review.
 
    ```bash
    helper="${CLAUDE_SKILL_DIR}/scripts/gpt-subagent"
-   session="$($helper < /tmp/review-prompt.md)"
+   session="$($helper < /tmp/review-prompt.md)"  # every start needs a matching stop
    $helper status "$session"
    $helper capture "$session"
    $helper send "$session" < /tmp/review-followup.md
@@ -48,8 +48,12 @@ existing login. Do not install software or change credentials during a review.
 5. Inspect the final response and verify consequential claims against primary
    artifacts. An interactive session normally stays alive after a response;
    idle or dead pane state alone is not proof of a successful review. Exited
-   panes are retained for diagnosis. Stop only the named review session when
-   finished; never kill the tmux server or unrelated sessions.
+   panes are retained for diagnosis.
+6. Before your final answer, run `$helper stop "$session"` for every session
+   you started, including failed or exited ones. Keep a session open only when
+   the user needs follow-ups, and then name it in your answer as still open.
+   Stop only your own named sessions; never kill the tmux server or unrelated
+   sessions.
 
 The `scripts/gpt-subagent-tmux` entrypoint is an alias with the same interface.
 Initial tmux prompts are limited to 128 KiB; send further context as follow-ups.
