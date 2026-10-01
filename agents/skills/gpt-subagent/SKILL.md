@@ -11,6 +11,11 @@ harness adapters and pinned models differ. Model is pinned to `gpt-6.1-sol`. Rea
 `high`. The helper runs in the current working directory using the user's
 existing login. Do not install software or change credentials during a review.
 
+The helper uses the managed `~/.local/bin/codex` entrypoint, installed by
+`dotfiles.sh` from the global npm package. It requires the verified CLI version
+`0.159.2` or newer and rejects older versions before dispatch. Run `xu` or
+`codex update` to upgrade; run `./dotfiles.sh` to repair a missing entrypoint.
+
 ## Default: persistent tmux review
 
 1. Define one bounded read-only assignment, including the goal, relevant paths,

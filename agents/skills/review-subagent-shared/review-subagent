@@ -13,6 +13,23 @@ esac
 helper="${harness}-subagent"
 prefix="${harness}-review-"
 runner="${0:A}"
+codex_cli="$HOME/.local/bin/codex"
+
+check_codex_cli() {
+    [[ "$harness" == gpt ]] || return 0
+    if [[ ! -x "$codex_cli" ]]; then
+        print -u2 "$helper: managed Codex CLI missing; run ./dotfiles.sh"
+        return 127
+    fi
+    local version
+    version="$("$codex_cli" --version)" || return
+    version="${version#codex-cli }"
+    autoload -Uz is-at-least
+    if [[ "$version" != <->.<->.<->* ]] || ! is-at-least 0.159.2 "$version"; then
+        print -u2 "$helper: Codex CLI 0.159.2+ required for $model (found $version); run xu or codex update"
+        return 2
+    fi
+}
 
 parse_options() {
     output_format=text
@@ -45,7 +62,6 @@ launch() {
             c --model opus --effort high -- "$prompt"
         fi
     else
-        (( $+commands[codex] )) || { print -u2 "$helper: codex is not on PATH"; return 127; }
         # The read-only Seatbelt sandbox blocks DNS and SSH control sockets. REVIEW_SUBAGENT_NETWORK=1
         # opts into workspace-write with network so reviewers can reach dev machines. Clear inherited
         # extra writable roots; the launch directory and temp dirs remain writable, so use scratch.
@@ -57,9 +73,9 @@ launch() {
         local -a options=(--ask-for-approval never "${sandbox[@]}" --model gpt-6.1-sol
             -c 'model_reasoning_effort="high"' -c 'shell_environment_policy.inherit="all"')
         if [[ "$mode" == once ]]; then
-            print -rn -- "$prompt" | command codex "${options[@]}" exec --ephemeral --skip-git-repo-check --color never -
+            print -rn -- "$prompt" | command "$codex_cli" "${options[@]}" exec --ephemeral --skip-git-repo-check --color never -
         else
-            command codex "${options[@]}" --no-alt-screen -- "$prompt"
+            command "$codex_cli" "${options[@]}" --no-alt-screen -- "$prompt"
         fi
     fi
 }
@@ -117,6 +133,7 @@ fi
 
 if [[ "$action" == --once ]]; then
     parse_options "$@" || exit $?
+    check_codex_cli || exit $?
     [[ ! -t 0 ]] || { usage; exit 2; }
     prompt="$(command cat)" || exit 1
     [[ -n "${prompt//[[:space:]]/}" ]] || { print -u2 "$helper: prompt is empty"; exit 2; }
@@ -153,6 +170,7 @@ case "$action" in
         ;;
     start)
         parse_options "$@" || exit $?
+        check_codex_cli || exit $?
         if [[ -t 0 ]]; then
             usage
             exit 2

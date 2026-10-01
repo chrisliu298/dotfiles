@@ -460,6 +460,33 @@ install_skills() {
     done
 }
 
+# One npm-managed Codex CLI, independent of PATH order and app runtime versions.
+setup_codex_cli() {
+    command -v npm >/dev/null 2>&1 || { warn "Codex CLI requires npm"; return 127; }
+    local prefix cli version
+    prefix="$(npm prefix -g)" || return
+    cli="$prefix/lib/node_modules/@openai/codex/bin/codex.js"
+    version=""
+    if [[ -x "$cli" ]]; then
+        version="$("$cli" --version)" || return
+        version="${version#codex-cli }"
+    fi
+    if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] || \
+        ! zsh -fc 'autoload -Uz is-at-least; is-at-least 0.159.2 "$1"' -- "$version"; then
+        log "install/update npm Codex CLI (requires 0.159.2+)"
+        npm install -g @openai/codex@latest || return
+        version="$("$cli" --version)" || return
+        version="${version#codex-cli }"
+        zsh -fc 'autoload -Uz is-at-least; is-at-least 0.159.2 "$1"' -- "$version" || {
+            warn "Codex CLI is still too old: $version"
+            return 1
+        }
+    fi
+    # Both public entrypoints resolve to this npm package. Leave the app's
+    # private runtimes alone; their lifecycle belongs to the desktop app.
+    ensure_symlink "$cli" "$HOME/.local/bin/codex"
+}
+
 # uv-managed CLI tools: installed once per machine via `uv tool install`
 # (not symlinked; credentials/state stay machine-local). Format: "pkg|note".
 CLI_TOOLS=(
@@ -749,6 +776,8 @@ main() {
         lint)    lint_skills; exit ;;
     esac
 
+    # Host-local installs can drift without changing the repository fingerprint.
+    setup_codex_cli
     local fp; fp=$(compute_fingerprint)
     if stamp_fresh "$GLOBAL_STAMP" "$fp"; then
         printf '\n  %s🔧 dotfiles%s  up to date %s(%s)%s\n\n' "$_CYN" "$_RST" "$_DIM" "$ROOT" "$_RST"
@@ -822,4 +851,6 @@ main() {
     printf '\n  ✨ Done. Restart your shell or %ssource ~/.zshrc%s\n\n' "$_DIM" "$_RST"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

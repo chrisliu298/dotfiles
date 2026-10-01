@@ -645,7 +645,7 @@ _codex_resume_effort(){
 }
 xc(){ _codex_resume_effort --last "$@"; }
 xr(){ _codex_resume_effort "$@"; }
-xu(){ npm install -g @openai/codex@latest "$@"; }
+xu(){ command "$HOME/.local/bin/codex" update "$@"; }
 xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-6.1-sol --config model_reasoning_effort=high "${*}"; }
 
 # Show Claude + Codex account emails on local, macmini, and l40s.

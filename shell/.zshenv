@@ -32,6 +32,10 @@ if (( IS_MACOS )); then
     export CPPFLAGS="-I/opt/homebrew/opt/curl/include"
 fi
 
+# Keep the managed Codex entrypoint ahead of npm, standalone, and app binaries.
+typeset -U path
+path=("$HOME/.local/bin" "${path[@]}")
+
 # =============================================================================
 # Editor
 # =============================================================================

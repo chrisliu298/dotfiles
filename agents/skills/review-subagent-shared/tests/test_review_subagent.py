@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
@@ -24,6 +25,9 @@ def harness(request, tmp_path):
     backend.write_text(f'''#!{sys.executable}
 import json, os, sys
 from pathlib import Path
+if '--version' in sys.argv:
+    print('codex-cli ' + os.environ.get('MOCK_CODEX_VERSION', '0.159.2'))
+    sys.exit(0)
 Path(os.environ['CAPTURE']).write_text(json.dumps({{'args': sys.argv[1:], 'sentinel': os.environ.get('CODEX_REVIEW_SUBAGENT_ACTIVE')}}))
 if '-p' in sys.argv or 'exec' in sys.argv:
     sys.stdin.read()
@@ -37,6 +41,9 @@ for line in sys.stdin:
     backend.chmod(0o755)
     (tmp_path / '.functions').write_text(f'c() {{ "{backend}" "$@"; }}\n')
     (tmp_path / 'codex').symlink_to(backend)
+    canonical = tmp_path / '.local' / 'bin' / 'codex'
+    canonical.parent.mkdir(parents=True)
+    canonical.symlink_to(backend)
     tmux = shutil.which('tmux')
     socket = 'review-test-' + uuid.uuid4().hex
     if tmux:
@@ -94,6 +101,74 @@ def test_gpt_network_sandbox_scope(harness, mode, network):
     finally:
         if session:
             assert run('stop', session).returncode == 0
+
+
+def test_gpt_ignores_other_codex_on_path(harness):
+    name, run, tmp = harness
+    if name != 'gpt':
+        pytest.skip('GPT-only CLI selection')
+    (tmp / 'codex').unlink()
+    (tmp / 'codex').write_text('#!/bin/sh\necho wrong-cli >&2\nexit 99\n')
+    (tmp / 'codex').chmod(0o755)
+    result = run('--once')
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'review result'
+
+
+@pytest.mark.parametrize('mode', ['--once', 'start'])
+def test_gpt_rejects_old_cli_before_dispatch(harness, mode):
+    name, run, tmp = harness
+    if name != 'gpt':
+        pytest.skip('GPT-only version requirement')
+    result = run(mode, extra_env={'MOCK_CODEX_VERSION': '0.157.1'})
+    assert result.returncode == 2
+    assert '0.159.2' in result.stderr
+    assert 'xu' in result.stderr
+    assert not (tmp / 'call.json').exists()
+    assert not run('list').stdout.strip()
+
+
+def test_gpt_missing_canonical_cli_does_not_fall_back(harness):
+    name, run, tmp = harness
+    if name != 'gpt':
+        pytest.skip('GPT-only CLI selection')
+    (tmp / '.local' / 'bin' / 'codex').unlink()
+    result = run('--once')
+    assert result.returncode == 127
+    assert 'dotfiles.sh' in result.stderr
+    assert not (tmp / 'call.json').exists()
+
+
+def test_codex_setup_repairs_old_link_and_updates_only_when_needed(tmp_path):
+    prefix = tmp_path / 'npm-global'
+    package_bin = prefix / 'lib' / 'node_modules' / '@openai' / 'codex' / 'bin' / 'codex.js'
+    package_bin.parent.mkdir(parents=True)
+    version = tmp_path / 'version'
+    version.write_text('0.157.1')
+    package_bin.write_text(f'#!/bin/sh\necho "codex-cli $(cat {shlex.quote(str(version))})"\n')
+    package_bin.chmod(0o755)
+    npm = tmp_path / 'npm'
+    receipt = tmp_path / 'npm-update'
+    npm.write_text(f'''#!/bin/sh
+if [ "$1" = prefix ]; then
+    echo {shlex.quote(str(prefix))}
+else
+    echo "$*" >> {shlex.quote(str(receipt))}
+    echo 0.159.2 > {shlex.quote(str(version))}
+fi
+''')
+    npm.chmod(0o755)
+    canonical = tmp_path / '.local' / 'bin' / 'codex'
+    canonical.parent.mkdir(parents=True)
+    canonical.symlink_to(tmp_path / 'old-standalone')
+    env = dict(os.environ, HOME=str(tmp_path), PATH=str(tmp_path) + os.pathsep + os.environ['PATH'])
+    script = SKILLS.parents[1] / 'dotfiles.sh'
+    command = f'source {shlex.quote(str(script))}; setup_codex_cli'
+    for _ in range(2):
+        result = subprocess.run(['bash', '-c', command], env=env, text=True, capture_output=True)
+        assert result.returncode == 0, result.stderr
+        assert canonical.resolve() == package_bin
+    assert receipt.read_text().splitlines() == ['install -g @openai/codex@latest']
 
 
 @pytest.mark.parametrize('args', [('--model', 'other'), ('--effort', 'xhigh'), ('--settings', '{}')])
