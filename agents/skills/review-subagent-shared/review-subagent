@@ -46,7 +46,15 @@ launch() {
         fi
     else
         (( $+commands[codex] )) || { print -u2 "$helper: codex is not on PATH"; return 127; }
-        local -a options=(--ask-for-approval never --sandbox read-only --model gpt-6.1-sol
+        # The read-only Seatbelt sandbox blocks DNS and SSH control sockets. REVIEW_SUBAGENT_NETWORK=1
+        # opts into workspace-write with network so reviewers can reach dev machines. Clear inherited
+        # extra writable roots; the launch directory and temp dirs remain writable, so use scratch.
+        local -a sandbox=(--sandbox read-only)
+        if [[ "${REVIEW_SUBAGENT_NETWORK:-0}" == 1 ]]; then
+            sandbox=(--sandbox workspace-write -c 'sandbox_workspace_write.network_access=true'
+                -c 'sandbox_workspace_write.writable_roots=[]')
+        fi
+        local -a options=(--ask-for-approval never "${sandbox[@]}" --model gpt-6.1-sol
             -c 'model_reasoning_effort="high"' -c 'shell_environment_policy.inherit="all"')
         if [[ "$mode" == once ]]; then
             print -rn -- "$prompt" | command codex "${options[@]}" exec --ephemeral --skip-git-repo-check --color never -
@@ -175,6 +183,7 @@ case "$action" in
         session="${prefix}${uuid:l}"
         if ! pane="$(tmux new-session -d -x 160 -y 48 -P -F '#{pane_id}' -s "$session" -c "$PWD" \
             -e CODEX_REVIEW_SUBAGENT_ACTIVE=1 -e REVIEW_SUBAGENT_TMUX_RUNNER=1 \
+            -e REVIEW_SUBAGENT_NETWORK="${REVIEW_SUBAGENT_NETWORK:-0}" \
             -- "$runner" "$harness" __run "$scratch_dir")"; then
             command rm -f -- "$scratch_dir/prompt.md"
             command rmdir -- "$scratch_dir"

@@ -18,6 +18,7 @@ def harness(request, tmp_path):
     name = request.param
     env = dict(os.environ, HOME=str(tmp_path), CAPTURE=str(tmp_path / 'call.json'))
     env.pop('CODEX_REVIEW_SUBAGENT_ACTIVE', None)
+    env.pop('REVIEW_SUBAGENT_NETWORK', None)
     env.pop('TMUX', None)
     backend = tmp_path / 'backend'
     backend.write_text(f'''#!{sys.executable}
@@ -69,6 +70,30 @@ def test_once_pins_and_json(harness):
     else:
         assert 'model_reasoning_effort="high"' in args
         assert args[args.index('--sandbox') + 1] == 'read-only'
+
+
+@pytest.mark.parametrize('mode', ['--once', 'start'])
+@pytest.mark.parametrize('network', ['0', '1'])
+def test_gpt_network_sandbox_scope(harness, mode, network):
+    name, run, tmp = harness
+    if name != 'gpt':
+        pytest.skip('GPT-only sandbox selection')
+    if mode == 'start' and not shutil.which('tmux'):
+        pytest.skip('tmux is required for network propagation checks')
+    result = run(mode, extra_env={'REVIEW_SUBAGENT_NETWORK': network})
+    assert result.returncode == 0, result.stderr
+    session = result.stdout.strip() if mode == 'start' else None
+    try:
+        if session:
+            wait_for(run, session, 'capture', 'MOCK_READY')
+        args = json.loads((tmp / 'call.json').read_text())['args']
+        assert args[args.index('--ask-for-approval') + 1] == 'never'
+        assert args[args.index('--sandbox') + 1] == ('workspace-write' if network == '1' else 'read-only')
+        assert ('sandbox_workspace_write.network_access=true' in args) == (network == '1')
+        assert ('sandbox_workspace_write.writable_roots=[]' in args) == (network == '1')
+    finally:
+        if session:
+            assert run('stop', session).returncode == 0
 
 
 @pytest.mark.parametrize('args', [('--model', 'other'), ('--effort', 'xhigh'), ('--settings', '{}')])

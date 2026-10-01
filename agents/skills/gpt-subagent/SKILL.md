@@ -83,6 +83,14 @@ the same process if the command tool yields a running-session ID; do not start
 another request because output has not arrived. JSON is a shared wrapper format,
 not a harness-specific event stream.
 
+## Network access (opt-in)
+
+The default read-only Codex sandbox blocks DNS and SSH control sockets, so reviewers cannot reach
+remote dev machines. Set `REVIEW_SUBAGENT_NETWORK=1` on `start` or `--once` to run Codex in
+`workspace-write` with network access instead. The helper clears additional writable roots inherited
+from Codex configuration. The launch directory and temp dirs remain writable, so launch from a
+scratch directory, not the repository, and keep the read-only instruction in the prompt.
+
 ## Scope, delegation, and failures
 
 The reviewer may use its native subagents for bounded parts of the review when
@@ -98,9 +106,10 @@ operations; use the caller's native agents for delegated execution.
 
 Both workflows prohibit writes in the assignment. Harness enforcement differs:
 Claude uses the existing `c` launcher (which bypasses permission prompts), while
-Codex uses a read-only shell sandbox and `approval=never`. Neither establishes
-read-only enforcement for every external tool. Keep the reviewer within the
-user's authorized scope and avoid passing unnecessary secrets.
+Codex defaults to a read-only shell sandbox and uses `approval=never` in both
+default and network modes. Network mode allows local writes as described above.
+Neither establishes read-only enforcement for every external tool. Keep the
+reviewer within the user's authorized scope and avoid passing unnecessary secrets.
 
 Judge results by actual responses and exit status, not diagnostic text alone.
 On failure, inspect the pane/output and workspace, report the error, then retry
