@@ -4,7 +4,7 @@
   "overrides": {
     "claude": "ansi256(173)",
     "claudeShimmer": "ansi256(216)",
-    "clawd_body": "ansi256(173)",
+    "clawd_body": "rgb(215,119,87)",
     "clawd_background": "#000000",
     "briefLabelClaude": "ansi256(173)",
     "text": "#f2f2f2",

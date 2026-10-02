@@ -22,6 +22,15 @@ worktree names use blue, branches and additions use green, and deletions use red
 Elapsed time uses cyan, context percentage uses purple, and cost uses gold;
 context labels and token counts stay muted so the status line remains scannable.
 
+The default layout has two rows: model/project/git/session details first, then
+context/5-hour and 7-day limits/cost/changed lines. It reads Claude Code's
+`COLUMNS` and wraps at field boundaries in narrow panes, reserving four columns
+for footer spacing. A field wider than the pane wraps within the field without
+dropping text. ANSI colors and OSC 8 links do not count toward width and remain
+intact across rows; CJK and combining text use Unicode display widths. The
+renderer uses `jq` and macOS's bundled Perl (`Unicode::UCD`). Without a valid
+`COLUMNS`, it assumes 120 columns.
+
 Claude Code uses the stable `custom:openai` selection. `theme` copies the matching
 tracked variant to `~/.claude/themes/openai.json`; Claude watches that file and
 reloads changes in running sessions. Sessions opened before this change with an
@@ -30,9 +39,9 @@ old `custom:openai-dark` or `custom:openai-light` selection need one manual
 start following the stable file.
 Both variants inherit Claude's ANSI syntax palette, with green added rows and
 red removed rows. Neutral text and surfaces are overridden to keep the hierarchy clear. The
-Claude mascot uses the closest 256-color match to its built-in coral; the ANSI
-preset would turn it bright red in the OpenAI terminal palette, while its RGB
-color quantizes to pink in tmux. The light-mode assistant label uses a darker
+Claude mascot uses its built-in coral, `rgb(215,119,87)`; the ANSI preset would
+turn it bright red in the OpenAI terminal palette. In tmux, where Claude renders
+256 colors, the RGB value may quantize toward pink. The light-mode assistant label uses a darker
 orange for readable text, with a lighter spinner shimmer.
 Word highlights use softer green/red shades than the built-in ANSI palette;
 the same theme tokens also color `+N` and `-N` counts. Inside tmux, Claude

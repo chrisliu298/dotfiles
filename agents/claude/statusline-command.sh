@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Claude Code status line — follows the terminal's light/dark ANSI palette
-# Model | project | branch* | 9m | $1.45 | +141/-25 | 5h 37% 2h41m | 7d 26% 4d3h | ctx 26% 38k/200k
+# Model · project · branch* · 9m
+# ctx 26% 38k/200k · 5h 37% 2h41m · 7d 26% 4d3h · $1.45 · +141/-25
 
 input=$(cat)
 
@@ -90,16 +91,6 @@ fmt_tokens() {
   fi
 }
 
-join_parts() {
-  local sep="$1"; shift
-  local out=""
-  for p in "$@"; do
-    [ -n "$out" ] && out+="$sep"
-    out+="$p"
-  done
-  printf '%s' "$out"
-}
-
 # ── Shared helpers ────────────────────────────────────────────────
 rl_reset_fmt() {
   local ts="$1"
@@ -127,9 +118,9 @@ rl_reset_fmt() {
   fi
 }
 
-# ── Build single-line output ──────────────────────────────────────
-sep="${muted} · ${reset}"
+# ── Build session and usage rows ──────────────────────────────────
 parts=()
+usage_parts=()
 
 # Session info
 if [ -n "$model" ]; then
@@ -172,7 +163,7 @@ if [ -n "$rl_5h" ]; then
   rl5_seg="${muted}5h ${rl5_pct:-0}%${reset}"
   rl5_reset=$(rl_reset_fmt "$rl_5h_reset")
   [ -n "$rl5_reset" ] && rl5_seg+=" ${muted}${rl5_reset}${reset}"
-  parts+=("$rl5_seg")
+  usage_parts+=("$rl5_seg")
 fi
 
 if [ -n "$rl_7d" ]; then
@@ -180,7 +171,7 @@ if [ -n "$rl_7d" ]; then
   rl7_seg="${muted}7d ${rl7_pct:-0}%${reset}"
   rl7_reset=$(rl_reset_fmt "$rl_7d_reset")
   [ -n "$rl7_reset" ] && rl7_seg+=" ${muted}${rl7_reset}${reset}"
-  parts+=("$rl7_seg")
+  usage_parts+=("$rl7_seg")
 fi
 
 # Context window
@@ -193,12 +184,12 @@ if [ -n "$cur_input" ] && [ -n "$ctx_size" ] && [ "$ctx_size" -gt 0 ]; then
   cur_tok=$(( ${cur_input:-0} + ${cur_output:-0} + ${cur_cache_create:-0} + ${cur_cache_read:-0} ))
   ctx_seg+="${muted} $(fmt_tokens "$cur_tok")/$(fmt_tokens "$ctx_size")"
 fi
-parts+=("${ctx_seg}${reset}")
+usage_parts=("${ctx_seg}${reset}" "${usage_parts[@]}")
 
 # Cost
 if [ -n "$cost" ] && [ "$cost" != "0" ]; then
   cost_fmt=$(printf "%.2f" "$cost")
-  [ "$cost_fmt" != "0.00" ] && parts+=("${yellow}\$${cost_fmt}${reset}")
+  [ "$cost_fmt" != "0.00" ] && usage_parts+=("${yellow}\$${cost_fmt}${reset}")
 fi
 
 # Lines changed
@@ -210,8 +201,76 @@ if [ -n "$lines_add" ] || [ -n "$lines_rm" ]; then
     [ -n "$changes" ] && changes+="/"
     changes+="${red}-${lr}${reset}"
   }
-  [ -n "$changes" ] && parts+=("${changes}")
+  [ -n "$changes" ] && usage_parts+=("${changes}")
 fi
 
 # ── Output ────────────────────────────────────────────────────────
-printf '%b' "$(join_parts "$sep" "${parts[@]}")"
+# NUL-delimited fields, with an empty field separating the two logical rows.
+# Perl is included with macOS; Unicode::UCD keeps CJK and combining text aligned.
+{
+  [ "${#parts[@]}" -gt 0 ] && printf '%b\0' "${parts[@]}"
+  printf '\0'
+  printf '%b\0' "${usage_parts[@]}"
+} | perl -CS -MUnicode::UCD=charprop -e '
+  use strict;
+  use warnings;
+  use utf8;
+  my $columns = $ENV{COLUMNS} // 120;
+  $columns = 120 unless $columns =~ /\A[1-9][0-9]*\z/;
+  # Leave room for Claude Code footer indentation and the terminal edge.
+  my $width = $columns > 4 ? $columns - 4 : 1;
+  my ($col, $style, $link) = (0, "", "");
+  my %char_width;
+  my $token = qr/\e\[[0-?]*[ -\/]*[\@-~]|\e\][^\a\e]*(?:\a|\e\\)|\X/;
+
+  sub cell_width {
+    my ($text) = @_;
+    return 0 if $text =~ /\A\e/;
+    my $cells = 0;
+    for my $char (split //, $text) {
+      next if $char =~ /[\p{Mn}\p{Me}\p{Cf}]/;
+      my $n = ord $char;
+      my $w = $char_width{$n} //= ($n < 128 ? 1 :
+        charprop($n, "East_Asian_Width") =~ /\A(?:Wide|Fullwidth)\z/ ? 2 : 1);
+      $cells = $w if $w > $cells;
+    }
+    return $cells;
+  }
+
+  sub new_row {
+    print "\e]8;;\a" if length $link;
+    print "\e[0m" if length $style;
+    print "\n", $style, $link;
+    $col = 0;
+  }
+
+  sub emit {
+    my ($text) = @_;
+    for my $piece ($text =~ /($token)/g) {
+      my $cells = cell_width($piece);
+      new_row() if $cells && $col && $col + $cells > $width;
+      if ($piece =~ /\A\e\[[0-9;]*m\z/) {
+        $style = "" if $piece eq "\e[0m" || $piece eq "\e[m";
+        $style .= $piece unless $piece eq "\e[0m" || $piece eq "\e[m";
+      } elsif ($piece =~ /\A\e\]8;[^;]*;(.*?)(?:\a|\e\\)\z/s) {
+        $link = length($1) ? $piece : "";
+      }
+      print $piece;
+      $col += $cells;
+    }
+  }
+
+  local $/ = "\0";
+  while (my $part = <STDIN>) {
+    chomp $part;
+    if (!length $part) {
+      new_row() if $col;
+      next;
+    }
+    my $cells = 0;
+    $cells += cell_width($_) for $part =~ /($token)/g;
+    new_row() if $col && $col + 3 + $cells > $width;
+    emit("\e[90m · \e[0m") if $col;
+    emit($part);
+  }
+'
