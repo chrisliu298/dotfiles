@@ -72,8 +72,7 @@ MANUAL_SKILLS=(
 # Which manual skills are currently enabled — a committed declarative set, one
 # name per line ('#' comments / blank lines ignored; empty = all off). Every
 # ./dotfiles.sh run enforces it (symlink the listed, prune the rest), and
-# enable/disable rewrite it. Since dfs runs `git pull && ./dotfiles.sh` on each
-# peer, a commit + dfs propagates the set to every machine — no per-host toggling.
+# enable/disable rewrite it.
 MANUAL_ENABLED_FILE="$ROOT/agents/skills/manual-skills.enabled"
 
 MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: claude,codex or omit for both)
@@ -170,7 +169,7 @@ _manual_enabled() {
 }
 
 # Record manual skill $1 as on|off in the committed set (sorted, de-duped, header
-# preserved). Caller commits + runs dfs to propagate the change to every machine.
+# preserved).
 _manual_set_state() {
     local name="$1" state="$2" data
     mkdir -p "$(dirname "$MANUAL_ENABLED_FILE")"
@@ -179,7 +178,7 @@ _manual_set_state() {
     [[ "$state" == on ]] && data=$(printf '%s\n%s' "$data" "$name")
     data=$(printf '%s\n' "$data" | grep -vE '^[[:space:]]*$' | LC_ALL=C sort -u || true)
     {
-        printf '# Enabled manual skills, one per line (committed; dfs propagates). Empty = all off.\n'
+        printf '# Enabled manual skills, one per line (committed). Empty = all off.\n'
         printf '# Toggle with ./dotfiles.sh enable/disable <name>; enforced on every ./dotfiles.sh run.\n'
         [[ -n "$data" ]] && printf '%s\n' "$data"
     } > "$MANUAL_ENABLED_FILE"
@@ -682,7 +681,7 @@ cmd_enable() {
     fi
     $found || { warn "skill '$name' not found"; return 1; }
     _manual_set_state "$name" on
-    log "enabled '$name' in the committed set — commit + run dfs to propagate"
+    log "enabled '$name' in the committed set"
 }
 
 cmd_disable() {
@@ -694,7 +693,7 @@ cmd_disable() {
     done
     if _is_manual "$name"; then
         _manual_set_state "$name" off
-        log "disabled '$name' in the committed set — commit + run dfs to propagate"
+        log "disabled '$name' in the committed set"
     fi
     $removed || log "$name is not currently enabled"
 }

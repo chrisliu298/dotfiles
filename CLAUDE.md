@@ -22,7 +22,7 @@ Elsewhere:
 - `./dotfiles.sh` — initialize submodules, sync skill repos, symlink files, install skills, and register MCP servers + Claude plugins + tmux plugins (TPM).
 - `./dotfiles.sh lint` — run skill portability checks (universal C/X skill mechanical violations) and the agent-doc identity guard; also runs automatically at the end of a full `./dotfiles.sh`.
 - `./dotfiles.sh skills` — list manual skills and whether each is enabled.
-- `./dotfiles.sh enable <name>` / `./dotfiles.sh disable <name>` — toggle a manual skill; rewrites the committed `agents/skills/manual-skills.enabled` set, so commit + `dfs` to propagate the change to every machine.
+- `./dotfiles.sh enable <name>` / `./dotfiles.sh disable <name>` — toggle a manual skill; rewrites the committed `agents/skills/manual-skills.enabled` set.
 
 ## Conventions
 
@@ -49,7 +49,7 @@ Run `./dotfiles.sh` after changes to installation logic, skill wiring, or manage
 - Match existing history: imperative, concise subjects (`Add ...`, `Update ...`, `Remove ...`, `Refactor ...`).
 - Keep commits atomic by logical change (docs vs scripts vs skill content).
 - PRs include: purpose, changed paths, verification commands run, and any migration/symlink impact. Link related issues; add screenshots only for UI-facing documentation changes.
-- **Sync after push**: after `git push` succeeds, run `dfs` (a `shell/.functions` helper) to propagate to peers — concurrent `git pull --ff-only` + `./dotfiles.sh` on `macbookpro16`, `macmini`, `l40s`; the current host is skipped. Skipping this leaves the other machines on the previous revision. Non-interactive/agent shells: `zsh -c 'source ~/dotfiles/shell/.functions && dfs'` (self-contained; no TTY or `.zshrc` needed).
+- **Peer sync is explicit-only**: run `dfs` only when the user explicitly requests it. Otherwise, do not run it or mention it in updates or the final response.
 
 </important>
 
