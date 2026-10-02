@@ -7,7 +7,81 @@ bridge_version=0.3.32
 bridge_install=$HOME/.local/share/codex-traex/$bridge_version
 default_bridge_bundle=$bridge_install/bridge/dist/server.js
 default_codex_bin=$HOME/.local/bin/codex
-CODEX_TRAEX_DEFAULT_MODEL=GPT-5.6-Sol
+CODEX_TRAEX_DEFAULT_MODEL=${CODEX_TRAEX_DEFAULT_MODEL:-GPT-5.6-Sol}
+codex_home=${CODEX_TRAEX_HOME:-$HOME/.codex-traex}
+source_config=${CODEX_TRAEX_SOURCE_CONFIG:-$HOME/.codex/config.toml}
+
+sync_config() {
+  node_bin=$(command -v node || true)
+  if [ -z "$node_bin" ]; then
+    echo "codex-traex: node is required to sync config" >&2
+    exit 1
+  fi
+
+  mkdir -p "$codex_home"
+  if [ ! -f "$source_config" ]; then
+    [ -f "$codex_home/config.toml" ] && return 0
+    config_temp="$codex_home/config.toml.tmp.$$"
+    printf 'model = "%s"\nmodel_reasoning_effort = "medium"\n' \
+      "$CODEX_TRAEX_DEFAULT_MODEL" >"$config_temp"
+    chmod 600 "$config_temp"
+    mv "$config_temp" "$codex_home/config.toml"
+    return 0
+  fi
+
+  config_temp="$codex_home/config.toml.tmp.$$"
+  "$node_bin" -e '
+    const fs = require("node:fs");
+    const sourcePath = process.argv[1];
+    const targetPath = process.argv[2];
+    const fallbackModel = process.argv[3];
+
+    const topLevelModelLine = contents => {
+      for (const line of contents.split(/\r?\n/)) {
+        if (/^\s*\[/.test(line)) break;
+        if (/^\s*model\s*=/.test(line)) return line;
+      }
+      return null;
+    };
+
+    let source = "";
+    try {
+      source = fs.readFileSync(sourcePath, "utf8");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+
+    let modelLine = null;
+    try {
+      modelLine = topLevelModelLine(fs.readFileSync(targetPath, "utf8"));
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    if (!modelLine) modelLine = `model = ${JSON.stringify(fallbackModel)}`;
+
+    const lines = source.split(/\r?\n/);
+    let replaced = false;
+    for (let index = 0; index < lines.length; index += 1) {
+      if (/^\s*\[/.test(lines[index])) break;
+      if (/^\s*model\s*=/.test(lines[index])) {
+        lines[index] = modelLine;
+        replaced = true;
+        break;
+      }
+    }
+    if (!replaced) lines.unshift(modelLine);
+
+    let output = lines.join("\n");
+    if (!output.endsWith("\n")) output += "\n";
+    fs.writeFileSync(process.argv[4], output, { mode: 0o600 });
+  ' "$source_config" "$codex_home/config.toml" \
+    "$CODEX_TRAEX_DEFAULT_MODEL" "$config_temp" || {
+    rm -f "$config_temp"
+    return 1
+  }
+  chmod 600 "$config_temp"
+  mv "$config_temp" "$codex_home/config.toml"
+}
 
 # Extract only the standalone bridge. Never run the package's Desktop installer.
 if [ "${1:-}" = setup ]; then
@@ -31,11 +105,14 @@ if [ "${1:-}" = setup ]; then
   echo "Installed standalone TraeX bridge $bridge_version"
   exit 0
 fi
+if [ "${1:-}" = sync-config ]; then
+  sync_config
+  exit 0
+fi
 
 bridge_bundle=${CODEX_TRAEX_BRIDGE_BUNDLE:-$default_bridge_bundle}
 bridge_address=${CODEX_TRAEX_BRIDGE_ADDR:-}
 bridge_state_dir=${CODEX_TRAEX_BRIDGE_STATE_DIR:-$HOME/.local/state/codex-traex/$$}
-codex_home=${CODEX_TRAEX_HOME:-$HOME/.codex-traex}
 model=${CODEX_TRAEX_MODEL:-}
 has_model_flag=false
 
@@ -175,6 +252,9 @@ link_shared() {
   ln -s "$source_path" "$target_path"
 }
 link_shared "$HOME/.codex/AGENTS.md" "$codex_home/AGENTS.md"
+link_shared "$HOME/.codex/hooks.json" "$codex_home/hooks.json"
+link_shared "$HOME/.codex/keybindings.json" "$codex_home/keybindings.json"
+link_shared "$HOME/.codex/themes" "$codex_home/themes"
 mkdir -p "$codex_home/skills"
 for skill_path in "$HOME/.codex/skills/"*; do
   [ -f "$skill_path/SKILL.md" ] || continue
@@ -217,16 +297,10 @@ chmod 600 "$catalog_temp"
 mv "$catalog_temp" "$catalog_path"
 catalog_temp=
 
-# Seed first-run defaults without overriding choices subsequently saved by /model.
-"$node_bin" -e '
-  const fs = require("node:fs");
-  let fd;
-  try { fd = fs.openSync(process.argv[1], "wx", 0o600); }
-  catch (error) { if (error.code === "EEXIST") process.exit(0); throw error; }
-  try {
-    fs.writeFileSync(fd, `model = ${JSON.stringify(process.argv[2])}\nmodel_reasoning_effort = "medium"\n`);
-  } finally { fs.closeSync(fd); }
-' "$codex_home/config.toml" "$CODEX_TRAEX_DEFAULT_MODEL"
+# Mirror the native Codex configuration on every launch while preserving the
+# TraeX model selected through /model. Provider-specific values remain
+# invocation overrides below, so the official Codex config is never modified.
+sync_config
 
 if [ "$has_model_flag" = false ] && [ -n "$model" ]; then
   set -- --model "$model" "$@"

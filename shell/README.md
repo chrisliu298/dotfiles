@@ -25,9 +25,10 @@ its own private runtimes, which are managed by the app rather than dotfiles.
 
 `codex-traex` uses that same native CLI with a standalone Responses bridge and
 an independent `~/.codex-traex` home. It links the current `~/.codex/AGENTS.md`
-and installed user skills on each launch; `~/.agents/skills` remains discoverable
-by Codex. Built-in system skills are generated separately. Configuration,
-authentication, history, and session databases stay in the independent home.
+plus its hooks, keybindings, themes, and installed user skills on each launch;
+`~/.agents/skills` remains discoverable by Codex. Built-in system skills are
+generated separately. Authentication, history, and session databases stay in
+the independent home.
 
 After `./dotfiles.sh`, install the bridge and use your existing TraeX login:
 
@@ -69,23 +70,30 @@ from the live bridge catalog. `/model` descriptions include the load percentage
 reported by TraeX (for example, `Load 29%`). Values refresh when the CLI starts;
 the menu is a startup snapshot, not a continuously updated display. Percentages
 can exceed 100%; missing or invalid values appear as `Load n/a`.
-On first launch, the wrapper seeds `GPT-5.6-Sol`
-and `medium` in `~/.codex-traex/config.toml` only if that file is absent.
-Subsequent launches honor the model and reasoning effort saved by `/model`.
+On every launch, the wrapper mirrors `~/.codex/config.toml` into
+`~/.codex-traex/config.toml` while preserving the TraeX model previously saved
+by `/model`. This keeps CLI preferences, project trust, TUI settings, MCP
+servers, and future Codex configuration changes aligned without allowing a
+TraeX model selection to modify the native Codex default. If the source config
+does not exist, the wrapper preserves an existing TraeX config or seeds
+`GPT-5.6-Sol` with `medium` reasoning. Run `codex-traex sync-config` to refresh
+the mirror without starting the bridge.
 One-off overrides are
 `CODEX_TRAEX_MODEL`, `CODEX_TRAEX_HOME`, `CODEX_TRAEX_CODEX_BIN`,
 `CODEX_TRAEX_BRIDGE_BUNDLE`, `CODEX_TRAEX_BRIDGE_ADDR` (loopback only), and
-`CODEX_TRAEX_BRIDGE_STATE_DIR`. Set them per invocation. Explicit `--model`,
+`CODEX_TRAEX_BRIDGE_STATE_DIR`; `CODEX_TRAEX_SOURCE_CONFIG` changes the config
+used as the mirror source. Set them per invocation. Explicit `--model`,
 `CODEX_TRAEX_MODEL`, or CLI config overrides take precedence over saved defaults.
 Native
 `codex` and the Desktop app retain their existing configuration. MCP and plugin
-configuration is not copied from the official home; plugins, ChatGPT apps,
-automatic approval review, and background memories are disabled in this entrypoint.
+configuration is copied from the official home, but plugins, ChatGPT apps,
+automatic approval review, and background memories remain disabled by this entrypoint.
 Skills that explicitly call another model
 service continue to call that service.
 
-Verify installation with `sh -n shell/codex-traex`, `./dotfiles.sh lint`, the
-headless command above, and `readlink ~/.codex-traex/AGENTS.md`. To verify actual
+Verify installation with `sh -n shell/codex-traex`,
+`shell/test-codex-traex-config-sync.sh`, `./dotfiles.sh lint`, the headless
+command above, and the shared-resource links in `~/.codex-traex`. To verify actual
 instruction and skill loading, inspect the new rollout's `user_instructions`
 and `environment_context` in `~/.codex-traex/sessions/` after a completed turn.
 
