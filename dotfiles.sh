@@ -288,66 +288,66 @@ install_links() {
         [[ -e "$src" ]] || { warn "skip ~/${entry#*:} (source missing)"; continue; }
         ensure_symlink "$src" "$HOME/${entry#*:}"
     done
-    install_delete_hooks
+    remove_legacy_delete_hooks
 }
 
-install_delete_hooks() {
-    local hook_src="$ROOT/agents/hooks/prevent-catastrophic-delete.sh"
-    local dir dest
+remove_legacy_delete_hooks() {
+    local dest dir tmp
     for dir in "$HOME/.claude/hooks" "$HOME/.codex/hooks"; do
-        # Migrate the initial whole-directory symlink without touching a real
-        # directory that may contain unrelated host-local hooks.
         if [[ -L "$dir" && "$(readlink "$dir")" == "$ROOT/agents/hooks" ]]; then
             rm "$dir"
+            log "unlink ${dir/#$HOME/~}"
         fi
-        mkdir -p "$dir"
-        ensure_symlink "$hook_src" "$dir/prevent-catastrophic-delete.sh"
     done
 
-    # Codex keeps hooks in a separate file. Merge our owned matcher group so
-    # host-local hooks (notably on l40s) survive dotfiles installation.
-    local hook_config="$ROOT/agents/codex/hooks.json"
-    dest="$HOME/.codex/hooks.json"
-    if [[ -L "$dest" && "$(readlink "$dest")" == "$hook_config" ]]; then
-        rm "$dest"
-    elif [[ -L "$dest" ]]; then
-        warn "skip ~/.codex/hooks.json merge (unexpected symlink)"
-        return 1
-    fi
-    mkdir -p "$(dirname "$dest")"
-    [[ -e "$dest" ]] || printf '%s\n' '{"hooks":{}}' > "$dest"
-    jq -e '
-        type == "object" and
-        ((.hooks // {}) | type == "object") and
-        ((.hooks.PreToolUse // []) | type == "array") and
-        all((.hooks.PreToolUse // [])[];
-            type == "object" and
-            ((.hooks // []) | type == "array") and
-            all((.hooks // [])[]; type == "object"))
-    ' "$dest" >/dev/null 2>&1 || {
-        warn "skip ~/.codex/hooks.json merge (invalid or incompatible schema)"
-        return 1
-    }
+    for dest in "$HOME/.claude/hooks/prevent-catastrophic-delete.sh" \
+                "$HOME/.codex/hooks/prevent-catastrophic-delete.sh"; do
+        if [[ -L "$dest" && "$(readlink "$dest")" == "$ROOT/agents/hooks/prevent-catastrophic-delete.sh" ]]; then
+            rm "$dest"
+            log "unlink ${dest/#$HOME/~}"
+        fi
+    done
 
-    local group tmp
-    group=$(sed "s|~/|$HOME/|g" "$hook_config" | jq -c '.hooks.PreToolUse[0]')
-    tmp=$(mktemp "${dest}.tmp.XXXXXX")
-    jq --argjson group "$group" '
-        .hooks //= {} |
-        .hooks.PreToolUse = (
-            ((.hooks.PreToolUse // [])
-                | map(.hooks = ((.hooks // []) | map(select((.command // "") | endswith("/hooks/prevent-catastrophic-delete.sh") | not))))
-                | map(select((.hooks | length) > 0)))
-            + [$group]
-        )
-    ' "$dest" > "$tmp"
-    if cmp -s "$tmp" "$dest"; then
-        rm "$tmp"
-    else
-        chmod 600 "$tmp"
-        mv "$tmp" "$dest"
-        log "merge ~/.codex/hooks.json"
+    dest="$HOME/.codex/hooks.json"
+    if [[ -L "$dest" && "$(readlink "$dest")" == "$ROOT/agents/codex/hooks.json" ]]; then
+        rm "$dest"
+        log "unlink ${dest/#$HOME/~}"
     fi
+
+    # Remove only this repo's retired hook, preserving host-local hook groups.
+    for dest in "$HOME/.claude/settings.json" "$HOME/.codex/hooks.json"; do
+        [[ -f "$dest" && ! -L "$dest" ]] || continue
+        jq -e '
+            type == "object" and
+            ((.hooks // {}) | type == "object") and
+            ((.hooks.PreToolUse // []) | type == "array") and
+            all((.hooks.PreToolUse // [])[];
+                type == "object" and
+                ((.hooks // []) | type == "array") and
+                all((.hooks // [])[]; type == "object"))
+        ' "$dest" >/dev/null 2>&1 || {
+            warn "skip ${dest/#$HOME/~} hook cleanup (invalid or incompatible schema)"
+            continue
+        }
+
+        tmp=$(mktemp "${dest}.tmp.XXXXXX")
+        jq '
+            .hooks.PreToolUse = (
+                ((.hooks.PreToolUse // [])
+                    | map(.hooks = ((.hooks // []) | map(select((.command // "") | endswith("/hooks/prevent-catastrophic-delete.sh") | not))))
+                    | map(select((.hooks | length) > 0)))
+            ) |
+            if (.hooks.PreToolUse | length) == 0 then del(.hooks.PreToolUse) else . end |
+            if (.hooks | length) == 0 then del(.hooks) else . end
+        ' "$dest" > "$tmp"
+        if cmp -s "$tmp" "$dest"; then
+            rm "$tmp"
+        else
+            chmod 600 "$tmp"
+            mv "$tmp" "$dest"
+            log "remove retired hook from ${dest/#$HOME/~}"
+        fi
+    done
 }
 
 _skills_repos() {

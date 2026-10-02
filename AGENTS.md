@@ -9,7 +9,6 @@ Personal dotfiles and AI agent configurations for macOS with zsh, managed by `do
 Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`CLAUDE.md`, `settings.json` — merged into the live file, not symlinked — keybindings, statusline, themes), `codex/` → `~/.codex/`. The rest are not agent homes:
 
 - `agents/eval/` — instruction-following harness for the shared agent doc (prompts, rubric, runner scripts).
-- `agents/hooks/` — shared Claude/Codex destructive-command guard and tests.
 - `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` symlinks each into the agent dirs the `SKILLS` table selects (most to both Claude and Codex; some are Claude- or Codex-only). Manual skills install only when listed in `agents/skills/manual-skills.enabled`.
 
 Elsewhere:
