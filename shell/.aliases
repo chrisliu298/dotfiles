@@ -65,7 +65,7 @@ alias nqu="npx quartz upload"
 # Claude Code
 # =============================================================================
 # Defined as functions in shell/.functions to support shared base args.
-alias ct="uv run --directory ~/Developer/GitHub/claude-usage-tracker ~/Developer/GitHub/claude-usage-tracker/main.py"
+# alias ct="uv run --directory ~/Developer/GitHub/claude-usage-tracker ~/Developer/GitHub/claude-usage-tracker/main.py"
 alias adb="uv run --directory ~/Developer/GitHub/adb ~/Developer/GitHub/adb/adb.py"
 
 # Account switching (claude-swap). `cs` = TUI dashboard; `csw` rotates.

@@ -1,0 +1,239 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+bridge_version=0.3.32
+bridge_install=$HOME/.local/share/codex-traex/$bridge_version
+default_bridge_bundle=$bridge_install/bridge/dist/server.js
+default_codex_bin=$HOME/.local/bin/codex
+CODEX_TRAEX_DEFAULT_MODEL=GPT-5.6-Sol
+
+# Extract only the standalone bridge. Never run the package's Desktop installer.
+if [ "${1:-}" = setup ]; then
+  [ -f "$default_bridge_bundle" ] && { echo "TraeX bridge $bridge_version is installed"; exit 0; }
+  setup_dir=$(mktemp -d "${TMPDIR:-/tmp}/codex-traex-install.XXXXXX")
+  trap 'rm -rf "$setup_dir"' EXIT
+  archive=${2:-}
+  if [ -z "$archive" ]; then
+    (cd "$setup_dir" && npm pack "@byted/codex-traex-hybrid@$bridge_version" \
+      --registry=https://bnpm.byted.org --ignore-scripts --prefer-offline --json > pack.json)
+    archive=$setup_dir/$(node -e 'process.stdout.write(require(process.argv[1])[0].filename)' "$setup_dir/pack.json")
+  fi
+  tar -xzf "$archive" -C "$setup_dir" package/package.json package/payload/traex-bridge
+  node -e '
+    const p = require(process.argv[1]);
+    if (p.name !== "@byted/codex-traex-hybrid" || p.version !== process.argv[2]) process.exit(1);
+  ' "$setup_dir/package/package.json" "$bridge_version"
+  test -f "$setup_dir/package/payload/traex-bridge/dist/server.js"
+  mkdir -p "$bridge_install"
+  mv "$setup_dir/package/payload/traex-bridge" "$bridge_install/bridge"
+  echo "Installed standalone TraeX bridge $bridge_version"
+  exit 0
+fi
+
+bridge_bundle=${CODEX_TRAEX_BRIDGE_BUNDLE:-$default_bridge_bundle}
+bridge_address=${CODEX_TRAEX_BRIDGE_ADDR:-}
+bridge_state_dir=${CODEX_TRAEX_BRIDGE_STATE_DIR:-$HOME/.local/state/codex-traex/$$}
+codex_home=${CODEX_TRAEX_HOME:-$HOME/.codex-traex}
+model=${CODEX_TRAEX_MODEL:-}
+has_model_flag=false
+
+# Keep provider state separate, but reuse the installed instructions and skills.
+if [ "$codex_home" = "$HOME/.codex" ] || [ "$codex_home" -ef "$HOME/.codex" ]; then
+  echo "codex-traex: CODEX_TRAEX_HOME must differ from ~/.codex" >&2
+  exit 2
+fi
+for argument in "$@"; do
+  if [ "${next_is_model:-false}" = true ]; then
+    model=$argument
+    next_is_model=false
+  else
+    case "$argument" in
+      -m|--model) next_is_model=true; has_model_flag=true ;;
+      --model=*) model=${argument#--model=}; has_model_flag=true ;;
+    esac
+  fi
+done
+
+case "$bridge_address" in
+  '') ;;
+  127.0.0.1:*|localhost:*) ;;
+  *)
+    echo "codex-traex: CODEX_TRAEX_BRIDGE_ADDR must use a loopback host" >&2
+    exit 2
+    ;;
+esac
+
+if [ -n "${CODEX_TRAEX_CODEX_BIN:-}" ]; then
+  codex_bin=$CODEX_TRAEX_CODEX_BIN
+elif [ -x "$default_codex_bin" ]; then
+  codex_bin=$default_codex_bin
+else
+  codex_bin=$(command -v codex || true)
+fi
+
+if [ -z "$codex_bin" ] || [ ! -x "$codex_bin" ]; then
+  echo "codex-traex: native Codex binary not found" >&2
+  exit 1
+fi
+
+node_bin=$(command -v node || true)
+curl_bin=$(command -v curl || true)
+if [ -z "$node_bin" ] || [ -z "$curl_bin" ]; then
+  echo "codex-traex: node and curl are required" >&2
+  exit 1
+fi
+if [ ! -f "$bridge_bundle" ]; then
+  echo "codex-traex: TraeX bridge missing; run codex-traex setup" >&2
+  exit 1
+fi
+
+if [ -z "$bridge_address" ]; then
+  # Independent CLI windows must not stop one another's bridge on exit.
+  bridge_address=$("$node_bin" -e '
+    const server = require("node:net").createServer();
+    server.on("error", error => { console.error(error.message); process.exit(1); });
+    server.listen(0, "127.0.0.1", () => {
+      process.stdout.write(`127.0.0.1:${server.address().port}`);
+      server.close();
+    });
+  ')
+fi
+base_url="http://$bridge_address/v1"
+bridge_pid=
+catalog_temp=
+
+bridge_ready() {
+  "$curl_bin" -fsS --max-time 2 "$base_url/models" 2>/dev/null |
+    "$node_bin" -e '
+      let input = "";
+      process.stdin.setEncoding("utf8");
+      process.stdin.on("data", chunk => { input += chunk; });
+      process.stdin.on("end", () => {
+        try {
+          const value = JSON.parse(input);
+          const ok = Array.isArray(value.data) &&
+            value.data.some(model => model && model.owned_by === "bytedance-trae");
+          process.exit(ok ? 0 : 1);
+        } catch (_) {
+          process.exit(1);
+        }
+      });
+    '
+}
+
+cleanup() {
+  if [ -n "$catalog_temp" ] && [ -f "$catalog_temp" ]; then
+    rm -f "$catalog_temp"
+  fi
+  if [ -n "$bridge_pid" ] && kill -0 "$bridge_pid" 2>/dev/null; then
+    kill "$bridge_pid" 2>/dev/null || true
+    wait "$bridge_pid" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT HUP INT TERM
+
+if ! bridge_ready; then
+  mkdir -p "$bridge_state_dir"
+  bridge_log="$bridge_state_dir/bridge.log"
+  env \
+    TRAEX_BRIDGE_ADDR="$bridge_address" \
+    TRAEX_BRIDGE_STATE_DIR="$bridge_state_dir" \
+    "$node_bin" "$bridge_bundle" >>"$bridge_log" 2>&1 &
+  bridge_pid=$!
+
+  attempts=0
+  while ! bridge_ready; do
+    if ! kill -0 "$bridge_pid" 2>/dev/null; then
+      echo "codex-traex: TraeX bridge exited during startup" >&2
+      echo "codex-traex: inspect $bridge_log for details" >&2
+      exit 1
+    fi
+    attempts=$((attempts + 1))
+    if [ "$attempts" -ge 100 ]; then
+      echo "codex-traex: timed out waiting for TraeX bridge" >&2
+      echo "codex-traex: inspect $bridge_log for details" >&2
+      exit 1
+    fi
+    sleep 0.1
+  done
+fi
+
+mkdir -p "$codex_home"
+link_shared() {
+  source_path=$1
+  target_path=$2
+  [ -e "$source_path" ] || return 0
+  if [ -L "$target_path" ]; then
+    [ "$(readlink "$target_path")" = "$source_path" ] && return 0
+    rm "$target_path"
+  elif [ -e "$target_path" ]; then
+    echo "codex-traex: refusing to replace existing $target_path" >&2
+    exit 2
+  fi
+  ln -s "$source_path" "$target_path"
+}
+link_shared "$HOME/.codex/AGENTS.md" "$codex_home/AGENTS.md"
+mkdir -p "$codex_home/skills"
+for skill_path in "$HOME/.codex/skills/"*; do
+  [ -f "$skill_path/SKILL.md" ] || continue
+  link_shared "$skill_path" "$codex_home/skills/${skill_path##*/}"
+done
+# Codex discovers ~/.agents/skills independently of CODEX_HOME. Built-in system
+# skills stay private, so Codex cannot regenerate them through a shared link.
+catalog_path="$codex_home/traex-models.json"
+catalog_temp="$catalog_path.tmp.$$"
+"$curl_bin" -fsS --max-time 10 \
+  "$base_url/models?client_version=codex-hybrid" >"$catalog_temp"
+
+"$node_bin" -e '
+      const wanted = process.argv[1];
+      const path = process.argv[2];
+      try {
+        const value = JSON.parse(require("node:fs").readFileSync(path, "utf8"));
+        if (!Array.isArray(value.models) || value.models.length === 0) process.exit(1);
+        if (!wanted) process.exit(0);
+        const model = value.models.find(item => item && item.slug === wanted);
+        if (!model || !Number.isInteger(model.context_window) || model.context_window <= 0) {
+          process.exit(1);
+        }
+      } catch (_) {
+        process.exit(1);
+      }
+    ' "$model" "$catalog_temp" || {
+  echo "codex-traex: model is not present in the live TraeX catalog: $model" >&2
+  exit 1
+}
+chmod 600 "$catalog_temp"
+mv "$catalog_temp" "$catalog_path"
+catalog_temp=
+
+# Seed first-run defaults without overriding choices subsequently saved by /model.
+"$node_bin" -e '
+  const fs = require("node:fs");
+  let fd;
+  try { fd = fs.openSync(process.argv[1], "wx", 0o600); }
+  catch (error) { if (error.code === "EEXIST") process.exit(0); throw error; }
+  try {
+    fs.writeFileSync(fd, `model = ${JSON.stringify(process.argv[2])}\nmodel_reasoning_effort = "medium"\n`);
+  } finally { fs.closeSync(fd); }
+' "$codex_home/config.toml" "$CODEX_TRAEX_DEFAULT_MODEL"
+
+if [ "$has_model_flag" = false ] && [ -n "$model" ]; then
+  set -- --model "$model" "$@"
+fi
+CODEX_HOME="$codex_home" "$codex_bin" \
+  --no-daemon \
+  --disable plugins \
+  --disable guardian_approval \
+  --disable apps \
+  --disable memories \
+  -c 'model_provider="traex"' \
+  -c 'model_providers.traex.name="TraeX"' \
+  -c "model_providers.traex.base_url=\"$base_url\"" \
+  -c 'model_providers.traex.wire_api="responses"' \
+  -c 'model_providers.traex.supports_websockets=false' \
+  -c 'web_search="disabled"' \
+  -c "model_catalog_json=\"$catalog_path\"" \
+  "$@"

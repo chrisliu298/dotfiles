@@ -11,6 +11,7 @@ LINKS=(
     "shell/.zshenv:.zshenv"
     "shell/.zshrc:.zshrc"
     "shell/theme-apply:.local/bin/theme-apply"
+    "shell/codex-traex:.local/bin/codex-traex"
     ".config/starship:.config/starship"
     # btop has no config include and rewrites its own config, so its live
     # ~/.config/btop/btop.conf is host-local (generated, outside git). Only the

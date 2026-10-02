@@ -554,7 +554,6 @@ cr(){ _claude --dangerously-skip-permissions --resume "$@"; }
 crc(){ _claude rc --dangerously-skip-permissions "$@"; }
 cu(){ command claude update "$@"; }
 cpu(){ local prompt="/push"; (( $# )) && prompt+=" ${*}"; _claude -p --dangerously-skip-permissions "$prompt"; }
-chl(){ (( $# )) || { echo 'Usage: chl "<prompt>"'; return 1; }; _claude -p --dangerously-skip-permissions "${*}"; }
 cch(){
     local _claude_bin="$(command -v claude)" || return 127
     local _cmd="${(q)_claude_bin} --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official"
@@ -563,13 +562,6 @@ cch(){
     tmux new-session -ds claude-channels "$_cmd" 2>/dev/null
     tmux attach -t claude-channels
 }
-# Reasoning-effort tiers (CLAUDE_CODE_EFFORT_LEVEL); plain `c` keeps the default.
-cl(){  CLAUDE_CODE_EFFORT_LEVEL=low    _claude --dangerously-skip-permissions "$@"; }
-cm(){  CLAUDE_CODE_EFFORT_LEVEL=medium _claude --dangerously-skip-permissions "$@"; }
-ch(){  CLAUDE_CODE_EFFORT_LEVEL=high   _claude --dangerously-skip-permissions "$@"; }
-cx(){  CLAUDE_CODE_EFFORT_LEVEL=xhigh  _claude --dangerously-skip-permissions "$@"; }
-cmx(){ CLAUDE_CODE_EFFORT_LEVEL=max    _claude --dangerously-skip-permissions "$@"; }
-
 # Sequentially scout every awesome-list repo's Scholar Inbox feed with Claude
 # Code (Opus, high effort), printing only each run's final message.
 scout-papers-scholar-inbox-all() {
@@ -623,30 +615,17 @@ scout-papers-scholar-inbox-all() {
     printf '\nAll Scholar Inbox scouts completed.\n'
 }
 
-xn(){ command codex --yolo -m gpt-6.1-sol --config model_reasoning_effort=none "$@"; }
-x(){ command codex --yolo -m gpt-6.1-sol --config model_reasoning_effort=medium "$@"; }
-xl(){ command codex --yolo -m gpt-6.1-sol --config model_reasoning_effort=low "$@"; }
-xm(){ command codex --yolo -m gpt-6.1-sol --config model_reasoning_effort=medium "$@"; }
-xh(){ command codex --yolo -m gpt-6.1-sol --config model_reasoning_effort=high "$@"; }
-xx(){ command codex --yolo -m gpt-6.1-sol --config model_reasoning_effort=xhigh "$@"; }
-xmx(){ command codex --yolo -m gpt-6.1-sol --config model_reasoning_effort=max "$@"; }
-xul(){ command codex --yolo -m gpt-6.1-sol --config model_reasoning_effort=ultra "$@"; }
-_codex_resume_effort(){
-    local resume_args=()
-    if [[ "$1" == "--last" ]]; then
-        resume_args=(--last)
-        shift
-    fi
-    local effort=medium
-    case "$1" in
-        none|low|medium|high|xhigh|max) effort="$1"; shift ;;
-    esac
-    command codex resume "${resume_args[@]}" --yolo -m gpt-6.1-sol --config model_reasoning_effort="$effort" "$@"
-}
-xc(){ _codex_resume_effort --last "$@"; }
-xr(){ _codex_resume_effort "$@"; }
+# Use the shared server; reasoning effort comes from config.toml or /model.
+CODEX_MODEL=gpt-6.1-sol
+x(){ command codex --yolo -m "$CODEX_MODEL" "$@"; }
+unalias ct 2>/dev/null || true
+ct(){ command codex-traex --yolo "$@"; }
+ctc(){ ct resume --last "$@"; }
+ctr(){ ct resume "$@"; }
+ctu(){ xu "$@"; }
+xc(){ command codex resume --last --yolo -m "$CODEX_MODEL" "$@"; }
+xr(){ command codex resume --yolo -m "$CODEX_MODEL" "$@"; }
 xu(){ command "$HOME/.local/bin/codex" update "$@"; }
-xhl(){ (( $# )) || { echo 'Usage: xhl "<prompt>"'; return 1; }; command codex exec --yolo -m gpt-6.1-sol --config model_reasoning_effort=high "${*}"; }
 
 # Show Claude + Codex account emails on local, macmini, and l40s.
 ae() {
