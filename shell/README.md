@@ -65,7 +65,11 @@ An existing package archive can be reused with `codex-traex setup /path/to/packa
 the installer checks its package name and pinned version before installation.
 
 Choose models with `/model` or `--model`; model metadata and context limits come
-from the live bridge catalog. On first launch, the wrapper seeds `GPT-5.6-Sol`
+from the live bridge catalog. `/model` descriptions include the load percentage
+reported by TraeX (for example, `Load 29%`). Values refresh when the CLI starts;
+the menu is a startup snapshot, not a continuously updated display. Percentages
+can exceed 100%; missing or invalid values appear as `Load n/a`.
+On first launch, the wrapper seeds `GPT-5.6-Sol`
 and `medium` in `~/.codex-traex/config.toml` only if that file is absent.
 Subsequent launches honor the model and reasoning effort saved by `/model`.
 One-off overrides are

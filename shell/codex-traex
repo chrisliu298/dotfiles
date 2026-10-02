@@ -193,11 +193,19 @@ catalog_temp="$catalog_path.tmp.$$"
       try {
         const value = JSON.parse(require("node:fs").readFileSync(path, "utf8"));
         if (!Array.isArray(value.models) || value.models.length === 0) process.exit(1);
-        if (!wanted) process.exit(0);
-        const model = value.models.find(item => item && item.slug === wanted);
-        if (!model || !Number.isInteger(model.context_window) || model.context_window <= 0) {
-          process.exit(1);
+        if (wanted) {
+          const model = value.models.find(item => item && item.slug === wanted);
+          if (!model || !Number.isInteger(model.context_window) || model.context_window <= 0) {
+            process.exit(1);
+          }
         }
+        for (const model of value.models) {
+          const percent = model.businessMetadata?.load?.load_percent;
+          const load = Number.isFinite(percent) && percent >= 0
+            ? `${Math.round(percent)}%` : "n/a";
+          model.description = `Load ${load} · ${model.description || model.slug}`;
+        }
+        require("node:fs").writeFileSync(path, JSON.stringify(value));
       } catch (_) {
         process.exit(1);
       }
