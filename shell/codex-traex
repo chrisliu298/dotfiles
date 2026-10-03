@@ -35,6 +35,7 @@ sync_config() {
     const sourcePath = process.argv[1];
     const targetPath = process.argv[2];
     const fallbackModel = process.argv[3];
+    const home = process.argv[4];
 
     const topLevelModelLine = contents => {
       for (const line of contents.split(/\r?\n/)) {
@@ -71,11 +72,31 @@ sync_config() {
     }
     if (!replaced) lines.unshift(modelLine);
 
+    const homeHeader = `[projects.${JSON.stringify(home)}]`;
+    let homeSection = lines.findIndex(line => line.trim() === homeHeader);
+    if (homeSection === -1) {
+      while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+      lines.push("", homeHeader, `trust_level = "untrusted"`);
+    } else {
+      let sectionEnd = homeSection + 1;
+      while (sectionEnd < lines.length && !/^\s*\[/.test(lines[sectionEnd])) {
+        sectionEnd += 1;
+      }
+      const trustLine = lines
+        .slice(homeSection + 1, sectionEnd)
+        .findIndex(line => /^\s*trust_level\s*=/.test(line));
+      if (trustLine === -1) {
+        lines.splice(homeSection + 1, 0, `trust_level = "untrusted"`);
+      } else {
+        lines[homeSection + 1 + trustLine] = `trust_level = "untrusted"`;
+      }
+    }
+
     let output = lines.join("\n");
     if (!output.endsWith("\n")) output += "\n";
-    fs.writeFileSync(process.argv[4], output, { mode: 0o600 });
+    fs.writeFileSync(process.argv[5], output, { mode: 0o600 });
   ' "$source_config" "$codex_home/config.toml" \
-    "$CODEX_TRAEX_DEFAULT_MODEL" "$config_temp" || {
+    "$CODEX_TRAEX_DEFAULT_MODEL" "$HOME" "$config_temp" || {
     rm -f "$config_temp"
     return 1
   }
@@ -267,6 +288,25 @@ catalog_temp="$catalog_path.tmp.$$"
 "$curl_bin" -fsS --max-time 10 \
   "$base_url/models?client_version=codex-hybrid" >"$catalog_temp"
 
+# Mirror the native Codex configuration while preserving the TraeX model saved
+# through /model, then pin that model on the command line. Project-local config
+# has higher precedence than user config, so the pin prevents an unrelated
+# .codex/config.toml from selecting a model that the TraeX catalog does not have.
+sync_config
+if [ "$has_model_flag" = false ] && [ -z "$model" ]; then
+  model=$("$node_bin" -e '
+    const contents = require("node:fs").readFileSync(process.argv[1], "utf8");
+    for (const line of contents.split(/\r?\n/)) {
+      if (/^\s*\[/.test(line)) break;
+      const match = line.match(/^\s*model\s*=\s*"([^"]+)"\s*(?:#.*)?$/);
+      if (match) {
+        process.stdout.write(match[1]);
+        break;
+      }
+    }
+  ' "$codex_home/config.toml")
+fi
+
 "$node_bin" -e '
       const wanted = process.argv[1];
       const path = process.argv[2];
@@ -296,11 +336,6 @@ catalog_temp="$catalog_path.tmp.$$"
 chmod 600 "$catalog_temp"
 mv "$catalog_temp" "$catalog_path"
 catalog_temp=
-
-# Mirror the native Codex configuration on every launch while preserving the
-# TraeX model selected through /model. Provider-specific values remain
-# invocation overrides below, so the official Codex config is never modified.
-sync_config
 
 if [ "$has_model_flag" = false ] && [ -n "$model" ]; then
   set -- --model "$model" "$@"

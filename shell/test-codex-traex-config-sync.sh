@@ -8,11 +8,14 @@ trap 'rm -rf "$test_root"' EXIT HUP INT TERM
 
 mkdir -p "$test_root/codex" "$test_root/codex-traex"
 
-cat > "$test_root/codex/config.toml" <<'EOF'
+cat > "$test_root/codex/config.toml" <<EOF
 model_reasoning_effort = "high"
 model_verbosity = "low"
 model = "gpt-6.1-sol"
 approval_policy = "on-request"
+
+[projects."$HOME"]
+trust_level = "trusted"
 
 [projects."/tmp/example"]
 trust_level = "trusted"
@@ -30,11 +33,14 @@ CODEX_TRAEX_HOME="$test_root/codex-traex" \
 CODEX_TRAEX_SOURCE_CONFIG="$test_root/codex/config.toml" \
   "$repo_root/shell/codex-traex" sync-config
 
-diff -u - "$test_root/codex-traex/config.toml" <<'EOF'
+sed "s|HOME_PLACEHOLDER|$HOME|" <<'EOF' |
 model_reasoning_effort = "high"
 model_verbosity = "low"
 model = "GPT-5.6-Sol"
 approval_policy = "on-request"
+
+[projects."HOME_PLACEHOLDER"]
+trust_level = "untrusted"
 
 [projects."/tmp/example"]
 trust_level = "trusted"
@@ -42,6 +48,7 @@ trust_level = "trusted"
 [tui]
 theme = "openai-dark"
 EOF
+  diff -u - "$test_root/codex-traex/config.toml"
 
 grep -q '^model = "gpt-6.1-sol"$' "$test_root/codex/config.toml"
 

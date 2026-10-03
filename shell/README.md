@@ -72,12 +72,17 @@ the menu is a startup snapshot, not a continuously updated display. Percentages
 can exceed 100%; missing or invalid values appear as `Load n/a`.
 On every launch, the wrapper mirrors `~/.codex/config.toml` into
 `~/.codex-traex/config.toml` while preserving the TraeX model previously saved
-by `/model`. This keeps CLI preferences, project trust, TUI settings, MCP
-servers, and future Codex configuration changes aligned without allowing a
-TraeX model selection to modify the native Codex default. If the source config
-does not exist, the wrapper preserves an existing TraeX config or seeds
-`GPT-5.6-Sol` with `medium` reasoning. Run `codex-traex sync-config` to refresh
-the mirror without starting the bridge.
+by `/model`. It marks the home directory untrusted in the TraeX copy so
+`~/.codex/config.toml` cannot also be loaded as project-local configuration when
+the CLI starts from `~`; the native Codex config is unchanged. The saved TraeX
+model is also pinned for each invocation because project-local configuration
+otherwise has higher precedence than user configuration. This keeps CLI
+preferences, other project trust entries, TUI settings, MCP servers, and future
+Codex configuration changes aligned without allowing a native or project model
+to leak into the TraeX provider. If the source config does not exist, the
+wrapper preserves an existing TraeX config or seeds `GPT-5.6-Sol` with `medium`
+reasoning. Run `codex-traex sync-config` to refresh the mirror without starting
+the bridge.
 One-off overrides are
 `CODEX_TRAEX_MODEL`, `CODEX_TRAEX_HOME`, `CODEX_TRAEX_CODEX_BIN`,
 `CODEX_TRAEX_BRIDGE_BUNDLE`, `CODEX_TRAEX_BRIDGE_ADDR` (loopback only), and
