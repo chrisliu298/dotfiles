@@ -65,6 +65,10 @@ applied to this process.
 An existing package archive can be reused with `codex-traex setup /path/to/package.tgz`;
 the installer checks its package name and pinned version before installation.
 
+The bridge reuses the native TraeX login. If startup reports an expired login,
+run `traex login`, complete the authentication flow, and retry `ct`.
+`traex login status` may still report a stored login after its token has expired.
+
 Choose models with `/model` or `--model`; model metadata and context limits come
 from the live bridge catalog. `/model` descriptions include the load percentage
 reported by TraeX (for example, `Load 29%`). Values refresh when the CLI starts;

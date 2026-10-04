@@ -244,7 +244,11 @@ if ! bridge_ready; then
   attempts=0
   while ! bridge_ready; do
     if ! kill -0 "$bridge_pid" 2>/dev/null; then
-      echo "codex-traex: TraeX bridge exited during startup" >&2
+      if grep -Fq 'TRAE_NATIVE_LOGIN_REQUIRED: TraeX 登录已过期' "$bridge_log"; then
+        echo "codex-traex: TraeX 登录已过期，请先执行 traex login，完成登录后重试 ct" >&2
+      else
+        echo "codex-traex: TraeX bridge exited during startup" >&2
+      fi
       echo "codex-traex: inspect $bridge_log for details" >&2
       exit 1
     fi
