@@ -80,9 +80,7 @@ MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: clau
 )
 
 # name|marketplace — Claude plugins installed + enabled at user scope (claude-only)
-PLUGINS=(
-    "code-simplifier|claude-plugins-official"
-)
+PLUGINS=()
 
 SKILL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/skills-src"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}"
@@ -613,6 +611,7 @@ install_mcp_servers() {
 }
 
 install_plugins() {
+    (( ${#PLUGINS[@]} )) || return 0
     command -v claude &>/dev/null || { warn "claude CLI not found — skipping plugins"; return; }
 
     # Skip CLI calls when PLUGINS config hasn't changed

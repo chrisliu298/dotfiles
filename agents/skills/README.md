@@ -56,7 +56,7 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 
 ### Discovery quirks (not managed here)
 
-- **Plugin-provided skills**: Some skills (e.g., `code-simplifier`) come from Claude marketplace plugins and live in `~/.claude/skills/` as regular directories, not symlinks.
+- **Plugin-provided skills**: Skills from Claude marketplace plugins live in `~/.claude/skills/` as regular directories, not symlinks.
 
 ## MCP Servers
 
@@ -69,8 +69,6 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 
 Managed by the `PLUGINS` table in `dotfiles.sh` — each is installed and enabled at **user scope** on every run (`name|marketplace`):
 
-| Plugin | Marketplace | Purpose |
-|--------|-------------|---------|
-| code-simplifier | claude-plugins-official | Simplify/refactor changed code |
+None are currently managed (the table is empty).
 
 User scope keeps them available across all projects (vs. per-project pinning, which drifts between machines). Plugin install state lives in `~/.claude/plugins/` and is **not** synced by `dfs` — `./dotfiles.sh` reconciles it on each machine. Other marketplace plugins can still be added ad hoc with `claude plugin install`.
