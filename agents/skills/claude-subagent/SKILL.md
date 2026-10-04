@@ -28,6 +28,7 @@ existing login. Do not install software or change credentials during a review.
    session="$($helper < /tmp/review-prompt.md)"  # every start needs a matching stop
    $helper status "$session"
    $helper capture "$session"
+   $helper wait "$session"   # blocks until the turn finishes; prints the final reply
    $helper send "$session" < /tmp/review-followup.md
    $helper interrupt "$session"
    $helper list
@@ -37,6 +38,28 @@ existing login. Do not install software or change credentials during a review.
 
 3. Follow that same session until it returns a substantive result. A printed
    session name means startup was dispatched, not that the review succeeded.
+   After `start` and each `send`, run `$helper wait "$session"` once. Choose
+   how to collect its result using the caller's available tools:
+
+   - With async `functions.exec` and `notify()`, await `exec_command` inside
+     the script. If it returns a running-session ID, await `write_stdin` on
+     that same process until it exits, then call `notify()` with the session
+     name, exit code, and collected output. Let the script yield while you do
+     independent work; keep the awaited script alive until notification.
+     Unawaited promises are discarded when the script ends. This bridges
+     completion into the current turn; do not assume it wakes a finished turn.
+   - With ordinary shell tools, collect the same process's result using
+     `write_stdin` (or the tool's equivalent). A running-session ID alone does
+     not promise a completion notification.
+
+   Do not launch duplicate waiters or repeatedly capture tmux while the waiter
+   is running. Collect its final result with `functions.wait` if the async
+   script yielded, and finish collecting it before stopping the review session
+   or ending your turn.
+   `wait` returns only for a turn that finished after the latest `start` or
+   `send` (from the harness's turn-complete hook), printing the final reply.
+   It exits 1 if the pane dies first and 124 after `--timeout` seconds (default
+   3600); it does not see turns stopped by `interrupt` or blocked on startup prompts.
    `capture` includes 300 lines of history plus the visible screen. `status`
    reports the pane, whether it exited, its exit code if available, and whether
    bracketed paste is enabled (`input_ready=1`). That flag does not mean the
@@ -74,7 +97,7 @@ $helper --once --output-format json < /tmp/review-prompt.md
 ```
 
 Both helpers accept `--once`, `start`, `list`, `capture`, `status`, `send`,
-`interrupt`, and `stop`. `start` and `--once` optionally accept `--model` with
+`wait`, `interrupt`, and `stop`. `start` and `--once` optionally accept `--model` with
 only their pinned model and `--effort high`; other values and raw harness flags
 are rejected. The assignment is always supplied on stdin.
 

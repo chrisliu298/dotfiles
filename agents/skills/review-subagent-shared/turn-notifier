@@ -1,0 +1,43 @@
+#!/usr/bin/env perl
+# Record a finished review turn in $REVIEW_SUBAGENT_TURN_DIR so `wait` can return.
+# Codex `notify` passes its event JSON as the last argument; a Claude Code Stop
+# hook passes it on stdin. `done` holds the turn count, `last` the final message.
+# Codex also notifies for side threads such as title generation, so only the
+# thread whose first input is the start prompt (saved as `prompt`) counts.
+use strict;
+use warnings;
+use JSON::PP;
+
+my $dir = $ENV{REVIEW_SUBAGENT_TURN_DIR} or exit 0;
+my $raw = @ARGV ? $ARGV[-1] : do { local $/; <STDIN> };
+my $event = eval { decode_json($raw // '') } || {};
+exit 0 if defined $event->{type} && $event->{type} ne 'agent-turn-complete';
+
+sub publish {
+    my ($name, $text) = @_;
+    open my $fh, '>:encoding(UTF-8)', "$dir/$name.tmp" or return;
+    print {$fh} $text;
+    close $fh;
+    rename "$dir/$name.tmp", "$dir/$name";
+}
+
+if (defined(my $thread = $event->{'thread-id'})) {
+    if (open my $fh, '<', "$dir/thread") {
+        my $main = <$fh> // '';
+        exit 0 if $main ne $thread;
+    } else {
+        my $prompt = do { local $/; open my $pf, '<:encoding(UTF-8)', "$dir/prompt" or exit 0; <$pf> };
+        my $first = ($event->{'input-messages'} // [])->[0] // '';
+        s/^\s+|\s+$//g for $prompt, $first;
+        exit 0 if $first ne $prompt;
+        publish('thread', $thread);
+    }
+}
+my $message = $event->{'last-assistant-message'} // $event->{last_assistant_message} // '';
+
+my $count = 0;
+if (open my $fh, '<', "$dir/done") { $count = <$fh> // 0; chomp $count; }
+# Publish the message before the count so `wait` never sees a new count with a stale message.
+publish('last', $message);
+publish('done', ($count =~ /^\d+$/ ? $count : 0) + 1 . "\n");
+exit 0;

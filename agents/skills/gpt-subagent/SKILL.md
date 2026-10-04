@@ -30,6 +30,7 @@ The helper uses the managed `~/.local/bin/codex` entrypoint, installed by
    session="$($helper < /tmp/review-prompt.md)"  # every start needs a matching stop
    $helper status "$session"
    $helper capture "$session"
+   $helper wait "$session"   # blocks until the turn finishes; prints the final reply
    $helper send "$session" < /tmp/review-followup.md
    $helper interrupt "$session"
    $helper list
@@ -39,6 +40,14 @@ The helper uses the managed `~/.local/bin/codex` entrypoint, installed by
 
 3. Follow that same session until it returns a substantive result. A printed
    session name means startup was dispatched, not that the review succeeded.
+   After `start` and each `send`, run `$helper wait "$session"` as a
+   background Bash command (`run_in_background`) so you are notified when it
+   exits instead of polling; if the command tool yields a running-session ID,
+   wait on that same process.
+   `wait` returns only for a turn that finished after the latest `start` or
+   `send` (from the harness's turn-complete hook), printing the final reply.
+   It exits 1 if the pane dies first and 124 after `--timeout` seconds (default
+   3600); it does not see turns stopped by `interrupt` or blocked on startup prompts.
    `capture` includes 300 lines of history plus the visible screen. `status`
    reports the pane, whether it exited, its exit code if available, and whether
    bracketed paste is enabled (`input_ready=1`). That flag does not mean the
@@ -76,7 +85,7 @@ $helper --once --output-format json < /tmp/review-prompt.md
 ```
 
 Both helpers accept `--once`, `start`, `list`, `capture`, `status`, `send`,
-`interrupt`, and `stop`. `start` and `--once` optionally accept `--model` with
+`wait`, `interrupt`, and `stop`. `start` and `--once` optionally accept `--model` with
 only their pinned model and `--effort high`; other values and raw harness flags
 are rejected. The assignment is always supplied on stdin.
 

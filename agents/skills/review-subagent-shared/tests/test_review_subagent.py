@@ -17,13 +17,13 @@ SKILLS = Path(__file__).resolve().parents[2]
 @pytest.fixture(params=['claude', 'gpt'])
 def harness(request, tmp_path):
     name = request.param
-    env = dict(os.environ, HOME=str(tmp_path), CAPTURE=str(tmp_path / 'call.json'))
+    env = dict(os.environ, HOME=str(tmp_path), TMPDIR=str(tmp_path), CAPTURE=str(tmp_path / 'call.json'))
     env.pop('CODEX_REVIEW_SUBAGENT_ACTIVE', None)
     env.pop('REVIEW_SUBAGENT_NETWORK', None)
     env.pop('TMUX', None)
     backend = tmp_path / 'backend'
     backend.write_text(f'''#!{sys.executable}
-import json, os, sys
+import json, os, subprocess, sys
 from pathlib import Path
 if '--version' in sys.argv:
     print('codex-cli ' + os.environ.get('MOCK_CODEX_VERSION', '0.159.2'))
@@ -33,10 +33,28 @@ if '-p' in sys.argv or 'exec' in sys.argv:
     sys.stdin.read()
     print(os.environ.get('MOCK_RESULT', 'review result'))
     sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
+inputs = [sys.argv[-1]]
+def turn_done(text, thread='main'):
+    # Fire the turn-complete hook the way each harness does.
+    args = sys.argv[1:]
+    if '--settings' in args:
+        command = json.loads(args[args.index('--settings') + 1])['hooks']['Stop'][0]['hooks'][0]['command']
+        subprocess.run(command, shell=True, input=json.dumps({{'last_assistant_message': text}}), text=True)
+    for value in args:
+        if value.startswith('notify='):
+            event = {{'type': 'agent-turn-complete', 'thread-id': thread, 'last-assistant-message': text,
+                     'input-messages': inputs if thread == 'main' else ['Generate a title. User prompt:\\n' + inputs[0]]}}
+            subprocess.run(json.loads(value[len('notify='):]) + [json.dumps(event)])
 print('\\x1b[?2004hMOCK_READY', flush=True)
+if '--settings' in sys.argv: turn_done('ANSWER:' + inputs[0])
+elif any(value.startswith('notify=') for value in sys.argv):
+    turn_done('TITLE', thread='title')  # Codex side threads must not count as review turns.
+    turn_done('ANSWER:' + inputs[0])
 for line in sys.stdin:
     print('RECEIVED:' + line.strip(), flush=True)
+    inputs.append(line.strip())
     if 'EXIT_NOW' in line: sys.exit(7)
+    if 'SILENT' not in line: turn_done('ANSWER:' + line.strip().replace('\\x1b[200~', '').replace('\\x1b[201~', ''))
 ''')
     backend.chmod(0o755)
     (tmp_path / '.functions').write_text(f'c() {{ "{backend}" "$@"; }}\n')
@@ -209,14 +227,21 @@ def test_default_tmux_lifecycle(harness):
     session = r.stdout.strip()
     assert session.startswith(name + '-review-')
     wait_for(run, session, 'capture', 'MOCK_READY')
+    r = run('wait', session)
+    assert (r.returncode, r.stdout.strip()) == (0, 'ANSWER:assignment'), r.stderr
     wait_for(run, session, 'status', 'input_ready=1')
     assert session in run('list').stdout
     assert run('send', session, prompt='FOLLOWUP_123').returncode == 0
-    wait_for(run, session, 'capture', 'RECEIVED:')
+    r = run('wait', session)  # Blocks for the turn hook, even if it fired before wait started.
+    assert (r.returncode, r.stdout.strip()) == (0, 'ANSWER:FOLLOWUP_123'), r.stderr
+    assert run('send', session, prompt='SILENT').returncode == 0
+    r = run('wait', session, '--timeout', '1')  # No new turn yet: times out instead of replaying the old one.
+    assert r.returncode == 124, (r.stdout, r.stderr)
     assert 'FOLLOWUP_123' in run('capture', session, alias=True).stdout
     assert run('interrupt', session).returncode == 0
     assert run('send', session, prompt='EXIT_NOW').returncode == 0
     wait_for(run, session, 'status', 'dead=1 exit_code=7')
+    assert run('wait', session).returncode == 1  # A dead pane ends the wait instead of hanging.
     assert run('send', session).returncode == 1
     assert run('stop', session).returncode == 0
     assert session not in run('list').stdout

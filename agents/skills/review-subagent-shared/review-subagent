@@ -14,6 +14,7 @@ helper="${harness}-subagent"
 prefix="${harness}-review-"
 runner="${0:A}"
 codex_cli="$HOME/.local/bin/codex"
+notifier="${runner:h}/turn-notifier"
 
 check_codex_cli() {
     [[ "$harness" == gpt ]] || return 0
@@ -59,7 +60,10 @@ launch() {
         if [[ "$mode" == once ]]; then
             print -rn -- "$prompt" | c -p --no-session-persistence --model opus --effort high
         else
-            c --model opus --effort high -- "$prompt"
+            # The Stop hook records each finished turn for `wait`.
+            c --model opus --effort high \
+                --settings "{\"hooks\":{\"Stop\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"'$notifier'\"}]}]}}" \
+                -- "$prompt"
         fi
     else
         # The read-only Seatbelt sandbox blocks DNS and SSH control sockets. REVIEW_SUBAGENT_NETWORK=1
@@ -75,7 +79,8 @@ launch() {
         if [[ "$mode" == once ]]; then
             print -rn -- "$prompt" | command "$codex_cli" "${options[@]}" exec --ephemeral --skip-git-repo-check --color never -
         else
-            command "$codex_cli" "${options[@]}" --no-alt-screen -- "$prompt"
+            # notify records each finished turn for `wait`, replacing any configured notifier.
+            command "$codex_cli" "${options[@]}" -c "notify=[\"$notifier\"]" --no-alt-screen -- "$prompt"
         fi
     fi
 }
@@ -84,6 +89,7 @@ usage() {
     print -u2 "usage: $helper [start] < prompt.md  (default: tmux)"
     print -u2 "       $helper --once [--output-format text|json] < prompt.md"
     print -u2 "       $helper send SESSION < message.md"
+    print -u2 "       $helper wait SESSION [--timeout SECONDS]  (default: 3600)"
     print -u2 "       $helper list | capture|status|interrupt|stop SESSION"
     print -u2 "       model=$model, effort=high (fixed)"
 }
@@ -96,6 +102,14 @@ input_ready() {
     local state_file value=0
     state_file="$(tmux show-options -v -t "$session" @review_paste_state 2>/dev/null)" || true
     [[ -n "$state_file" && -r "$state_file" ]] && read -r value < "$state_file"
+    print -r -- "${value:-0}"
+}
+
+# Count of finished turns recorded by turn-notifier for the current session.
+turns_done() {
+    local turn_dir value=0
+    turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir 2>/dev/null)" || true
+    [[ -n "$turn_dir" && -r "$turn_dir/done" ]] && read -r value < "$turn_dir/done"
     print -r -- "${value:-0}"
 }
 
@@ -199,17 +213,29 @@ case "$action" in
             exit 1
         fi
         session="${prefix}${uuid:l}"
+        if ! turn_dir="$(command mktemp -d "${TMPDIR:-/tmp}/${helper}-turns.XXXXXX")" || \
+            ! command cp -- "$scratch_dir/prompt.md" "$turn_dir/prompt"; then
+            [[ -n "$turn_dir" ]] && command rm -rf -- "$turn_dir"
+            command rm -f -- "$scratch_dir/prompt.md"
+            command rmdir -- "$scratch_dir"
+            exit 1
+        fi
         if ! pane="$(tmux new-session -d -x 160 -y 48 -P -F '#{pane_id}' -s "$session" -c "$PWD" \
             -e CODEX_REVIEW_SUBAGENT_ACTIVE=1 -e REVIEW_SUBAGENT_TMUX_RUNNER=1 \
             -e REVIEW_SUBAGENT_NETWORK="${REVIEW_SUBAGENT_NETWORK:-0}" \
+            -e REVIEW_SUBAGENT_TURN_DIR="$turn_dir" \
             -- "$runner" "$harness" __run "$scratch_dir")"; then
+            command rm -rf -- "$turn_dir"
             command rm -f -- "$scratch_dir/prompt.md"
             command rmdir -- "$scratch_dir"
             exit 1
         fi
         if ! tmux set-window-option -t "$session" remain-on-exit on || \
-            ! tmux set-option -t "$session" @review_pane "$pane"; then
+            ! tmux set-option -t "$session" @review_pane "$pane" || \
+            ! tmux set-option -t "$session" @review_turn_dir "$turn_dir" || \
+            ! tmux set-option -t "$session" @review_sent 0; then
             tmux kill-session -t "=$session" 2>/dev/null || true
+            command rm -rf -- "$turn_dir"
             command rm -f -- "$scratch_dir/prompt.md"
             command rmdir -- "$scratch_dir" 2>/dev/null || true
             exit 1
@@ -231,7 +257,16 @@ case "$action" in
         fi
         print -r -- "$session"
         ;;
-    send|capture|status|interrupt|stop)
+    send|capture|status|interrupt|stop|wait)
+        timeout=3600
+        if [[ "$action" == wait && "${2:-}" == --timeout ]]; then
+            if (( $# != 3 )) || [[ "$3" != <1-> ]]; then
+                usage
+                exit 2
+            fi
+            timeout="$3"
+            set -- "$1"
+        fi
         if (( $# != 1 )) || [[ "$1" != "$prefix"* ]]; then
             usage
             exit 2
@@ -269,6 +304,11 @@ case "$action" in
                     exit 1
                 fi
                 buffer="${prefix}${uuid:l}"
+                # `wait` returns only for a turn that finishes after this send.
+                if ! tmux set-option -t "$session" @review_sent "$(turns_done)"; then
+                    command rm -f -- "$message_file"
+                    exit 1
+                fi
                 if ! tmux load-buffer -b "$buffer" "$message_file"; then
                     command rm -f -- "$message_file"
                     exit 1
@@ -283,7 +323,33 @@ case "$action" in
             capture) tmux capture-pane -p -S -300 -t "$pane" ;;
             status) print -r -- "$(tmux display-message -p -t "$pane" '#{session_name} pane=#{pane_id} dead=#{pane_dead} exit_code=#{pane_dead_status}') input_ready=$(input_ready)" ;;
             interrupt) tmux send-keys -t "$pane" Escape ;;
-            stop) tmux kill-session -t "=$session" ;;
+            wait)
+                sent="$(tmux show-options -v -t "$session" @review_sent)" || exit 1
+                deadline=$(( SECONDS + timeout ))
+                while (( $(turns_done) <= sent )); do
+                    if ! tmux has-session -t "=$session" 2>/dev/null || \
+                        [[ "$(tmux display-message -p -t "$pane" '#{pane_dead}')" != 0 ]]; then
+                        print -u2 "$helper: review pane exited before the turn finished: $session"
+                        exit 1
+                    fi
+                    if (( SECONDS >= deadline )); then
+                        print -u2 "$helper: no finished turn after $timeout seconds: $session"
+                        exit 124
+                    fi
+                    sleep 1
+                done
+                turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir)" || exit 1
+                if [[ -r "$turn_dir/last" ]]; then
+                    print -r -- "$(<"$turn_dir/last")"
+                fi
+                ;;
+            stop)
+                turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir 2>/dev/null)"
+                tmux kill-session -t "=$session" || exit
+                if [[ "$turn_dir" == */"${helper}"-turns.* ]]; then
+                    command rm -rf -- "$turn_dir"
+                fi
+                ;;
         esac
         ;;
     *)
