@@ -11,11 +11,11 @@ For other harnesses, use the supported background/session equivalent described i
 
 Two clocks, inner → outer: the wrapper's **`--max-wait`** (default 120 min, both paths) → the Bash-tool **`timeout`** (121 min). The engine itself has **no** per-run generation cap — a long Pro turn runs until it finishes or is stopped. When `--max-wait` elapses the wrapper exits 124 but the detached worker keeps running; reattach with `--run-id` rather than resubmitting.
 
-Wait for the completion notification. Do NOT poll from the agent side — the wrapper is already polling (see the waiting guidance in [SKILL.md](../SKILL.md#invoke-and-wait)).
+Wait for the completion notification, or collect the same wrapper process as described in [SKILL.md](../SKILL.md#invoke-and-wait). Do NOT add a separate polling loop over the run (status checks, artifact reads, repeated `--run-id` calls) — the wrapper is already polling. Repeated `write_stdin` calls on the wrapper's own session are collection, not polling.
 
 ## Recovery
 
-`gpt-pro` prints `run_id=<id>` and a ready-to-run `recover_with=gpt-pro --run-id <id>` line to stderr at the start — both land in the background task's output file. Capture the **literal** id from there; a `$RUN_ID` shell variable does **not** survive into a later Bash-tool call. Wrapper timeout (124) or SSH transport loss (255) normally leaves the detached worker running. Harness `TaskStop` or `kill` may kill the entire process tree, including that collector, while the original browser turn keeps generating. Reattach with the same id, inside the same envelope (`run_in_background: true`, `timeout: 7260000`) — this is recovery, not the forbidden polling:
+`gpt-pro` prints `run_id=<id>` and a ready-to-run `recover_with=gpt-pro --run-id <id>` line to stderr at the start — in Claude Code both land in the background task's output file; on harnesses that merge streams they appear in the collected output, possibly across early chunks. Capture the **literal** id from there; a `$RUN_ID` shell variable does **not** survive into a later Bash-tool call. Wrapper timeout (124) or SSH transport loss (255) normally leaves the detached worker running. Harness `TaskStop` or `kill` may kill the entire process tree, including that collector, while the original browser turn keeps generating. Reattach with the same id, inside the same envelope (in Claude Code `run_in_background: true`, `timeout: 7260000`; elsewhere the same collection pattern) — this is recovery, not the forbidden polling:
 
 ```bash
 gpt-pro --run-id ask-20260611T002710Z-…    # the literal id, not "$RUN_ID"

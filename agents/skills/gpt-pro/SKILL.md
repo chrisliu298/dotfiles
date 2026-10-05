@@ -48,10 +48,31 @@ run_in_background: true
 timeout:           7260000
 ```
 
-On other harnesses, use their supported background/session mechanism and allow
-121 minutes for the wrapper's default 120-minute deadline. Do not invent unsupported
-tool arguments. Continue independent work and wait using the harness's completion
-mechanism; do not run a second polling loop or submit again while the call is live.
+Claude Code notifies you when it exits. On other harnesses, allow 121 minutes for
+the wrapper's default 120-minute deadline and do not invent unsupported tool
+arguments; per-call yield or wait limits (such as `yield_time_ms`) bound one
+collection call, not the command's lifetime. Choose how to collect the result
+using the caller's available tools:
+
+- With async `functions.exec` and `notify()`, await `exec_command` running
+  `gpt-pro` inside the script. If it returns a running-session ID, await
+  `write_stdin` on that same process until it exits, then call `notify()` with
+  the exit code and collected output. Let the script yield while you do
+  independent work; keep the awaited script alive until notification.
+  Unawaited promises are discarded when the script ends. This bridges completion
+  into the current turn; do not assume it wakes a finished turn.
+- With ordinary shell tools, collect the same process's result using
+  `write_stdin` (or the tool's equivalent). A running-session ID alone does not
+  promise a completion notification.
+
+If the tool merges stdout and stderr, accumulate every chunk, including the first:
+`run_id=` appears early and may be absent from the final chunk. Record the literal
+run ID as soon as it appears. Repeated `write_stdin` calls on that one session are
+collection, not polling; `functions.wait` collects the yielded script rather than
+adding a waiter. Continue independent work meanwhile. Do not start another waiter
+or polling loop, or submit again, while the call is live. Finish collecting the
+wrapper's output before ending your turn when possible; if interrupted, recover
+with the run ID as described below.
 
 The answer goes to stdout; `run_id=<id>`, `recover_with=…`, and diagnostics go to
 stderr. Keep these streams separate if saving them. Capture the literal run ID for

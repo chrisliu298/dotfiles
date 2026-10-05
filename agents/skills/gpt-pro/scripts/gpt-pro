@@ -24,8 +24,9 @@ fi
 # response reaches stdout ONLY after a fetch exits 0 with a non-empty body;
 # the run-id, diagnostics, and the engine's JSONL all go to stderr.
 #
-# What this wrapper deliberately does NOT do (lives in SKILL.md): the Bash-tool
-# envelope (run_in_background:true, timeout:7260000), the Pro-quota cost gate,
+# What this wrapper deliberately does NOT do (lives in SKILL.md): the caller's
+# background/collection envelope (Claude Code: run_in_background:true,
+# timeout:7260000), the Pro-quota cost gate,
 # and prompt composition. Those are the caller's judgment, not the shell's.
 
 VERSION=2
@@ -84,7 +85,8 @@ Exit:   0 ok · 1 error/empty · 2 usage · 3 legacy worker timeout · 4 not fou
         · 124 timed out, still pending (recover with --run-id) · 255 SSH transport unknown (reattach with --run-id)
         · stop: 0 stopped/already-finished/pending · 2 no live worker · 4 unknown run
 
-Always wrap the Bash call in run_in_background:true, timeout:7260000.
+Run it in the background and collect this one process until it exits (Claude Code:
+run_in_background:true, timeout:7260000; other harnesses: see SKILL.md).
 USAGE
 }
 
