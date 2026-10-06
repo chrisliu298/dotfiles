@@ -553,6 +553,10 @@ cc(){ _claude --dangerously-skip-permissions --continue "$@"; }
 cr(){ _claude --dangerously-skip-permissions --resume "$@"; }
 crc(){ _claude rc --dangerously-skip-permissions "$@"; }
 cu(){ command claude update "$@"; }
+# Switch Claude Desktop (cdswap) and Claude Code (cswap) together; the Desktop
+# profile must be saved under the same email cswap uses. cdswap goes first
+# because it is the one likely to refuse, which then leaves both unchanged.
+csall(){ (( $# == 1 )) || { echo "usage: csall <email>" >&2; return 2; }; cdswap use "$1" && cswap switch "$1"; }
 cpu(){ local prompt="/push"; (( $# )) && prompt+=" ${*}"; _claude -p --dangerously-skip-permissions "$prompt"; }
 cch(){
     local _claude_bin="$(command -v claude)" || return 127

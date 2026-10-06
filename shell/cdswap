@@ -1,0 +1,208 @@
+#!/bin/sh
+# cdswap — switch the account Claude Desktop is signed in to.
+#
+# Claude Desktop keeps its login apart from Claude Code's (cswap only swaps the
+# latter). Desktop's login lives in two places, and only those are swapped:
+#   Cookies                       claude.ai session cookies (whole SQLite file)
+#   config.json "oauth:*" keys    tokens Desktop hands to its Claude Code sessions
+#   config.json lastKnownAccountUuid
+# Everything else — settings, sidebar, session history, worktrees — stays put.
+# Values are copied as stored (encrypted with this Mac's keychain key); nothing
+# is decrypted or sent over the network.
+#
+# Usage:
+#   cdswap save <name>   store the signed-in account as <name> (Desktop keeps running)
+#   cdswap use <name>    switch to <name>, checkpointing the current account first
+#   cdswap list          saved accounts; * marks the signed-in one
+# Pass -y to skip the confirmation before Claude Desktop is quit. Quitting it
+# stops every Claude Code session running inside Desktop, so `use` must run
+# from a terminal outside Desktop. Runs are serialized by a lock, and an
+# interrupted switch is finished on the next run.
+#
+# Overrides (tests): CDSWAP_APP_DATA, CDSWAP_HOME, CDSWAP_SKIP_APP=1.
+set -eu
+
+app_data="${CDSWAP_APP_DATA:-$HOME/Library/Application Support/Claude}"
+store="${CDSWAP_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/cdswap}"
+account_keys='(.key | startswith("oauth:")) or .key == "lastKnownAccountUuid"'
+
+die() { echo "cdswap: $*" >&2; exit 1; }
+
+check_name() {
+    case "$1" in
+        ''|.*|*[!A-Za-z0-9._@+-]*) die "invalid name '$1' (letters, digits, . _ @ + -)" ;;
+    esac
+}
+
+live_uuid() { jq -r '.lastKnownAccountUuid // empty' "$app_data/config.json"; }
+
+# lastKnownAccountUuid survives a sign-out, so a session cookie is the signal.
+signed_in() {
+    [ -f "$app_data/Cookies" ] && [ -n "$(sqlite3 "$app_data/Cookies" \
+        "select 1 from cookies where host_key like '%claude.ai' and name = 'sessionKey' limit 1")" ]
+}
+
+# Profile whose saved account UUID matches the signed-in one, if any.
+current_profile() {
+    signed_in || return 0
+    uuid=$(live_uuid)
+    [ -n "$uuid" ] || return 0
+    for dir in "$store"/*/; do
+        [ -f "$dir/account.json" ] || continue
+        if [ "$(jq -r '.lastKnownAccountUuid // empty' "$dir/account.json")" = "$uuid" ]; then
+            basename "$dir"
+            return 0
+        fi
+    done
+}
+
+app_running() {
+    [ "${CDSWAP_SKIP_APP:-0}" = 1 ] && return 1
+    # -a: Desktop is an ancestor when run from one of its own sessions.
+    # Helpers count too: the network service writes Cookies until it exits.
+    pgrep -axq Claude || pgrep -aq 'Claude Helper'
+}
+
+# Quitting Desktop would kill this shell mid-switch if Desktop is its ancestor.
+inside_app() {
+    [ "${CDSWAP_SKIP_APP:-0}" = 1 ] && return 1
+    pgrep -axq Claude && ! pgrep -xq Claude
+}
+
+# Quit Desktop gracefully; never force-kill, so its sessions shut down cleanly.
+quit_app() {
+    app_running || return 0
+    if [ "$assume_yes" != 1 ]; then
+        sessions=$(pgrep -af "$app_data/claude-code/" | wc -l | tr -d ' ')
+        printf 'Quit Claude Desktop (%s Claude Code session processes will stop)? [y/N] ' "$sessions"
+        read -r reply </dev/tty || reply=
+        case "$reply" in y|Y|yes) ;; *) die "aborted" ;; esac
+    fi
+    osascript -e 'quit app "Claude"' >/dev/null
+    i=0
+    while app_running; do
+        i=$((i + 1))
+        [ "$i" -le 30 ] || die "Claude Desktop is still running; quit it manually and retry"
+        sleep 0.5
+    done
+}
+
+launch_app() {
+    [ "${CDSWAP_SKIP_APP:-0}" = 1 ] || open -a Claude
+}
+
+# Copy the live login into <name>, replacing any previous copy atomically.
+capture() {
+    signed_in && [ -n "$(live_uuid)" ] || die "Claude Desktop is not signed in"
+    stage=$(mktemp -d "$store/.stage.XXXXXX")
+    # .backup reads through any pending journal, unlike a plain copy.
+    sqlite3 "$app_data/Cookies" ".backup '$stage/Cookies'"
+    jq "with_entries(select($account_keys))" "$app_data/config.json" > "$stage/account.json"
+    chmod 600 "$stage/Cookies" "$stage/account.json"
+    rm -rf "$store/.$1.old"
+    [ ! -d "$store/$1" ] || mv "$store/$1" "$store/.$1.old"
+    mv "$stage" "$store/$1"
+    rm -rf "$store/.$1.old"
+}
+
+# The .pending marker spans the two renames: until it is gone, the live files
+# may mix two accounts and must not be captured.
+restore() {
+    profile="$store/$1"
+    tmp_cfg=$(mktemp "$app_data/.config.json.XXXXXX")
+    tmp_cookies=$(mktemp "$app_data/.Cookies.XXXXXX")
+    jq -s ".[0] | with_entries(select($account_keys | not)) | . + \$p[0]" \
+        "$app_data/config.json" --slurpfile p "$profile/account.json" > "$tmp_cfg"
+    cp "$profile/Cookies" "$tmp_cookies"
+    echo "$1" > "$store/.pending"
+    # A journal left from the previous account would be replayed onto this file.
+    rm -f "$app_data/Cookies-journal" "$app_data/Cookies-wal" "$app_data/Cookies-shm"
+    mv "$tmp_cookies" "$app_data/Cookies"
+    mv "$tmp_cfg" "$app_data/config.json"
+    rm "$store/.pending"
+}
+
+# Finish whatever an interrupted run left behind.
+recover() {
+    rm -rf "$store"/.stage.*
+    for old in "$store"/.*.old; do
+        [ -d "$old" ] || continue
+        name=${old##*/.}
+        name=${name%.old}
+        if [ -d "$store/$name" ]; then rm -rf "$old"; else mv "$old" "$store/$name"; fi
+    done
+    [ -f "$store/.pending" ] || return 0
+    name=$(cat "$store/.pending")
+    if [ ! -f "$store/$name/account.json" ]; then rm "$store/.pending"; return 0; fi
+    ! app_running || die "a switch to '$name' was interrupted; quit Claude Desktop and rerun"
+    echo "Finishing interrupted switch to '$name'."
+    restore "$name"
+}
+
+# Safe while Desktop runs: the SQLite backup is a consistent snapshot, and
+# `use` checkpoints again after quitting.
+cmd_save() {
+    check_name "$1"
+    capture "$1"
+    echo "Saved Claude Desktop account as '$1'."
+}
+
+# Sets $current; refuses to switch away from a signed-in account never saved.
+outgoing_profile() {
+    current=$(current_profile)
+    if [ -z "$current" ] && signed_in; then
+        die "the signed-in account is not saved; run 'cdswap save <name>' first"
+    fi
+}
+
+cmd_use() {
+    check_name "$1"
+    [ -f "$store/$1/account.json" ] || die "no saved account '$1' (see: cdswap list)"
+    ! inside_app || die "run this from a terminal outside Claude Desktop; quitting it would stop this shell"
+    outgoing_profile
+    if [ "$current" = "$1" ]; then
+        echo "Already signed in as '$1'."
+        return 0
+    fi
+    quit_app
+    # Re-resolve: the account may have changed while waiting for confirmation.
+    outgoing_profile
+    # Checkpoint the outgoing account: Desktop rotates its sessionKey over time.
+    [ -z "$current" ] || capture "$current"
+    restore "$1"
+    echo "Switched Claude Desktop to '$1'."
+    launch_app
+}
+
+cmd_list() {
+    current=$(current_profile)
+    found=0
+    for dir in "$store"/*/; do
+        [ -f "$dir/account.json" ] || continue
+        found=1
+        name=$(basename "$dir")
+        if [ "$name" = "$current" ]; then echo "* $name"; else echo "  $name"; fi
+    done
+    [ "$found" = 1 ] || echo "No saved accounts. Sign in to Claude Desktop, then: cdswap save <name>"
+}
+
+assume_yes=0
+if [ "${1:-}" = -y ]; then assume_yes=1; shift; fi
+case "${1:-}" in
+    -h|--help|help) sed -n '2,/^set -eu/{/^set -eu/d;s/^# \{0,1\}//;p;}' "$0"; exit 0 ;;
+esac
+
+mkdir -p "$store"
+chmod 700 "$store"
+mkdir "$store/.lock" 2>/dev/null \
+    || die "another cdswap is running (if not, remove $store/.lock)"
+trap 'rmdir "$store/.lock"' EXIT
+trap 'exit 1' HUP INT TERM
+recover
+
+case "${1:-}" in
+    save) [ $# -eq 2 ] || die "usage: cdswap save <name>"; cmd_save "$2" ;;
+    use)  [ $# -eq 2 ] || die "usage: cdswap use <name>"; cmd_use "$2" ;;
+    list|'') cmd_list ;;
+    *) die "unknown command '$1' (save, use, list)" ;;
+esac
