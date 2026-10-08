@@ -98,6 +98,6 @@ asserts the two files (the Pi and Grok copies were dropped with those agents) ar
 ## Delivery and delegation smoke cases
 
 Use [delivery-cases.md](delivery-cases.md) with the current global instructions in one
-read-only dual-subagent call. Do not use the legacy multi-peer dispatcher for this
+read-only subagent call per peer (e.g. `claude-subagent`, `gpt-subagent`, `cursor-subagent`). Do not use the legacy multi-peer dispatcher for this
 focused check. See [the dated result](delivery-smoke-2026-09-06.md) and its
 [responses](delivery-smoke-2026-09-06.json) for the criteria and limitations.

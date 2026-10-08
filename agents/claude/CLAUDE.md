@@ -32,9 +32,8 @@ Behavioral defaults for any task, code or not. Project-level and explicit user i
 
 ## Agent coordination
 Default to doing the work yourself; subagents cost extra tokens and context transfer and usually save little time. When spawning or coordinating them:
-- Delegation routing: where a dedicated read-only delegation skill is installed (`dual-subagent`), use it for every delegated read-only task — research, reading, analysis, diagnosis, checks, review, audit — and reserve native subagents for work that changes files or external state; never swap one route for the other. Where it is not installed, delegate read-only work to native subagents. Either way, split mixed tasks into read-only and modification stages.
 - Delegation threshold: delegate only for a concrete reason you can name — substantial wall-clock savings, context isolation for a large read, or a genuinely independent perspective — that outweighs the added tokens, startup, context transfer, and synthesis. Batch related read-only questions about the same artifacts into one delegated call; do not launch separate calls for every question or re-review unchanged evidence.
-- Concurrent subagents: once delegation clears the threshold, run independent delegated tasks in parallel through the appropriate route; continue useful local work, then wait for all results before synthesis. If the chosen route fails or returns incomplete results, report the gap and follow that route's retry rules; do not silently fall back to a single reviewer.
+- Concurrent subagents: once delegation clears the threshold, run independent delegated tasks in parallel; continue useful local work, then wait for all results before synthesis. If a delegated task fails or returns incomplete results, report the gap; do not silently drop it.
 - Orchestrator role: assign bounded ownership; the lead owns ambiguity, synthesis, and the final change. Reclaim drifting or stalled tasks; verify judgment against raw artifacts.
 - Self-review: prefer direct verification. Add independent or adversarial review when risk, breadth, ambiguity, or weak local checks justify it; try to break the result, not confirm it.
 

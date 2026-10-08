@@ -114,7 +114,7 @@ owns evidence checking and synthesis. A child failure matters only when it
 leaves an unresolved gap.
 
 The shared `CODEX_REVIEW_SUBAGENT_ACTIVE` sentinel blocks nested review helper
-calls (including the Claude/GPT/Cursor/dual helpers) with exit 126. Native
+calls (including the Claude/GPT/Cursor helpers) with exit 126. Native
 subagents remain available. Never use this skill for implementation or external
 operations; use the caller's native agents for delegated execution.
 

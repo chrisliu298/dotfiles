@@ -46,7 +46,6 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 | Skill | C | X | Source · Description |
 |-------|:-:|:-:|----------------------|
 | cursor-subagent         | — | ✱ | local — Read-only Cursor review helper for Codex, with optional interactive tmux mode |
-| dual-subagent           | — | ✱ | local — Parallel Claude and Cursor review helper for Codex |
 | prism                   | ✱ | — | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to GPT via relay) |
 | relay                   | ✱ | — | local — Cross-agent relay from Claude to GPT (Claude-only caller) |
 

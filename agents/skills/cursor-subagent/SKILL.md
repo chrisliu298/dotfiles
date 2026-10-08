@@ -133,7 +133,7 @@ and ask before changing the skill's default. Do not silently fall back to Auto.
 ## Safety and verification
 
 The helper marks the launched Cursor process with a recursion sentinel. If
-Cursor tries to invoke `claude-subagent`, `cursor-subagent`, or `dual-subagent`,
+Cursor tries to invoke `claude-subagent` or `cursor-subagent`,
 that nested helper exits 126. Cursor may still use its own native subagents
 within the inherited read-only scope.
 
