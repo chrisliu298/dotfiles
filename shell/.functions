@@ -8,15 +8,106 @@ dock_autohide_test() {
     killall Dock
 }
 
-# Restart Clash Verge's service-managed Mihomo core (briefly disconnects traffic).
-clash-restart() {
+# Control Clash Verge's Mihomo core over its socket while TUN stays on:
+# `on` = rule mode, `off` = direct mode (runtime-only — restarting the app returns
+# to its saved mode); `restart` restarts the core (briefly disconnects traffic);
+# `update [vX.Y.Z]` installs a GitHub release (default: latest) — see _cv_update.
+# Usage: cv on | cv off | cv restart | cv update [tag] | cv [status]
+cv() {
     local clash_socket="/var/run/clash-verge-service/users/$(id -u)/verge-mihomo.sock"
     if [[ ! -S "$clash_socket" ]]; then
-        printf 'clash-restart: core socket not found; start Clash Verge first: %s\n' "$clash_socket" >&2
+        printf 'cv: core socket not found; start Clash Verge first: %s\n' "$clash_socket" >&2
         return 1
     fi
-    curl --fail --silent --show-error --max-time 10 --noproxy '*' \
-        --unix-socket "$clash_socket" -X POST http://localhost/restart
+    local api=(curl --fail --silent --show-error --max-time 10 --noproxy '*' --unix-socket "$clash_socket")
+    case "$1" in
+        on|off)
+            local mode=rule
+            [[ "$1" == off ]] && mode=direct
+            "${api[@]}" -X PATCH http://localhost/configs -d "{\"mode\":\"$mode\"}" || return
+            cv status ;;
+        restart) "${api[@]}" -X POST http://localhost/restart ;;
+        update) _cv_update "$clash_socket" "$2" ;;
+        status|'')
+            local cfg chain=Proxy next
+            cfg=$("${api[@]}" http://localhost/configs) || return
+            # Follow the Proxy group down to the node actually carrying traffic.
+            next=Proxy
+            while next=$("${api[@]}" "http://localhost/proxies/$next" | jq -r '.now // empty') && [[ -n "$next" ]]; do
+                chain+=" -> $next"
+            done
+            jq -r --arg chain "$chain" '"mode: \(.mode) (\(if .mode == "direct" then "off" else "on" end))  tun: \(if .tun.enable then "on" else "OFF" end)\n\($chain)"' <<<"$cfg" ;;
+        *) echo "usage: cv on | off | restart | update [tag] | status" >&2; return 2 ;;
+    esac
+}
+
+# Install a Clash Verge Rev release straight from GitHub. The in-app updater pulls
+# through the update.hwdns.net mirror (~150 KB/s here) and Homebrew's cask lags
+# releases, so `brew upgrade` can downgrade. Downloads through the running proxy
+# BEFORE quitting the app (quitting drops Tun), checks the signing team, then swaps.
+_cv_update() {
+    local clash_socket=$1 tag=$2 repo=clash-verge-rev/clash-verge-rev team=JPH3Z7PPBB
+    local app="/Applications/Clash Verge.app" arch dir cur port i
+    local api=(curl --fail --silent --show-error --max-time 10 --noproxy '*' --unix-socket "$clash_socket")
+    case "$(uname -m)" in arm64) arch=aarch64 ;; x86_64) arch=x64 ;; *) echo "cv update: unsupported arch" >&2; return 1 ;; esac
+    port=$("${api[@]}" http://localhost/configs | jq -r '."mixed-port"') || return
+    local -x HTTPS_PROXY="http://127.0.0.1:$port"
+    if [[ -z "$tag" ]]; then
+        tag=$(gh release view -R "$repo" --json tagName -q .tagName) || return
+    fi
+    cur=$(defaults read "$app/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null)
+    if [[ "v$cur" == "$tag" ]]; then
+        echo "cv update: already on $tag"; return 0
+    fi
+    echo "cv update: v${cur:-?} -> $tag"
+    dir=$(mktemp -d -t cv-update) || return
+    gh release download "$tag" -R "$repo" -D "$dir" -p "Clash.Verge_*_${arch}.app.tar.gz" || return
+    tar -xzf "$dir"/Clash.Verge_*_"${arch}".app.tar.gz -C "$dir" || return
+    if ! codesign --verify --deep --strict "$dir/Clash Verge.app" \
+        || ! codesign -dv "$dir/Clash Verge.app" 2>&1 | grep -q "TeamIdentifier=$team"; then
+        echo "cv update: signature check failed; left in $dir" >&2; return 1
+    fi
+    osascript -e 'quit app "Clash Verge"'
+    for i in {1..30}; do pgrep -qf "$app/Contents/MacOS/" || break; sleep 0.5; done
+    if pgrep -qf "$app/Contents/MacOS/"; then
+        echo "cv update: Clash Verge did not quit; nothing replaced" >&2; return 1
+    fi
+    mv "$app" "$dir/Clash Verge.app.old" && mv "$dir/Clash Verge.app" "$app" || return
+    open -a "$app"
+    # The service helper owns the core; wait for it to answer on the socket again.
+    for i in {1..60}; do "${api[@]}" http://localhost/version >/dev/null 2>&1 && break; sleep 0.5; done
+    printf 'cv update: app %s, core %s (old app kept at %s)\n' \
+        "$(defaults read "$app/Contents/Info.plist" CFBundleShortVersionString)" \
+        "$("${api[@]}" http://localhost/version | jq -r .version)" "$dir/Clash Verge.app.old"
+}
+
+# Control Amphetamine via its AppleScript dictionary (it has no CLI).
+# Usage: amp on [Nh|Nm]   (no duration = indefinite; display may sleep)
+#        amp off | amp status
+amp() {
+    local script
+    case "$1" in
+        on)
+            local dur=0 unit=0
+            case "$2" in
+                '') ;;
+                <1->h) dur=${2%h} unit=hours ;;
+                <1->m) dur=${2%m} unit=minutes ;;
+                *) echo "usage: amp on [Nh|Nm]" >&2; return 2 ;;
+            esac
+            script="start new session with options {duration:$dur, interval:$unit, displaySleepAllowed:true}" ;;
+        off) script='end session' ;;
+        status|'')
+            script='if session is active then
+                set t to session time remaining
+                if t is 0 then return "active, indefinite"
+                return "active, " & t & "s remaining"
+            else
+                return "inactive"
+            end if' ;;
+        *) echo "usage: amp on [Nh|Nm] | off | status" >&2; return 2 ;;
+    esac
+    osascript -e 'tell application "Amphetamine"' -e "$script" -e 'end tell'
 }
 
 # =============================================================================
