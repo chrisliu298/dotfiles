@@ -25,8 +25,8 @@ gpt-pro --run-id <id> [--max-wait <sec>]                            # reattach /
 | `--files-from <file>` | Inline every path listed in `<file>` (one per line; `#` comments ok). Repeatable. |
 | `--include-tree <dir>` | Inline a directory recursively — capped, skips hidden/vendor/binary/secret files. Repeatable. |
 | `--allow-secret <path>` | Permit one file the secret scan would otherwise refuse. Repeatable. |
-| `--run-id <id>` | Reattach to an existing run (recovery); skips submit, then waits for the result (blocking fetch locally, poll loop over SSH). |
-| `--max-wait <sec>` | How long the wrapper waits, on both the local and SSH paths (default 7200 = 120 min — generous so a queued run isn't killed mid-flight). On expiry it exits 124 and the run keeps going; reattach with `--run-id`. Set the Bash-tool `timeout` to at least `(--max-wait + 60) × 1000` ms. |
+| `--run-id <id>` | Reattach to an existing run (recovery); skips submit, then waits for the result (blocking fetch). |
+| `--max-wait <sec>` | How long the wrapper waits (default 7200 = 120 min — generous so a queued run isn't killed mid-flight). On expiry it exits 124 and the run keeps going; reattach with `--run-id`. Set the Bash-tool `timeout` to at least `(--max-wait + 60) × 1000` ms. |
 | `--dry-run` | Resolve the included files + run-id, report the composed size, then exit. No Pro quota used. |
 
 Files are inlined through the shared **`filectx`** helper (sibling script): validated, secret-scanned (`FILECTX_SECRETS=deny\|warn\|off`), and capped — all **before** submit, so a bad file burns no quota.

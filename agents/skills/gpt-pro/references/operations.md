@@ -2,28 +2,28 @@
 
 ## Background and timeout
 
-The engine runs on this Mac by default, where `gpt-pro` blocks on it directly; with `GPT_PRO_HOST` set to an SSH host (e.g. `macmini`) it instead runs its own short-session poll loop. Either way `--max-wait` (default 120 min) bounds how long the wrapper waits. The default is deliberately generous — a queued or long Pro run killed by a tight timeout wastes the tokens it already spent, so favor completion. For a Bash tool supporting background and timeout fields, wrap the invocation in:
+The engine runs on this Mac, where `gpt-pro` blocks on it directly. `--max-wait` (default 120 min) bounds how long the wrapper waits. The default is deliberately generous — a queued or long Pro run killed by a tight timeout wastes the tokens it already spent, so favor completion. For a Bash tool supporting background and timeout fields, wrap the invocation in:
 
 - `run_in_background: true`
 - `timeout: 7260000` — Bash-tool timeout in **milliseconds** = **121 min**, 60 s of slack over the default `--max-wait 7200` (= 120 min) so the tool doesn't preempt the wrapper's final diagnostic. If you change `--max-wait`, set this to at least `(--max-wait + 60) × 1000`.
 
 For other harnesses, use the supported background/session equivalent described in [SKILL.md](../SKILL.md#invoke-and-wait), preserving the same wrapper deadline and timeout slack.
 
-Two clocks, inner → outer: the wrapper's **`--max-wait`** (default 120 min, both paths) → the Bash-tool **`timeout`** (121 min). The engine itself has **no** per-run generation cap — a long Pro turn runs until it finishes or is stopped. When `--max-wait` elapses the wrapper exits 124 but the detached worker keeps running; reattach with `--run-id` rather than resubmitting.
+Two clocks, inner → outer: the wrapper's **`--max-wait`** (default 120 min) → the Bash-tool **`timeout`** (121 min). The engine itself has **no** per-run generation cap — a long Pro turn runs until it finishes or is stopped. When `--max-wait` elapses the wrapper exits 124 but the detached worker keeps running; reattach with `--run-id` rather than resubmitting.
 
 Wait for the completion notification, or collect the same wrapper process as described in [SKILL.md](../SKILL.md#invoke-and-wait). Do NOT add a separate polling loop over the run (status checks, artifact reads, repeated `--run-id` calls) — the wrapper is already polling. Repeated `write_stdin` calls on the wrapper's own session are collection, not polling.
 
 ## Recovery
 
-`gpt-pro` prints `run_id=<id>` and a ready-to-run `recover_with=gpt-pro --run-id <id>` line to stderr at the start — in Claude Code both land in the background task's output file; on harnesses that merge streams they appear in the collected output, possibly across early chunks. Capture the **literal** id from there; a `$RUN_ID` shell variable does **not** survive into a later Bash-tool call. Wrapper timeout (124) or SSH transport loss (255) normally leaves the detached worker running. Harness `TaskStop` or `kill` may kill the entire process tree, including that collector, while the original browser turn keeps generating. Reattach with the same id, inside the same envelope (in Claude Code `run_in_background: true`, `timeout: 7260000`; elsewhere the same collection pattern) — this is recovery, not the forbidden polling:
+`gpt-pro` prints `run_id=<id>` and a ready-to-run `recover_with=gpt-pro --run-id <id>` line to stderr at the start — in Claude Code both land in the background task's output file; on harnesses that merge streams they appear in the collected output, possibly across early chunks. Capture the **literal** id from there; a `$RUN_ID` shell variable does **not** survive into a later Bash-tool call. Wrapper timeout (124) normally leaves the detached worker running. Harness `TaskStop` or `kill` may kill the entire process tree, including that collector, while the original browser turn keeps generating. Reattach with the same id, inside the same envelope (in Claude Code `run_in_background: true`, `timeout: 7260000`; elsewhere the same collection pattern) — this is recovery, not the forbidden polling:
 
 ```bash
 gpt-pro --run-id ask-20260611T002710Z-…    # the literal id, not "$RUN_ID"
 ```
 
-This skips submit and calls `fetch --recover` (blocking locally, poll loop over SSH). A finished run returns its existing result; a live worker is left running. If the worker died and `conversation.json` contains a valid original conversation URL, the engine starts a collector for that same conversation, with the usual completion checks, model audit, and idle browser cleanup. It never types or sends the prompt again. A run without a usable saved URL cannot be recovered automatically: exit 6 (`reason: no_live_worker`) is terminal for this invocation, and repeating fetch will not repair missing evidence. Inspect `conversation.json` and `worker.stderr`; surface the failure rather than submitting again.
+This skips submit and calls `fetch --recover` (blocking). A finished run returns its existing result; a live worker is left running. If the worker died and `conversation.json` contains a valid original conversation URL, the engine starts a collector for that same conversation, with the usual completion checks, model audit, and idle browser cleanup. It never types or sends the prompt again. A run without a usable saved URL cannot be recovered automatically: exit 6 (`reason: no_live_worker`) is terminal for this invocation, and repeating fetch will not repair missing evidence. Inspect `conversation.json` and `worker.stderr`; surface the failure rather than submitting again.
 
-If the run already finished but you lost the output, read it from the run_dir directly — but **read `result.json` FIRST: only `status: "ok"` makes `response.md` usable.** With the default local engine:
+If the run already finished but you lost the output, read it from the run_dir directly — but **read `result.json` FIRST: only `status: "ok"` makes `response.md` usable.** With the local engine:
 
 ```bash
 jq -r '.status, .reason, .model_audit' ~/.gpt-pro/runs/<run_id>/result.json   # gate — must print ok
@@ -78,7 +78,6 @@ The wrapper's **exit code** is the agent's decision key — every code maps to o
 | 5 | run was stopped; no answer body | terminal — report the stop; do not resubmit automatically |
 | 6 | no live worker; stderr includes `recoverable` | if `true`, reattach with `gpt-pro --run-id <id>` to restore collection from the original URL; if `false`, inspect `conversation.json` and `worker.stderr` and report the failure. Never submit again automatically. A local new-run `ask` can also return this code after its collector dies. |
 | 124 | `--max-wait` elapsed, run still pending | reattach: `gpt-pro --run-id <id>` (same envelope) |
-| 255 | SSH transport state unknown | reattach **first**: `gpt-pro --run-id <id>`; only if *that* exits 4 did the submit never land — then resubmit. Never start a fresh run before reattaching (risks a duplicate, double-quota run) |
 
 On a non-zero exit the engine's terminal stderr JSON carries a `reason`. **Exit 1 is the catch-all — every engine error returns it** (`err()` hardcodes `exit_code: 1`; only `ok` → 0, legacy timeouts → 3, and `stopped` → 5 differ), so for a failed run the **`reason`, not the exit code, is the decision key**.
 
@@ -107,7 +106,7 @@ The **`sent?`** column is the resubmit-safety key: **pre-send** = the failure ha
 | `run_id_conflict` | 2 | pre-send | reattach id collided with a *different* prompt | pick a fresh run (drop `--run-id`) |
 | `run_id_conflict_no_sha` | 2 | pre-send | run_dir exists but `meta.json` lacks a prompt hash (a prior `ask` was killed mid-write) | delete the run_dir and retry, or use a fresh `--run-id` |
 | `not_found` | 4 | — | reattached to a run that never landed | the submit never reached the engine — start a **fresh** run |
-| `wait_timeout` / `fetch_timeout` | 124 | — | `--max-wait` elapsed (local or SSH path), **worker still alive** (`status: pending`, not an error) | reattach: `gpt-pro --run-id <id>` |
+| `wait_timeout` / `fetch_timeout` | 124 | — | `--max-wait` elapsed, **worker still alive** (`status: pending`, not an error) | reattach: `gpt-pro --run-id <id>` |
 
 `model_audit` also appears in a **successful** result — these are the fail-**open** verdicts, not errors: `verified` (slug present and allowlisted — the normal case), `model_ok_slug_missing` (slug absent but the menu confirms Sol; model confirmed, effort unverified), `unverified_missing_slug` (slug absent *and* menu unreadable — a double selector break degrades rather than bricking the tool). The two FATAL verdicts (`slug_mismatch`, `menu_mismatch`) never reach a `status: ok`; they surface as the two mismatch reasons above.
 
@@ -124,4 +123,4 @@ Reasons you may see in `worker.stderr`'s stage trace but **never** as a caller-v
 - `worker.stdout` — detached worker's stdout (usually empty)
 - `worker.stderr` — **structured JSONL stage trace**: one line per stage (`start`, `slot_queued`/`slot_acquired`, `chrome_cdp_ready`/`chrome_connected`/`chrome_activated`, `logged_in`, `model_verified`, `prompt_typed`, `sent`, `extracted`, `finished`, plus `error` / `orphan_kill_*` / `*_skipped`). When something fails mid-run, this is the fastest path to the failure point — the last stage before the `error` line tells you where it died.
 
-Read them directly when diagnosing (prefix `ssh "$GPT_PRO_HOST"` if you relay to a remote engine).
+Read them directly when diagnosing.

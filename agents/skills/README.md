@@ -38,7 +38,7 @@ Columns: **C**laude · Code**x** · **M**use. Legend: ✓ auto-installed · ✱ 
 |-------|:-:|:-:|:-:|----------------------|
 | agent-team              | ✓ | ✓ | ✓ | local — Unified read-only GPT/Claude/Cursor/Muse/Pro tasks; parallel backends, tmux (Pro via gpt-pro relay) |
 | arxiv-reader            | ✓ | ✓ | ✓ | local — Read arxiv via TeX / HF markdown / HTML fallback |
-| gpt-pro                 | ✓ | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini (the `gpt-pro` CLI is on PATH from the Codex copy) |
+| gpt-pro                 | ✓ | ✓ | ✓ | local — ChatGPT Pro Extended through the local relay engine (the `gpt-pro` CLI is on PATH from the Codex copy) |
 | pdf                     | — | ✓ | — | [openai/skills][c-pdf-o] — PDF read/edit (Claude uses the claude.ai-synced `anthropic-skills:pdf`; both are the vendors' native skills, not repo-owned, so Muse gets no managed copy) |
 | push                    | ✓ | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
 | recall                  | ✓ | ✓ | ✓ | local — Recall from all past sessions of this agent, or the other agents on request (separate Claude, Codex, and Muse builds with a shared entrypoint) |
