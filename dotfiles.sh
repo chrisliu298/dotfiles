@@ -202,7 +202,7 @@ _manual_set_state() {
     {
         printf '# Enabled manual skills, one per line (committed). Empty = all off.\n'
         printf '# Toggle with ./dotfiles.sh enable/disable <name>; enforced on every ./dotfiles.sh run.\n'
-        [[ -n "$data" ]] && printf '%s\n' "$data"
+        if [[ -n "$data" ]]; then printf '%s\n' "$data"; fi
     } > "$MANUAL_ENABLED_FILE"
 }
 
