@@ -10,6 +10,7 @@ Zsh with Zinit plugin manager and Starship prompt.
 | `.zshrc` | Plugin manager, completions, keybindings, history |
 | `.aliases` | Command shortcuts |
 | `.functions` | Shell utility functions |
+| `remap-keys` | macOS: right Option → right Control via `hidutil`, merged with existing mappings (e.g. Raycast Hyper Key); re-applied at login by the `local.remap-keys` LaunchAgent that `dotfiles.sh` writes. `remap-keys --reset` removes it |
 
 Load order: `.zshenv` → `.zshrc` (sources `.aliases` and `.functions`).
 

@@ -1,0 +1,27 @@
+#!/bin/zsh
+# Remap right Option to right Control on every keyboard via hidutil (no app needed).
+# A plain `hidutil property --set` replaces each device's whole UserKeyMapping, so
+# merge in entries other tools already installed (e.g. Raycast's Hyper Key
+# CapsLock -> F20); Raycast likewise preserves ours when it adds or removes its own.
+# Run at login by the local.remap-keys LaunchAgent that dotfiles.sh installs.
+# Usage: remap-keys          apply (idempotent)
+#        remap-keys --reset  drop our entry, keep the others
+set -euo pipefail
+
+SRC=$((0x7000000E6))  # right Option
+DST=$((0x7000000E4))  # right Control
+
+# Existing "src dst" pairs across all services, minus our own entry.
+others=$(hidutil property --get UserKeyMapping | awk '
+    /MappingSrc/ { gsub(/;/, ""); s = $3 }
+    /MappingDst/ { gsub(/;/, ""); d = $3 }
+    /}/ && s != "" { print s, d; s = d = "" }
+' | sort -u | awk -v src="$SRC" '$1 != src')
+
+entries=()
+while read -r s d; do
+    [[ -n "$s" ]] && entries+=("{\"HIDKeyboardModifierMappingSrc\":$s,\"HIDKeyboardModifierMappingDst\":$d}")
+done <<< "$others"
+[[ "${1:-}" == --reset ]] || entries+=("{\"HIDKeyboardModifierMappingSrc\":$SRC,\"HIDKeyboardModifierMappingDst\":$DST}")
+
+hidutil property --set "{\"UserKeyMapping\":[${(j:,:)entries}]}" >/dev/null

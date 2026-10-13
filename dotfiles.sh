@@ -11,6 +11,7 @@ LINKS=(
     "shell/.zshenv:.zshenv"
     "shell/.zshrc:.zshrc"
     "shell/theme-apply:.local/bin/theme-apply"
+    "shell/remap-keys:.local/bin/remap-keys"
     "shell/codex-traex:.local/bin/codex-traex"
     ".config/starship:.config/starship"
     # btop has no config include and rewrites its own config, so its live
@@ -310,6 +311,33 @@ install_links() {
         ensure_symlink "$src" "$HOME/${entry#*:}"
     done
     remove_legacy_delete_hooks
+}
+
+# hidutil remaps reset at reboot, so a login agent re-applies shell/remap-keys.
+# Written (not symlinked) because launchd needs this host's absolute path.
+install_launch_agents() {
+    [[ "$(uname)" == Darwin ]] || return 0
+    local label=local.remap-keys
+    local plist="$HOME/Library/LaunchAgents/$label.plist"
+    local want
+    want=$(cat <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$label</string>
+  <key>ProgramArguments</key><array><string>$HOME/.local/bin/remap-keys</string></array>
+  <key>RunAtLoad</key><true/>
+</dict>
+</plist>
+EOF
+)
+    [[ -f "$plist" && "$(cat "$plist")" == "$want" ]] && return
+    mkdir -p "${plist%/*}"
+    printf '%s\n' "$want" > "$plist"
+    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "$plist" || warn "launchctl bootstrap $label failed"
+    log "load ${plist/#$HOME/~}"
 }
 
 remove_legacy_delete_hooks() {
@@ -834,7 +862,7 @@ main() {
 
     # Foreground: local-only sections
     section "Theme"; setup_theme_state
-    section "Links";  install_links
+    section "Links";  install_links; install_launch_agents
 
     # Must start after Links: TPM reads ~/.config/tmux/tmux.conf (the symlink
     # install_links creates), not the repo copy. Launched here rather than with
