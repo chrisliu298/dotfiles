@@ -12,7 +12,10 @@ Run the dotfiles installer from the repo root:
 ./dotfiles.sh
 ```
 
-It symlinks this directory to `~/.config/ghostty`, including `config` and `themes/`.
+It symlinks this directory to `~/.config/ghostty`, including `config`, `themes/`, and `shaders/`.
+
+`shaders/focus-flash.glsl` briefly tints and borders a split in the theme's ANSI
+blue when it gains focus, so switching splits is easy to follow.
 
 `theme light` and `theme dark` select the custom `OpenAI Light` and `OpenAI Dark`
 Ghostty themes. Their neutral surfaces follow the [OpenAI site](https://openai.com/)
