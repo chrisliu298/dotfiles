@@ -20,8 +20,9 @@ dotfiles/
 ├── shell/                   # Zsh config (Zinit, Starship, fzf)
 ├── .config/                 # App configs (Neovim, tmux, btop)
 └── agents/                  # AI agent configurations
-    ├── claude/              # Claude Code config (CLAUDE.md, settings, keybindings, statusline, themes)
-    ├── codex/               # Codex config (AGENTS.md)
+    ├── AGENTS.md            # Global instructions, linked as ~/.claude/CLAUDE.md and ~/.codex/AGENTS.md
+    ├── claude/              # Claude Code config (settings, keybindings, statusline, themes)
+    ├── codex/               # Codex config (themes)
     └── skills/              # Repo-owned skill sources + authoring references
 ```
 

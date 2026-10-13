@@ -23,12 +23,12 @@ LINKS=(
     ".config/nvim:.config/nvim"
     ".config/tmux:.config/tmux"
     ".config/ghostty:.config/ghostty"
-    "agents/claude/CLAUDE.md:.claude/CLAUDE.md"
+    "agents/AGENTS.md:.claude/CLAUDE.md"
     "agents/claude/keybindings.json:.claude/keybindings.json"
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
     "agents/claude/themes/openai-dark.json:.claude/themes/openai-dark.json"
     "agents/claude/themes/openai-light.json:.claude/themes/openai-light.json"
-    "agents/codex/AGENTS.md:.codex/AGENTS.md"
+    "agents/AGENTS.md:.codex/AGENTS.md"
     "agents/codex/themes/openai-dark.tmTheme:.codex/themes/openai-dark.tmTheme"
     "agents/codex/themes/openai-light.tmTheme:.codex/themes/openai-light.tmTheme"
 )
@@ -733,34 +733,7 @@ lint_skills() {
         hits=1
     done
     (( hits )) && warn "fix per agents/skills/references/universal-skill-authoring.md, or scope the skill claude-only"
-# agentdocs status propagates: fatal for `./dotfiles.sh lint`, advisory in a full run
-    local _ad=0
-    lint_agentdocs    || _ad=$?
-    return "$_ad"
-}
-
-# ── agent-doc identity-guard ─────────────────────────────────────
-# The two global instruction files (claude/CLAUDE.md, codex/AGENTS.md) are one
-# canonical, agent-read text copied to both paths. They are
-# identical BELOW the H1 (line 1), which only names each file (# CLAUDE.md vs # AGENTS.md) —
-# the sole per-file delta; effectiveness parity verified by the harness in agents/eval/.
-# Assert body identity; any diff means one copy was edited without propagating. To change
-# them: edit one, copy to the other (keeping each H1), commit together.
-lint_agentdocs() {
-    local -a docs=(
-        "agents/claude/CLAUDE.md"
-        "agents/codex/AGENTS.md"
-    )
-    local ref="${docs[0]}" f rc=0
-    if [[ ! -f "$ROOT/$ref" ]]; then warn "agentdocs: missing canonical $ref"; return 1; fi
-    for f in "${docs[@]:1}"; do
-        if [[ ! -f "$ROOT/$f" ]]; then warn "agentdocs: missing copy $f"; rc=1; continue; fi
-        if ! diff -q <(tail -n +2 "$ROOT/$ref") <(tail -n +2 "$ROOT/$f") >/dev/null 2>&1; then
-            warn "agentdocs: $f differs from $ref below the H1 (bodies must be identical) — re-copy the canonical text"
-            rc=1
-        fi
-    done
-    return "$rc"
+    return 0
 }
 
 # ── Main ─────────────────────────────────────────────────────────

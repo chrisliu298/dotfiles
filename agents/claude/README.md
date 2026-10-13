@@ -1,10 +1,9 @@
 # agents/claude — Claude Code agent home
 
-Config for [Claude Code](https://claude.com/claude-code). Everything here targets `~/.claude/`.
+Config for [Claude Code](https://claude.com/claude-code). Everything here targets `~/.claude/`. The global `~/.claude/CLAUDE.md` is a symlink to the shared [`agents/AGENTS.md`](../AGENTS.md).
 
 | Path | Installed as | Notes |
 |------|--------------|-------|
-| `CLAUDE.md` | symlink | One of the two canonical global instruction files — see root `CLAUDE.md`. |
 | `keybindings.json` | symlink | Custom key and chord bindings. |
 | `settings.json` | **merged** by `dotfiles.sh` | Merged onto the live file so keys Claude Code writes (e.g. `/effort`'s `modelSettings`) survive; repo values win and arrays are replaced whole, so a key deleted here must also be deleted from `~/.claude/settings.json`. `~/` is expanded to an absolute path, which Claude Code requires. `theme` is set to `custom:openai`. |
 | `statusline-command.sh` | symlink | Status line renderer. ANSI *named* colors only, so it follows the terminal palette — see below. |

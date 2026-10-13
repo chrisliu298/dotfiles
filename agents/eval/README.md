@@ -42,7 +42,7 @@ compare. The relay-peer legs are scripted; the Claude leg and the judge need Cla
 
 1. **Build runners** (one per variant; add `--none` for a baseline):
    ```sh
-   ./build-runner.sh ../codex/AGENTS.md runner_current.md   # variant under test
+   ./build-runner.sh ../AGENTS.md runner_current.md        # variant under test
    ./build-runner.sh /path/to/candidate.md runner_cand.md   # a proposed rewrite
    ./build-runner.sh --none runner_base.md                  # model-default baseline
    ```
@@ -92,8 +92,8 @@ behavior, compare the current doc, one narrowly edited candidate, and a model-de
 
 First used (2026-07) to clear an aggressive de-format + prune + four-file unification of the global
 doc: 8 model lineages × {current, pruned} + repeats, blind-judged — aggregate parity (pruned ≥
-current), so the pruned/unified doc was adopted. The `lint_agentdocs` guard in `dotfiles.sh` now just
-asserts the two files (the Pi and Grok copies were dropped with those agents) are identical below the H1 (each file keeps its own `# CLAUDE.md`/`# AGENTS.md` title).
+current), so the pruned/unified doc was adopted. The remaining Claude and Codex copies were later
+merged into the single `agents/AGENTS.md`, symlinked into both agent homes.
 
 ## Delivery and delegation smoke cases
 
