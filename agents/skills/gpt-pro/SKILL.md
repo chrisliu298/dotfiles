@@ -2,8 +2,9 @@
 effort: low
 name: gpt-pro
 description: |
-  Send a prompt to ChatGPT Pro when the user requests GPT-Pro, a Pro take,
-  or a second opinion from ChatGPT Pro.
+  Send a prompt to ChatGPT Pro alone when the user requests GPT-Pro, a Pro take,
+  or a second opinion from ChatGPT Pro. When Pro is one of several backends
+  (Codex, Claude, Cursor, Muse) on the same task, use agent-team instead.
 allowed-tools: Bash(gpt-pro:*), Bash(${CLAUDE_SKILL_DIR}/scripts/gpt-pro:*), Bash(ssh:*), Read, Write
 user-invocable: true
 ---

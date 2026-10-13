@@ -1,6 +1,6 @@
 ---
 name: agent-team
-description: Delegate independent read-only analysis, research, planning, or review to GPT/Codex CLI, Claude Code, Cursor Agent, Muse Code, or ChatGPT Pro, including several backends in parallel. Use when the user names these backends for a task or requests this skill. Not for implementation, external operations, or unspecified native subagent requests.
+description: Delegate independent read-only analysis, research, planning, or review to GPT/Codex CLI, Claude Code, Cursor Agent, Muse Code, or ChatGPT Pro, including several backends in parallel. Use when the user names these backends for a task or requests this skill; a request for ChatGPT Pro alone goes to gpt-pro. Not for implementation, external operations, or unspecified native subagent requests.
 ---
 
 # Agent Team
@@ -20,7 +20,7 @@ Read the user's message for backend names and assignments:
 - “让 Claude 审查” → `claude`.
 - “Claude 和 Cursor 并行独立审查” → `claude` and `cursor`, same assignment.
 - “GPT、Claude、Cursor、Muse 都看一下” → all four, same assignment.
-- “也问问 Pro” / “ChatGPT Pro” → `pro`.
+- “也问问 Pro” / “ChatGPT Pro” alongside other backends → `pro`.
 - “Claude 看正确性，GPT 看测试” → `claude` and `gpt`, distinct assignments.
 
 Each backend runs at most once per call; a repeated `--backend` is rejected. When
