@@ -31,14 +31,21 @@ LINKS=(
     "agents/AGENTS.md:.codex/AGENTS.md"
     "agents/codex/themes/openai-dark.tmTheme:.codex/themes/openai-dark.tmTheme"
     "agents/codex/themes/openai-light.tmTheme:.codex/themes/openai-light.tmTheme"
+    # Only the dark tmTheme: Muse 1.4.7's custom-theme contrast check only
+    # accepts dark themes (foreground brighter than background) and silently
+    # skips light ones, so light mode uses its built-in `dynamic` theme
+    # (see shell/theme-apply). Link the light file once Muse accepts it.
+    "agents/muse/themes/openai-dark.tmTheme:.config/muse/themes/openai-dark.tmTheme"
 )
 
 # name|source|agents — name * = auto-discover subdirs with SKILL.md
 # source: ./path (local), ~/path (host-local, skipped when absent), or owner/repo[/subpath] (GitHub)
 SKILLS=(
-    # The wildcard installs every skill to Claude and Codex; the explicit entries below narrow
-    # that (claude-only: relay, prism; recall has a separate build per agent).
-    "*|./agents/skills|claude,codex"
+    # The wildcard installs every skill to Claude, Codex and Muse; the explicit entries below
+    # narrow that (claude-only: relay, prism; recall has a separate build per agent).
+    # Claude/Codex get live symlinks; Muse's store owns its managed personal root,
+    # so muse entries are copy-installed via `muse skills install` (see _muse_skill_install).
+    "*|./agents/skills|claude,codex,muse"
     # Relay: claude-only caller; targets GPT via the script.
     # MANUAL (below); explicit entry keeps it claude-only when enabled (the wildcard would install it everywhere).
     "relay|./agents/skills/relay|claude"
@@ -50,10 +57,15 @@ SKILLS=(
     # each subdir as `recall`.
     "recall|./agents/skills/recall/claude|claude"
     "recall|./agents/skills/recall/codex|codex"
+    "recall|./agents/skills/recall/muse|muse"
+    # pdf is each vendor's native skill (anthropic's for Claude, this openai one for Codex),
+    # not repo-owned, so Muse gets no managed copy of it. Muse still discovers the Codex
+    # copy natively; keep it off there per host with `muse skills disable pdf --scope user`.
     "pdf|openai/skills/skills/.curated/pdf|codex"
-    # Third-party skills installed per host by `npx skills` (e.g. lark-*, merlin-*). Codex reads
-    # ~/.agents/skills natively; Claude does not, so link them in (earlier entries win on name clashes).
-    "*|~/.agents/skills|claude"
+    # Third-party skills installed per host by `npx skills` (e.g. lark-*, merlin-*). Codex and
+    # Muse read ~/.agents/skills natively; Claude does not, and gets only the ones it uses, so the
+    # rest's long descriptions stay out of its skill list.
+    "weekly-report|~/.agents/skills/weekly-report|claude"
 )
 
 # Skills not auto-installed (opt-in). Toggle with: ./dotfiles.sh enable/disable <name>.
@@ -76,6 +88,8 @@ MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: clau
 PLUGINS=()
 
 SKILL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/skills-src"
+# Muse's managed personal skill root, owned by its skills store.
+MUSE_SKILLS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/muse/skills"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}"
 GLOBAL_STAMP="$CACHE_DIR/dotfiles-global-stamp"
 
@@ -98,6 +112,23 @@ ensure_symlink() {
     rm -rf "$dest"
     ln -s "$src" "$dest"
     log "link ${dest/#$HOME/~}"
+}
+
+# Muse's personal root ($MUSE_SKILLS_DIR) is owned by its skills store,
+# which keeps a copy plus provenance for update/uninstall — direct symlinks
+# there load in practice but are outside that contract ("provenance missing"
+# from store commands). So Muse entries are reconciled through the official
+# install command instead of ensure_symlink; every run re-records the source
+# and refreshes the copy (--force is what a repeat install requires). Edits
+# to a skill therefore reach Muse on the next ./dotfiles.sh run, whose
+# fingerprint covers the full tracked diff, not live like the Claude/Codex links.
+_muse_skill_install() {
+    local spath="$1" sname="$2"
+    if muse skills install "$spath" --name "$sname" --force >/dev/null 2>&1; then
+        log "muse install $sname"
+    else
+        warn "muse skills install failed: $sname (from $spath)"
+    fi
 }
 
 # Check stamp file against fingerprint; return 0 (fresh) or 1 (stale/missing)
@@ -367,13 +398,17 @@ _fetch_skills_repos() {
 
 install_skills() {
     mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills"
+    # Muse is installed per host (not every machine has it yet); skip its column when absent.
+    local muse_available=false
+    command -v muse >/dev/null 2>&1 && muse_available=true
+    $muse_available || log "muse CLI not found; skipping Muse skills"
     local explicit_names=$'\n'
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name _ _ <<< "$entry"
         [[ "$name" != "*" ]] && explicit_names+="$name"$'\n'
     done
 
-    local claude_expected="" codex_expected=""
+    local claude_expected="" codex_expected="" muse_expected=""
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name source agents <<< "$entry"
         local base_dir; base_dir=$(_resolve_source "$source")
@@ -407,11 +442,13 @@ install_skills() {
         for se in ${skill_entries[@]+"${skill_entries[@]}"}; do
             local sname="${se%%:*}" spath="${se#*:}"
             if [[ "$agents" == *claude* && $'\n'"$claude_expected" == *$'\n'"$sname"$'\n'* ]] \
-                || [[ "$agents" == *codex* && $'\n'"$codex_expected" == *$'\n'"$sname"$'\n'* ]]; then
+                || [[ "$agents" == *codex* && $'\n'"$codex_expected" == *$'\n'"$sname"$'\n'* ]] \
+                || [[ "$agents" == *muse* && $'\n'"$muse_expected" == *$'\n'"$sname"$'\n'* ]]; then
                 warn "skip $sname from $source (already provided by an earlier entry)"; continue
             fi
             [[ "$agents" == *claude* ]] && { ensure_symlink "$spath" "$HOME/.claude/skills/$sname"; claude_expected+="$sname"$'\n'; }
             [[ "$agents" == *codex* ]]  && { ensure_symlink "$spath" "$HOME/.codex/skills/$sname";  codex_expected+="$sname"$'\n'; }
+            [[ "$agents" == *muse* ]] && $muse_available && { _muse_skill_install "$spath" "$sname"; muse_expected+="$sname"$'\n'; }
         done
     done
 
@@ -435,6 +472,22 @@ install_skills() {
             rm "$entry"; log "clean ${entry/#$HOME/~}"
         done
     done
+
+    # Prune Muse skills this repo installed but no longer selects. The store
+    # lockfile records each install's local source, so only entries sourced
+    # from this repo or the skill cache are ours to remove — a skill the user
+    # installed into Muse by hand is never touched.
+    local muse_lock="$MUSE_SKILLS_DIR/.muse/lock.json"
+    if $muse_available && [[ -f "$muse_lock" ]] && command -v jq >/dev/null 2>&1; then
+        local mid msrc
+        while IFS=$'\t' read -r mid msrc; do
+            [[ -n "$mid" ]] || continue
+            [[ $'\n'"$muse_expected" == *$'\n'"$mid"$'\n'* ]] && continue
+            case "$msrc" in "$ROOT"/*|"$SKILL_CACHE"/*) ;; *) continue ;; esac
+            muse skills uninstall "$mid" >/dev/null 2>&1 \
+                && log "muse uninstall $mid (no longer selected)" || true
+        done < <(jq -r '.skills // {} | to_entries[] | select(.value.source.type == "local") | [.key, .value.source.path] | @tsv' "$muse_lock" 2>/dev/null)
+    fi
 
     # Prune stale cache repos
     [[ -d "$SKILL_CACHE" ]] || return
@@ -656,6 +709,7 @@ cmd_enable() {
         [[ -f "$base_dir/SKILL.md" ]] || { warn "skip $name (no SKILL.md at $source)"; continue; }
         [[ "$agents" == *claude* ]] && ensure_symlink "$base_dir" "$HOME/.claude/skills/$name"
         [[ "$agents" == *codex* ]]  && ensure_symlink "$base_dir" "$HOME/.codex/skills/$name"
+        [[ "$agents" == *muse* ]] && command -v muse >/dev/null 2>&1 && _muse_skill_install "$base_dir" "$name"
         found=true
     done
     # Fall back to wildcard discovery
@@ -668,6 +722,7 @@ cmd_enable() {
             [[ -f "$skill_dir/SKILL.md" ]] || continue
             [[ "$agents" == *claude* ]] && ensure_symlink "$skill_dir" "$HOME/.claude/skills/$name"
             [[ "$agents" == *codex* ]]  && ensure_symlink "$skill_dir" "$HOME/.codex/skills/$name"
+            [[ "$agents" == *muse* ]] && command -v muse >/dev/null 2>&1 && _muse_skill_install "$skill_dir" "$name"
             found=true
         done
     fi
@@ -683,6 +738,10 @@ cmd_disable() {
     for dir in "$HOME/.claude/skills/$name" "$HOME/.codex/skills/$name"; do
         [[ -L "$dir" ]] && { rm "$dir"; log "removed ${dir/#$HOME/~}"; removed=true; }
     done
+    if [[ -d "$MUSE_SKILLS_DIR/$name" ]] && command -v muse >/dev/null 2>&1; then
+        muse skills uninstall "$name" >/dev/null 2>&1 \
+            && { log "muse uninstall $name"; removed=true; } || true
+    fi
     if _is_manual "$name"; then
         _manual_set_state "$name" off
         log "disabled '$name' in the committed set"
@@ -695,7 +754,7 @@ cmd_skills() {
     local m
     for m in "${MANUAL_SKILLS[@]}"; do
         local status="${_DIM}off${_RST}"
-        [[ -L "$HOME/.claude/skills/$m" || -L "$HOME/.codex/skills/$m" ]] && status="on "
+        [[ -L "$HOME/.claude/skills/$m" || -L "$HOME/.codex/skills/$m" || -d "$MUSE_SKILLS_DIR/$m" ]] && status="on "
         printf '    %-22s %s\n' "$m" "$status"
     done
     printf '\n'

@@ -81,12 +81,12 @@ Use the helper instead of reading whole transcript files into context.
    `sources[*].coverage`, `stats`, and `current_task_exclusion`; a partial source
    error or omitted records limits the conclusion. If still unresolved, report
    "not found in the searched records" and ask for a discriminating clue.
-   Never fabricate a detail or silently search the other agent.
+   Never fabricate a detail or silently search the other agents.
 5. Answer with exactly one provenance line from the **evidence message actually
    used**, so a wrong session match is visible:
 
    ```text
-   recall [codex|claude]: <date> · <session prefix> · <gist>
+   recall [codex|claude|muse]: <date> · <session prefix> · <gist>
    ```
 
    Preserve its role, timestamp/date, session and message/line anchors. If an

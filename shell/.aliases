@@ -90,6 +90,11 @@ alias caw="codex-auth switch"  # interactive, or caw email/alias
 alias caa="codex-auth login"   # sign in and add the current account
 
 # =============================================================================
+# Muse Code
+# =============================================================================
+# Defined as functions in shell/.functions to support shared base args.
+
+# =============================================================================
 # macOS-Only
 # =============================================================================
 if (( IS_MACOS )); then

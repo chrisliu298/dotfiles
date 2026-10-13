@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""Search the local Codex and Claude conversation stores with source attribution."""
+"""Search the local Codex, Claude, and Muse conversation stores with source attribution."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ SKILLS = Path(__file__).resolve().parents[1]
 SCRIPTS = {
     "codex": SKILLS / "codex" / "scripts" / "recall.py",
     "claude": SKILLS / "claude" / "scripts" / "recall.py",
+    "muse": SKILLS / "muse" / "scripts" / "recall.py",
 }
 
 
@@ -90,9 +91,9 @@ def search(query: str | list[str], cwd: str, sources: list[str], limit: int, rol
 
 
 def show(source: str, args: argparse.Namespace) -> dict:
-    if source == "codex":
+    if source in ("codex", "muse"):
         if not args.item_id:
-            return {"status": "error", "reason": "Codex results require --item-id"}
+            return {"status": "error", "reason": f"{source} results require --item-id"}
         command = ["show", "--session-id", args.session, "--item-id", args.item_id]
     else:
         if args.line is None:
@@ -108,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     find = commands.add_parser("search")
     find.add_argument("--query", "-q", action="append", required=True, help="Repeat for up to six complementary phrasings")
     find.add_argument("--cwd", default=os.getcwd())
-    find.add_argument("--agent", choices=("codex", "claude"), required=True)
+    find.add_argument("--agent", choices=("codex", "claude", "muse"), required=True)
     find.add_argument("--source", choices=("self", "other", "all"), default="self")
     find.add_argument("--limit", type=int, choices=range(1, 21), default=5)
     find.add_argument("--roles", choices=("both", "user", "assistant"), default="both")
@@ -119,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     context.add_argument("--before", type=int, choices=range(21), default=3)
     context.add_argument("--after", type=int, choices=range(21), default=5)
     context.add_argument("--max-chars", type=int, choices=range(1000, 50001), default=12000)
-    context.add_argument("--source", choices=("codex", "claude"), required=True)
+    context.add_argument("--source", choices=("codex", "claude", "muse"), required=True)
     context.add_argument("--session", required=True)
     context.add_argument("--item-id")
     context.add_argument("--line", type=int)
@@ -133,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
         sources = (
             list(SCRIPTS) if args.source == "all" else
             [args.agent] if args.source == "self" else
-            ["claude" if args.agent == "codex" else "codex"]
+            [name for name in SCRIPTS if name != args.agent]
         )
         result = search(args.query, args.cwd, sources, args.limit, args.roles,
                         args.since.isoformat() if args.since else None,
