@@ -39,10 +39,12 @@ claude_config="${CLAUDE_CONFIG:-$HOME/.claude/settings.json}"
 claude_theme_dir="${CLAUDE_THEME_DIR:-$HOME/.claude/themes}"
 muse_config="${MUSE_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/muse/settings.json}"
 cswap_bin="${CSWAP_BIN:-cswap}"
+# Muse Code keeps its own built-in theme in both modes (see the muse block below).
+muse_theme="default"
 
 case "$mode" in
-    light) ghostty_theme="OpenAI Light"; btop_theme="openai_light"; tmux_theme="openai_light"; starship_palette="openai_light"; codex_tui_theme="openai-light"; muse_theme="dynamic" ;;
-    dark)  ghostty_theme="OpenAI Dark";  btop_theme="openai_dark";  tmux_theme="openai_dark";  starship_palette="openai_dark";  codex_tui_theme="openai-dark";  muse_theme="custom:openai-dark" ;;
+    light) ghostty_theme="OpenAI Light"; btop_theme="openai_light"; tmux_theme="openai_light"; starship_palette="openai_light"; codex_tui_theme="openai-light" ;;
+    dark)  ghostty_theme="OpenAI Dark";  btop_theme="openai_dark";  tmux_theme="openai_dark";  starship_palette="openai_dark";  codex_tui_theme="openai-dark" ;;
     *) printf 'theme-apply: invalid mode: %s (want light|dark)\n' "$mode" >&2; exit 2 ;;
 esac
 
@@ -150,11 +152,9 @@ fi
 
 # Muse reads its theme and terminal background from settings.json at startup
 # (running sessions keep theirs). Pin the background over the startup probe,
-# which can miss under tmux/SSH. Dark pins the tracked OpenAI Dark tmTheme
-# (agents/muse/themes, linked by dotfiles.sh; same palette as Codex's); light
-# uses `dynamic`, which follows the terminal ANSI palette, because Muse
-# 1.4.7's custom-theme contrast check only accepts dark themes (foreground
-# brighter than background) and silently skips light ones.
+# which can miss under tmux/SSH, and keep its own built-in `default` theme —
+# not the OpenAI palette. The pinned background is what makes that default
+# theme resolve to its light/dark variant in step with `theme`.
 if [ -f "$muse_config" ]; then
     muse_tmp="${muse_config}.theme.$$"
     jq --arg bg "$mode" --arg theme "$muse_theme" \

@@ -31,11 +31,6 @@ LINKS=(
     "agents/AGENTS.md:.codex/AGENTS.md"
     "agents/codex/themes/openai-dark.tmTheme:.codex/themes/openai-dark.tmTheme"
     "agents/codex/themes/openai-light.tmTheme:.codex/themes/openai-light.tmTheme"
-    # Only the dark tmTheme: Muse 1.4.7's custom-theme contrast check only
-    # accepts dark themes (foreground brighter than background) and silently
-    # skips light ones, so light mode uses its built-in `dynamic` theme
-    # (see shell/theme-apply). Link the light file once Muse accepts it.
-    "agents/muse/themes/openai-dark.tmTheme:.config/muse/themes/openai-dark.tmTheme"
 )
 
 # name|source|agents — name * = auto-discover subdirs with SKILL.md
