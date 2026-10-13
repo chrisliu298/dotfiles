@@ -19,6 +19,7 @@ yellow='\033[33m'                    # cost
 # ── Extract fields (single jq call) ─────────────────────────────
 eval "$(echo "$input" | jq -r '
   @sh "model=\(.model.display_name // "")",
+  @sh "model_id=\(.model.id // "")",
   @sh "effort_level=\(.effort.level // "")",
   @sh "cwd=\(.workspace.current_dir // .cwd // "")",
   @sh "project_dir=\(.workspace.project_dir // "")",
@@ -179,11 +180,22 @@ pct="${used_pct%.*}"
 pct="${pct:-0}"
 (( pct > 100 )) && pct=100
 (( pct < 0 )) && pct=0
-ctx_seg="${muted}ctx ${magenta}${pct}%"
+ctx_tail=""
 if [ -n "$cur_input" ] && [ -n "$ctx_size" ] && [ "$ctx_size" -gt 0 ]; then
   cur_tok=$(( ${cur_input:-0} + ${cur_output:-0} + ${cur_cache_create:-0} + ${cur_cache_read:-0} ))
-  ctx_seg+="${muted} $(fmt_tokens "$cur_tok")/$(fmt_tokens "$ctx_size")"
+  # Measure against the auto-compact window (set by /autocompact) when it is
+  # smaller than the model's context window, since that is where compaction fires.
+  compact_window=$(jq -r --arg m "$model_id" \
+    '.modelSettings[$m].autoCompactWindow // .autoCompactWindow // empty' \
+    "$HOME/.claude/settings.json" 2>/dev/null)
+  if [[ "$compact_window" =~ ^[0-9]+$ ]] && (( compact_window > 0 && compact_window < ctx_size )); then
+    ctx_size=$compact_window
+    pct=$(( cur_tok * 100 / ctx_size ))
+    (( pct > 100 )) && pct=100
+  fi
+  ctx_tail="${muted} $(fmt_tokens "$cur_tok")/$(fmt_tokens "$ctx_size")"
 fi
+ctx_seg="${muted}ctx ${magenta}${pct}%${ctx_tail}"
 usage_parts=("${ctx_seg}${reset}" "${usage_parts[@]}")
 
 # Cost
