@@ -1,11 +1,3 @@
 {
-  "bindings": [
-    {
-      "context": "Task",
-      "bindings": {
-        "ctrl+x ctrl+g": "task:background",
-        "ctrl+b": null
-      }
-    }
-  ]
+  "bindings": []
 }
