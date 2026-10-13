@@ -10,6 +10,9 @@ export DISABLE_MAGIC_FUNCTIONS=true
 
 # Terminal color support
 export COLORTERM=truecolor
+# Claude Code clamps to 256 colors under $TMUX unless this is set; tmux here
+# forwards RGB (terminal-features), so keep truecolor (e.g. the clawd orange).
+export CLAUDE_CODE_TMUX_TRUECOLOR=1
 
 # Starship prompt config
 # Host-local generated Starship config (active palette applied by `theme`;
@@ -50,6 +53,10 @@ fi
 # Claude Code
 # =============================================================================
 export ENABLE_PROMPT_CACHING_1H=1
+# Skip the "shell -c script runs rm and could not be checked" prompt, which bypass mode does not
+# cover and which misfires on nested bash -c / python -c quoting. Read at process start, so it must
+# be exported here; settings.json "env" does not reach it.
+export CLAUDE_CODE_DISABLE_INLINE_SHELL_RM_PROMPT=1
 # Telemetry left ENABLED so Claude Code can fetch the GrowthBook flag for /rc (remote-control).
 # Actively `unset` (not merely leave the export commented): commenting out only stops *setting* the
 # var — it does not clear a value already inherited from a long-lived parent (e.g. a tmux server
@@ -57,6 +64,10 @@ export ENABLE_PROMPT_CACHING_1H=1
 # unset clears that stale value in every new shell, so tmux panes get /rc too. To opt back out of
 # telemetry, replace the line below with: export DISABLE_TELEMETRY=1
 unset DISABLE_TELEMETRY
+
+# Agents write POSIX-style `$var` expecting word splitting; give Claude Code's shell (and the
+# snapshot it captures options from) sh semantics. Must run before the tmux unset below.
+[[ -n "$CLAUDECODE" ]] && setopt SH_WORD_SPLIT
 
 # Unset CLAUDECODE inside tmux so claude can start fresh
 [[ -n "$TMUX" ]] && unset CLAUDECODE
