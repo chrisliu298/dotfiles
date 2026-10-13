@@ -67,6 +67,19 @@ case "$sub" in
       stop_not_found) echo '{"status":"not_found"}'>&2; exit 4 ;;
       *)              echo '{"status":"stopped","reason":"stopped_after_send"}'>&2; exit 0 ;;
     esac ;;
+  send)
+    n=$(bump send)
+    printf '%s\n' "${args[@]}" > "$st/send-args-$n"
+    cat > "$st/send-body-$n"
+    if [ "$n" -gt 1 ]; then
+      cmp "$st/send-args-1" "$st/send-args-$n" >/dev/null || exit 98
+      cmp "$st/send-body-1" "$st/send-body-$n" >/dev/null || exit 98
+    fi
+    case "$GPRT_SCN" in
+      send_drop) [ "$n" -lt 2 ] && exit 255 ;;
+      send_pending) echo '{"status":"pending"}' >&2; exit 124 ;;
+    esac
+    echo '{"status":"sent"}' >&2; exit 0 ;;
   *) echo "fake-ssh: bad sub '$sub' in: ${args[*]}">&2; exit 99 ;;
 esac
 FAKE
@@ -108,6 +121,11 @@ case "$1" in
            stop_no_worker) echo '{"status":"no_live_worker"}'>&2; exit 2 ;;
            *)              echo '{"status":"stopped"}'>&2; exit 0 ;;
          esac ;;
+  send) printf '%s\n' "$@" > "$GPRT_STATE/send-args"; cat > "$GPRT_STATE/send-body"
+        case "$GPRT_SCN" in
+          send_pending) echo '{"status":"pending"}' >&2; exit 124 ;;
+          *) echo '{"status":"sent"}' >&2; exit 0 ;;
+        esac ;;
   *)     echo "fake-engine: bad sub $1">&2; exit 99 ;;
 esac
 FAKE
@@ -131,6 +149,12 @@ run_case() {  # <name> <mode ssh|local> <scenario> <expected-exit> <wrapper-extr
   [ -z "$EXP_ERR" ] || grep -qF "$EXP_ERR" <<<"$err" || { ok=0; why+="stderr missing '$EXP_ERR'; "; }
   case " $extra " in *" --run-id "*)
     [ ! -f "$sd/ask" ] || { ok=0; why+="recovery submitted a new prompt; "; } ;; esac
+  case " $extra " in *" --send "*)
+    [ ! -f "$sd/ask" ] && [ ! -f "$sd/fetch" ] && [ ! -f "$sd/calls" ] \
+      || { ok=0; why+="send opened a new run or fetched an answer; "; }
+    if [ "$exp_exit" = 0 ]; then
+      [ -z "$out" ] || { ok=0; why+="send returned an answer body; "; }
+    fi ;; esac
   if [ "$scn" = orphan_no_url ]; then
     [ -z "$out" ] || { ok=0; why+="orphan returned an answer; "; }
     local fetches=0
@@ -186,6 +210,14 @@ EXP_ERR="would include";         run_case "--dry-run lists resolved files, no su
 echo "── stop ──"
 SID="ask-20260530T000000Z-abc"
 EXP_ERR='"status":"stopped"';        run_case "--stop live turn (ssh) → exit 0"      ssh   stop_default   0 "--stop $SID"
+echo "── send ──"
+EXP_ERR='"status":"sent"'; run_case "local supplement returns receipt, no answer" local send_success 0 "--send $SID --message-id m1"
+EXP_ERR='"status":"sent"'; run_case "SSH retry preserves message id AND stdin" ssh send_drop 0 "--send $SID"
+EXP_ERR='delivery pending/unknown'; run_case "pending supplement preserves retry guidance" local send_pending 124 "--send $SID --message-id m1"
+EXP_ERR='mutually exclusive'; run_case "send cannot also recover" local send_success 2 "--send $SID --run-id $SID"
+EXP_ERR='only applies'; run_case "message-id without send is rejected" local send_success 2 "--message-id m1"
+EXP_ERR='invalid message_id'; run_case "unsafe message-id is rejected" local send_success 2 "--send $SID --message-id ../bad"
+EXP_ERR='included 1 local file'; run_case "supplement attachments use existing composition" local send_success 0 "--send $SID --message-id m1 -f $INCF/a.txt"
 EXP_ERR='"status":"no_live_worker"'; run_case "--stop dead worker → exit 2"          ssh   stop_no_worker 2 "--stop $SID"
 EXP_ERR='"status":"not_found"';      run_case "--stop unknown run → exit 4"          ssh   stop_not_found 4 "--stop nope-run"
 EXP_ERR='"status":"stopped"';        run_case "--stop local path → exit 0"           local stop_default   0 "--stop $SID"

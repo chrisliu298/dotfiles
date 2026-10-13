@@ -10,12 +10,14 @@ if [ -n "${RELAY_PEER:-}" ]; then
 fi
 
 # gpt-pro — caller-side wrapper for ChatGPT Pro Extended via the gpt-pro-relay
-# engine on this Mac (default) or macmini over SSH. One prompt on stdin, one response on stdout.
+# engine on this Mac (default) or macmini over SSH. New requests return answers;
+# --send adds stdin to an active request and returns a delivery receipt.
 #
 # Usage:
 #   gpt-pro [--max-wait <sec>] [--dry-run] < prompt.md   # new run, prompt on stdin
 #   gpt-pro --run-id <id> [--max-wait <sec>]             # reattach / recover a run
 #   gpt-pro --stop <id>                                  # interrupt a run (dequeue or click Stop)
+#   gpt-pro --send <id> [--message-id <id>] < supplement.md
 #   gpt-pro --help | --version
 #
 # It absorbs everything mechanical: run-id generation, local-vs-SSH transport,
@@ -29,7 +31,7 @@ fi
 # timeout:7260000), the Pro-quota cost gate,
 # and prompt composition. Those are the caller's judgment, not the shell's.
 
-VERSION=2
+VERSION=3
 
 # The engine runs on this machine by default. Set GPT_PRO_HOST to an SSH host to
 # relay to a remote engine instead — e.g. GPT_PRO_HOST=macmini (or macmini-fast
@@ -60,6 +62,7 @@ Usage:
   gpt-pro [-f <path>]... [--max-wait <sec>] [--dry-run] < prompt.md   # new run
   gpt-pro --run-id <id> [--max-wait <sec>]                            # reattach / recover a run
   gpt-pro --stop <id>                                                 # interrupt a run
+  gpt-pro --send <id> [--message-id <id>] < supplement.md              # supplement an active run
   gpt-pro --help | --version
 
 Options:
@@ -73,7 +76,12 @@ Options:
                         Collector recovery needs a saved conversation URL; never submits again.
   --stop <id>           Interrupt a run: dequeue if it hasn't sent yet, else click ChatGPT's
                         Stop button on the live turn. Graceful; no response is returned.
-  --max-wait <sec>      Caller-side wait deadline, local or SSH (default 7200 = 120 min); the run keeps going.
+  --send <id>           Send stdin/files to the original conversation of an active run.
+                        Wait for a delivery receipt (default 30s), not the final answer.
+  --message-id <id>     Idempotency key for --send. Retry with the SAME id and content;
+                        omitting it creates a new message. The generated id is printed.
+  --max-wait <sec>      Caller wait deadline (default 7200s for answers, 30s for --send receipts).
+                        The run/message keeps going when the wait expires.
   --dry-run             Resolve files + run-id, report the composed size, then exit. No quota used.
 
 Files are validated, secret-scanned, and capped (5 MB composed) BEFORE submit — no quota
@@ -91,12 +99,14 @@ USAGE
 }
 
 # ---- parse args ----
-RUN_ID=""; REATTACH=false; STOP=false; MAX_WAIT=7200; MAX_WAIT_SET=false; DRY=false
+RUN_ID=""; REATTACH=false; STOP=false; SEND=false; MESSAGE_ID=""; MAX_WAIT=7200; MAX_WAIT_SET=false; DRY=false
 INC_FILES=(); INC_FROMS=(); INC_TREES=(); INC_ALLOW=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --run-id)       [ $# -ge 2 ] || die 2 "--run-id requires a value"; RUN_ID="$2"; REATTACH=true; shift 2 ;;
     --stop)         [ $# -ge 2 ] || die 2 "--stop requires a run-id"; RUN_ID="$2"; STOP=true; shift 2 ;;
+    --send)         [ $# -ge 2 ] || die 2 "--send requires a run-id"; RUN_ID="$2"; SEND=true; shift 2 ;;
+    --message-id)   [ $# -ge 2 ] || die 2 "--message-id requires a value"; MESSAGE_ID="$2"; shift 2 ;;
     --max-wait)     [ $# -ge 2 ] || die 2 "--max-wait requires a value"; MAX_WAIT="$2"; MAX_WAIT_SET=true; shift 2 ;;
     -f|--file)      [ $# -ge 2 ] || die 2 "$1 requires a path"; INC_FILES+=("$2"); shift 2 ;;
     --files-from)   [ $# -ge 2 ] || die 2 "--files-from requires a file"; INC_FROMS+=("$2"); shift 2 ;;
@@ -113,6 +123,15 @@ done
 HAVE_INCLUDES=false
 { [ "${#INC_FILES[@]}" -gt 0 ] || [ "${#INC_FROMS[@]}" -gt 0 ] || [ "${#INC_TREES[@]}" -gt 0 ]; } && HAVE_INCLUDES=true
 if $REATTACH && $HAVE_INCLUDES; then die 2 "-f/--file/--files-from/--include-tree compose a NEW run; they don't apply to --run-id recovery"; fi
+if $SEND; then
+  { $REATTACH || $STOP; } && die 2 "--send, --run-id, and --stop are mutually exclusive"
+  [[ "$RUN_ID" =~ ^[A-Za-z0-9._-]{1,100}$ ]] || die 2 "invalid run_id: '$RUN_ID'"
+  [ -n "$MESSAGE_ID" ] || MESSAGE_ID="msg-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+  [[ "$MESSAGE_ID" =~ ^[A-Za-z0-9._-]{1,100}$ ]] || die 2 "invalid message_id: '$MESSAGE_ID'"
+  $MAX_WAIT_SET || MAX_WAIT=30
+elif [ -n "$MESSAGE_ID" ]; then
+  die 2 "--message-id only applies to --send"
+fi
 if $STOP; then
   $REATTACH && die 2 "--stop and --run-id are mutually exclusive; --stop already names the run to interrupt"
   $HAVE_INCLUDES && die 2 "--stop interrupts an existing run; it takes no files"
@@ -194,7 +213,7 @@ else
   (( bytes > 0 ))          || die 2 "empty prompt: no stdin and no -f/--file includes"
   (( bytes <= MAX_BYTES )) || die 2 "composed prompt too large: ${bytes} bytes (cap ${MAX_BYTES}); trim the file list; no quota burned"
   # Canonical id: ~57 chars, matches [A-Za-z0-9._-]+, well under 100. No descriptive slug.
-  RUN_ID="ask-$(date -u +%Y%m%dT%H%M%SZ)-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+  if ! $SEND; then RUN_ID="ask-$(date -u +%Y%m%dT%H%M%SZ)-$(uuidgen | tr '[:upper:]' '[:lower:]')"; fi
 fi
 
 if $DRY; then
@@ -203,8 +222,32 @@ if $DRY; then
     "$FILECTX" resolve --json "${specargs[@]}" 2>/dev/null \
       | jq -r '.files[] | "  \(.path)  (\(.bytes) bytes)"' 1>&2 || true
   fi
-  echo "gpt-pro: run_id=$RUN_ID transport=$($LOCAL && echo local || echo ssh) mode=$($REATTACH && echo reattach || echo submit)" >&2
+  echo "gpt-pro: run_id=$RUN_ID transport=$($LOCAL && echo local || echo ssh) mode=$($SEND && echo send || { $REATTACH && echo reattach || echo submit; })" >&2
   exit 0
+fi
+if $SEND; then
+  echo "gpt-pro: run_id=$RUN_ID message_id=$MESSAGE_ID transport=$($LOCAL && echo local || echo ssh) mode=send" >&2
+  run_send() {
+    if $LOCAL; then
+      "$RELAY_BIN" send "$RUN_ID" --message-id "$MESSAGE_ID" --timeout "$MAX_WAIT" <"$PROMPT_FILE" >"$OUT" 2>"$ERR"
+    else
+      "${RUN[@]}" "$RELAY_BIN" send "$RUN_ID" --message-id "$MESSAGE_ID" --timeout "$MAX_WAIT" <"$PROMPT_FILE" >"$OUT" 2>"$ERR"
+    fi
+  }
+  set +e; run_send; rc=$?; set -e
+  if (( rc == 127 )) && [ "$RELAY_BIN" != "$RELAY_VENV" ]; then
+    RELAY_BIN="$RELAY_VENV"; set +e; run_send; rc=$?; set -e
+  fi
+  if (( rc == 255 )); then
+    echo "gpt-pro: send SSH dropped; retrying once with the SAME message-id…" >&2
+    set +e; run_send; rc=$?; set -e
+  fi
+  [ -s "$ERR" ] && cat "$ERR" >&2
+  [ -s "$OUT" ] && cat "$OUT" >&2
+  if (( rc == 124 || rc == 255 || rc == 6 )); then
+    echo "gpt-pro: delivery pending/unknown; retry the identical supplement with: gpt-pro --send $RUN_ID --message-id $MESSAGE_ID. A fresh message-id would send it again." >&2
+  fi
+  exit "$rc"
 fi
 echo "gpt-pro: run_id=$RUN_ID transport=$($LOCAL && echo local || echo ssh) mode=$($REATTACH && echo reattach || echo submit)" >&2
 echo "gpt-pro: recover_with=gpt-pro --run-id $RUN_ID" >&2

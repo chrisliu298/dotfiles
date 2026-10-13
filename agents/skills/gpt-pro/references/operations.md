@@ -52,7 +52,7 @@ Stop is **not** resubmit-safe cover for a mistake: a dequeued run spent no quota
 
 ## Concurrency
 
-New runs rotate across the three ChatGPT accounts (1 → 2 → 3, persisted in `~/.gpt-pro/account-router.json`; the run's `account` is in `meta.json`). Each account has its own Chrome process and profile, and up to `GPT_PRO_MAX_PARALLEL` (default **6**, clamped to a ceiling of **10**) runs **per account** share it, each in its own tab. Beyond the cap, that account's additional workers queue on its file-lock semaphore (`~/.gpt-pro/slots/` for account 1, `~/.gpt-pro/account-<N>/slots/` for the others) and wait for a slot to free up (the worker logs `slot_queued`, then `slot_acquired` when it gets in). A queued run can wait **15+ min before it even reaches `sent`** (961 s observed), so total wall-clock = **queue wait + the run itself (5–20 min, up to 1–2 hours)** — don't set `--max-wait` (or the Bash-tool timeout) shorter than that.
+All runs use a single ChatGPT account (account 1; the run's `account` is in `meta.json`). It has its own Chrome process and profile, and up to `GPT_PRO_MAX_PARALLEL` (default **6**, clamped to a ceiling of **10**) runs share it, each in its own tab. Beyond the cap, additional workers queue on its file-lock semaphore (`~/.gpt-pro/slots/`) and wait for a slot to free up (the worker logs `slot_queued`, then `slot_acquired` when it gets in). A queued run can wait **15+ min before it even reaches `sent`** (961 s observed), so total wall-clock = **queue wait + the run itself (5–20 min, up to 1–2 hours)** — don't set `--max-wait` (or the Bash-tool timeout) shorter than that.
 
 **A backgrounded call with no exit code is not a failed call.** Empty output + no completion notification is insufficient to diagnose failure. Never fresh-submit over it — that may double-submit a live run and double-burn quota. Inspect the recent stage trace for progress:
 
@@ -62,7 +62,7 @@ tail -5 ~/.gpt-pro/runs/<run_id>/worker.stderr
 
 With a live worker, `slot_queued` with no `slot_acquired` = queued, waiting its turn, and `sent` with no `finished` = generating. Historical stage lines alone do not prove worker liveness; reattach with `--run-id` when the caller was interrupted so the engine can check and recover collection if needed.
 
-Each account's Chrome closes itself when its last run (or `login`/`doctor`) exits, and the next run on that account relaunches it automatically with the saved profile — an invoking agent never needs to manage it. `gpt-pro-relay close-chrome [--account N|all]` is **operator maintenance only** (it refuses by default if any worker is in flight; `--force` kills anyway) — don't run it as part of normal use or recovery. Raising `GPT_PRO_MAX_PARALLEL` above the default is a knob, not a free upgrade: parallel bursts on one ChatGPT Pro session are an account-side anti-abuse signal. If `network.json` starts showing 429s, captcha redirects, or unexplained `needs_reauth` after parallel use, drop it back to `1`.
+The relay Chrome closes itself when its last run (or `login`/`doctor`) exits, and the next run relaunches it automatically with the saved profile — an invoking agent never needs to manage it. `gpt-pro-relay close-chrome` is **operator maintenance only** (it refuses by default if any worker is in flight; `--force` kills anyway) — don't run it as part of normal use or recovery. Raising `GPT_PRO_MAX_PARALLEL` above the default is a knob, not a free upgrade: parallel bursts on one ChatGPT Pro session are an account-side anti-abuse signal. If `network.json` starts showing 429s, captcha redirects, or unexplained `needs_reauth` after parallel use, drop it back to `1`.
 
 ## If it fails
 
@@ -88,7 +88,7 @@ The **`sent?`** column is the resubmit-safety key: **pre-send** = the failure ha
 
 | reason | exit | sent? | meaning | what to do |
 |---|---|---|---|---|
-| `needs_reauth` | 1 | pre-send | session cookie missing or expired | user runs `gpt-pro-relay login --account <N>` (the run's `account` from `meta.json`) on the engine host, then resubmit |
+| `needs_reauth` | 1 | pre-send | session cookie missing or expired | user runs `gpt-pro-relay login` on the engine host, then resubmit |
 | `model_select_failed` | 1 | pre-send | couldn't get Pro selected in the picker | selectors drifted; surface `run_dir` to the user |
 | `model_drift_before_send` | 1 | pre-send | chip stopped reading `"Pro"` between verify and click — fails closed *before* the send | safe to resubmit (no quota burned); if it repeats, selectors drifted |
 | `instruction_boundary_lost_before_send` | 1 | pre-send | a large paste became attachment-only and the relay could not prove a non-empty ordinary execution instruction before Send | no quota burned; surface `run_dir`. Safe to retry after updating/fixing the relay; repeated failures mean composer selectors or behavior drifted |
