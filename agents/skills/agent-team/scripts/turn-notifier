@@ -1,0 +1,93 @@
+#!/usr/bin/env perl
+# Record a finished review turn in $REVIEW_SUBAGENT_TURN_DIR so `wait` can return.
+# Codex `notify` passes its event JSON as the last argument; a Claude Code Stop
+# hook passes it on stdin. `done` holds the turn count, `last` the final message.
+# Codex also notifies for side threads such as title generation and subagents, so
+# only the thread whose first input is the start prompt (saved as `prompt`) counts.
+# Forked subagents inherit that prompt, so a thread whose rollout names a parent is skipped.
+# Input sent mid-turn is steered into the running Codex turn, which can then end with
+# several final answers; `last` joins them from the rollout, since notify carries only one.
+use strict;
+use warnings;
+use JSON::PP;
+
+my $dir = $ENV{REVIEW_SUBAGENT_TURN_DIR} or exit 0;
+my $raw = @ARGV ? $ARGV[-1] : do { local $/; <STDIN> };
+my $event = eval { decode_json($raw // '') } || {};
+exit 0 if defined $event->{type} && $event->{type} ne 'agent-turn-complete';
+
+sub publish {
+    my ($name, $text) = @_;
+    open my $fh, '>:encoding(UTF-8)', "$dir/$name.tmp" or return;
+    print {$fh} $text;
+    close $fh;
+    rename "$dir/$name.tmp", "$dir/$name";
+}
+
+sub rollouts {
+    my ($thread) = @_;
+    return () unless $thread =~ /^[\w-]+$/;
+    my $home = $ENV{CODEX_HOME} || "$ENV{HOME}/.codex";
+    return glob "'$home/sessions'/*/*/*/rollout-*-$thread.jsonl";
+}
+
+# Final answers recorded since the thread's latest turn started.
+sub turn_answers {
+    my ($thread) = @_;
+    my @answers;
+    for my $rollout (rollouts($thread)) {
+        open my $rf, '<', $rollout or next;
+        while (my $line = <$rf>) {
+            my $item = eval { decode_json($line) } or next;
+            my $payload = $item->{payload} // {};
+            my $type = $payload->{type} // '';
+            if (($item->{type} // '') eq 'event_msg' && $type eq 'task_started') {
+                @answers = ();
+            } elsif (($item->{type} // '') eq 'response_item' && $type eq 'message'
+                && ($payload->{role} // '') eq 'assistant' && ($payload->{phase} // '') eq 'final_answer') {
+                push @answers, join '', map { $_->{text} // '' } @{$payload->{content} // []};
+            }
+        }
+    }
+    return @answers;
+}
+
+my $thread = $event->{'thread-id'};
+if (defined $thread) {
+    if (open my $fh, '<', "$dir/thread") {
+        my $main = <$fh> // '';
+        exit 0 if $main ne $thread;
+    } else {
+        my $prompt = do { local $/; open my $pf, '<:encoding(UTF-8)', "$dir/prompt" or exit 0; <$pf> };
+        my $first = ($event->{'input-messages'} // [])->[0] // '';
+        s/^\s+|\s+$//g for $prompt, $first;
+        exit 0 if $first ne $prompt;
+        for my $rollout (rollouts($thread)) {
+            open my $rf, '<', $rollout or next;
+            my $meta = eval { decode_json(scalar <$rf> // '') } || {};
+            exit 0 if ($meta->{payload} // {})->{parent_thread_id};
+        }
+        publish('thread', $thread);
+    }
+}
+my $message = $event->{'last-assistant-message'} // $event->{last_assistant_message} // '';
+if (defined $thread) {
+    my @answers = turn_answers($thread);
+    my $trim = sub { (my $text = shift) =~ s/^\s+|\s+$//g; $text };
+    # The rollout may not be flushed yet; never drop the message notify reported.
+    push @answers, $message if !@answers || $trim->($answers[-1]) ne $trim->($message);
+    $message = join "\n\n", grep { $trim->($_) ne '' } @answers;
+}
+
+my $count = 0;
+if (open my $fh, '<', "$dir/done") { $count = <$fh> // 0; chomp $count; }
+# Muse reports a turn that ended in an API error as StopFailure; `wait` fails on it.
+if (($event->{hook_event_name} // '') eq 'StopFailure') {
+    my $details = $event->{error_details} // 'unknown error';
+    $details = JSON::PP->new->canonical->encode($details) if ref $details;
+    publish('error', "turn failed: $details\n");
+}
+# Publish the message before the count so `wait` never sees a new count with a stale message.
+publish('last', $message);
+publish('done', ($count =~ /^\d+$/ ? $count : 0) + 1 . "\n");
+exit 0;

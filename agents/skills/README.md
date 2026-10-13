@@ -19,7 +19,7 @@ Host-local third-party skills installed by `npx skills` into `~/.agents/skills/`
 
 A shared/universal `SKILL.md` is written to work across both agents; agent-specific scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., relay and prism are claude-only, so they never reach Codex). Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex.
 
-`claude-subagent` and `gpt-subagent` share session management in `review-subagent-shared/` (not an installable skill). Their entrypoints resolve the source symlink to reach it. Run its regression checks with `uv run --with pytest pytest agents/skills/review-subagent-shared/tests`.
+`agent-team` is auto-installed for Claude and Codex and provides one entrypoint for read-only GPT, Claude, Cursor, Muse and ChatGPT Pro tasks (analysis, research, planning and review), running several backends in parallel. It is self-contained: its session runner and helpers live in `agent-team/scripts/`. Run regression checks with `uv run --with pytest pytest agents/skills/agent-team/tests`.
 
 Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via `./dotfiles.sh skills`.
 
@@ -33,9 +33,8 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 
 | Skill | C | X | Source · Description |
 |-------|:-:|:-:|----------------------|
+| agent-team              | ✓ | ✓ | local — Unified read-only GPT/Claude/Cursor/Muse/Pro tasks; parallel backends, tmux (Pro via gpt-pro relay) |
 | arxiv-reader            | ✓ | ✓ | local — Read arxiv via TeX / HF markdown / HTML fallback |
-| claude-subagent         | — | ✓ | local — Read-only Claude review for Codex; tmux by default, explicit one-shot mode |
-| gpt-subagent            | ✓ | — | local — Read-only GPT review for Claude; tmux by default, explicit one-shot mode |
 | gpt-pro                 | ✓ | ✓ | local — SSH to ChatGPT Pro Extended on macmini (the `gpt-pro` CLI is on PATH from the Codex copy) |
 | pdf                     | — | ✓ | [openai/skills][c-pdf-o] — PDF read/edit (Claude uses the claude.ai-synced `anthropic-skills:pdf`) |
 | push                    | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
@@ -45,7 +44,6 @@ Columns: **C**laude · Code**x**. Legend: ✓ auto-installed · ✱ manual (opt-
 
 | Skill | C | X | Source · Description |
 |-------|:-:|:-:|----------------------|
-| cursor-subagent         | — | ✱ | local — Read-only Cursor review helper for Codex, with optional interactive tmux mode |
 | prism                   | ✱ | — | local — Multi-perspective parallel review (Claude-only caller; dispatches parallax to GPT via relay) |
 | relay                   | ✱ | — | local — Cross-agent relay from Claude to GPT (Claude-only caller) |
 

@@ -37,8 +37,7 @@ LINKS=(
 # source: ./path (local), ~/path (host-local, skipped when absent), or owner/repo[/subpath] (GitHub)
 SKILLS=(
     # The wildcard installs every skill to Claude and Codex; the explicit entries below narrow
-    # that (claude-only: relay, prism, gpt-subagent; codex-only: claude-subagent, cursor-subagent;
-    # recall has a separate build per agent).
+    # that (claude-only: relay, prism; recall has a separate build per agent).
     "*|./agents/skills|claude,codex"
     # Relay: claude-only caller; targets GPT via the script.
     # MANUAL (below); explicit entry keeps it claude-only when enabled (the wildcard would install it everywhere).
@@ -51,10 +50,6 @@ SKILLS=(
     # each subdir as `recall`.
     "recall|./agents/skills/recall/claude|claude"
     "recall|./agents/skills/recall/codex|codex"
-    # claude-subagent: Codex-only caller; installing it into Claude would enable recursive self-dispatch.
-    "claude-subagent|./agents/skills/claude-subagent|codex"
-    "gpt-subagent|./agents/skills/gpt-subagent|claude"
-    "cursor-subagent|./agents/skills/cursor-subagent|codex"
     "pdf|openai/skills/skills/.curated/pdf|codex"
     # Third-party skills installed per host by `npx skills` (e.g. lark-*, merlin-*). Codex reads
     # ~/.agents/skills natively; Claude does not, so link them in (earlier entries win on name clashes).
@@ -63,7 +58,6 @@ SKILLS=(
 
 # Skills not auto-installed (opt-in). Toggle with: ./dotfiles.sh enable/disable <name>.
 MANUAL_SKILLS=(
-    cursor-subagent
     prism
     relay
 )

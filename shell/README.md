@@ -16,7 +16,7 @@ Load order: `.zshenv` → `.zshrc` (sources `.aliases` and `.functions`).
 Codex has one managed user-facing entrypoint: `~/.local/bin/codex`, linked to the
 global npm `@openai/codex` package. `dotfiles.sh` checks it on every run, repairs
 stale standalone links, and installs/upgrades versions below `0.159.2`. This
-directory leads PATH, so shell shortcuts and `gpt-subagent` use the same CLI;
+directory leads PATH, so shell shortcuts and `agent-team`'s GPT backend use the same CLI;
 the review helper also uses the absolute path and checks its version before
 dispatch. Use `xu` or `codex update` for future upgrades. The desktop app keeps
 its own private runtimes, which are managed by the app rather than dotfiles.
