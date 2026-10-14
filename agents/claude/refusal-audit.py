@@ -11,7 +11,9 @@ prints, without echoing any transcript content beyond short command heads:
      instructions attachment containing --marker (a new rule) first loaded;
   2. the refusal rate before vs after that load, with the Poisson probability
      of seeing at most the observed refusals at the old rate;
-  3. one block per refusal: entry of the turn, position in the turn, distance
+  3. stopped replies: the model that was running when the client reported one,
+     and whether the tool calls of the stopped reply still ran;
+  4. one block per refusal: entry of the turn, position in the turn, distance
      from the last compaction, and the tool calls/result sizes just before it.
 
   refusal-audit.py [--project DIR] [--since ISO] [--marker TEXT] [--context N]
@@ -60,6 +62,55 @@ def tool_head(c):
     inp = c.get("input") or {}
     s = inp.get("command") or inp.get("file_path") or inp.get("pattern") or inp.get("to") or ""
     return f"{c['name']}: {' '.join(str(s).split())[:80]}"
+
+
+def stopped_replies(records, since):
+    """The client's own "stopped by a safety classifier" notices: which model was
+    running, and whether the tool calls of the stopped reply still ran.
+
+    Not the same count as the refusal markers: a marker is written only when the
+    session was on the pinned model (so stops on the fallback model are missing
+    from it) and carries direction=retry, so it belongs to a later request than
+    the reply that was cut.
+    """
+    ordered = sorted((r for r in records if r.get("timestamp")), key=lambda r: r["timestamp"])
+    ran = {
+        c.get("tool_use_id")
+        for r in ordered
+        if r.get("type") == "user"
+        for c in (r.get("message") or {}).get("content") or []
+        if isinstance(c, dict) and c.get("type") == "tool_result"
+    }
+    out = []
+    for i, r in enumerate(ordered):
+        if r.get("type") != "user" or (r["timestamp"] or "")[:19] < since[:19]:
+            continue
+        if REFUSAL_NOTICE not in text_of((r.get("message") or {}).get("content")):
+            continue
+        prev = next(
+            (
+                q
+                for q in reversed(ordered[:i])
+                if q.get("type") == "assistant"
+                and ((q.get("message") or {}).get("model") or "").startswith("claude-")
+            ),
+            None,
+        )
+        calls = []
+        if prev:
+            calls = [
+                c
+                for q in ordered
+                if q.get("requestId") and q.get("requestId") == prev.get("requestId")
+                for c in (q.get("message") or {}).get("content") or []
+                if c.get("type") == "tool_use"
+            ]
+        out.append({
+            "t": r["timestamp"][:19],
+            "model": ((prev or {}).get("message") or {}).get("model") or "<unknown>",
+            "calls": [(c["name"], c.get("id") in ran) for c in calls],
+        })
+    return out
 
 
 def poisson_cdf(k, lam):
@@ -119,7 +170,7 @@ def audit(path, args):
                 turn_entry, turn_reqs = entry_kind(content), 0
                 recent.append(("entry", f"{turn_entry} {len(text_of(content))} chars"))
         recent = recent[-50:]
-    return title, rule_at, reqs, flags
+    return title, rule_at, reqs, flags, stopped_replies(records, args.since)
 
 
 def main():
@@ -133,10 +184,10 @@ def main():
 
     rows, total = [], defaultdict(int)
     for path in sorted(glob.glob(os.path.join(args.project, "*.jsonl"))):
-        title, rule_at, reqs, flags = audit(path, args)
-        if not reqs and not flags:
+        title, rule_at, reqs, flags, stops = audit(path, args)
+        if not reqs and not flags and not stops:
             continue
-        rows.append((title, rule_at, reqs, flags))
+        rows.append((title, rule_at, reqs, flags, stops))
         split = rule_at or "9"
         total["req_before"] += sum(t < split for t in reqs)
         total["req_after"] += sum(t >= split for t in reqs)
@@ -145,7 +196,7 @@ def main():
 
     print(f"since {args.since}, model {args.model}" + (f", rule marker {args.marker!r}" if args.marker else ""))
     print(f"{'session':28} {'requests':>8} {'refusals':>8} {'rate':>7}  {'rule loaded':20} last request")
-    for title, rule_at, reqs, flags in sorted(rows, key=lambda x: -len(x[2])):
+    for title, rule_at, reqs, flags, _ in sorted(rows, key=lambda x: -len(x[2])):
         rate = f"{100 * len(flags) / len(reqs):.2f}%" if reqs else "-"
         print(f"{title[:28]:28} {len(reqs):8} {len(flags):8} {rate:>7}  {(rule_at or '-')[:19]:20} {(reqs[-1] if reqs else '-')[:19]}")
 
@@ -156,7 +207,28 @@ def main():
             print(f"\nbefore rule: {fb}/{rb} = {100 * old:.2f}%   after rule: {fa}/{ra} = {100 * fa / ra:.2f}%")
             print(f"P(<= {fa} refusals in {ra} requests at the old rate) = {poisson_cdf(fa, old * ra):.3f}")
 
-    events = sorted(((f, title) for title, _, _, fl in rows for f in fl), key=lambda x: x[0]["t"])
+    stops = [s for _, _, _, _, st in rows for s in st]
+    markers = sum(len(fl) for _, _, _, fl, _ in rows)
+    if stops:
+        by_model = defaultdict(lambda: [0, 0, 0])  # stops, tool calls in them, calls that ran
+        for s in stops:
+            row = by_model[s["model"]]
+            row[0] += 1
+            row[1] += len(s["calls"])
+            row[2] += sum(ok for _, ok in s["calls"])
+        print(f"\nstopped replies: {len(stops)} (refusal markers: {markers}; a marker needs the pinned model)")
+        print(f"{'model running':22} {'stopped':>8} {'tool calls':>11} {'of those ran':>13}")
+        for model, (n, c, ok) in sorted(by_model.items(), key=lambda x: -x[1][0]):
+            print(f"{model:22} {n:8} {c:11} {ok:13}")
+        names = defaultdict(int)
+        for s in stops:
+            for name, ok in s["calls"]:
+                if ok:
+                    names[name] += 1
+        if names:
+            print("executed from a stopped reply: " + ", ".join(f"{n}x {k}" for k, n in sorted(names.items(), key=lambda x: -x[1])))
+
+    events = sorted(((f, title) for title, _, _, fl, _ in rows for f in fl), key=lambda x: x[0]["t"])
     for f, title in events:
         print(f"\n== {f['t'][:19]}Z {title} [{f['cat']}] entry={f['entry']} request #{f['pos'] + 1} of turn, "
               f"{f['since_compact']} requests after compaction {(f['compact_at'] or '-')[:19]}")
