@@ -21,6 +21,10 @@ A thread stays alive server side, so a standby worker needs no running process.
 resume omits it unless asked; --expect-cwd refuses to run a turn against a
 thread that sits somewhere else. --prompt - reads the prompt from stdin.
 The agent's final text goes to stdout, so a caller can redirect it to a file.
+
+The turn lives only as long as this process: if it exits early (a --timeout,
+a kill) the server aborts the turn. So there is no deadline unless asked; run
+it as a background command and the exit is the completion signal.
 """
 
 import argparse
@@ -40,7 +44,7 @@ class AppServer:
     """One `codex app-server` subprocess, after the initialize handshake."""
 
     def __init__(self, timeout):
-        self.deadline = time.time() + timeout
+        self.deadline = time.time() + timeout if timeout else float("inf")
         self.proc = subprocess.Popen(
             [CODEX, "app-server"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, bufsize=1,
@@ -120,7 +124,8 @@ def main():
     p.add_argument("--model")
     p.add_argument("--effort", choices=("low", "medium", "high"))
     p.add_argument("--limit", type=int, default=20)
-    p.add_argument("--timeout", type=float, default=1800)
+    p.add_argument("--timeout", type=float,
+                   help="seconds before giving up; the turn is aborted with it (default: none)")
     args = p.parse_args()
 
     server = AppServer(args.timeout)
