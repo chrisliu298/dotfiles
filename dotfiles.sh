@@ -29,7 +29,8 @@ LINKS=(
     "agents/claude/opus-repin.sh:.claude/opus-repin.sh"
     "agents/claude/refusal-audit.py:.claude/refusal-audit.py"
     "agents/claude/compact-instructions.md:.claude/compact-instructions.md"
-    "agents/claude/bash-syntax-check.sh:.claude/bash-syntax-check.sh
+    "agents/claude/bash-syntax-check.sh:.claude/bash-syntax-check.sh"
+    "agents/claude/codex-rpc.py:.claude/codex-rpc.py"
     "agents/claude/themes/openai-dark.json:.claude/themes/openai-dark.json"
     "agents/claude/themes/openai-light.json:.claude/themes/openai-light.json"
     "agents/AGENTS.md:.codex/AGENTS.md"
