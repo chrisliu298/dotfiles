@@ -33,7 +33,7 @@
   "hooks": {
     "PreCompact": [
       {
-        "hooks": [{ "type": "command", "command": "cat ~/.claude/compact-instructions.md" }]
+        "hooks": [{ "type": "command", "command": "jq -r '[(now|todate), .session_id[0:8], .trigger] | join(\" \")' >> ~/.local/state/precompact.log; cat ~/.claude/compact-instructions.md" }]
       }
     ],
     "SessionStart": [
