@@ -71,29 +71,39 @@ def audit(path, args):
     seen, turn_entry, turn_reqs, since_compact = set(), None, 0, 0
     reqs = []  # timestamps of target-model requests
     flags, recent = [], []  # recent: (kind, detail) of the last tool calls/results
+    records = []
     for line in open(path, errors="ignore"):
         try:
-            r = json.loads(line)
+            records.append(json.loads(line))
         except ValueError:
             continue
-        t = r.get("timestamp") or ""
+    # A refused reply is retracted: its partial messages are neither a request nor prior context.
+    retracted = {u for r in records for u in r.get("retractedMessageUuids") or []}
+    flagged = set()
+    for r in records:
+        if r.get("uuid") in retracted:
+            continue
+        t = (r.get("timestamp") or "")[:19]
         if r.get("type") == "custom-title":
             title = r.get("customTitle") or title
         a = r.get("attachment") or {}
         if args.marker and rule_at is None and a.get("type") == "instructions" and args.marker in json.dumps(a, ensure_ascii=False):
             rule_at = t
-        if t < args.since:
+        if t < args.since[:19]:
             continue
         sub = r.get("subtype") or ""
         m = r.get("message") or {}
         if sub == "compact_boundary":
-            last_compact, since_compact = t, 0
+            last_compact, since_compact, turn_entry, turn_reqs = t, 0, "compaction", 0
         elif sub.startswith("model_refusal"):
+            if r.get("originalModel") != args.model or r.get("requestId") in flagged:
+                continue
+            flagged.add(r.get("requestId"))
             flags.append({
                 "t": t, "cat": r.get("apiRefusalCategory"), "entry": turn_entry, "pos": turn_reqs,
                 "since_compact": since_compact, "compact_at": last_compact, "recent": recent[-args.context:],
             })
-        elif m.get("role") == "assistant" and m.get("id") not in seen:
+        elif m.get("role") == "assistant" and m.get("model") != "<synthetic>" and m.get("id") not in seen:
             seen.add(m.get("id"))
             turn_reqs += 1
             since_compact += 1
