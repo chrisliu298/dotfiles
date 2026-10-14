@@ -31,6 +31,11 @@
     "defaultMode": "bypassPermissions"
   },
   "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [{ "type": "command", "command": "cat ~/.claude/compact-instructions.md" }]
+      }
+    ],
     "SessionStart": [
       {
         "matcher": "compact",

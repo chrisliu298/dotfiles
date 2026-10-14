@@ -28,6 +28,7 @@ LINKS=(
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
     "agents/claude/opus-repin.sh:.claude/opus-repin.sh"
     "agents/claude/refusal-audit.py:.claude/refusal-audit.py"
+    "agents/claude/compact-instructions.md:.claude/compact-instructions.md"
     "agents/claude/themes/openai-dark.json:.claude/themes/openai-dark.json"
     "agents/claude/themes/openai-light.json:.claude/themes/openai-light.json"
     "agents/AGENTS.md:.codex/AGENTS.md"
