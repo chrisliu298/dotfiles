@@ -30,6 +30,19 @@
   "permissions": {
     "defaultMode": "bypassPermissions"
   },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [{ "type": "command", "command": "bash ~/.claude/opus-repin.sh session-start" }]
+      }
+    ],
+    "PreModelSwitch": [
+      {
+        "hooks": [{ "type": "command", "command": "bash ~/.claude/opus-repin.sh pre-switch" }]
+      }
+    ]
+  },
   "deniedMcpServers": [
     { "serverName": "claude.ai Google Drive" },
     { "serverName": "claude.ai Google Calendar" }
