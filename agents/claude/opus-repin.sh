@@ -61,7 +61,8 @@ session-start)
     touch "$STATE/$sid"
     log "compacted on $model after a $TARGET refusal; typing /model in $pane"
     (
-        switched() { grep -a -c 'Set model to `Opus 5.5`' "$transcript"; }
+        # A queued /model may only show up as the next request's model attachment.
+        switched() { grep -a -c -e 'Set model to `Opus 5.5`' -e "\"modelId\":\"$TARGET\"" "$transcript"; }
         for _ in $(seq 120); do
             sleep 1
             pane_is_claude "$pane" || break
@@ -74,7 +75,7 @@ session-start)
                 exit 0
             fi
             tmux send-keys -t "$pane" Enter
-            for _ in $(seq 20); do
+            for _ in $(seq 240); do
                 sleep 0.5
                 [[ $(switched) -gt $before ]] && { log "switched to $TARGET"; exit 0; }
             done
