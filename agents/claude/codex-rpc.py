@@ -10,11 +10,15 @@ turn/completed notification, so a caller gets a real completion signal instead
 of scraping a tmux pane.
 
   codex-rpc.py start  [--prompt TEXT | -] [--cwd DIR] [--model M] [--effort E]
-  codex-rpc.py resume --thread ID [--prompt TEXT | -] [--cwd DIR]
+  codex-rpc.py resume --thread ID [--prompt TEXT | -] [--cwd DIR] [--expect-cwd DIR]
   codex-rpc.py list   [--limit N]
 
-start prints the new thread id on stderr and keeps it resumable; resume
-continues that thread with its context. --prompt - reads the prompt from stdin.
+start prints the new thread id and working directory on stderr and keeps the
+thread resumable; resume continues it with its context. A thread stays alive
+server side, so a standby worker needs no running process. --cwd overrides the
+working directory for this turn and the following ones, so resume omits it
+unless asked; --expect-cwd refuses to run a turn against a thread that sits
+somewhere else. --prompt - reads the prompt from stdin.
 The agent's final text goes to stdout, so a caller can redirect it to a file.
 """
 
@@ -106,7 +110,8 @@ def main():
     p.add_argument("action", choices=("start", "resume", "list"))
     p.add_argument("--thread", help="thread id to resume")
     p.add_argument("--prompt", help="the turn's text, or - to read stdin")
-    p.add_argument("--cwd", default=os.getcwd())
+    p.add_argument("--cwd", help="the thread's working directory; omitted on resume it is preserved")
+    p.add_argument("--expect-cwd", help="abort unless the thread's working directory is this")
     p.add_argument("--model")
     p.add_argument("--effort", choices=("low", "medium", "high"))
     p.add_argument("--limit", type=int, default=20)
@@ -123,14 +128,20 @@ def main():
         if args.action == "resume":
             if not args.thread:
                 raise SystemExit("codex-rpc: resume needs --thread")
-            params = {"threadId": args.thread, "cwd": args.cwd}
+            params = {"threadId": args.thread}
         else:
-            params = {"cwd": args.cwd}
-        for key, value in (("model", args.model), ("effort", args.effort)):
+            params = {"cwd": args.cwd or os.getcwd()}
+        # cwd overrides this turn AND the following ones, so only send it when asked.
+        for key, value in (("cwd", args.cwd), ("model", args.model), ("effort", args.effort)):
             if value:
                 params[key] = value
         thread = server.request(f"thread/{args.action}", params)["thread"]
-        print(f"thread {thread['id']}", file=sys.stderr)
+        cwds = [e.get("cwd") for e in thread.get("environments") or []]
+        print(f"thread {thread['id']} cwd {', '.join(c or '?' for c in cwds) or '?'}", file=sys.stderr)
+        if args.expect_cwd:
+            want = os.path.realpath(os.path.expanduser(args.expect_cwd))
+            if [os.path.realpath(c) for c in cwds if c] != [want]:
+                raise SystemExit(f"codex-rpc: thread is at {cwds}, expected {want}")
 
         prompt = sys.stdin.read() if args.prompt == "-" else args.prompt
         if prompt and prompt.strip():
