@@ -45,9 +45,11 @@ class AppServer:
         )
         self.lines = queue.Queue()
         threading.Thread(target=self._read, daemon=True).start()
+        # No capabilities: what a client declares is negotiated into the shared
+        # background server's feature settings, which other Codex clients then
+        # have to match. Everything used here is in the stable API.
         self.request("initialize", {
             "clientInfo": {"name": "codex-rpc", "title": "codex-rpc", "version": "0.1.0"},
-            "capabilities": {"experimentalApi": True},
         })
         self.notify("initialized")
 
