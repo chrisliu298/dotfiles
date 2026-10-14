@@ -32,7 +32,11 @@ CLAUDE = HOME / ".claude/projects"
 
 
 def owners():
-    """Thread id -> owner, from the ledger's `owner  <uuid>  started` rows."""
+    """Thread id -> (owner, done), from the ledger's `owner  <uuid>  started [done]` rows.
+
+    A standby thread is labelled with its Claude session's name; a temporary one
+    (a review, a discussion round) with `<session> · <purpose>`, and `done` is
+    appended to its row once that work is over."""
     out = {}
     if LEDGER.exists():
         for line in LEDGER.read_text().splitlines():
@@ -40,7 +44,7 @@ def owners():
                 continue
             m = re.search(r"([0-9a-f]{8}-[0-9a-f-]{27,})", line)
             if m:
-                out[m.group(1)] = line[: m.start()].strip() or "-"
+                out[m.group(1)] = (line[: m.start()].strip() or "-", line.split()[-1] == "done")
     return out
 
 
@@ -163,7 +167,7 @@ def collect(args, now):
             continue
         if not args.tui and info["via"] != "codex-rpc":
             continue
-        info["owner"] = known.get(info["id"], "(unrecorded)")
+        info["owner"], info["done"] = known.get(info["id"], ("(unrecorded)", False))
         rows.append(info)
     rows.sort(key=lambda r: (not r["running"], r["last"] or ""), reverse=False)
     rows.sort(key=lambda r: r["running"], reverse=True)
@@ -179,7 +183,7 @@ def as_json(args, now):
             "via": html.escape(r["via"]),
             "model": html.escape(f"{r['model']}/{r['effort']}"),
             "sandbox": html.escape(r["sandbox"]),
-            "state": "running" if r["running"] else "idle",
+            "state": "running" if r["running"] else "done" if r["done"] else "idle",
             "turns": r["turns"], "tokens": f"{r['tokens']:,}",
             "last_turn": f"{r['secs']}s" if r["secs"] is not None else "-",
             "idle": ago(r["last"], now),
@@ -187,7 +191,7 @@ def as_json(args, now):
             "task": html.escape(r["task"] or "-"),
             "cwd": html.escape(r["cwd"].replace(str(HOME), "~")),
         })
-    mine = {r["owner"] for r in helpers}
+    mine = {r["owner"] for r in helpers if " · " not in r["owner"]}  # standby threads only
     waiting = [html.escape(n) for n in sorted(claude_sessions()) if n not in mine]
     scope = ("all working directories" if args.all else
              os.path.realpath(args.cwd).replace(str(HOME), "~"))
@@ -248,7 +252,7 @@ async function tick() {
         '</td><td class="n idle">' + x.idle + '</td></tr>';
     }).join('') || '<tr><td colspan="8" class="none">no helper threads</td></tr>';
     document.getElementById('note').innerHTML = d.without_helper.length
-      ? 'Claude sessions with no helper yet: <b>' + d.without_helper.join(', ') + '</b>'
+      ? 'Claude sessions with no standby helper: <b>' + d.without_helper.join(', ') + '</b>'
       : 'Every active Claude session has a helper.';
   } catch (e) {
     document.getElementById('sub').textContent = 'cannot reach the server';
@@ -311,7 +315,7 @@ def main():
         print("(no helper threads)")
     print(f"\ntotal {data['tokens_total']} tokens")
     if data["without_helper"]:
-        print("no helper yet: " + ", ".join(data["without_helper"]))
+        print("no standby helper: " + ", ".join(data["without_helper"]))
 
 
 if __name__ == "__main__":

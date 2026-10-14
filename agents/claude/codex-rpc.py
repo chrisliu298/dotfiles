@@ -15,7 +15,8 @@ of scraping a tmux pane.
 
 start prints the new thread id and working directory on stderr and keeps the
 thread resumable; --owner records it in the ledger that codex-workers.py
-reads before the first turn runs. resume continues a thread with its context.
+reads before the first turn runs: the Claude session's name for its standby
+thread, `<session> · <purpose>` for a temporary one (a review, a discussion). resume continues a thread with its context.
 A thread stays alive server side, so a standby worker needs no running process.
 --cwd overrides the working directory for this turn and the following ones, so
 resume omits it unless asked; --expect-cwd refuses to run a turn against a
@@ -150,7 +151,7 @@ def main():
         print(f"thread {thread['id']} cwd {', '.join(c or '?' for c in cwds) or '?'}", file=sys.stderr)
         if args.owner and args.action == "start":
             with open(LEDGER, "a") as ledger:
-                ledger.write(f"{args.owner:<28}{thread['id']}  {time.strftime('%Y-%m-%dT%H:%M:%S%z')}\n")
+                ledger.write(f"{args.owner:<26}  {thread['id']}  {time.strftime('%Y-%m-%dT%H:%M:%S%z')}\n")
         if args.expect_cwd:
             want = os.path.realpath(os.path.expanduser(args.expect_cwd))
             if [os.path.realpath(c) for c in cwds if c] != [want]:
