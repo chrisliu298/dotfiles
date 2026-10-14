@@ -44,13 +44,31 @@ def owners():
     return out
 
 
+# A served page refreshes every few seconds; these keep what earlier refreshes
+# parsed, so each one reads only what the transcripts appended since.
+_SCANS, _TITLES = {}, {}
+
+
+def appended(path, offset):
+    """Complete lines written after offset, each with the offset after it."""
+    with path.open("rb") as f:
+        f.seek(offset)
+        for line in f:
+            if not line.endswith(b"\n"):  # half-written; the next refresh gets it
+                return
+            offset += len(line)
+            yield line, offset
+
+
 def scan(path):
     """One thread: identity, settings, activity, cost and what it last ran."""
-    info = {"id": None, "cwd": "?", "via": "?", "model": "?", "effort": "?",
-            "sandbox": "?", "turns": 0, "tokens": 0, "last": None, "running": False,
-            "task": "", "secs": None, "started": None}
-    open_at = None
-    for line in path.open(errors="replace"):
+    offset, info, open_at = _SCANS.get(path, (0, None, None))
+    if info is None or path.stat().st_size < offset:
+        offset, open_at = 0, None
+        info = {"id": None, "cwd": "?", "via": "?", "model": "?", "effort": "?",
+                "sandbox": "?", "turns": 0, "tokens": 0, "last": None, "running": False,
+                "task": "", "secs": None, "started": None}
+    for line, offset in appended(path, offset):
         try:
             r = json.loads(line)
         except ValueError:
@@ -87,6 +105,8 @@ def scan(path):
             # The first turn carries the injected AGENTS.md; keep real prompts.
             if text and not text.startswith("# AGENTS.md"):
                 info["task"] = text[:90]
+    _SCANS[path] = (offset, info, open_at)
+    info = dict(info)
     if info["running"] and open_at:
         info["secs"] = None
     return info
@@ -111,9 +131,11 @@ def claude_sessions(days=1):
             age = now - dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc)
             if age.days >= days:
                 continue
-            name, last = None, None
-            for line in path.open(errors="replace"):
-                if '"custom-title"' not in line and '"agent-name"' not in line:
+            offset, name, last = _TITLES.get(path, (0, None, None))
+            if path.stat().st_size < offset:
+                offset, name, last = 0, None, None
+            for line, offset in appended(path, offset):
+                if b'"custom-title"' not in line and b'"agent-name"' not in line:
                     continue
                 try:
                     r = json.loads(line)
@@ -121,6 +143,7 @@ def claude_sessions(days=1):
                     continue
                 name = r.get("customTitle") or r.get("agentName") or name
                 last = r.get("timestamp") or last
+            _TITLES[path] = (offset, name, last)
             if name:
                 names[name] = max(names.get(name, ""), last or "")
     return names
@@ -148,8 +171,8 @@ def collect(args, now):
 
 
 def as_json(args, now):
-    rows, total = [], 0
-    for r in collect(args, now):
+    rows, total, helpers = [], 0, collect(args, now)
+    for r in helpers:
         total += r["tokens"]
         rows.append({
             "owner": html.escape(r["owner"]), "thread": r["id"],
@@ -164,7 +187,7 @@ def as_json(args, now):
             "task": html.escape(r["task"] or "-"),
             "cwd": html.escape(r["cwd"].replace(str(HOME), "~")),
         })
-    mine = {r["owner"] for r in collect(args, now)}
+    mine = {r["owner"] for r in helpers}
     waiting = [html.escape(n) for n in sorted(claude_sessions()) if n not in mine]
     scope = ("all working directories" if args.all else
              os.path.realpath(args.cwd).replace(str(HOME), "~"))
@@ -255,6 +278,7 @@ def serve(args, port):
         def log_message(self, *a):
             pass
 
+    as_json(args, dt.datetime.now(dt.timezone.utc))  # parse everything once, before the first visitor
     print(f"http://127.0.0.1:{port}/")
     HTTPServer(("127.0.0.1", port), Handler).serve_forever()
 
