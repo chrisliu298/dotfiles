@@ -29,6 +29,7 @@ LINKS=(
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
     "agents/claude/opus-repin.sh:.claude/opus-repin.sh"
     "agents/claude/refusal-audit.py:.claude/refusal-audit.py"
+    "agents/claude/compact-instructions.md:.claude/compact-instructions.md"
     "agents/claude/bash-syntax-check.sh:.claude/bash-syntax-check.sh"
     "agents/claude/codex-rpc.py:.claude/codex-rpc.py"
     "agents/claude/codex-workers.py:.claude/codex-workers.py"
