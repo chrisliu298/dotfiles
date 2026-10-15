@@ -61,8 +61,9 @@ session-start)
     touch "$STATE/$sid"
     log "compacted on $model after a $TARGET refusal; typing /model in $pane"
     (
-        # A queued /model may only show up as the next request's model attachment.
-        switched() { grep -a -c -e 'Set model to `Opus 5.5`' -e "\"modelId\":\"$TARGET\"" "$transcript"; }
+        # A queued /model may only show up as the next request's model attachment,
+        # or, when that first request is refused at once, as the refusal record.
+        switched() { grep -a -c -e 'Set model to `Opus 5.5`' -e "\"modelId\":\"$TARGET\"" -e "\"originalModel\":\"$TARGET\"" "$transcript"; }
         for _ in $(seq 120); do
             sleep 1
             pane_is_claude "$pane" || break
