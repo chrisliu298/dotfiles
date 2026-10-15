@@ -36,11 +36,6 @@
         "hooks": [{ "type": "command", "command": "bash ~/.claude/bash-syntax-check.sh" }]
       }
     ],
-    "PreCompact": [
-      {
-        "hooks": [{ "type": "command", "command": "jq -r '[(now|todate), .session_id[0:8], .trigger] | join(\" \")' >> ~/.local/state/precompact.log; cat ~/.claude/compact-instructions.md" }]
-      }
-    ],
     "SessionStart": [
       {
         "matcher": "compact",
