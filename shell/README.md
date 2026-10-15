@@ -107,6 +107,32 @@ command above, and the shared-resource links in `~/.codex-traex`. To verify actu
 instruction and skill loading, inspect the new rollout's `user_instructions`
 and `environment_context` in `~/.codex-traex/sessions/` after a completed turn.
 
+### Claude Desktop accounts
+
+Claude Desktop keeps its own login, so `cswap` does not change the account its
+Code tab sessions use. `cdswap` (alias `csd`) swaps only Desktop's login: the
+`Cookies` database plus the `oauth:*` and `lastKnownAccountUuid` keys in
+`config.json`. Settings, the sidebar, session history, and worktrees are left
+alone, and nothing is decrypted or sent over the network. Profiles live in
+`~/.local/share/cdswap/` (mode 700).
+
+```sh
+cdswap save you@example.com   # once per account, while signed in; no restart
+cdswap use you@example.com    # quit Desktop, checkpoint current, swap, relaunch
+cdswap new                    # checkpoint current, sign out locally, relaunch to sign in
+cdswap list                   # * marks the signed-in account
+csall you@example.com         # cdswap use + cswap switch with the same email
+```
+
+Switching quits Claude Desktop, which stops every Claude Code session running
+inside it; it asks first unless given `-y`, and never force-kills the app.
+Run `use`/`new`/`csall` from a terminal outside Desktop, and run long sessions from
+the CLI in tmux if they must survive a switch. `use` refuses to leave a
+signed-in account that was never saved; an interrupted switch is completed on
+the next run. To add an account, run `cdswap new`, sign in, then `cdswap save`;
+avoid Desktop's own Sign out, which may revoke the saved session server-side.
+Verify with `shell/test-cdswap.sh`.
+
 ## Plugins (Zinit)
 
 `zsh-syntax-highlighting`, `zsh-completions`, `zsh-autosuggestions`, `fzf` + `fzf-tab`, Oh My Zsh snippets (`git`, `sudo`, `command-not-found`). Modern Unix tools (`fd`, `rg`, `zoxide`, `delta`) installed via Zinit from GitHub releases.
@@ -118,7 +144,7 @@ See `.aliases` and `.functions` for the full list. Highlights:
 - **Shell**: `ez` (reload), `o` (open), `b` (btop), `theme [light|dark|toggle|status]` / `theme --all <mode>` (OpenAI light/dark across terminal tools and macOS appearance)
 - **Tmux**: `t`, `ta`, `tl`, `tn`, `tk`, `to` (new/attach to `$PWD` name), `tka` (kill all)
 - **Python/uv**: `sv` (source venv), `us` (sync), `ua` (add)
-- **Claude Code**: `c` (auto-accept), `cc` (continue), `cr` (resume), `cpu` (/push), `scout-papers-scholar-inbox-all` (sequentially scout five awesome lists with Opus at high effort, showing final messages only)
+- **Claude Code**: `c` (auto-accept), `cc` (continue), `cr` (resume), `cpu` (/push), `csd` / `csall` (Claude Desktop account / switch CLI + Desktop together), `scout-papers-scholar-inbox-all` (sequentially scout five awesome lists with Opus at high effort, showing final messages only)
 - **Codex**: `x` / `ct` (official / TraeX), `xc` / `ctc` (resume --last), `xr` / `ctr` (resume picker or session ID), `xu` / `ctu` (update shared CLI), `cal`/`cas`/`caw`/`caa` (codex-auth list/status/switch/login)
 - **Muse Code**: `m` (--yolo), `mc` (resume --last), `mr` (resume picker, or session name/ID); no `mu` — Muse has no update subcommand
 - **Homebrew**: `bi`/`bu`/`bic` (install/uninstall/cask), `bupd`/`bupg` (update/upgrade)
