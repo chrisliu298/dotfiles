@@ -1,14 +1,8 @@
-Write the summary as the minimal state needed to resume the work correctly:
+Summarize the state needed to continue the task:
 
-- the current goal, the next step, pending tasks, and the user's authorization scope and prohibitions;
-- decisions already made, each with a short reason that can be checked;
-- the parameters, data contracts, metric definitions and versions the next steps must keep, one short line
-  each, tied to a commit, SHA or snapshot where there is one;
-- identifiers: job and run IDs, commits, SHAs, MR numbers, table names, file and document paths;
-- the key numbers the next decisions depend on (current best scores, thresholds, fresh results);
-- any operation whose outcome is not yet verified (a submitted job, a write, a deletion, a remote command),
-  any change of the active model, and the checks to run before continuing;
-- open questions and anything waiting on the user.
+- goal, next step, pending work, and the user's instructions and authorization;
+- confirmed decisions, required parameters, versions, identifiers, and artifact paths;
+- unverified actions and checks needed before retrying them; the current model if relevant.
 
-Point to code, configs, diffs and logs that can be re-read from a fixed version instead of copying large
-blocks of them. Do not reconstruct earlier step-by-step reasoning; refer to a record file for any history.
+Keep concise reasons for decisions and point to large artifacts rather than copying them.
+Carry forward confirmed constraints, not new restrictions inferred from incidental events.
