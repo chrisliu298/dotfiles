@@ -33,7 +33,7 @@ pane_is_claude() {
     [[ "$(tmux display -p -t "$1" '#{pane_current_command}' 2>/dev/null)" =~ ^(claude|[0-9]+\.[0-9]+\.[0-9]+)$ ]]
 }
 
-fresh() { [[ -f "$1" && $(($(date +%s) - $(stat -f %m "$1"))) -lt $TTL ]]; }
+fresh() { [[ -f "$1" && $(($(date +%s) - $(/usr/bin/stat -f %m "$1"))) -lt $TTL ]]; }
 
 case "${1:-}" in
 pre-switch)
