@@ -90,7 +90,7 @@ if (action === 'config') {
       if (expected && !received(prefix, expected)) continue;
       seen.add(key);
       if (record.status !== 'success' || replies.length === 0) {
-        publish('error', `Cursor turn ${record.status || 'ended without status'}${record.error ? `: ${record.error}` : ''}${replies.length ? '' : ' without a complete response'}`);
+        publish('error', `R turn ${record.status || 'ended without status'}${record.error ? `: ${record.error}` : ''}${replies.length ? '' : ' without a complete response'}`);
         // Text written before the failure may be complete, but nothing proves it.
         if (replies.length) publish('partial', replies.join('\n\n'));
         else rmSync(join(dir, 'partial'), { force: true });
@@ -107,7 +107,7 @@ if (action === 'config') {
     }
   }
   const timer = setInterval(() => {
-    try { poll(); } catch (error) { publish('error', `Cursor transcript tracker failed: ${error.message}`); }
+    try { poll(); } catch (error) { publish('error', `R transcript tracker failed: ${error.message}`); }
   }, 100);
   for (const signal of ['SIGTERM', 'SIGHUP', 'SIGINT']) process.on(signal, () => { clearInterval(timer); process.exit(0); });
 } else {

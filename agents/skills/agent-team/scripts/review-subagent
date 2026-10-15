@@ -6,16 +6,16 @@ setopt pipe_fail
 harness="$1"
 shift
 case "$harness" in
-    claude) model=opus ;;
-    gpt) model=gpt-6.1-sol ;;
-    cursor) model=claude-opus-5-5-high ;;
-    muse) model=muse-wonder-full-1.0 ;;
+    claude) model=opus code=C ;;
+    gpt) model=gpt-6.1-sol code=G ;;
+    cursor) model=claude-opus-5-5-high code=R ;;
+    muse) model=muse-wonder-full-1.0 code=M ;;
     *) print -u2 'unknown review harness'; exit 2 ;;
 esac
-# Diagnostics name the public entrypoint; temp files carry the backend.
+# Diagnostics name the public entrypoint; sessions and temp files carry the codename.
 helper=agent-team
-tmp="agent-team-${harness}"
-prefix="${harness}-review-"
+tmp="agent-team-${code}"
+prefix="${code}-review-"
 runner="${0:A}"
 codex_cli="$HOME/.local/bin/codex"
 notifier="${runner:h}/turn-notifier"
@@ -335,7 +335,7 @@ case "$action" in
                 [[ -z "$conversation" || "$conversation" == *[^a-zA-Z0-9_-]* ]] || \
                 ! print -r -- "$conversation" > "$turn_dir/conversation" || \
                 ! node "${runner:h}/cursor-session.mjs" paths "$turn_dir" "$PWD" "$conversation"; then
-                print -u2 "$helper: could not prepare the native Cursor conversation"
+                print -u2 "$helper: could not prepare the native R conversation"
                 command rm -rf -- "$turn_dir" "$scratch_dir"
                 exit 1
             fi
@@ -343,7 +343,7 @@ case "$action" in
         elif [[ "$harness" == muse ]]; then
             harness_env=(-e "MUSE_BIN=$muse_cli")
         fi
-        if ! pane="$(tmux new-session -d -x 160 -y 48 -P -F '#{pane_id}' -s "$session" -c "$PWD" \
+        if ! pane="$(tmux new-session -d -x 160 -y 48 -P -F '#{pane_id}' -s "$session" -n "$code" -c "$PWD" \
             -e CODEX_REVIEW_SUBAGENT_ACTIVE=1 -e REVIEW_SUBAGENT_TMUX_RUNNER=1 \
             -e REVIEW_SUBAGENT_TURN_DIR="$turn_dir" \
             "${harness_env[@]}" \
@@ -573,6 +573,11 @@ case "$action" in
                 turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir)" || exit 1
                 if [[ "$harness" == muse && -s "$turn_dir/error" ]]; then
                     print -u2 -r -- "$helper: $(<"$turn_dir/error")"
+                    # A transport error can end a turn whose answer was already fully written.
+                    if [[ -r "$turn_dir/last" && -n "$(<"$turn_dir/last")" ]]; then
+                        print -u2 "$helper: unverified text written before the failure:"
+                        print -u2 -r -- "$(<"$turn_dir/last")"
+                    fi
                     exit 1
                 fi
                 reply=''
@@ -588,8 +593,7 @@ case "$action" in
             stop)
                 turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir 2>/dev/null)"
                 tmux kill-session -t "=$session" || exit
-                # Sessions started before the legacy entrypoints were removed use the old prefix.
-                if [[ "$turn_dir" == */(${tmp}|${harness}-subagent)-turns.* ]]; then
+                if [[ "$turn_dir" == */${tmp}-turns.* ]]; then
                     command rm -rf -- "$turn_dir"
                 fi
                 ;;

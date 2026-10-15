@@ -1,6 +1,7 @@
 """Routing, parallel startup, partial failures, and output preservation."""
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -40,7 +41,7 @@ if action == 'start':
             print('startup was serialized', file=sys.stderr)
             sys.exit(9)
         time.sleep(.02)
-    print(backend + '-review-' + str(os.getpid()))
+    print({{'claude': 'C', 'gpt': 'G', 'cursor': 'R', 'muse': 'M'}}[backend] + '-review-' + str(os.getpid()))
 elif action == '--once':
     if os.environ.get('HANG_BACKEND') == backend:
         import signal, subprocess
@@ -50,6 +51,8 @@ elif action == '--once':
         (root / 'descendant.pid').write_text(str(descendant.pid))
         while True: time.sleep(1)
     if os.environ.get('EMPTY_BACKEND') == backend: sys.exit(0)
+    # Real CLIs print banners naming themselves even on success.
+    print('banner: ' + backend + ' codex', file=sys.stderr)
     # Split multi-byte characters across writes, like a streamed CLI reply.
     for byte in '结论🙂'.encode('utf8'):
         os.write(1, bytes([byte]))
@@ -58,6 +61,8 @@ elif action == '--once':
 elif action == 'wait':
     if os.environ.get('EMPTY_BACKEND') == backend: sys.exit(0)
     print('ANSWER:' + backend + ':' + args[0])
+elif action == 'status':
+    print('agent-team: latest message delivery failed; wait reports that failure', file=sys.stderr)
 elif action == 'send' and backend == 'cursor':
     print('delivery unconfirmed; do not resend automatically', file=sys.stderr)
     sys.exit(124)
@@ -88,12 +93,20 @@ if '--send' in args:
     if os.environ.get('PRO_STATE') == 'finished':
         print('{{"event":"send_rejected","reason":"run_finished"}}', file=sys.stderr)
         sys.exit(2)
+    if os.environ.get('PRO_STATE') == 'pending':
+        print('gpt-pro: delivery pending/unknown; retry the identical supplement with: gpt-pro --send '
+              + value('--send') + ' --message-id ' + value('--message-id') + '. A fresh message-id would send it again.',
+              file=sys.stderr)
+        sys.exit(255)
     if os.environ.get('PRO_STATE') == 'queued':
         print('{{"status":"error","reason":"run_not_ready"}}', file=sys.stderr)
         sys.exit(2)
     sys.exit(0)
 if '--run-id' in args:
-    if os.environ.get('PRO_STATE') == 'running': sys.exit(124)
+    if os.environ.get('PRO_STATE') == 'running':
+        print('gpt-pro: timed out after 8s, run still pending — recover with: gpt-pro --run-id ' + value('--run-id'),
+              file=sys.stderr)
+        sys.exit(124)
     print('PRO:' + value('--run-id'))
     sys.exit(0)
 print('gpt-pro: run_id=' + run_id + ' transport=ssh mode=submit', file=sys.stderr)
@@ -121,12 +134,12 @@ print('PRO ONCE')
 
 def test_backends_start_concurrently_with_same_assignment(unified):
     run, root = unified
-    outcome = run('start', '--backend', 'claude', '--backend', 'gpt', '--backend', 'muse',
+    outcome = run('start', '--backend', 'C', '--backend', 'G', '--backend', 'M',
                   extra_env={'EXPECTED_STARTS': '3'})
     assert outcome.returncode == 0, outcome.stderr
     manifest = json.loads(outcome.stdout)
     assert manifest['errors'] == []
-    assert [item['backend'] for item in manifest['sessions']] == ['claude', 'gpt', 'muse']
+    assert [item['backend'] for item in manifest['sessions']] == ['C', 'G', 'M']
     assert all('instance' not in item for item in manifest['sessions'])
     handles = [item['session'] for item in manifest['sessions']]
     assert len(set(handles)) == 3
@@ -142,22 +155,22 @@ def test_backends_start_concurrently_with_same_assignment(unified):
 def test_unavailable_backend_preserves_successful_handles_without_fallback(unified):
     run, root = unified
     (root / '.local/bin/codex').unlink()
-    outcome = run('start', '--backend', 'claude', '--backend', 'gpt')
+    outcome = run('start', '--backend', 'C', '--backend', 'G')
     assert outcome.returncode == 1
     manifest = json.loads(outcome.stdout)
-    assert len(manifest['sessions']) == 1 and manifest['sessions'][0]['backend'] == 'claude'
-    assert manifest['errors'][0]['backend'] == 'gpt'
+    assert len(manifest['sessions']) == 1 and manifest['sessions'][0]['backend'] == 'C'
+    assert manifest['errors'][0]['backend'] == 'G'
     calls = [json.loads(line) for line in (root / 'calls.jsonl').read_text().splitlines()]
     assert [item['backend'] for item in calls] == ['claude']
 
 
 def test_handle_survives_nonzero_exit_after_session_was_created(unified):
     run, _ = unified
-    outcome = run('start', '--backend', 'claude', '--backend', 'gpt', extra_env={'FAIL_BACKEND': 'gpt'})
+    outcome = run('start', '--backend', 'C', '--backend', 'G', extra_env={'FAIL_BACKEND': 'gpt'})
     assert outcome.returncode == 1
     manifest = json.loads(outcome.stdout)
-    assert [item['backend'] for item in manifest['sessions']] == ['claude', 'gpt']
-    assert manifest['errors'][0]['backend'] == 'gpt'
+    assert [item['backend'] for item in manifest['sessions']] == ['C', 'G']
+    assert manifest['errors'][0]['backend'] == 'G'
     assert manifest['errors'][0]['exit_code'] == 7
 
 
@@ -165,21 +178,21 @@ def test_all_backends_use_one_skill(unified):
     run, _ = unified
     backends = run('backends')
     assert all(item['available'] for item in json.loads(backends.stdout)['backends'])
-    outcome = run('--once', '--backend', 'claude', '--backend', 'gpt', '--backend', 'cursor', '--backend', 'muse',
-                  '--backend', 'pro')
+    outcome = run('--once', '--backend', 'C', '--backend', 'G', '--backend', 'R', '--backend', 'M',
+                  '--backend', 'P')
     assert outcome.returncode == 0, outcome.stderr
     replies = json.loads(outcome.stdout)['results']
-    assert [item['backend'] for item in replies] == ['claude', 'gpt', 'cursor', 'muse', 'pro']
+    assert [item['backend'] for item in replies] == ['C', 'G', 'R', 'M', 'P']
     assert all(item['result'] == '结论🙂' for item in replies[:4]) and replies[4]['result'] == 'PRO ONCE'
 
 
 def test_batch_retains_each_failure_and_cursor_delivery_uncertainty(unified):
     run, _ = unified
-    outcome = run('--once', '--backend', 'claude', '--backend', 'gpt', extra_env={'FAIL_BACKEND': 'gpt'})
+    outcome = run('--once', '--backend', 'C', '--backend', 'G', extra_env={'FAIL_BACKEND': 'gpt'})
     assert outcome.returncode == 1
     replies = json.loads(outcome.stdout)['results']
     assert replies[0]['exit_code'] == 0 and replies[1]['exit_code'] == 7
-    sent = run('send', 'cursor-review-old', 'claude-review-old')
+    sent = run('send', 'R-review-old', 'C-review-old')
     assert sent.returncode == 124
     replies = json.loads(sent.stdout)['results']
     assert replies[0]['delivery'] == 'unconfirmed' and replies[1]['delivery'] == 'submitted'
@@ -189,8 +202,8 @@ def test_per_instance_prompt_files_start_distinct_assignments_in_one_call(unifie
     run, root = unified
     (root / 'correctness.md').write_text('看正确性')
     (root / 'tests.md').write_text('看测试')
-    outcome = run('start', '--backend', f'claude={root / "correctness.md"}', '--backend', 'gpt',
-                  '--backend', f'cursor={root / "tests.md"}', prompt='共享任务', extra_env={'EXPECTED_STARTS': '3'})
+    outcome = run('start', '--backend', f'C={root / "correctness.md"}', '--backend', 'G',
+                  '--backend', f'R={root / "tests.md"}', prompt='共享任务', extra_env={'EXPECTED_STARTS': '3'})
     assert outcome.returncode == 0, outcome.stderr
     calls = {call['backend']: call['prompt'] for call in
              map(json.loads, (root / 'calls.jsonl').read_text().splitlines())}
@@ -200,13 +213,13 @@ def test_per_instance_prompt_files_start_distinct_assignments_in_one_call(unifie
 def test_prompt_files_make_stdin_optional(unified):
     run, root = unified
     (root / 'a.md').write_text('任务甲')
-    outcome = subprocess.run([run.entry, '--once', '--backend', f'gpt={root / "a.md"}'], stdin=subprocess.DEVNULL,
+    outcome = subprocess.run([run.entry, '--once', '--backend', f'G={root / "a.md"}'], stdin=subprocess.DEVNULL,
                              capture_output=True, text=True, env=run.env, timeout=12)
     assert outcome.returncode == 0, outcome.stderr
     assert json.loads((root / 'calls.jsonl').read_text())['prompt'] == '任务甲'
 
 
-@pytest.mark.parametrize('spec', ['gpt=missing.md', 'gpt='])
+@pytest.mark.parametrize('spec', ['G=missing.md', 'G='])
 def test_unreadable_prompt_file_dispatches_nothing(unified, spec):
     run, root = unified
     assert run('start', '--backend', spec).returncode == 2
@@ -214,7 +227,7 @@ def test_unreadable_prompt_file_dispatches_nothing(unified, spec):
 
 
 @pytest.mark.parametrize('action', ['start', '--once'])
-@pytest.mark.parametrize('backends', [('claude', 'claude'), ('gpt', 'muse', 'gpt=prompt.md')])
+@pytest.mark.parametrize('backends', [('C', 'C'), ('G', 'M', 'G=prompt.md')])
 def test_each_backend_runs_at_most_once_per_call(unified, action, backends):
     run, root = unified
     (root / 'prompt.md').write_text('x')
@@ -224,9 +237,9 @@ def test_each_backend_runs_at_most_once_per_call(unified, action, backends):
     assert not (root / 'calls.jsonl').exists()
 
 
-@pytest.mark.parametrize('options', [[], ['--backend', 'unknown'], ['--backend', 'gpt', '--effort', 'high'],
-                                   ['--backend', 'gpt', '--model', 'gpt-6.1-sol'],
-                                   ['--backend', 'cursor', '--mode', 'ask'], ['--network', '--backend', 'gpt']])
+@pytest.mark.parametrize('options', [[], ['--backend', 'unknown'], ['--backend', 'claude'], ['--backend', 'G', '--effort', 'high'],
+                                   ['--backend', 'G', '--model', 'gpt-6.1-sol'],
+                                   ['--backend', 'R', '--mode', 'ask'], ['--network', '--backend', 'G']])
 def test_invalid_selection_dispatches_nothing(unified, options):
     run, root = unified
     assert run('start', *options).returncode == 2
@@ -235,13 +248,13 @@ def test_invalid_selection_dispatches_nothing(unified, options):
 
 def test_recursion_and_duplicate_target_guard(unified):
     run, root = unified
-    assert run('start', '--backend', 'claude', extra_env={'CODEX_REVIEW_SUBAGENT_ACTIVE': '1'}).returncode == 126
-    assert run('send', 'gpt-review-old', 'gpt-review-old').returncode == 2
+    assert run('start', '--backend', 'C', extra_env={'CODEX_REVIEW_SUBAGENT_ACTIVE': '1'}).returncode == 126
+    assert run('send', 'G-review-old', 'G-review-old').returncode == 2
     assert not (root / 'calls.jsonl').exists()
 
 
-@pytest.mark.parametrize('args', [('start', '--backend', 'claude'),
-                                 ('--once', '--backend', 'claude'), ('send', 'claude-review-old')])
+@pytest.mark.parametrize('args', [('start', '--backend', 'C'),
+                                 ('--once', '--backend', 'C'), ('send', 'C-review-old')])
 def test_slow_pipe_reads_complete_prompt(unified, args):
     run, root = unified
     proc = subprocess.Popen([run.entry, *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -264,8 +277,8 @@ def test_slow_pipe_reads_complete_prompt(unified, args):
 @pytest.mark.parametrize('action', ['--once', 'wait'])
 def test_empty_reply_is_failure_in_batch(unified, action):
     run, _ = unified
-    args = (['--backend', 'claude', '--backend', 'gpt'] if action == '--once' else
-            ['claude-review-old', 'gpt-review-old'])
+    args = (['--backend', 'C', '--backend', 'G'] if action == '--once' else
+            ['C-review-old', 'G-review-old'])
     reply = run(action, *args, extra_env={'EMPTY_BACKEND': 'gpt'})
     assert reply.returncode == 1
     results = json.loads(reply.stdout)['results']
@@ -275,7 +288,7 @@ def test_empty_reply_is_failure_in_batch(unified, action):
 
 def test_once_retains_completed_result_and_times_out_entire_child_tree(unified):
     run, root = unified
-    proc = subprocess.Popen([run.entry, '--once', '--backend', 'claude', '--backend', 'gpt', '--timeout', '1'],
+    proc = subprocess.Popen([run.entry, '--once', '--backend', 'C', '--backend', 'G', '--timeout', '1'],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, env=run.env | {'HANG_BACKEND': 'gpt'})
     proc.stdin.write('任务')
@@ -284,7 +297,7 @@ def test_once_retains_completed_result_and_times_out_entire_child_tree(unified):
     try:
         # This record must arrive while GPT is still running, before the final manifest.
         event = json.loads(proc.stderr.readline())
-        assert event['event'] == 'completed' and event['backend'] == 'claude'
+        assert event['event'] == 'completed' and event['backend'] == 'C'
         assert event['result'] == '结论🙂' and not event['is_error']
         assert proc.poll() is None
         stdout, stderr = proc.communicate(timeout=6)
@@ -313,7 +326,7 @@ def test_once_retains_completed_result_and_times_out_entire_child_tree(unified):
 @pytest.mark.parametrize('termination, code', [(signal.SIGINT, 130), (signal.SIGTERM, 143)])
 def test_once_interruption_preserves_completed_reply_and_stops_children(unified, termination, code):
     run, root = unified
-    proc = subprocess.Popen([run.entry, '--once', '--backend', 'claude', '--backend', 'gpt', '--timeout', '10'],
+    proc = subprocess.Popen([run.entry, '--once', '--backend', 'C', '--backend', 'G', '--timeout', '10'],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, env=run.env | {'HANG_BACKEND': 'gpt'})
     proc.stdin.write('任务')
@@ -321,7 +334,7 @@ def test_once_interruption_preserves_completed_reply_and_stops_children(unified,
     proc.stdin = None
     try:
         event = json.loads(proc.stderr.readline())
-        assert event['backend'] == 'claude' and event['result'] == '结论🙂'
+        assert event['backend'] == 'C' and event['result'] == '结论🙂'
         deadline = time.monotonic() + 2
         while not (root / 'descendant.pid').exists() and time.monotonic() < deadline:
             time.sleep(.02)
@@ -350,7 +363,7 @@ def test_once_interruption_preserves_completed_reply_and_stops_children(unified,
 
 def test_once_can_be_cancelled_while_waiting_for_stdin(unified):
     run, root = unified
-    proc = subprocess.Popen([run.entry, '--once', '--backend', 'claude'], stdin=subprocess.PIPE,
+    proc = subprocess.Popen([run.entry, '--once', '--backend', 'C'], stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=run.env)
     try:
         time.sleep(1)
@@ -374,11 +387,11 @@ def test_pro_runs_without_tmux_and_gets_attached_files(unified):
     run, root = unified
     (root / 'bin/tmux').unlink()
     (root / 'notes.md').write_text('x')
-    outcome = subprocess.run([run.entry, '--backend', 'pro', '--file', 'notes.md'], input='审查',
+    outcome = subprocess.run([run.entry, '--backend', 'P', '--file', 'notes.md'], input='审查',
                              capture_output=True, text=True, env=run.env, cwd=root, timeout=12)
     assert outcome.returncode == 0, outcome.stderr
     session = outcome.stdout.strip()
-    assert session == 'pro-review-ask-20261013T000000Z-0f0e0d0c-1111-2222-3333-444455556666'
+    assert session == 'P-review-ask-20261013T000000Z-0f0e0d0c-1111-2222-3333-444455556666'
     assert pro_calls(root) == [{'args': ['--max-wait', '1', '-f', str(root / 'notes.md')], 'stdin': '审查'}]
     assert run('list').stdout.split() == [session]
     assert run('stop', session).returncode == 0
@@ -388,7 +401,7 @@ def test_pro_runs_without_tmux_and_gets_attached_files(unified):
 def test_file_is_listed_for_tmux_backends_and_inlined_by_pro(unified):
     run, root = unified
     (root / 'a.py').write_text('x')
-    outcome = run('start', '--backend', 'claude', '--backend', 'pro', '--file', str(root / 'a.py'), prompt='审查\n')
+    outcome = run('start', '--backend', 'C', '--backend', 'P', '--file', str(root / 'a.py'), prompt='审查\n')
     assert outcome.returncode == 0, outcome.stderr
     claude = json.loads((root / 'calls.jsonl').read_text())
     assert claude['prompt'] == f'审查\n\nRead these files:\n- {root / "a.py"}\n'
@@ -398,16 +411,16 @@ def test_file_is_listed_for_tmux_backends_and_inlined_by_pro(unified):
 @pytest.mark.parametrize('path', ['missing.py', '.'])
 def test_unreadable_file_dispatches_nothing(unified, path):
     run, root = unified
-    assert run('start', '--backend', 'pro', '--file', path).returncode == 2
+    assert run('start', '--backend', 'P', '--file', path).returncode == 2
     assert not (root / 'pro.jsonl').exists()
 
 
 def test_pro_waits_two_hours_by_default(unified):
     run, root = unified
-    session = 'pro-review-ask-1'
+    session = 'P-review-ask-1'
     assert run('wait', session).stdout == 'PRO:ask-1\n'
     assert run('wait', session, '--timeout', '8').returncode == 0
-    assert run('--once', '--backend', 'pro').stdout == 'PRO ONCE\n'
+    assert run('--once', '--backend', 'P').stdout == 'PRO ONCE\n'
     assert [call['args'][-2:] for call in pro_calls(root)] == [['--max-wait', '7200'], ['--max-wait', '8'], ['--max-wait', '7200']]
     running = run('status', session, extra_env={'PRO_STATE': 'running'})
     assert running.stdout == f'{session} state=running\n'
@@ -415,23 +428,64 @@ def test_pro_waits_two_hours_by_default(unified):
 
 def test_pro_send_is_idempotent_and_rejects_finished_runs(unified):
     run, root = unified
-    first = run('send', 'pro-review-ask-1', prompt='补充')
+    first = run('send', 'P-review-ask-1', prompt='补充')
     assert json.loads(first.stdout)['delivery'] == 'confirmed'
-    run('send', 'pro-review-ask-1', prompt='补充')
+    run('send', 'P-review-ask-1', prompt='补充')
     ids = {call['args'][call['args'].index('--message-id') + 1] for call in pro_calls(root)}
     assert len(ids) == 1
-    finished = run('send', 'pro-review-ask-1', prompt='再问', extra_env={'PRO_STATE': 'finished'})
+    finished = run('send', 'P-review-ask-1', prompt='再问', extra_env={'PRO_STATE': 'finished'})
     assert finished.returncode == 1 and json.loads(finished.stdout)['delivery'] == 'failed'
     assert 'start a new task' in finished.stderr
-    queued = run('send', 'pro-review-ask-1', prompt='再问', extra_env={'PRO_STATE': 'queued'})
+    queued = run('send', 'P-review-ask-1', prompt='再问', extra_env={'PRO_STATE': 'queued'})
     assert queued.returncode == 1 and 'resend the same supplement' in queued.stderr
 
 
 def test_pro_submission_failure_returns_no_handle(unified):
     run, root = unified
-    outcome = run('start', '--backend', 'pro', extra_env={'PRO_SUBMIT_RC': '1'})
+    outcome = run('start', '--backend', 'P', extra_env={'PRO_SUBMIT_RC': '1'})
     assert outcome.returncode == 1 and json.loads(outcome.stdout)['sessions'] == []
     assert run('list').stdout == ''
     missing = run('backends', extra_env={'GPT_PRO_BIN': str(root / 'none')})
-    assert {item['backend']: item['available'] for item in json.loads(missing.stdout)['backends']}['pro'] is False
+    assert {item['backend']: item['available'] for item in json.loads(missing.stdout)['backends']}['P'] is False
 
+
+
+REAL_NAMES = re.compile(r'(?i:claude|gpt|codex|cursor|muse)|\b[Pp]ro\b')
+
+
+def test_successful_replies_do_not_reveal_backend_names(unified):
+    run, _ = unified
+    outcome = run('--once', *(arg for code in 'CGRMP' for arg in ('--backend', code)))
+    assert outcome.returncode == 0, outcome.stderr
+    replies = json.loads(outcome.stdout)['results']
+    assert all('diagnostics' not in item for item in replies)
+    started = run('start', '--backend', 'C', '--backend', 'P')
+    assert started.returncode == 0, started.stderr
+    waited = run('wait', 'C-review-old', 'P-review-ask-1')
+    assert waited.returncode == 0, waited.stderr
+    for result in (outcome, started, waited):
+        assert not REAL_NAMES.search(result.stderr), result.stderr
+    assert all('diagnostics' not in item for item in json.loads(waited.stdout)['results'])
+
+
+def test_pro_recovery_hint_points_at_the_codename_session(unified):
+    run, _ = unified
+    pending = run('wait', 'P-review-ask-1', extra_env={'PRO_STATE': 'running'})
+    assert pending.returncode == 124
+    assert 'agent-team wait P-review-ask-1' in pending.stderr
+    assert not REAL_NAMES.search(pending.stderr), pending.stderr
+
+
+def test_pro_send_retry_hint_points_at_the_codename_session(unified):
+    run, _ = unified
+    pending = run('send', 'P-review-ask-1', prompt='补充', extra_env={'PRO_STATE': 'pending'})
+    assert pending.returncode == 1 and json.loads(pending.stdout)['delivery'] == 'failed'
+    assert 'agent-team send P-review-ask-1' in pending.stderr
+    assert not REAL_NAMES.search(pending.stderr), pending.stderr
+
+
+def test_successful_status_keeps_helper_hints(unified):
+    run, _ = unified
+    status = run('status', 'C-review-old')
+    assert status.returncode == 0
+    assert 'latest message delivery failed' in status.stderr
