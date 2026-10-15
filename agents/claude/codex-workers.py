@@ -28,7 +28,7 @@ import re
 HOME = pathlib.Path.home()
 SESSIONS = HOME / ".codex/sessions"
 LEDGER = HOME / ".local/state/codex-workers"
-CLAUDE = HOME / ".claude/projects"
+CLAUDE_SESSIONS = HOME / ".claude/sessions"
 
 
 def owners():
@@ -48,9 +48,9 @@ def owners():
     return out
 
 
-# A served page refreshes every few seconds; these keep what earlier refreshes
-# parsed, so each one reads only what the transcripts appended since.
-_SCANS, _TITLES = {}, {}
+# A served page refreshes every few seconds; this keeps what earlier refreshes
+# parsed, so each one reads only what the rollouts appended since.
+_SCANS = {}
 
 
 def appended(path, offset):
@@ -127,29 +127,21 @@ def ago(stamp, now):
     return f"{minutes}m" if minutes < 60 else f"{minutes // 60}h{minutes % 60:02d}m"
 
 
-def claude_sessions(days=1):
-    """Recently active Claude sessions, by display name."""
-    names, now = {}, dt.datetime.now(dt.timezone.utc)
-    for project in CLAUDE.glob("*"):
-        for path in project.glob("*.jsonl"):
-            age = now - dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc)
-            if age.days >= days:
-                continue
-            offset, name, last = _TITLES.get(path, (0, None, None))
-            if path.stat().st_size < offset:
-                offset, name, last = 0, None, None
-            for line, offset in appended(path, offset):
-                if b'"custom-title"' not in line and b'"agent-name"' not in line:
-                    continue
-                try:
-                    r = json.loads(line)
-                except ValueError:
-                    continue
-                name = r.get("customTitle") or r.get("agentName") or name
-                last = r.get("timestamp") or last
-            _TITLES[path] = (offset, name, last)
-            if name:
-                names[name] = max(names.get(name, ""), last or "")
+def claude_sessions(cwd=None):
+    """Names of the running Claude sessions, optionally only those started in `cwd`.
+
+    Each running session keeps ~/.claude/sessions/<pid>.json; a session that has
+    exited, or was renamed, no longer shows under its old name."""
+    names = set()
+    for path in CLAUDE_SESSIONS.glob("*.json"):
+        try:
+            s = json.loads(path.read_text())
+            os.kill(s["pid"], 0)
+        except (OSError, ValueError, KeyError):
+            continue
+        if s.get("nameSource") != "user" or (cwd and os.path.realpath(s.get("cwd", "")) != cwd):
+            continue
+        names.add(s["name"])
     return names
 
 
@@ -192,7 +184,8 @@ def as_json(args, now):
             "cwd": html.escape(r["cwd"].replace(str(HOME), "~")),
         })
     mine = {r["owner"] for r in helpers if " · " not in r["owner"]}  # standby threads only
-    waiting = [html.escape(n) for n in sorted(claude_sessions()) if n not in mine]
+    names = claude_sessions(None if args.all else os.path.realpath(args.cwd))
+    waiting = [html.escape(n) for n in sorted(names) if n not in mine]
     scope = ("all working directories" if args.all else
              os.path.realpath(args.cwd).replace(str(HOME), "~"))
     return {"rows": rows, "now": now.astimezone().strftime("%H:%M:%S"),
