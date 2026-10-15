@@ -22,9 +22,10 @@ Ghostty themes. Their neutral surfaces follow the [OpenAI site](https://openai.c
 and [developer docs](https://developers.openai.com/api/docs); ANSI accents are
 adapted for terminal readability. These are personal themes, not official OpenAI
 assets. Starship, tmux, btop, Neovim, Codex TUI, and Claude Code use matching
-light/dark palettes; fastfetch follows Ghostty's ANSI colors.
-The themes also remap the extended palette entries used by Claude Code's
-green/red diff backgrounds so tmux matches the direct-terminal appearance.
+light/dark palettes (Claude Code can also use its Anthropic theme); fastfetch
+follows Ghostty's ANSI colors. The themes also remap the extended palette
+entries used by both Claude Code themes' diff backgrounds, each on its own
+indices, so tmux matches the direct-terminal appearance.
 
 Or symlink this config directory directly:
 

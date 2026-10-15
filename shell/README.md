@@ -122,7 +122,7 @@ See `.aliases` and `.functions` for the full list. Highlights:
 - **Codex**: `x` / `ct` (official / TraeX), `xc` / `ctc` (resume --last), `xr` / `ctr` (resume picker or session ID), `xu` / `ctu` (update shared CLI), `cal`/`cas`/`caw`/`caa` (codex-auth list/status/switch/login)
 - **Muse Code**: `m` (--yolo), `mc` (resume --last), `mr` (resume picker, or session name/ID); no `mu` — Muse has no update subcommand
 - **Homebrew**: `bi`/`bu`/`bic` (install/uninstall/cask), `bupd`/`bupg` (update/upgrade)
-- **Functions**: `dfs` (pull + install + sync remote), `theme [light|dark|toggle|status]` / `theme --all <mode>` (Ghostty + Starship + btop + tmux + Neovim + Codex TUI + Claude Code ANSI-based theme + Muse Code + macOS; fastfetch follows ANSI; `--all` also applies to macmini and l40s), `synckeys` (propagate `~/.zshenv.local` API/plan keys to peers; dry-run by default, `synckeys apply` to write), `rename_device`
+- **Functions**: `dfs` (pull + install + sync remote), `theme [light|dark|toggle|status]` / `theme --all <mode>` (Ghostty + Starship + btop + tmux + Neovim + Codex TUI + Claude Code OpenAI/Anthropic themes + Muse Code + macOS; fastfetch follows ANSI; `--all` also applies to macmini and l40s), `synckeys` (propagate `~/.zshenv.local` API/plan keys to peers; dry-run by default, `synckeys apply` to write), `rename_device`
 
 ### Reasoning effort
 

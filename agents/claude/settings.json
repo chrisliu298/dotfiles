@@ -10,7 +10,6 @@
     "type": "command",
     "command": "bash ~/.claude/statusline-command.sh"
   },
-  "theme": "custom:openai",
   "effortLevel": "high",
   "language": "chinese",
   "autoCompactWindow": 400000,

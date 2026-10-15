@@ -26,6 +26,8 @@
     "composerSidebarBackground": "#262626",
     "bashMessageBackgroundColor": "#292929",
     "memoryBackgroundColor": "#26302c",
-    "rate_limit_empty": "#404040"
+    "rate_limit_empty": "#404040",
+    "orange_FOR_SUBAGENTS_ONLY": "#ff9e57",
+    "pink_FOR_SUBAGENTS_ONLY": "#f47fd6"
   }
 }

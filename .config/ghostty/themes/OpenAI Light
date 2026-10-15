@@ -29,6 +29,12 @@ palette = 174=#c98190
 palette = 194=#dbeee5
 palette = 224=#fbe2e7
 
+# Claude Code's Anthropic theme draws its diffs with these separate indices.
+palette = 107=#8aa36a
+palette = 167=#d68a79
+palette = 193=#e6ecdc
+palette = 217=#f6e0da
+
 background = #ffffff
 foreground = #1f1f1f
 selection-background = #e8e8e8

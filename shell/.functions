@@ -189,7 +189,10 @@ _theme_local() {
     [[ -f "${tmux_theme_dir}/${tmux_theme}.conf" ]] || { printf 'theme: missing tmux theme: %s\n' "$tmux_theme" >&2; return 1; }
     grep -q "^\\[palettes\\.${starship_palette}\\]$" "$starship_template" || { printf 'theme: missing Starship palette: %s\n' "$starship_palette" >&2; return 1; }
     [[ -f "${codex_theme_dir}/openai-${new_mode}.tmTheme" ]] || { printf 'theme: missing Codex theme: openai-%s\n' "$new_mode" >&2; return 1; }
-    [[ -f "$HOME/.claude/themes/openai-${new_mode}.json" ]] || { printf 'theme: missing Claude theme: openai-%s (run ./dotfiles.sh)\n' "$new_mode" >&2; return 1; }
+    local claude_family
+    for claude_family in anthropic openai; do
+        [[ -f "$HOME/.claude/themes/${claude_family}-${new_mode}.json" ]] || { printf 'theme: missing Claude theme: %s-%s (run ./dotfiles.sh)\n' "$claude_family" "$new_mode" >&2; return 1; }
+    done
     [[ -f "${nvim_color_dir}/openai-${new_mode}.lua" ]] || { printf 'theme: missing Neovim theme: openai-%s\n' "$new_mode" >&2; return 1; }
 
     # Preserve the previous mode so a failed switch rolls back cleanly. All writes
@@ -257,7 +260,7 @@ _theme_local() {
     printf '  Prompt:  %s\n' "$starship_palette"
     printf '  Neovim:  openai-%s (next start)\n' "$new_mode"
     printf '  Codex:   openai-%s\n' "$new_mode"
-    printf '  Claude:  custom:openai (legacy sessions: choose "OpenAI (follows theme)" in /theme once)\n'
+    printf '  Claude:  %s (Anthropic or OpenAI "(follows theme)" in /theme)\n' "$(jq -r '.theme // "unset"' "$HOME/.claude/settings.json" 2>/dev/null)"
     printf '  Muse:    %s (next start)\n' "$muse_theme"
 }
 

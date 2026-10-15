@@ -32,6 +32,8 @@ LINKS=(
     "agents/claude/bash-syntax-check.sh:.claude/bash-syntax-check.sh"
     "agents/claude/codex-rpc.py:.claude/codex-rpc.py"
     "agents/claude/codex-workers.py:.claude/codex-workers.py"
+    "agents/claude/themes/anthropic-dark.json:.claude/themes/anthropic-dark.json"
+    "agents/claude/themes/anthropic-light.json:.claude/themes/anthropic-light.json"
     "agents/claude/themes/openai-dark.json:.claude/themes/openai-dark.json"
     "agents/claude/themes/openai-light.json:.claude/themes/openai-light.json"
     "agents/AGENTS.md:.codex/AGENTS.md"
@@ -280,7 +282,9 @@ setup_theme_state() {
             sed "s|~/|$HOME/|g" "$claude_src" > "$claude_stage"
         fi
     fi
-    # The source variants must exist before theme-apply generates openai.json.
+    # The source variants must exist before theme-apply generates anthropic.json and openai.json.
+    ensure_symlink "$ROOT/agents/claude/themes/anthropic-dark.json" "$HOME/.claude/themes/anthropic-dark.json"
+    ensure_symlink "$ROOT/agents/claude/themes/anthropic-light.json" "$HOME/.claude/themes/anthropic-light.json"
     ensure_symlink "$ROOT/agents/claude/themes/openai-dark.json" "$HOME/.claude/themes/openai-dark.json"
     ensure_symlink "$ROOT/agents/claude/themes/openai-light.json" "$HOME/.claude/themes/openai-light.json"
 
