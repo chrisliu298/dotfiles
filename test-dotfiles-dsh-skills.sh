@@ -44,7 +44,7 @@ for name in arxiv-reader; do
         || fail "DeepSeek symlink for $name points at $(readlink "$link")"
 done
 
-for name in agent-team codex-exec gpt-pro relay prism recall; do
+for name in agent-team codex-exec gpt-pro recall; do
     if [ -e "$dsh_skills/$name" ] || [ -L "$dsh_skills/$name" ]; then
         fail "$name must not be installed into DeepSeek"
     fi

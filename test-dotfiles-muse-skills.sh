@@ -99,12 +99,6 @@ done
 [ -f "$HOME/.claude/skills/merlin-dup/marker" ] && [ -d "$HOME/.agents/skills/merlin-dup" ] \
     || fail "an existing ~/.claude/skills copy must not be overwritten"
 
-# Manual claude-only orchestrators never reach the Muse store either.
-for name in relay prism; do
-    grep -F "skills install $repo_root/agents/skills/$name" "$calls" >/dev/null \
-        && fail "$name must not be installed into Muse"
-done
-
 # pdf is each vendor's own native skill (anthropic for Claude, openai for
 # Codex), not a repo-owned one: Codex keeps its symlink, Muse gets nothing.
 grep -F "skills install $pdf_src" "$calls" >/dev/null \

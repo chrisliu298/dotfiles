@@ -10,7 +10,7 @@ Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/
 
 - `agents/AGENTS.md` — the single global instruction file, symlinked as both `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`.
 - `agents/eval/` — instruction-following harness for the shared agent doc (prompts, rubric, runner scripts).
-- `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` installs each into the agents the `SKILLS` table selects (most to Claude, Codex, Muse, and DeepSeek Harness; some are Claude- or Codex-only): live symlinks for Claude/Codex/DeepSeek Harness, and copy-installs into Muse's store-owned personal root via `muse skills install`. Manual skills install only when listed in `agents/skills/manual-skills.enabled`.
+- `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` installs each into the agents the `SKILLS` table selects (most to Claude, Codex, Muse, and DeepSeek Harness; some are Claude- or Codex-only): live symlinks for Claude/Codex/DeepSeek Harness, and copy-installs into Muse's store-owned personal root via `muse skills install`.
 
 Elsewhere:
 
@@ -21,8 +21,6 @@ Elsewhere:
 
 - `./dotfiles.sh` — initialize submodules, sync skill repos, symlink files, install skills, and register MCP servers + Claude plugins + tmux plugins (TPM).
 - `./dotfiles.sh lint` — run skill portability checks (universal C/X skill mechanical violations); also runs automatically at the end of a full `./dotfiles.sh`.
-- `./dotfiles.sh skills` — list manual skills and whether each is enabled.
-- `./dotfiles.sh enable <name>` / `./dotfiles.sh disable <name>` — toggle a manual skill; rewrites the committed `agents/skills/manual-skills.enabled` set.
 
 ## Conventions
 

@@ -2,8 +2,8 @@
 
 How to write a `SKILL.md` that is shared across both agents (marked C/X in the
 [skill matrix](../README.md)) so one file works — or degrades cleanly — on each. Read this
-before editing a skill wired to more than `claude`. Claude-only skills (relay, prism)
-and per-harness builds (recall) are exempt.
+before editing a skill wired to more than `claude`. Claude-only skills (agent-team, codex-exec,
+gpt-pro) and per-harness builds (recall) are exempt.
 
 ## The one idea
 
@@ -25,8 +25,8 @@ What each harness actually does (verified 2026-06):
 
 Why `$ARGUMENTS` is the sharp trap: it's substituted by the harness *before the model sees the
 body*. On a harness that doesn't interpolate, the literal string `$ARGUMENTS` reaches the model
-as dead text and the parameter is silently lost. `prism` is the model to copy — it parses
-`prism 2 1` from the natural-language tail, not from a placeholder.
+as dead text and the parameter is silently lost. Parse parameters from the natural-language
+tail instead.
 
 ## Five rules
 
@@ -52,7 +52,7 @@ as dead text and the parameter is silently lost. `prism` is the model to copy �
 5. **Scope when degradation would change the outcome.** Litmus: *remove the harness feature —
    does the skill still do what its `description` promises?* **Yes → degrade. No → scope** it
    to `claude` in the `SKILLS` table in `dotfiles.sh`. Capabilities with no plain-text
-   equivalent are scope-only: cross-model dispatch (relay/prism), scheduling/persistence
+   equivalent are scope-only: cross-model dispatch (agent-team), scheduling/persistence
    (`Cron*`, `ScheduleWakeup`, `/loop`), programmatic `Skill()` composition, hook enforcement.
 
 Plus two hygiene rules:
@@ -65,10 +65,6 @@ Plus two hygiene rules:
    at the wrong directory on the other harness. Reference scripts relative to the skill dir
    ("the `gpt-pro` script beside this `SKILL.md`"). Frontmatter (`allowed-tools`) may keep
    absolute paths — it's Claude-only and ignored elsewhere.
-
-## What's already right (copy these)
-
-- `prism` — parses its config from the natural-language tail, no `$ARGUMENTS`.
 
 ## Mechanical gate
 

@@ -10,13 +10,6 @@
 # Run: bash agents/skills/gpt-pro/scripts/test-gpt-pro.sh
 set -uo pipefail
 
-# This offline harness drives the wrapper against FAKE engines only — never the
-# real gpt-pro. So the wrapper's anti-recursion guard (which refuses when
-# RELAY_PEER is set) is a false positive here: unset it, or every nested wrapper
-# call exits 1 when the harness is itself run inside a relay peer (e.g. a GPT
-# review), yielding a spurious 0/N.
-unset RELAY_PEER
-
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WRAP="$HERE/gpt-pro"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/gptpro-test.XXXXXX")"

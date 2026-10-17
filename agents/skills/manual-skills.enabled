@@ -1,2 +1,0 @@
-# Enabled manual skills, one per line (committed). Empty = all off.
-# Toggle with ./dotfiles.sh enable/disable <name>; enforced on every ./dotfiles.sh run.

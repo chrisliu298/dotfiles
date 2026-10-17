@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# filectx — shared local-file context resolver/packer for the prism and
-# gpt-pro CLIs. ONE source of truth for: expanding file specs (absolute
-# paths, @base-relative paths, single-level globs, frozen lists, capped directory
-# trees), validating them fail-closed, scanning for secrets, and either emitting
-# the resolved absolute paths (for agents that read files themselves) or the
-# fenced file contents (for gpt-pro, which cannot read local files).
+# filectx — local-file context resolver/packer for the gpt-pro CLI. ONE source
+# of truth for: expanding file specs (absolute paths, @base-relative paths,
+# single-level globs, frozen lists, capped directory trees), validating them
+# fail-closed, scanning for secrets, and either emitting the resolved absolute
+# paths (for agents that read files themselves) or the fenced file contents
+# (for gpt-pro, which cannot read local files).
 #
 # Two modes:
 #   filectx resolve [opts] [--] [spec...]   # stdout: validated absolute paths, one per line (or --json)

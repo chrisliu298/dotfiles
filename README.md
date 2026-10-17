@@ -35,8 +35,5 @@ See [`shell/`](shell/README.md), [`.config/`](.config/README.md), and [`agents/s
 | Action | Command |
 |--------|---------|
 | Install/update all | `./dotfiles.sh` |
-| List manual skills | `./dotfiles.sh skills` |
-| Enable a manual skill | `./dotfiles.sh enable <name>` |
-| Disable a manual skill | `./dotfiles.sh disable <name>` |
 | Add a local skill | Create `agents/skills/<name>/SKILL.md`, run `./dotfiles.sh` |
 | Add an upstream skill | Add `name\|owner/repo/subpath\|agents` to `SKILLS` table in `dotfiles.sh` |

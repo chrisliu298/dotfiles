@@ -38,7 +38,7 @@ criterion (`rubric.md`):
 ## How to run
 
 Each candidate doc is a **variant**. Run every variant through the same prompts, score blind,
-compare. The relay-peer legs are scripted; the Claude leg and the judge need Claude orchestration.
+compare. The cross-model peer legs are scripted (through agent-team); the Claude leg and the judge need Claude orchestration.
 
 1. **Build runners** (one per variant; add `--none` for a baseline):
    ```sh

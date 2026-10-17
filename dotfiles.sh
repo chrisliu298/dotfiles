@@ -45,17 +45,12 @@ LINKS=(
 # source: ./path (local), ~/path (host-local, skipped when absent), or owner/repo[/subpath] (GitHub)
 SKILLS=(
     # The wildcard installs every skill to Claude, Codex, Muse and DeepSeek Harness; the explicit
-    # entries below narrow that (claude-only: relay, prism, codex-exec, agent-team, gpt-pro; recall
-    # has a separate build per agent).
+    # entries below narrow that (claude-only: codex-exec, agent-team, gpt-pro; recall has a separate
+    # build per agent).
     # Claude/Codex/DeepSeek get live symlinks; Muse's store owns its managed personal root,
     # so muse entries are copy-installed via `muse skills install` (see _muse_skill_install).
     # DeepSeek is installed only on hosts where the harness has run (its ~/.dsh exists).
     "*|./agents/skills|claude,codex,muse,deepseek"
-    # Relay: claude-only caller; targets GPT via the script.
-    # MANUAL (below); explicit entry keeps it claude-only when enabled (the wildcard would install it everywhere).
-    "relay|./agents/skills/relay|claude"
-    # prism: claude-only caller (dispatches parallax to GPT via relay). MANUAL (below).
-    "prism|./agents/skills/prism|claude"
     # codex-exec: claude-only caller; Codex is its executor, so it must not get the skill.
     "codex-exec|./agents/skills/codex-exec|claude"
     # agent-team: claude-only caller; the other agents reach it only as dispatched backends.
@@ -89,18 +84,6 @@ SKILLS=(
 # bundle script, hand copies) drop them into ~/.agents/skills, which Codex, Muse and DeepSeek
 # Harness read natively, so install_skills moves each into ~/.claude/skills.
 CLAUDE_ONLY_AGENT_SKILLS=(weekly-report 'merlin-*')
-
-# Skills not auto-installed (opt-in). Toggle with: ./dotfiles.sh enable/disable <name>.
-MANUAL_SKILLS=(
-    prism
-    relay
-)
-
-# Which manual skills are currently enabled — a committed declarative set, one
-# name per line ('#' comments / blank lines ignored; empty = all off). Every
-# ./dotfiles.sh run enforces it (symlink the listed, prune the rest), and
-# enable/disable rewrite it.
-MANUAL_ENABLED_FILE="$ROOT/agents/skills/manual-skills.enabled"
 
 MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: claude,codex or omit for both)
     "chrome-devtools|npx|chrome-devtools-mcp@latest --autoConnect --channel stable --no-usage-statistics|codex"
@@ -204,36 +187,9 @@ sync_git_checkout() {
     fi
 }
 
-_is_manual() {
-    local name="$1" m
-    for m in "${MANUAL_SKILLS[@]}"; do [[ "$m" == "$name" ]] && return 0; done
-    return 1
-}
-
 # Has DeepSeek Harness been set up on this host? Its ~/.dsh (or $DSH_HOME) is
 # created on first launch; skip the directory entirely rather than seeding it.
 _dsh_available() { [[ -d "$DSH_HOME_DIR" ]]; }
-
-# Is manual skill $1 enabled in the committed set?
-_manual_enabled() {
-    [[ -f "$MANUAL_ENABLED_FILE" ]] && grep -qxF "$1" "$MANUAL_ENABLED_FILE"
-}
-
-# Record manual skill $1 as on|off in the committed set (sorted, de-duped, header
-# preserved).
-_manual_set_state() {
-    local name="$1" state="$2" data
-    mkdir -p "$(dirname "$MANUAL_ENABLED_FILE")"
-    [[ -f "$MANUAL_ENABLED_FILE" ]] || : > "$MANUAL_ENABLED_FILE"
-    data=$(grep -vE '^[[:space:]]*(#|$)' "$MANUAL_ENABLED_FILE" 2>/dev/null | grep -vxF "$name" || true)
-    [[ "$state" == on ]] && data=$(printf '%s\n%s' "$data" "$name")
-    data=$(printf '%s\n' "$data" | grep -vE '^[[:space:]]*$' | LC_ALL=C sort -u || true)
-    {
-        printf '# Enabled manual skills, one per line (committed). Empty = all off.\n'
-        printf '# Toggle with ./dotfiles.sh enable/disable <name>; enforced on every ./dotfiles.sh run.\n'
-        if [[ -n "$data" ]]; then printf '%s\n' "$data"; fi
-    } > "$MANUAL_ENABLED_FILE"
-}
 
 _resolve_source() {
     local source="$1"
@@ -495,7 +451,6 @@ install_skills() {
         local base_dir; base_dir=$(_resolve_source "$source")
         [[ "$source" == \~/* && ! -d "$base_dir" ]] && continue
         [[ -d "$base_dir" ]] || { warn "skip $name (source not found: $source)"; continue; }
-        [[ "$name" != "*" ]] && _is_manual "$name" && ! _manual_enabled "$name" && continue
 
         local -a skill_entries=()
         if [[ "$name" == "*" ]]; then
@@ -508,8 +463,6 @@ install_skills() {
                     d="${d%/}"; local dname="${d##*/}"
                     # Explicit entries override wildcard's agents setting
                     [[ "$explicit_names" == *$'\n'"$dname"$'\n'* ]] && continue
-                    # Manual skills install only when enabled in the committed set
-                    _is_manual "$dname" && ! _manual_enabled "$dname" && continue
                     skill_entries+=("$dname:$d")
                 done
             fi
@@ -551,8 +504,6 @@ install_skills() {
             [[ -L "$entry" ]] || continue
             local bname="${entry##*/}"
             [[ "$bname" == .* ]] && continue
-            # Enabled manual skills are in "$expected" (kept above); a manual skill
-            # absent from the committed set falls through here and is pruned.
             [[ $'\n'"$expected" == *$'\n'"$bname"$'\n'* ]] && continue
             rm "$entry"; log "clean ${entry/#$HOME/~}"
         done
@@ -790,74 +741,6 @@ install_plugins() {
     stamp_write "$stamp_file" "$fingerprint"
 }
 
-# ── Skill toggle commands ────────────────────────────────────────
-
-cmd_enable() {
-    local name="${1:?usage: dotfiles.sh enable <name>}"
-    _is_manual "$name" || { warn "'$name' is not a manual skill"; return 1; }
-    local found=false
-    # Check explicit entries first
-    for entry in "${SKILLS[@]}"; do
-        IFS='|' read -r ename source agents <<< "$entry"
-        [[ "$ename" == "$name" ]] || continue
-        _ensure_source "$source"
-        local base_dir; base_dir=$(_resolve_source "$source")
-        [[ -f "$base_dir/SKILL.md" ]] || { warn "skip $name (no SKILL.md at $source)"; continue; }
-        [[ "$agents" == *claude* ]] && ensure_symlink "$base_dir" "$HOME/.claude/skills/$name"
-        [[ "$agents" == *codex* ]]  && ensure_symlink "$base_dir" "$HOME/.codex/skills/$name"
-        [[ "$agents" == *muse* ]] && command -v muse >/dev/null 2>&1 && _muse_skill_install "$base_dir" "$name"
-        [[ "$agents" == *deepseek* ]] && _dsh_available && { mkdir -p "$DSH_SKILLS_DIR"; ensure_symlink "$base_dir" "$DSH_SKILLS_DIR/$name"; }
-        found=true
-    done
-    # Fall back to wildcard discovery
-    if ! $found; then
-        for entry in "${SKILLS[@]}"; do
-            IFS='|' read -r ename source agents <<< "$entry"
-            [[ "$ename" == "*" ]] || continue
-            local base_dir; base_dir=$(_resolve_source "$source")
-            local skill_dir="$base_dir/$name"
-            [[ -f "$skill_dir/SKILL.md" ]] || continue
-            [[ "$agents" == *claude* ]] && ensure_symlink "$skill_dir" "$HOME/.claude/skills/$name"
-            [[ "$agents" == *codex* ]]  && ensure_symlink "$skill_dir" "$HOME/.codex/skills/$name"
-            [[ "$agents" == *muse* ]] && command -v muse >/dev/null 2>&1 && _muse_skill_install "$skill_dir" "$name"
-            [[ "$agents" == *deepseek* ]] && _dsh_available && { mkdir -p "$DSH_SKILLS_DIR"; ensure_symlink "$skill_dir" "$DSH_SKILLS_DIR/$name"; }
-            found=true
-        done
-    fi
-    $found || { warn "skill '$name' not found"; return 1; }
-    _manual_set_state "$name" on
-    log "enabled '$name' in the committed set"
-}
-
-cmd_disable() {
-    local name="${1:?usage: dotfiles.sh disable <name>}"
-    _is_manual "$name" || warn "'$name' is not a manual skill — next run will re-create it"
-    local removed=false
-    for dir in "$HOME/.claude/skills/$name" "$HOME/.codex/skills/$name" "$DSH_SKILLS_DIR/$name"; do
-        [[ -L "$dir" ]] && { rm "$dir"; log "removed ${dir/#$HOME/~}"; removed=true; }
-    done
-    if [[ -d "$MUSE_SKILLS_DIR/$name" ]] && command -v muse >/dev/null 2>&1; then
-        muse skills uninstall "$name" >/dev/null 2>&1 \
-            && { log "muse uninstall $name"; removed=true; } || true
-    fi
-    if _is_manual "$name"; then
-        _manual_set_state "$name" off
-        log "disabled '$name' in the committed set"
-    fi
-    $removed || log "$name is not currently enabled"
-}
-
-cmd_skills() {
-    printf '\n  %sManual skills%s  (toggle with: ./dotfiles.sh enable/disable <name>)\n\n' "$_CYN" "$_RST"
-    local m
-    for m in "${MANUAL_SKILLS[@]}"; do
-        local status="${_DIM}off${_RST}"
-        [[ -L "$HOME/.claude/skills/$m" || -L "$HOME/.codex/skills/$m" || -L "$DSH_SKILLS_DIR/$m" || -d "$MUSE_SKILLS_DIR/$m" ]] && status="on "
-        printf '    %-22s %s\n' "$m" "$status"
-    done
-    printf '\n'
-}
-
 # ── Skill portability lint ───────────────────────────────────────
 # Warn (non-fatal) when a universal (non-claude-only) OWN skill BODY embeds
 # harness-specific syntax that silently breaks on Codex. Frontmatter is
@@ -892,9 +775,6 @@ lint_skills() {
 main() {
     cd "$ROOT"
     case "${1:-}" in
-        enable)  cmd_enable "${2:-}"; exit ;;
-        disable) cmd_disable "${2:-}"; exit ;;
-        skills)  cmd_skills; exit ;;
         lint)    lint_skills; exit ;;
     esac
 

@@ -4,6 +4,5 @@ __pycache__/
 *.py[cod]
 .venv/
 agents/claude/plugins/installed_plugins.json
-.relay/
 run.log
 .goals/
