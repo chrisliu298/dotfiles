@@ -19,7 +19,7 @@ Single source of truth: own skills live in `agents/skills/`; community/third-par
 
 Repo-sourced Muse installs that the table no longer selects are uninstalled again; skills a user installed into Muse from anywhere else are never touched. Only symlinks are pruned in the three symlink roots, so a hand-installed skill directory survives. Verify the wiring offline (temp `$HOME`, stubbed `muse`) with `./test-dotfiles-muse-skills.sh` and `./test-dotfiles-dsh-skills.sh`.
 
-Host-local third-party skills installed into `~/.agents/skills/` (e.g. `lark-*` by `npx skills`) are read natively by Codex, Muse, and DeepSeek Harness (which scans `~/.agents/skills` as a default root); Claude Code does not read that directory, which keeps the `lark-*` long descriptions out of its skill list. The Claude-only ones (`CLAUDE_ONLY_AGENT_SKILLS` in `dotfiles.sh`: `weekly-report` and `merlin-*`) are moved from there into `~/.claude/skills/` on every run, so only Claude sees them; an existing `~/.claude/skills/<name>` directory is never overwritten. Install new Merlin skills with `merlin-cli skill install <name> --agent claude-code`, which targets `~/.claude/skills/` directly.
+Host-local third-party skills installed into `~/.agents/skills/` are read natively by Codex, Muse, and DeepSeek Harness (which scans `~/.agents/skills` as a default root); Claude Code does not read that directory. The Claude-only ones (`CLAUDE_ONLY_AGENT_SKILLS` in `dotfiles.sh`: `weekly-report` and `merlin-*`) are moved from there into `~/.claude/skills/` on every run, so only Claude sees them; an existing `~/.claude/skills/<name>` directory is never overwritten. Install new Merlin skills with `merlin-cli skill install <name> --agent claude-code`, which targets `~/.claude/skills/` directly.
 
 A shared/universal `SKILL.md` is written to work across agents; agent-specific scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., relay and prism are claude-only, so they never reach Codex or Muse). Muse also discovers `~/.claude/skills` and `~/.codex/skills` natively, so `dotfiles.sh` turns off in Muse every skill found there that the table does not select for Muse. Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex and DeepSeek Harness; Muse records `allowed-tools` as advisory metadata only.
 
@@ -31,7 +31,7 @@ Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via
 
 Columns: **C**laude · Code**x** · **M**use · **D**eepSeek Harness. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
-> The Claude-only skills (relay, prism, codex-exec, agent-team, gpt-pro, and the host-local `weekly-report` and `merlin-*`) stay off Codex, Muse and DeepSeek. `recall` ships as two harness-specific builds (Claude, Codex) under one name; each defaults to its own complete history and can search the other agent's complete history on request through a shared entrypoint. It has no Muse or DeepSeek build, so Muse and `~/.dsh/sessions` history isn't searched; `dotfiles.sh` also turns off the Claude/Codex copies Muse discovers natively. Relay and prism are additionally guarded so a dispatched peer can't trigger them.
+> The Claude-only skills (relay, prism, codex-exec, agent-team, gpt-pro, the six `lark-*`, and the host-local `weekly-report` and `merlin-*`) stay off Codex, Muse and DeepSeek. `recall` ships as two harness-specific builds (Claude, Codex) under one name; each defaults to its own complete history and can search the other agent's complete history on request through a shared entrypoint. It has no Muse or DeepSeek build, so Muse and `~/.dsh/sessions` history isn't searched; `dotfiles.sh` also turns off the Claude/Codex copies Muse discovers natively. Relay and prism are additionally guarded so a dispatched peer can't trigger them.
 
 **Enabled** (✓ auto-installed). Claude gets `pdf` and `skill-creator` from the claude.ai-synced skills (`anthropic-skills:*`), not from this repo.
 
@@ -40,6 +40,7 @@ Columns: **C**laude · Code**x** · **M**use · **D**eepSeek Harness. Legend: �
 | agent-team              | ✓ | — | — | — | local — Unified read-only GPT/Claude/Gemini/Muse/DeepSeek/Pro tasks; parallel backends, tmux (Pro via gpt-pro relay) |
 | arxiv-reader            | ✓ | ✓ | ✓ | ✓ | local — Read arxiv via TeX / HF markdown / HTML fallback |
 | gpt-pro                 | ✓ | — | — | — | local — ChatGPT Pro Extended through the local relay engine (the `gpt-pro` CLI is on PATH from the Claude copy) |
+| lark-shared, lark-doc, lark-wiki, lark-im, lark-sheets, lark-drive | ✓ | — | — | — | [larksuite/cli][c-lark] — Feishu auth, docs, wiki, chat, sheets and drive through `lark-cli` (`npm install -g @larksuite/cli`); tracks main on every run |
 | pdf                     | — | ✓ | — | — | [openai/skills][c-pdf-o] — PDF read/edit (Claude uses the claude.ai-synced `anthropic-skills:pdf`; both are the vendors' native skills, not repo-owned, so Muse gets no managed copy) |
 | push                    | ✓ | ✓ | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
 | recall                  | ✓ | ✓ | — | — | local — Recall from all past sessions of this agent, or the other agent on request (separate Claude and Codex builds with a shared entrypoint; no Muse or DeepSeek build) |
@@ -54,6 +55,7 @@ Columns: **C**laude · Code**x** · **M**use · **D**eepSeek Harness. Legend: �
 > Note: SKILL.md supports an optional Claude-only `effort` frontmatter (`medium` / `high` / `max`) to set thinking budget per skill. Currently unset on every skill in this repo — they all inherit the session default.
 
 [c-pdf-o]: https://github.com/openai/skills
+[c-lark]: https://github.com/larksuite/cli/tree/main/skills
 
 ### Discovery quirks (not managed here)
 
