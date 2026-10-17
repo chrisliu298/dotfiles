@@ -87,7 +87,7 @@ Use the helper instead of reading whole transcript files into context.
    used**, so a wrong session match is visible:
 
    ```text
-   recall [codex|claude|muse]: <date> · <session prefix> · <gist>
+   recall [codex|claude]: <date> · <session prefix> · <gist>
    ```
 
    Preserve its role, timestamp/date, session and message/line anchors. If an

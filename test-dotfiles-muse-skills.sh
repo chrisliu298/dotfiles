@@ -62,13 +62,9 @@ for name in agent-team arxiv-reader gpt-pro push; do
         || fail "expected forced muse install for $name from its repo source"
 done
 
-# recall reaches Muse only as its own build, never the Claude/Codex builds.
-grep -F "skills install $repo_root/agents/skills/recall/muse" "$calls" | grep -q -- '--force' \
-    || fail "expected forced muse install for recall from its muse build"
-for build in claude codex; do
-    grep -F "skills install $repo_root/agents/skills/recall/$build" "$calls" >/dev/null \
-        && fail "the $build recall build must not be installed into Muse"
-done
+# recall has Claude and Codex builds only; neither reaches Muse.
+grep -F "skills install $repo_root/agents/skills/recall" "$calls" >/dev/null \
+    && fail "recall must not be installed into Muse"
 
 # Skills without the muse token never reach the Muse store: the claude-only
 # orchestrators.

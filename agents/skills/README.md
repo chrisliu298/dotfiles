@@ -30,7 +30,7 @@ Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via
 
 Columns: **C**laude · Code**x** · **M**use. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
-> The Claude-only orchestration skills (relay, prism) stay off Codex and Muse. `recall` ships as three harness-specific builds under one name; each defaults to its own complete history and can search the other agents' complete history on request through a shared entrypoint. Relay and prism are additionally guarded so a dispatched peer can't trigger them.
+> The Claude-only orchestration skills (relay, prism) stay off Codex and Muse. `recall` ships as two harness-specific builds (Claude, Codex) under one name; each defaults to its own complete history and can search the other agent's complete history on request through a shared entrypoint. It has no Muse build, so Muse history isn't searched. Relay and prism are additionally guarded so a dispatched peer can't trigger them.
 
 **Enabled** (✓ auto-installed). Claude gets `pdf` and `skill-creator` from the claude.ai-synced skills (`anthropic-skills:*`), not from this repo.
 
@@ -41,7 +41,7 @@ Columns: **C**laude · Code**x** · **M**use. Legend: ✓ auto-installed · ✱ 
 | gpt-pro                 | ✓ | ✓ | ✓ | local — ChatGPT Pro Extended through the local relay engine (the `gpt-pro` CLI is on PATH from the Codex copy) |
 | pdf                     | — | ✓ | — | [openai/skills][c-pdf-o] — PDF read/edit (Claude uses the claude.ai-synced `anthropic-skills:pdf`; both are the vendors' native skills, not repo-owned, so Muse gets no managed copy) |
 | push                    | ✓ | ✓ | ✓ | local — Push to remote (auto-picks single vs atomic commits) |
-| recall                  | ✓ | ✓ | ✓ | local — Recall from all past sessions of this agent, or the other agents on request (separate Claude, Codex, and Muse builds with a shared entrypoint) |
+| recall                  | ✓ | ✓ | — | local — Recall from all past sessions of this agent, or the other agent on request (separate Claude and Codex builds with a shared entrypoint; no Muse build) |
 
 **Disabled** (✱ manual, opt-in via `./dotfiles.sh enable <name>`):
 

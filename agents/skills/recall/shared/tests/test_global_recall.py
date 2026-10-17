@@ -34,7 +34,7 @@ class GlobalRecallTests(unittest.TestCase):
         return json.loads(output.getvalue())
 
     def test_default_reads_only_calling_agents_complete_history(self) -> None:
-        for agent in ("codex", "claude", "muse"):
+        for agent in ("codex", "claude"):
             with self.subTest(agent=agent), mock.patch.object(recall, "run_source", return_value=hit(agent)) as run:
                 result = self.invoke("--agent", agent)
                 self.assertEqual(run.call_count, 1)
@@ -73,8 +73,8 @@ class GlobalRecallTests(unittest.TestCase):
     def test_other_source_is_explicit(self) -> None:
         with mock.patch.object(recall, "run_source", side_effect=lambda source, _: hit(source)) as run:
             result = self.invoke("--agent", "codex", "--source", "other")
-        self.assertEqual({call.args[0] for call in run.call_args_list}, {"claude", "muse"})
-        self.assertEqual({c["source"] for c in result["candidates"]}, {"claude", "muse"})
+        self.assertEqual({call.args[0] for call in run.call_args_list}, {"claude"})
+        self.assertEqual({c["source"] for c in result["candidates"]}, {"claude"})
 
     def test_roles_reaches_each_source_before_ranking(self) -> None:
         for agent in ("codex", "claude"):
@@ -87,31 +87,7 @@ class GlobalRecallTests(unittest.TestCase):
         with mock.patch.object(recall, "run_source", side_effect=lambda source, _: hit(source)):
             result = self.invoke("--agent", "codex", "--source", "all")
         self.assertEqual(result["status"], "ambiguous")
-        self.assertEqual({c["source"] for c in result["candidates"]}, {"codex", "claude", "muse"})
-
-    def test_real_worker_reads_muse_store(self) -> None:
-        import os
-        import tempfile
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            session_dir = root / "sessions" / "2026" / "10" / "13" / "33333333-3333-3333-3333-333333333333"
-            session_dir.mkdir(parents=True)
-            records = [{
-                "sequence": 24, "recorded_at": 1791858614753068,
-                "stream": {"kind": "session", "id": "33333333-3333-3333-3333-333333333333"},
-                "payload_type": "runtime.session",
-                "payload": {"kind": "run", "run_id": "r1",
-                            "event": {"kind": "started", "prompt": "orchard retry budget seven"}},
-            }]
-            (session_dir / "session.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
-            with mock.patch.dict(os.environ, {"MUSE_RECALL_ROOT": str(root / "sessions"),
-                                              "RECALL_CACHE_DIR": str(root / "cache")}):
-                os.environ.pop("MUSE_SESSION_ID", None)
-                os.environ.pop("MUSE_THREAD_ID", None)
-                result = recall.search(["orchard retry", "retry budget"], directory, ["muse"], 5)
-                self.assertEqual(result["candidates"][0]["source"], "muse")
-                self.assertEqual(result["candidates"][0]["evidence"][0]["session"],
-                                 "33333333-3333-3333-3333-333333333333")
+        self.assertEqual({c["source"] for c in result["candidates"]}, {"codex", "claude"})
 
 
 if __name__ == "__main__":

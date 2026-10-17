@@ -62,7 +62,6 @@ SKILLS=(
     # each subdir as `recall`.
     "recall|./agents/skills/recall/claude|claude"
     "recall|./agents/skills/recall/codex|codex"
-    "recall|./agents/skills/recall/muse|muse"
     # pdf is each vendor's native skill (anthropic's for Claude, this openai one for Codex),
     # not repo-owned, so Muse gets no managed copy of it. Muse still discovers the Codex
     # copy natively; keep it off there per host with `muse skills disable pdf --scope user`.

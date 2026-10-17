@@ -29,7 +29,7 @@ def backend(source):
 
 def load(source, cwd, query):
     api = backend(source)
-    if source in ("codex", "muse"):
+    if source == "codex":
         root = api.session_root()
         inventory = api.file_inventory(root)
         turns, stats = api.load_turns(api.files_for_scope(inventory, "all", cwd=cwd, session_id=""))
@@ -52,7 +52,7 @@ def load(source, cwd, query):
                      token_counts=dict(Counter(turn.tokens))) for turn in turns]
         metadata = {"stats": stats, "current_task_exclusion":
                     "resolved" if api.current_session_id() else "unresolved"}
-    if source in ("codex", "muse"):
+    if source == "codex":
         by_file = defaultdict(list)
         for row in rows:
             by_file[row.pop("cache_path")].append(row)
@@ -192,7 +192,7 @@ if __name__ == "__main__":
     import argparse
     import json
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", choices=("codex", "claude", "muse"), required=True)
+    parser.add_argument("--source", choices=("codex", "claude"), required=True)
     parser.add_argument("--query", action="append", required=True)
     parser.add_argument("--cwd", required=True)
     parser.add_argument("--limit", type=int, default=5)
