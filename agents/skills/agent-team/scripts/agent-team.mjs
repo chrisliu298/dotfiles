@@ -8,9 +8,7 @@ const skill = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const runner = resolve(skill, 'scripts/review-subagent');
 // Pro runs live in the gpt-pro relay rather than tmux, so a separate adapter drives them.
 const proSession = resolve(skill, 'scripts/pro-session.mjs');
-// Callers and output see only codenames; the runners keep the real harness names.
-const harnesses = { C: 'claude', G: 'gpt', R: 'cursor', M: 'muse', P: 'pro' };
-const names = Object.keys(harnesses);
+const names = ['claude', 'gpt', 'cursor', 'muse', 'pro'];
 const args = process.argv.slice(2);
 
 function usage(message) {
@@ -21,8 +19,8 @@ function usage(message) {
     '       agent-team wait SESSION [SESSION ...] [--timeout SECONDS]\n' +
     '       agent-team capture|status|interrupt|stop SESSION [SESSION ...]\n' +
     '       agent-team list | backends\n' +
-    '       NAME is C, G, R, M, or P; each at most once per call. NAME=PROMPT gives that\n' +
-    '       backend its own prompt file instead of stdin. --file attaches a file to P and lists its\n' +
+    '       NAME is claude, gpt, cursor, muse, or pro; each at most once per call. NAME=PROMPT gives that\n' +
+    '       backend its own prompt file instead of stdin. --file attaches a file to Pro and lists its\n' +
     '       path for the others. Models and high are fixed.\n');
   process.exit(2);
 }
@@ -38,7 +36,7 @@ while (args.length) {
   const option = args.shift();
   if (option === '--backend' && ['start', '--once'].includes(action)) {
     const [backend, ...file] = (args.shift() || '').split('=');
-    if (!names.includes(backend)) usage('backend must be C, G, R, M, or P');
+    if (!names.includes(backend)) usage('backend must be claude, gpt, cursor, muse, or pro');
     if (selections.some(item => item.backend === backend)) usage(`each backend runs at most once per call: ${backend}`);
     const selection = { backend };
     if (file.length) {
@@ -63,7 +61,7 @@ while (args.length) {
     timeout = args.shift();
     if (!/^[1-9][0-9]*$/.test(timeout || '') || !Number.isSafeInteger(Number(timeout))) usage('timeout must be a positive integer');
   } else if (!option.startsWith('-') && ['send', 'wait', 'capture', 'status', 'interrupt', 'stop'].includes(action)) {
-    const match = /^([CGRMP])-review-[a-zA-Z0-9-]+$/.exec(option);
+    const match = /^(claude|gpt|cursor|muse|pro)-review-[a-zA-Z0-9-]+$/.exec(option);
     if (!match) usage(`invalid review session: ${option}`);
     if (sessions.some(item => item.session === option)) usage('the same session must not be targeted twice');
     sessions.push({ backend: match[1], session: option });
@@ -82,7 +80,6 @@ function command(name) {
   return (process.env.PATH || '').split(':').map(dir => join(dir || '.', name)).find(executable) || null;
 }
 function availability(backend) {
-  backend = harnesses[backend];
   if (backend === 'pro') {
     const named = process.env.GPT_PRO_BIN;
     if (named ? !(named.includes('/') && executable(named)) : !command('gpt-pro') && !executable(resolve(skill, '../gpt-pro/scripts/gpt-pro'))) {
@@ -128,7 +125,7 @@ if (action === '--once') {
 function run(item, commandArgs, input = '', options = {}) {
   return new Promise(resolveResult => {
     let stdout = '', stderr = '';
-    const bounded = commandArgs[0] === '--once', pro = item.backend === 'P';
+    const bounded = commandArgs[0] === '--once', pro = item.backend === 'pro';
     // A Pro answer can take far longer than the tmux backends' default hour.
     const seconds = Number(timeout || (pro ? 7200 : 3600));
     let cancelled = 0, timer, killTimer;
@@ -136,7 +133,7 @@ function run(item, commandArgs, input = '', options = {}) {
     if (pro && bounded) commandArgs = [...commandArgs, '--timeout', String(seconds)];
     // Each one-shot gets an owned process group so timeout also stops descendants.
     const child = pro ? spawn(process.execPath, [proSession, ...commandArgs], { stdio: ['pipe', 'pipe', 'pipe'], detached: bounded, ...options })
-      : spawn(runner, [harnesses[item.backend], ...commandArgs], { stdio: ['pipe', 'pipe', 'pipe'], detached: bounded, ...options });
+      : spawn(runner, [item.backend, ...commandArgs], { stdio: ['pipe', 'pipe', 'pipe'], detached: bounded, ...options });
     function signalGroup(signal) {
       if (!child.pid) return;
       try { process.kill(-child.pid, signal); }
@@ -173,8 +170,7 @@ function run(item, commandArgs, input = '', options = {}) {
         stderr += 'backend returned an empty reply\n';
         exit_code = 1;
       }
-      // A finished one-shot needs no diagnostics, and its CLI banner would reveal the real backend.
-      resolveResult({ ...item, stdout, stderr: exit_code === 0 && bounded ? '' : stderr, exit_code });
+      resolveResult({ ...item, stdout, stderr, exit_code });
     });
     child.stdin.end(input);
   });
@@ -220,11 +216,11 @@ if (action === 'backends') {
   for (const item of selections) {
     item.prompt ??= input;
     // Pro inlines attached files itself; the other backends read them from disk.
-    if (files.length && item.backend !== 'P') item.prompt = item.prompt.replace(/\s*$/, '\n\nRead these files:\n') + files.map(path => `- ${path}\n`).join('');
+    if (files.length && item.backend !== 'pro') item.prompt = item.prompt.replace(/\s*$/, '\n\nRead these files:\n') + files.map(path => `- ${path}\n`).join('');
   }
   if (action === 'start' && selections.some(item => Buffer.byteLength(item.prompt) > 131072)) usage('initial prompt exceeds 128 KiB; send further context later');
   if (['start', '--once'].includes(action)) {
-    if (action === 'start' && selections.some(item => item.backend !== 'P') && !command('tmux')) {
+    if (action === 'start' && selections.some(item => item.backend !== 'pro') && !command('tmux')) {
       process.stderr.write('agent-team: tmux is required\n');
       process.exit(127);
     }
@@ -232,7 +228,7 @@ if (action === 'backends') {
     const results = await Promise.all(selections.map(item => {
       if (!checks.has(item.backend)) checks.set(item.backend, probe(item.backend));
       const reason = checks.get(item.backend);
-      const extra = item.backend === 'P' ? files.flatMap(path => ['--file', path]) : [];
+      const extra = item.backend === 'pro' ? files.flatMap(path => ['--file', path]) : [];
       const task = reason ? Promise.resolve({ ...item, stdout: '', stderr: reason + '\n', exit_code: 1 }) : run(item, [action, ...extra], item.prompt);
       return task.then(outcome => {
         if (action === 'start' && outcome.exit_code === 0) {
@@ -273,7 +269,7 @@ if (action === 'backends') {
     diagnose(results);
     if (action === 'send') {
       const messages = results.map(item => ({ ...result(item), delivery: item.exit_code === 0 ?
-        ['R', 'P'].includes(item.backend) ? 'confirmed' : 'submitted' : item.exit_code === 124 ? 'unconfirmed' : 'failed' }));
+        ['cursor', 'pro'].includes(item.backend) ? 'confirmed' : 'submitted' : item.exit_code === 124 ? 'unconfirmed' : 'failed' }));
       json(results.length === 1 ? messages[0] : { results: messages, is_error: results.some(item => item.exit_code !== 0) });
     } else if (results.length === 1) process.stdout.write(results[0].stdout);
     else json({ results: results.map(result), is_error: results.some(item => item.exit_code !== 0) });

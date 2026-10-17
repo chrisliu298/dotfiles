@@ -9,12 +9,12 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const skill = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const prefix = 'P-review-';
+const prefix = 'pro-review-';
 const defaultWait = 7200;
 const registry = join(process.env.XDG_STATE_HOME || join(homedir(), '.local/state'), 'agent-team/pro');
 
 function fail(message, code = 1) {
-  process.stderr.write(`agent-team (P): ${message}\n`);
+  process.stderr.write(`agent-team (pro): ${message}\n`);
   process.exit(code);
 }
 function executable(path) {
@@ -38,14 +38,6 @@ function call(args, input = '') {
   if (result.error) fail(result.error.message);
   return { stdout: result.stdout || '', stderr: result.stderr || '', code: result.status ?? 1 };
 }
-// Relay wrapper diagnostics under the codename, pointing every recovery or retry command at
-// this helper. Resending identical text through `send` reuses its content-derived message id.
-function relay(stderr) {
-  process.stderr.write(stderr
-    .replace(/gpt-pro --send ([A-Za-z0-9-]+) --message-id [A-Za-z0-9-]+/g, (_, id) => `agent-team send ${prefix}${id}`)
-    .replace(/gpt-pro --run-id ([A-Za-z0-9-]+)/g, (_, id) => `agent-team wait ${prefix}${id}`)
-    .replace(/^gpt-pro:/gm, 'agent-team (P):'));
-}
 function fileArgs(files) { return files.flatMap(file => ['-f', file]); }
 function runId(session) { return session.slice(prefix.length); }
 function readStdin() {
@@ -64,13 +56,13 @@ while (rest.length) {
   else fail(`unsupported option or argument: ${option}`, 2);
 }
 const session = sessions[0];
-if (['send', 'wait', 'capture', 'status', 'interrupt', 'stop'].includes(action) && sessions.length !== 1) fail('specify one P session', 2);
+if (['send', 'wait', 'capture', 'status', 'interrupt', 'stop'].includes(action) && sessions.length !== 1) fail('specify one pro session', 2);
 
 if (action === '--once') {
   // The wrapper's own deadline exits 124 with a recovery hint while the run keeps going.
   const result = call(['--max-wait', String(timeout || defaultWait), ...fileArgs(files)], readStdin());
   process.stdout.write(result.stdout);
-  relay(result.stderr);
+  process.stderr.write(result.stderr);
   process.exit(result.code);
 } else if (action === 'start') {
   // A one-second wait submits the run and returns 124 while the detached worker carries on;
@@ -78,7 +70,7 @@ if (action === '--once') {
   const result = call(['--max-wait', '1', ...fileArgs(files)], readStdin());
   const id = /run_id=([A-Za-z0-9-]+)/.exec(result.stderr)?.[1];
   if (!id || ![0, 124, 255].includes(result.code)) {
-    relay(result.stderr);
+    process.stderr.write(result.stderr);
     fail(`submission failed (exit ${result.code})`, result.code || 1);
   }
   mkdirSync(registry, { recursive: true });
@@ -88,7 +80,7 @@ if (action === '--once') {
   // Reattaching waits on the live worker, or restores collection if it died; it never resends.
   const result = call(['--run-id', runId(session), '--max-wait', String(timeout || defaultWait)]);
   process.stdout.write(result.stdout);
-  relay(result.stderr);
+  process.stderr.write(result.stderr);
   process.exit(result.code);
 } else if (action === 'send') {
   const message = readStdin();
@@ -97,14 +89,14 @@ if (action === '--once') {
   const id = 'agent-team-' + createHash('sha256').update(runId(session) + '\0' + message).digest('hex').slice(0, 24);
   const result = call(['--send', runId(session), '--message-id', id], message);
   if (result.code === 2 && result.stderr.includes('run_finished')) {
-    fail('this P conversation has finished and accepts no follow-up; start a new task that includes ' +
+    fail('this Pro conversation has finished and accepts no follow-up; start a new task that includes ' +
       'its answer and the new question', 2);
   }
   if (result.code === 2 && result.stderr.includes('run_not_ready')) {
-    fail('P has not started answering yet; resend the same supplement shortly (its message id is ' +
+    fail('Pro has not started answering yet; resend the same supplement shortly (its message id is ' +
       'stable, so it is never delivered twice)', 2);
   }
-  relay(result.stderr);
+  process.stderr.write(result.stderr);
   process.exit(result.code);
 } else if (['status', 'capture'].includes(action)) {
   const result = call(['--run-id', runId(session), '--max-wait', '1']);
@@ -119,7 +111,7 @@ if (action === '--once') {
 } else if (['interrupt', 'stop'].includes(action)) {
   // Stop dequeues an unsent run or clicks Stop on the live turn; Pro cannot resume either way.
   const result = call(['--stop', runId(session)]);
-  relay(result.stderr);
+  process.stderr.write(result.stderr);
   if (action === 'stop' && [0, 4].includes(result.code)) rmSync(join(registry, session), { force: true });
   process.exit(result.code === 4 && action === 'stop' ? 0 : result.code);
 } else if (action === 'list') {

@@ -6,7 +6,7 @@ existing relay login. Report a missing wrapper or a relay failure; do not log in
 reconfigure the relay, or fall back to another backend. Each run spends Pro quota.
 
 No tmux: the relay's detached worker owns the run, and the session handle is
-`P-review-<run_id>`. `start` submits and returns once the run id is known;
+`pro-review-<run_id>`. `start` submits and returns once the run id is known;
 `wait` reattaches to the run (recovering collection if the worker died) and never
 resubmits. A timed-out `wait` leaves the run going, so wait on the same handle again.
 

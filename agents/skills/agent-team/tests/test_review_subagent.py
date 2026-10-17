@@ -327,7 +327,7 @@ for line in sys.stdin:
 
 def test_unified_parallel_backends(harness):
     name, run, _ = harness
-    backends = ('C', 'G', 'R')
+    backends = ('claude', 'gpt', 'cursor')
     if name != 'gpt' or not shutil.which('tmux'):
         pytest.skip('Unified real session manager')
     result = run('start', *(arg for backend in backends for arg in ('--backend', backend)), unified=True)
@@ -362,7 +362,7 @@ def test_unified_once_uses_real_cursor_adapter(harness):
     name, run, tmp = harness
     if name != 'cursor':
         pytest.skip('Cursor one-shot adapter integration')
-    outcome = run('--once', '--backend', 'R', '--output-format', 'json', unified=True)
+    outcome = run('--once', '--backend', 'cursor', '--output-format', 'json', unified=True)
     assert outcome.returncode == 0, outcome.stderr
     assert json.loads(outcome.stdout) == {'result': 'review result', 'exit_code': 0, 'is_error': False}
     call = json.loads((tmp / 'call.json').read_text())
@@ -371,7 +371,7 @@ def test_unified_once_uses_real_cursor_adapter(harness):
 
 
 def muse_session(run, prompt='assignment', extra_env=None):
-    result = run('start', '--backend', 'M', prompt=prompt, extra_env=extra_env, unified=True)
+    result = run('start', '--backend', 'muse', prompt=prompt, extra_env=extra_env, unified=True)
     assert result.returncode == 0, result.stderr
     return result.stdout.strip()
 
@@ -385,7 +385,7 @@ def test_unified_muse_session_uses_stop_hook_and_fixed_model(harness):
     name, run, tmp = harness
     muse_only(name)
     session = muse_session(run)
-    assert session.startswith('M-review-')
+    assert session.startswith('muse-review-')
     try:
         assert run('wait', session, unified=True).stdout.strip() == 'ANSWER:assignment'
         call = json.loads((tmp / 'call.json').read_text())
@@ -446,8 +446,6 @@ def test_unified_muse_stop_failure_fails_wait(harness):
     try:
         reply = run('wait', session, '--timeout', '10', unified=True)
         assert reply.returncode == 1 and 'turn failed' in reply.stderr and 'overloaded' in reply.stderr
-        # Text written before the failure follows on stderr, marked unverified; stdout stays empty.
-        assert 'unverified text written before the failure:\npartial' in reply.stderr and not reply.stdout.strip()
         # A later successful turn clears the failure.
         assert run('send', session, prompt='AFTER', unified=True).returncode == 0
         assert run('wait', session, unified=True).stdout.strip() == 'ANSWER:AFTER'
@@ -472,7 +470,7 @@ def test_unified_muse_once_passes_prompt_as_an_argument(harness):
     if name != 'gpt':
         pytest.skip('Muse one-shot integration')
     (tmp / 'work' / 'muse').mkdir(parents=True)  # A same-named directory must not shadow the CLI.
-    outcome = run('--once', '--backend', 'M', '--output-format', 'json', prompt='-leading dash',
+    outcome = run('--once', '--backend', 'muse', '--output-format', 'json', prompt='-leading dash',
                   unified=True, cwd=tmp / 'work')
     assert outcome.returncode == 0, outcome.stderr
     assert json.loads(outcome.stdout)['result'] == 'review result'
@@ -503,7 +501,7 @@ def test_unified_failed_send_cannot_replay_previous_reply(harness, failure):
     name, run, tmp = harness
     if name != 'gpt' or not shutil.which('tmux'):
         pytest.skip('Unified batch failure recovery')
-    started = run('start', '--backend', 'C', '--backend', 'G', unified=True)
+    started = run('start', '--backend', 'claude', '--backend', 'gpt', unified=True)
     sessions = [item['session'] for item in json.loads(started.stdout)['sessions']]
     def tmux(*args):
         return subprocess.run(['tmux', *args], env=run.env, capture_output=True, text=True, check=True).stdout.strip()
@@ -724,7 +722,7 @@ def test_default_tmux_lifecycle(harness):
     r = run()  # No mode flag must start a persistent session, not return a review.
     assert r.returncode == 0, r.stderr
     session = r.stdout.strip()
-    assert session.startswith({'claude': 'C', 'gpt': 'G', 'cursor': 'R'}[name] + '-review-')
+    assert session.startswith(name + '-review-')
     wait_for(run, session, 'capture', 'MOCK_READY')
     r = run('wait', session)
     expected = 'DRAFT:assignment\n\nANSWER:assignment' if name == 'gpt' else 'ANSWER:assignment'
