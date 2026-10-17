@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Claude Code status line — follows the terminal's light/dark ANSI palette
 # Model · project · branch* · 9m
-# ctx 26% 38k/200k · 5h 37% 2h41m · 7d 26% 4d3h · $1.45 · +141/-25
+# ctx 26% 38k/200k · 7d 26% 4d3h · $1.45 · +141/-25
 
 input=$(cat)
 
@@ -10,11 +10,11 @@ reset='\033[0m'
 muted='\033[90m'
 bold='\033[1m'
 blue='\033[34m'                      # navigation: project, worktree
-green='\033[32m'                     # branch, success, additions
-red='\033[31m'                       # errors, deletions
+green='\033[32m'                     # branch, success, additions, usage <50%
+red='\033[31m'                       # errors, deletions, usage >=80%
 cyan='\033[36m'                      # elapsed time
-magenta='\033[35m'                   # context usage
-yellow='\033[33m'                    # cost
+yellow='\033[33m'                    # cost, usage 50-79%
+magenta='\033[35m'                   # context token counts
 
 # ── Extract fields (single jq call) ─────────────────────────────
 eval "$(echo "$input" | jq -r '
@@ -37,8 +37,6 @@ eval "$(echo "$input" | jq -r '
   @sh "wt_branch=\(.worktree.branch // "")",
   @sh "agent_name=\(.agent.name // "")",
   @sh "vim_mode=\(.vim.mode // "")",
-  @sh "rl_5h=\(.rate_limits.five_hour.used_percentage // "")",
-  @sh "rl_5h_reset=\(.rate_limits.five_hour.resets_at // "")",
   @sh "rl_7d=\(.rate_limits.seven_day.used_percentage // "")",
   @sh "rl_7d_reset=\(.rate_limits.seven_day.resets_at // "")"
 ')"
@@ -93,6 +91,14 @@ fmt_tokens() {
 }
 
 # ── Shared helpers ────────────────────────────────────────────────
+# Color a usage percentage by how close it is to the limit
+usage_color() {
+  if [ "$1" -ge 80 ]; then echo "$red"
+  elif [ "$1" -ge 50 ]; then echo "$yellow"
+  else echo "$green"
+  fi
+}
+
 rl_reset_fmt() {
   local ts="$1"
   [ -z "$ts" ] && return
@@ -158,18 +164,11 @@ if [ -n "$duration_ms" ] && [ "$duration_ms" != "0" ]; then
   [ "$total_s" -gt 0 ] && parts+=("${cyan}${dur}${reset}")
 fi
 
-# Rate limits (text only, no bars)
-if [ -n "$rl_5h" ]; then
-  rl5_pct="${rl_5h%.*}"
-  rl5_seg="${muted}5h ${rl5_pct:-0}%${reset}"
-  rl5_reset=$(rl_reset_fmt "$rl_5h_reset")
-  [ -n "$rl5_reset" ] && rl5_seg+=" ${muted}${rl5_reset}${reset}"
-  usage_parts+=("$rl5_seg")
-fi
-
+# Weekly rate limit (text only, no bars)
 if [ -n "$rl_7d" ]; then
   rl7_pct="${rl_7d%.*}"
-  rl7_seg="${muted}7d ${rl7_pct:-0}%${reset}"
+  rl7_pct="${rl7_pct:-0}"
+  rl7_seg="${muted}7d $(usage_color "$rl7_pct")${rl7_pct}%${reset}"
   rl7_reset=$(rl_reset_fmt "$rl_7d_reset")
   [ -n "$rl7_reset" ] && rl7_seg+=" ${muted}${rl7_reset}${reset}"
   usage_parts+=("$rl7_seg")
@@ -193,9 +192,9 @@ if [ -n "$cur_input" ] && [ -n "$ctx_size" ] && [ "$ctx_size" -gt 0 ]; then
     pct=$(( cur_tok * 100 / ctx_size ))
     (( pct > 100 )) && pct=100
   fi
-  ctx_tail="${muted} $(fmt_tokens "$cur_tok")/$(fmt_tokens "$ctx_size")"
+  ctx_tail=" ${magenta}$(fmt_tokens "$cur_tok")${muted}/$(fmt_tokens "$ctx_size")"
 fi
-ctx_seg="${muted}ctx ${magenta}${pct}%${ctx_tail}"
+ctx_seg="${muted}ctx $(usage_color "$pct")${pct}%${ctx_tail}"
 usage_parts=("${ctx_seg}${reset}" "${usage_parts[@]}")
 
 # Cost
