@@ -98,6 +98,6 @@ merged into the single `agents/AGENTS.md`, symlinked into both agent homes.
 ## Delivery and delegation smoke cases
 
 Use [delivery-cases.md](delivery-cases.md) with the current global instructions in one
-read-only `agent-team` session per peer (e.g. `--backend claude`, `--backend gpt`, `--backend cursor`). Do not use the legacy multi-peer dispatcher for this
+read-only `agent-team` session per peer (e.g. `--backend claude`, `--backend gpt`, `--backend gemini`). Do not use the legacy multi-peer dispatcher for this
 focused check. See [the dated result](delivery-smoke-2026-09-06.md) and its
 [responses](delivery-smoke-2026-09-06.json) for the criteria and limitations.

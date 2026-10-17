@@ -4,7 +4,7 @@ name: gpt-pro
 description: |
   Send a prompt to ChatGPT Pro alone when the user requests GPT-Pro, a Pro take,
   or a second opinion from ChatGPT Pro. When Pro is one of several backends
-  (Codex, Claude, Cursor, Muse) on the same task, use agent-team instead.
+  (Codex, Claude, Gemini, Muse, DeepSeek) on the same task, use agent-team instead.
 allowed-tools: Bash(gpt-pro:*), Bash(${CLAUDE_SKILL_DIR}/scripts/gpt-pro:*), Read, Write
 user-invocable: true
 ---

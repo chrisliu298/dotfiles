@@ -23,7 +23,7 @@ Host-local third-party skills installed by `npx skills` into `~/.agents/skills/`
 
 A shared/universal `SKILL.md` is written to work across agents; agent-specific scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., relay and prism are claude-only, so they never reach Codex or Muse). Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex and DeepSeek Harness; Muse records `allowed-tools` as advisory metadata only.
 
-`agent-team` is auto-installed for Claude, Codex, Muse and DeepSeek Harness and provides one entrypoint for read-only GPT, Claude, Cursor, Muse and ChatGPT Pro tasks (analysis, research, planning and review), running several backends in parallel. It is self-contained: its session runner and helpers live in `agent-team/scripts/`, so Muse's copy-install works too. Run regression checks with `uv run --with pytest pytest agents/skills/agent-team/tests`.
+`agent-team` is auto-installed for Claude, Codex, Muse and DeepSeek Harness and provides one entrypoint for read-only GPT, Claude, Gemini (Cursor Agent), Muse, DeepSeek (Claude Code) and ChatGPT Pro tasks (analysis, research, planning and review), running several backends in parallel. It is self-contained: its session runner and helpers live in `agent-team/scripts/`, so Muse's copy-install works too. Run regression checks with `uv run --with pytest pytest agents/skills/agent-team/tests`.
 
 Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via `./dotfiles.sh skills`.
 
@@ -37,7 +37,7 @@ Columns: **C**laude · Code**x** · **M**use · **D**eepSeek Harness. Legend: �
 
 | Skill | C | X | M | D | Source · Description |
 |-------|:-:|:-:|:-:|:-:|----------------------|
-| agent-team              | ✓ | ✓ | ✓ | ✓ | local — Unified read-only GPT/Claude/Cursor/Muse/Pro tasks; parallel backends, tmux (Pro via gpt-pro relay) |
+| agent-team              | ✓ | ✓ | ✓ | ✓ | local — Unified read-only GPT/Claude/Gemini/Muse/DeepSeek/Pro tasks; parallel backends, tmux (Pro via gpt-pro relay) |
 | arxiv-reader            | ✓ | ✓ | ✓ | ✓ | local — Read arxiv via TeX / HF markdown / HTML fallback |
 | gpt-pro                 | ✓ | ✓ | ✓ | ✓ | local — ChatGPT Pro Extended through the local relay engine (the `gpt-pro` CLI is on PATH from the Codex copy) |
 | pdf                     | — | ✓ | — | — | [openai/skills][c-pdf-o] — PDF read/edit (Claude uses the claude.ai-synced `anthropic-skills:pdf`; both are the vendors' native skills, not repo-owned, so Muse gets no managed copy) |

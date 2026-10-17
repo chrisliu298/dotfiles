@@ -58,13 +58,13 @@ elif action == '--once':
 elif action == 'wait':
     if os.environ.get('EMPTY_BACKEND') == backend: sys.exit(0)
     print('ANSWER:' + backend + ':' + args[0])
-elif action == 'send' and backend == 'cursor':
+elif action == 'send' and backend == 'gemini':
     print('delivery unconfirmed; do not resend automatically', file=sys.stderr)
     sys.exit(124)
 if os.environ.get('FAIL_BACKEND') == backend: sys.exit(7)
 ''')
     runner.chmod(0o755)
-    (tmp_path / '.functions').write_text('c() { :; }\n')
+    (tmp_path / '.functions').write_text('c() { :; }\nds() { :; }\n')
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir()
     for name in ('tmux', 'jq', 'cursor-agent', 'muse'):
@@ -107,7 +107,7 @@ print('PRO ONCE')
     codex.chmod(0o755)
     env = {key: os.environ[key] for key in ('PATH', 'LANG') if key in os.environ}
     env.update(HOME=str(tmp_path), PATH=str(bin_dir) + os.pathsep + env['PATH'],
-               CURSOR_AGENT_BIN=str(bin_dir / 'cursor-agent'))
+               CURSOR_AGENT_BIN=str(bin_dir / 'cursor-agent'), DEEPSEEK_API_KEY='test-key')
     # No legacy manual-enabled file or per-caller version: both use this one skill.
     entry = tmp_path / 'installed-review'
     entry.symlink_to(target, target_is_directory=True)
@@ -165,21 +165,21 @@ def test_all_backends_use_one_skill(unified):
     run, _ = unified
     backends = run('backends')
     assert all(item['available'] for item in json.loads(backends.stdout)['backends'])
-    outcome = run('--once', '--backend', 'claude', '--backend', 'gpt', '--backend', 'cursor', '--backend', 'muse',
-                  '--backend', 'pro')
+    outcome = run('--once', '--backend', 'claude', '--backend', 'gpt', '--backend', 'gemini', '--backend', 'muse',
+                  '--backend', 'ds', '--backend', 'pro')
     assert outcome.returncode == 0, outcome.stderr
     replies = json.loads(outcome.stdout)['results']
-    assert [item['backend'] for item in replies] == ['claude', 'gpt', 'cursor', 'muse', 'pro']
-    assert all(item['result'] == '结论🙂' for item in replies[:4]) and replies[4]['result'] == 'PRO ONCE'
+    assert [item['backend'] for item in replies] == ['claude', 'gpt', 'gemini', 'muse', 'ds', 'pro']
+    assert all(item['result'] == '结论🙂' for item in replies[:5]) and replies[5]['result'] == 'PRO ONCE'
 
 
-def test_batch_retains_each_failure_and_cursor_delivery_uncertainty(unified):
+def test_batch_retains_each_failure_and_gemini_delivery_uncertainty(unified):
     run, _ = unified
     outcome = run('--once', '--backend', 'claude', '--backend', 'gpt', extra_env={'FAIL_BACKEND': 'gpt'})
     assert outcome.returncode == 1
     replies = json.loads(outcome.stdout)['results']
     assert replies[0]['exit_code'] == 0 and replies[1]['exit_code'] == 7
-    sent = run('send', 'cursor-review-old', 'claude-review-old')
+    sent = run('send', 'gemini-review-old', 'claude-review-old')
     assert sent.returncode == 124
     replies = json.loads(sent.stdout)['results']
     assert replies[0]['delivery'] == 'unconfirmed' and replies[1]['delivery'] == 'submitted'
@@ -190,11 +190,11 @@ def test_per_instance_prompt_files_start_distinct_assignments_in_one_call(unifie
     (root / 'correctness.md').write_text('看正确性')
     (root / 'tests.md').write_text('看测试')
     outcome = run('start', '--backend', f'claude={root / "correctness.md"}', '--backend', 'gpt',
-                  '--backend', f'cursor={root / "tests.md"}', prompt='共享任务', extra_env={'EXPECTED_STARTS': '3'})
+                  '--backend', f'gemini={root / "tests.md"}', prompt='共享任务', extra_env={'EXPECTED_STARTS': '3'})
     assert outcome.returncode == 0, outcome.stderr
     calls = {call['backend']: call['prompt'] for call in
              map(json.loads, (root / 'calls.jsonl').read_text().splitlines())}
-    assert calls == {'claude': '看正确性', 'gpt': '共享任务', 'cursor': '看测试'}
+    assert calls == {'claude': '看正确性', 'gpt': '共享任务', 'gemini': '看测试'}
 
 
 def test_prompt_files_make_stdin_optional(unified):
@@ -226,7 +226,7 @@ def test_each_backend_runs_at_most_once_per_call(unified, action, backends):
 
 @pytest.mark.parametrize('options', [[], ['--backend', 'unknown'], ['--backend', 'gpt', '--effort', 'high'],
                                    ['--backend', 'gpt', '--model', 'gpt-6-astra'],
-                                   ['--backend', 'cursor', '--mode', 'ask'], ['--network', '--backend', 'gpt']])
+                                   ['--backend', 'gemini', '--mode', 'ask'], ['--backend', 'cursor'], ['--network', '--backend', 'gpt']])
 def test_invalid_selection_dispatches_nothing(unified, options):
     run, root = unified
     assert run('start', *options).returncode == 2
@@ -434,3 +434,12 @@ def test_pro_submission_failure_returns_no_handle(unified):
     assert run('list').stdout == ''
     missing = run('backends', extra_env={'GPT_PRO_BIN': str(root / 'none')})
     assert {item['backend']: item['available'] for item in json.loads(missing.stdout)['backends']}['pro'] is False
+
+
+def test_ds_requires_its_api_key(unified):
+    run, root = unified
+    backends = run('backends', extra_env={'DEEPSEEK_API_KEY': ''})
+    ds = next(item for item in json.loads(backends.stdout)['backends'] if item['backend'] == 'ds')
+    assert not ds['available'] and 'DEEPSEEK_API_KEY' in ds['reason']
+    assert run('--once', '--backend', 'ds', extra_env={'DEEPSEEK_API_KEY': ''}).returncode == 1
+    assert not (root / 'calls.jsonl').exists()

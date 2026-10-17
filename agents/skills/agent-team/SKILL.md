@@ -1,6 +1,6 @@
 ---
 name: agent-team
-description: Delegate independent read-only analysis, research, planning, or review to GPT/Codex CLI, Claude Code, Cursor Agent, Muse Code, or ChatGPT Pro, including several backends in parallel. Use when the user names these backends for a task or requests this skill; a request for ChatGPT Pro alone goes to gpt-pro. Not for implementation, external operations, or unspecified native subagent requests.
+description: Delegate independent read-only analysis, research, planning, or review to GPT/Codex CLI, Claude Code, Gemini (Cursor Agent), Muse Code, DeepSeek (Claude Code), or ChatGPT Pro, including several backends in parallel. Use when the user names these backends for a task or requests this skill; a request for ChatGPT Pro alone goes to gpt-pro. Not for implementation, external operations, or unspecified native subagent requests.
 ---
 
 # Agent Team
@@ -18,8 +18,8 @@ use `--once` only for a request that needs no follow-ups.
 Read the user's message for backend names and assignments:
 
 - “让 Claude 审查” → `claude`.
-- “Claude 和 Cursor 并行独立审查” → `claude` and `cursor`, same assignment.
-- “GPT、Claude、Cursor、Muse 都看一下” → all four, same assignment.
+- “Claude 和 Gemini 并行独立审查” → `claude` and `gemini`, same assignment.
+- “GPT、Claude、Gemini、Muse、DeepSeek 都看一下” → all five, same assignment.
 - “也问问 Pro” / “ChatGPT Pro” alongside other backends → `pro`.
 - “Claude 看正确性，GPT 看测试” → `claude` and `gpt`, distinct assignments.
 
@@ -34,16 +34,17 @@ backend or add deadlines (`wait --timeout` bounds the wait). `--file PATH`
 their contents, while the other backends receive the absolute paths to read.
 If no backend was chosen and the request does not identify one, ask which to use.
 An unspecified “subagent review” remains the caller's native subagent workflow.
-`gpt` means Codex CLI; `pro` means ChatGPT Pro through the gpt-pro relay.
+`gpt` means Codex CLI; `gemini` means Cursor Agent on Gemini; `ds` means DeepSeek
+through Claude Code; `pro` means ChatGPT Pro through the gpt-pro relay.
 
 Before dispatch, read only the references for the chosen backends:
-[Claude](references/claude.md), [GPT](references/gpt.md), [Cursor](references/cursor.md),
-[Muse](references/muse.md), [Pro](references/pro.md).
+[Claude](references/claude.md), [GPT](references/gpt.md), [Gemini](references/gemini.md),
+[Muse](references/muse.md), [DeepSeek](references/ds.md), [Pro](references/pro.md).
 Use `scripts/agent-team` beside this `SKILL.md`; resolve its actual installed
 location rather than assuming a particular agent's skill directory. It requires
 Node.js and zsh, plus tmux for persistent non-Pro sessions. `backends` reports configured
 availability, not a verified login or model entitlement. This skill is installed
-for Claude Code, Codex, and Muse. Report unavailable backends; do not substitute one.
+for Claude Code, Codex, Muse, and DeepSeek Harness. Report unavailable backends; do not substitute one.
 
 ## Persistent task
 
@@ -63,8 +64,8 @@ From the authorized working directory:
 # helper is scripts/agent-team beside this SKILL.md.
 $helper backends
 session="$($helper start --backend claude < /tmp/review.md)"
-# Same assignment for GPT, Cursor and Muse, a distinct one for Claude:
-$helper start --backend gpt --backend cursor --backend muse \
+# Same assignment for GPT, Gemini and Muse, a distinct one for Claude:
+$helper start --backend gpt --backend gemini --backend muse \
   --backend claude=/tmp/claude-review.md < /tmp/review.md
 # Pro receives the file contents; Claude receives the path:
 $helper start --backend pro --backend claude --file src/main.py < /tmp/review.md
@@ -105,14 +106,14 @@ agreements, disagreements, and remaining gaps.
 
 ## Control and failure semantics
 
-- `send` returns JSON with `delivery`. Cursor `confirmed` means steering activation
+- `send` returns JSON with `delivery`. Gemini `confirmed` means steering activation
   or transcript receipt was confirmed; Pro `confirmed` means the relay acknowledged
-  delivery into the running answer. Claude/GPT/Muse `submitted` means text was
+  delivery into the running answer. Claude/GPT/Muse/DeepSeek `submitted` means text was
   pasted and Enter sent; it does not independently prove consumption or task
   completion. Use `wait` for the resulting reply. Do not interrupt merely to add context.
 - A Pro conversation accepts no follow-up once its answer finishes: `send` fails
   and says to start a new task that includes the answer and the new question.
-- Cursor and Pro `unconfirmed` return 124; the message may still be queued. Inspect it or
+- Gemini and Pro `unconfirmed` return 124; the message may still be queued. Inspect it or
   keep waiting, without automatically resending or restarting.
 - A failed `send` leaves that session's latest request failed. `wait` reports the
   failure instead of returning its previous reply; a subsequent successful send

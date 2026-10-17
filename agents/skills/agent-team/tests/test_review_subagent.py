@@ -200,7 +200,7 @@ while True:
 '''
 
 
-@pytest.fixture(params=['claude', 'gpt', 'cursor'])
+@pytest.fixture(params=['claude', 'gpt', 'gemini', 'ds'])
 def harness(request, tmp_path):
     name = request.param
     env = {key: os.environ[key] for key in ('PATH', 'LANG') if key in os.environ}
@@ -219,7 +219,7 @@ if '--version' in sys.argv:
 config_path = Path(os.environ.get('CURSOR_CONFIG_DIR', '/nonexistent'), 'cli-config.json')
 config = json.loads(config_path.read_text()) if config_path.exists() else None
 prompt_file = sys.argv[sys.argv.index('--prompt-file') + 1] if '--prompt-file' in sys.argv else None
-Path(os.environ['CAPTURE']).write_text(json.dumps({{'args': sys.argv[1:], 'sentinel': os.environ.get('CODEX_REVIEW_SUBAGENT_ACTIVE'), 'config': config,
+Path(os.environ['CAPTURE']).write_text(json.dumps({{'args': sys.argv[1:], 'sentinel': os.environ.get('CODEX_REVIEW_SUBAGENT_ACTIVE'), 'config': config, 'launcher': os.environ.get('LAUNCHER'),
                                                    'prompt_file': prompt_file, 'prompt': Path(prompt_file).read_text() if prompt_file else None}}))
 if 'create-chat' in sys.argv:
     print('cursor-main')
@@ -294,7 +294,8 @@ for line in sys.stdin:
     if 'SILENT' not in line: turn_done('ANSWER:' + line.strip().replace('\\x1b[200~', '').replace('\\x1b[201~', ''))
 ''')
     backend.chmod(0o755)
-    (tmp_path / '.functions').write_text(f'c() {{ "{backend}" "$@"; }}\n')
+    # Each launcher tags its calls so tests can tell which one ran.
+    (tmp_path / '.functions').write_text(f'c() {{ LAUNCHER=c "{backend}" "$@"; }}\nds() {{ LAUNCHER=ds "{backend}" "$@"; }}\n')
     (tmp_path / 'codex').symlink_to(backend)
     muse = tmp_path / 'muse'
     muse.write_text(f'#!{sys.executable}\n' + MUSE_NATIVE_MOCK)
@@ -327,7 +328,7 @@ for line in sys.stdin:
 
 def test_unified_parallel_backends(harness):
     name, run, _ = harness
-    backends = ('claude', 'gpt', 'cursor')
+    backends = ('claude', 'gpt', 'gemini')
     if name != 'gpt' or not shutil.which('tmux'):
         pytest.skip('Unified real session manager')
     result = run('start', *(arg for backend in backends for arg in ('--backend', backend)), unified=True)
@@ -358,11 +359,11 @@ def test_unified_parallel_backends(harness):
         assert run('stop', *sessions, unified=True).returncode == 0
 
 
-def test_unified_once_uses_real_cursor_adapter(harness):
+def test_unified_once_uses_real_gemini_adapter(harness):
     name, run, tmp = harness
-    if name != 'cursor':
+    if name != 'gemini':
         pytest.skip('Cursor one-shot adapter integration')
-    outcome = run('--once', '--backend', 'cursor', '--output-format', 'json', unified=True)
+    outcome = run('--once', '--backend', 'gemini', '--output-format', 'json', unified=True)
     assert outcome.returncode == 0, outcome.stderr
     assert json.loads(outcome.stdout) == {'result': 'review result', 'exit_code': 0, 'is_error': False}
     call = json.loads((tmp / 'call.json').read_text())
@@ -489,7 +490,7 @@ def test_unified_can_follow_up_and_stop_a_legacy_session(harness):
         assert run('wait', session, unified=True).returncode == 0
         result = run('send', session, prompt='UNIFIED_SUPPLEMENT', unified=True)
         assert result.returncode == 0, result.stderr
-        assert json.loads(result.stdout)['delivery'] == ('confirmed' if name == 'cursor' else 'submitted')
+        assert json.loads(result.stdout)['delivery'] == ('confirmed' if name == 'gemini' else 'submitted')
         result = run('wait', session, unified=True)
         assert result.returncode == 0 and result.stdout.strip() == 'ANSWER:UNIFIED_SUPPLEMENT'
     finally:
@@ -558,10 +559,11 @@ def test_once_pins_and_json(harness):
     assert json.loads(result.stdout) == {'result': 'review result', 'exit_code': 0, 'is_error': False}
     call = json.loads((tmp / 'call.json').read_text())
     args = call['args']
-    assert args[args.index('--model') + 1] == {'claude': 'opus', 'gpt': 'gpt-6-astra', 'cursor': 'gemini-4-argon-high'}[name]
+    assert args[args.index('--model') + 1] == {'claude': 'opus', 'gpt': 'gpt-6-astra', 'gemini': 'gemini-4-argon-high', 'ds': 'deepseek-flash[1m]'}[name]
     assert call['sentinel'] == '1'
-    if name == 'claude':
+    if name in ('claude', 'ds'):
         assert args[args.index('--effort') + 1] == 'high'
+        assert call['launcher'] == {'claude': 'c', 'ds': 'ds'}[name]
     elif name == 'gpt':
         assert 'model_reasoning_effort="high"' in args
         assert '--dangerously-bypass-approvals-and-sandbox' in args
@@ -576,7 +578,7 @@ def test_once_pins_and_json(harness):
 @pytest.mark.parametrize('mode', ['start', '--once'])
 def test_cursor_launch_has_all_tool_permissions(harness, mode):
     name, run, tmp = harness
-    if name != 'cursor' or (mode == 'start' and not shutil.which('tmux')):
+    if name != 'gemini' or (mode == 'start' and not shutil.which('tmux')):
         pytest.skip('Cursor full tool permissions')
     outcome = run(mode, unified=False)
     assert outcome.returncode == 0, outcome.stderr
@@ -700,7 +702,7 @@ def test_failures_and_empty_result(harness):
     assert json.loads(r.stdout)['is_error'] is True
     r = run('--once', extra_env={'MOCK_RESULT': ''})
     assert r.returncode == 1
-    assert ('no complete terminal result' if name == 'cursor' else 'empty response') in r.stderr
+    assert ('no complete terminal result' if name == 'gemini' else 'empty response') in r.stderr
     assert run('--once', prompt=' \n ').returncode == 2
     assert run('--once', extra_env={'CODEX_REVIEW_SUBAGENT_ACTIVE': '1'}).returncode == 126
 
@@ -734,7 +736,7 @@ def test_default_tmux_lifecycle(harness):
     assert run('send', session, prompt='FOLLOWUP_123').returncode == 0
     r = run('wait', session)  # Blocks for the turn hook, even if it fired before wait started.
     assert (r.returncode, r.stdout.strip()) == (0, 'ANSWER:FOLLOWUP_123'), r.stderr
-    if name == 'cursor':
+    if name == 'gemini':
         call = json.loads((tmp / 'call.json').read_text())
         args = call['args']
         assert args[args.index('--resume') + 1] == 'cursor-main'
@@ -748,10 +750,10 @@ def test_default_tmux_lifecycle(harness):
     assert 'FOLLOWUP_123' in run('capture', session).stdout
     assert run('interrupt', session).returncode == 0
     wait_for(run, session, 'status', 'input_ready=1')
-    assert run('send', session, prompt='EXIT_NOW').returncode == (1 if name == 'cursor' else 0)
+    assert run('send', session, prompt='EXIT_NOW').returncode == (1 if name == 'gemini' else 0)
     wait_for(run, session, 'status', 'dead=1 exit_code=7')
     assert run('wait', session).returncode == 1  # A dead pane ends the wait instead of hanging.
-    if name != 'cursor':
+    if name != 'gemini':
         assert run('send', session).returncode == 1
     assert run('stop', session).returncode == 0
     assert session not in run('list').stdout
@@ -789,7 +791,7 @@ def test_paste_mode_tracker(tmp_path):
 ])
 def test_cursor_tmux_rejects_incomplete_turn(harness, events):
     name, run, _ = harness
-    if name != 'cursor' or not shutil.which('tmux'):
+    if name != 'gemini' or not shutil.which('tmux'):
         pytest.skip('Cursor completion validation')
     result = run(extra_env={'MOCK_CURSOR_EVENTS': json.dumps(events)})
     assert result.returncode == 0, result.stderr
@@ -804,7 +806,7 @@ def test_cursor_tmux_rejects_incomplete_turn(harness, events):
 
 def test_cursor_multiline_followup_is_complete(harness):
     name, run, _ = harness
-    if name != 'cursor' or not shutil.which('tmux'):
+    if name != 'gemini' or not shutil.which('tmux'):
         pytest.skip('Cursor multiline input')
     session = run().stdout.strip()
     try:
@@ -820,7 +822,7 @@ def test_cursor_multiline_followup_is_complete(harness):
 
 def test_cursor_accepts_messages_during_a_turn(harness):
     name, run, tmp = harness
-    if name != 'cursor' or not shutil.which('tmux'):
+    if name != 'gemini' or not shutil.which('tmux'):
         pytest.skip('Cursor busy-message delivery')
     session = run(prompt='BUSY_INITIAL', extra_env={'MOCK_CURSOR_STEER_SECONDS': '0.5'}).stdout.strip()
     try:
@@ -850,7 +852,7 @@ def test_cursor_accepts_messages_during_a_turn(harness):
 @pytest.mark.parametrize('message', ['BUSY_FOLLOWUP', '第一行\nsecond line\nthird line'])
 def test_cursor_send_waits_for_delayed_steering(harness, message):
     name, run, tmp = harness
-    if name != 'cursor' or not shutil.which('tmux'):
+    if name != 'gemini' or not shutil.which('tmux'):
         pytest.skip('Cursor delayed steering')
     session = run(prompt='BUSY_INITIAL', extra_env={'MOCK_CURSOR_FOOTER_DELAY': '0.8'}).stdout.strip()
     try:
@@ -866,7 +868,7 @@ def test_cursor_send_waits_for_delayed_steering(harness, message):
 
 def test_cursor_send_waits_for_paste_to_render(harness):
     name, run, tmp = harness
-    if name != 'cursor' or not shutil.which('tmux'):
+    if name != 'gemini' or not shutil.which('tmux'):
         pytest.skip('Cursor paste rendering')
     session = run(prompt='BUSY_INITIAL', extra_env={'MOCK_CURSOR_PASTE_DELAY': '0.5'}).stdout.strip()
     try:
@@ -880,7 +882,7 @@ def test_cursor_send_waits_for_paste_to_render(harness):
 
 def test_cursor_wait_steers_followup_queued_behind_a_steer(harness):
     name, run, tmp = harness
-    if name != 'cursor' or not shutil.which('tmux'):
+    if name != 'gemini' or not shutil.which('tmux'):
         pytest.skip('Cursor queued steering')
     session = run(prompt='BUSY_INITIAL', extra_env={'MOCK_CURSOR_STEER_SECONDS': '11'}).stdout.strip()
     try:
@@ -896,7 +898,7 @@ def test_cursor_wait_steers_followup_queued_behind_a_steer(harness):
 
 def test_cursor_wait_reports_stream_crash_with_unverified_text(harness):
     name, run, _ = harness
-    if name != 'cursor' or not shutil.which('tmux'):
+    if name != 'gemini' or not shutil.which('tmux'):
         pytest.skip('Cursor stream crash')
     session = run(extra_env={'MOCK_CURSOR_CRASH': '1'}).stdout.strip()
     try:
@@ -911,7 +913,7 @@ def test_cursor_wait_reports_stream_crash_with_unverified_text(harness):
 @pytest.mark.parametrize('failure', ['MOCK_CURSOR_HIDE_FOOTER', 'MOCK_CURSOR_IGNORE_STEER'])
 def test_cursor_send_reports_unconfirmed_delivery(harness, failure):
     name, run, tmp = harness
-    if name != 'cursor' or not shutil.which('tmux'):
+    if name != 'gemini' or not shutil.which('tmux'):
         pytest.skip('Cursor unconfirmed steering')
     session = run(prompt='BUSY_INITIAL', extra_env={failure: '1'}).stdout.strip()
     try:

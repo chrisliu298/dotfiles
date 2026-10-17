@@ -33,7 +33,7 @@ sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
 
 def run(backend, *options):
     env, _ = backend
-    return subprocess.run([str(SCRIPTS / 'review-subagent'), 'cursor', '--once', *options],
+    return subprocess.run([str(SCRIPTS / 'review-subagent'), 'gemini', '--once', *options],
                           input='Read only this brief.', text=True,
                           capture_output=True, env=env, timeout=10)
 

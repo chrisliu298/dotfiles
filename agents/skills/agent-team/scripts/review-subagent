@@ -8,8 +8,9 @@ shift
 case "$harness" in
     claude) model=opus ;;
     gpt) model=gpt-6-astra ;;
-    cursor) model=gemini-4-argon-high ;;
+    gemini) model=gemini-4-argon-high ;;
     muse) model=muse-wonder-full-1.0 ;;
+    ds) model='deepseek-flash[1m]' ;;
     *) print -u2 'unknown review harness'; exit 2 ;;
 esac
 # Diagnostics name the public entrypoint; temp files carry the backend.
@@ -23,7 +24,7 @@ cursor_cli="${CURSOR_AGENT_BIN:-cursor-agent}"
 muse_cli="${MUSE_BIN:-muse}"
 
 check_harness_cli() {
-    if [[ "$harness" == cursor ]]; then
+    if [[ "$harness" == gemini ]]; then
         if (( ! $+commands[jq] || ! $+commands[node] )); then
             print -u2 "$helper: jq and Node.js are required"
             return 127
@@ -69,13 +70,13 @@ parse_options() {
     while (( $# )); do
         case "$1" in
             --trust)
-                [[ "$harness" == cursor ]] || { usage; return 2; }
+                [[ "$harness" == gemini ]] || { usage; return 2; }
                 shift
                 ;;
             --effort|--model|--output-format)
                 local option="$1" value="${2:-}"
                 if (( $# < 2 )); then usage; return 2; fi
-                if [[ "$harness" == (cursor|muse) && "$option" != --output-format ]]; then
+                if [[ "$harness" == (gemini|muse) && "$option" != --output-format ]]; then
                     print -u2 "$helper: model and effort are fixed; selection options are not supported"
                     return 2
                 fi
@@ -94,14 +95,17 @@ parse_options() {
 launch() {
     local mode="$1" prompt="$2"
     export CODEX_REVIEW_SUBAGENT_ACTIVE=1
-    if [[ "$harness" == claude ]]; then
+    if [[ "$harness" == (claude|ds) ]]; then
+        # DeepSeek runs Claude Code through the user's `ds` launcher, so it shares this path.
+        local launcher=c
+        [[ "$harness" == ds ]] && launcher=ds
         source "$HOME/.functions" || return 127
-        (( $+functions[c] )) || { print -u2 "$helper: c is not defined"; return 127; }
+        (( $+functions[$launcher] )) || { print -u2 "$helper: $launcher is not defined"; return 127; }
         if [[ "$mode" == once ]]; then
-            print -rn -- "$prompt" | c -p --no-session-persistence --model opus --effort high
+            print -rn -- "$prompt" | "$launcher" -p --no-session-persistence --model "$model" --effort high
         else
             # The Stop hook records each finished turn for `wait`.
-            c --model opus --effort high \
+            "$launcher" --model "$model" --effort high \
                 --settings "{\"hooks\":{\"Stop\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"'$notifier'\"}]}]}}" \
                 -- "$prompt"
         fi
@@ -121,7 +125,7 @@ launch() {
             local entry="[{\"hooks\":[{\"type\":\"command\",\"command\":\"$hook\"}]}]"
             command "$muse_cli" "${options[@]}" -c "hooks={\"Stop\":$entry,\"StopFailure\":$entry}" -- "$prompt"
         fi
-    elif [[ "$harness" == cursor ]]; then
+    elif [[ "$harness" == gemini ]]; then
         if [[ "$mode" == once ]]; then
             # The internal one-shot adapter reinstates the sentinel for its Cursor child.
             print -rn -- "$prompt" | CODEX_REVIEW_SUBAGENT_ACTIVE=0 CURSOR_AGENT_BIN="$cursor_cli" \
@@ -329,7 +333,7 @@ case "$action" in
             exit 1
         fi
         harness_env=()
-        if [[ "$harness" == cursor ]]; then
+        if [[ "$harness" == gemini ]]; then
             if ! node "${runner:h}/cursor-session.mjs" config "$turn_dir/cursor-config" || \
                 ! conversation="$("$cursor_cli" --trust create-chat)" || \
                 [[ -z "$conversation" || "$conversation" == *[^a-zA-Z0-9_-]* ]] || \
@@ -434,7 +438,7 @@ case "$action" in
                 fi
                 buffer="${prefix}${uuid:l}"
                 # `wait` returns only for a turn that finishes after this send.
-                if [[ "$harness" == cursor ]]; then
+                if [[ "$harness" == gemini ]]; then
                     turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir)" || exit 1
                     command rm -f -- "$turn_dir/error" "$turn_dir/partial"
                     if ! node "${runner:h}/cursor-session.mjs" mark-send "$turn_dir" "$message_file"; then
@@ -455,12 +459,12 @@ case "$action" in
                     exit 1
                 fi
                 command rm -f -- "$message_file"
-                [[ "$harness" == cursor ]] && draft="$(cursor_draft)"
+                [[ "$harness" == gemini ]] && draft="$(cursor_draft)"
                 if ! tmux paste-buffer -pr -d -b "$buffer" -t "$pane"; then
                     tmux delete-buffer -b "$buffer" 2>/dev/null || true
                     exit 1
                 fi
-                if [[ "$harness" == cursor ]]; then
+                if [[ "$harness" == gemini ]]; then
                     # Cursor ignores an Enter that arrives just after a paste, leaving
                     # the draft (e.g. `[Pasted text #1 +9 lines]`) unsent.
                     deadline=$(( SECONDS + 3 ))
@@ -472,7 +476,7 @@ case "$action" in
                 fi
                 tmux send-keys -t "$pane" Enter || exit 1
                 tmux set-option -t "$session" @review_send_state submitted || exit 1
-                if [[ "$harness" == cursor ]]; then
+                if [[ "$harness" == gemini ]]; then
                     # Enter submits text; the queued-message footer offers another Enter
                     # to steer. Confirm its activation or transcript receipt; absence
                     # of a slowly rendered footer is not proof of delivery.
@@ -513,7 +517,7 @@ case "$action" in
             capture) tmux capture-pane -p -S -300 -t "$pane" && turn_hint ;;
             status) print -r -- "$(tmux display-message -p -t "$pane" '#{session_name} pane=#{pane_id} dead=#{pane_dead} exit_code=#{pane_dead_status}') input_ready=$(input_ready)" && turn_hint ;;
             interrupt)
-                if [[ "$harness" == cursor ]]; then
+                if [[ "$harness" == gemini ]]; then
                     turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir)" || exit 1
                     command rm -f -- "$turn_dir/latest-message.json"
                     tmux send-keys -t "$pane" C-c
@@ -542,11 +546,11 @@ case "$action" in
                     fi
                     sent="$(tmux show-options -v -t "$session" @review_sent)" || exit 1
                     if [[ "$delivery" != pending ]] && (( $(turns_done) > sent )) && \
-                        [[ "$harness" != cursor || ! -e "$turn_dir/latest-message.json" ]] && \
+                        [[ "$harness" != gemini || ! -e "$turn_dir/latest-message.json" ]] && \
                         { [[ "$harness" != muse ]] || ! muse_busy; }; then
                         break
                     fi
-                    if [[ "$harness" == cursor && -s "$turn_dir/error" ]]; then
+                    if [[ "$harness" == gemini && -s "$turn_dir/error" ]]; then
                         print -u2 -r -- "$helper: $(<"$turn_dir/error")"
                         if [[ -s "$turn_dir/partial" ]]; then
                             print -u2 "$helper: unverified text written before the failure:"
@@ -564,7 +568,7 @@ case "$action" in
                         exit 124
                     fi
                     # Cursor steers one queued message at a time; steer the next when offered.
-                    if [[ "$harness" == cursor ]] && \
+                    if [[ "$harness" == gemini ]] && \
                         tmux capture-pane -p -t "$pane" | command grep -Eq "${cursor_footer}steer[[:space:]]*·"; then
                         tmux send-keys -t "$pane" Enter
                     fi

@@ -8,7 +8,7 @@ const skill = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const runner = resolve(skill, 'scripts/review-subagent');
 // Pro runs live in the gpt-pro relay rather than tmux, so a separate adapter drives them.
 const proSession = resolve(skill, 'scripts/pro-session.mjs');
-const names = ['claude', 'gpt', 'cursor', 'muse', 'pro'];
+const names = ['claude', 'gpt', 'gemini', 'muse', 'ds', 'pro'];
 const args = process.argv.slice(2);
 
 function usage(message) {
@@ -19,7 +19,7 @@ function usage(message) {
     '       agent-team wait SESSION [SESSION ...] [--timeout SECONDS]\n' +
     '       agent-team capture|status|interrupt|stop SESSION [SESSION ...]\n' +
     '       agent-team list | backends\n' +
-    '       NAME is claude, gpt, cursor, muse, or pro; each at most once per call. NAME=PROMPT gives that\n' +
+    '       NAME is claude, gpt, gemini, muse, ds, or pro; each at most once per call. NAME=PROMPT gives that\n' +
     '       backend its own prompt file instead of stdin. --file attaches a file to Pro and lists its\n' +
     '       path for the others. Models and high are fixed.\n');
   process.exit(2);
@@ -36,7 +36,7 @@ while (args.length) {
   const option = args.shift();
   if (option === '--backend' && ['start', '--once'].includes(action)) {
     const [backend, ...file] = (args.shift() || '').split('=');
-    if (!names.includes(backend)) usage('backend must be claude, gpt, cursor, muse, or pro');
+    if (!names.includes(backend)) usage('backend must be claude, gpt, gemini, muse, ds, or pro');
     if (selections.some(item => item.backend === backend)) usage(`each backend runs at most once per call: ${backend}`);
     const selection = { backend };
     if (file.length) {
@@ -61,7 +61,7 @@ while (args.length) {
     timeout = args.shift();
     if (!/^[1-9][0-9]*$/.test(timeout || '') || !Number.isSafeInteger(Number(timeout))) usage('timeout must be a positive integer');
   } else if (!option.startsWith('-') && ['send', 'wait', 'capture', 'status', 'interrupt', 'stop'].includes(action)) {
-    const match = /^(claude|gpt|cursor|muse|pro)-review-[a-zA-Z0-9-]+$/.exec(option);
+    const match = /^(claude|gpt|gemini|muse|ds|pro)-review-[a-zA-Z0-9-]+$/.exec(option);
     if (!match) usage(`invalid review session: ${option}`);
     if (sessions.some(item => item.session === option)) usage('the same session must not be targeted twice');
     sessions.push({ backend: match[1], session: option });
@@ -87,7 +87,7 @@ function availability(backend) {
     }
   } else if (backend === 'muse') {
     if (!command(process.env.MUSE_BIN || 'muse')) return 'muse is missing or not executable';
-  } else if (backend === 'cursor') {
+  } else if (backend === 'gemini') {
     if (!command(process.env.CURSOR_AGENT_BIN || 'cursor-agent')) return 'cursor-agent is missing or not executable';
     if (!command('jq')) return 'jq is required for Cursor';
   } else if (backend === 'gpt') {
@@ -99,11 +99,17 @@ function availability(backend) {
     const [major, minor, patch] = match.slice(1).map(Number);
     if (major === 0 && (minor < 159 || minor === 159 && patch < 2)) return 'Codex CLI 0.159.2+ is required';
   } else {
+    // Claude and DeepSeek both run Claude Code through the user's shell launchers.
+    const [label, launcher] = backend === 'ds' ? ['DeepSeek', 'ds'] : ['Claude', 'c'];
     const shell = command('zsh');
-    if (!shell) return 'zsh is required for the Claude launcher';
-    const check = spawnSync(shell, ['-c', 'source "$HOME/.functions" >/dev/null || exit 127; (( $+functions[c] ))'],
+    if (!shell) return `zsh is required for the ${label} launcher`;
+    const check = spawnSync(shell, ['-c', `source "$HOME/.functions" >/dev/null || exit 127; (( $+functions[${launcher}] ))`],
       { encoding: 'utf8', timeout: 5000 });
-    if (check.status !== 0) return 'the configured Claude c launcher is unavailable';
+    if (check.status !== 0) return `the configured ${label} ${launcher} launcher is unavailable`;
+    // The launcher's zsh reads the key from ~/.zshenv.local, which the caller may not have loaded.
+    if (backend === 'ds' && spawnSync(shell, ['-c', '[[ -n "${DEEPSEEK_API_KEY:-}" ]]'], { timeout: 5000 }).status !== 0) {
+      return 'DEEPSEEK_API_KEY is not set (see ~/.zshenv.local)';
+    }
   }
   return null;
 }
@@ -269,7 +275,7 @@ if (action === 'backends') {
     diagnose(results);
     if (action === 'send') {
       const messages = results.map(item => ({ ...result(item), delivery: item.exit_code === 0 ?
-        ['cursor', 'pro'].includes(item.backend) ? 'confirmed' : 'submitted' : item.exit_code === 124 ? 'unconfirmed' : 'failed' }));
+        ['gemini', 'pro'].includes(item.backend) ? 'confirmed' : 'submitted' : item.exit_code === 124 ? 'unconfirmed' : 'failed' }));
       json(results.length === 1 ? messages[0] : { results: messages, is_error: results.some(item => item.exit_code !== 0) });
     } else if (results.length === 1) process.stdout.write(results[0].stdout);
     else json({ results: results.map(result), is_error: results.some(item => item.exit_code !== 0) });
