@@ -13,13 +13,15 @@
 # While on the fallback, the session keeps the effort level the refused request
 # ran at, and the fallback thinks less per level, so the PostModelSwitch hook
 # types `/effort $FALLBACK_EFFORT` after an automatic switch to the fallback,
-# and `/effort <level saved for 5.5>` after a switch from it back to 5.5,
-# accepting the cache-miss dialog /effort shows while the cache is warm. A
+# and `/effort <level settings give 5.5 in this project>` after a switch from
+# it back to 5.5, accepting the cache-miss dialog /effort shows while the cache
+# is warm. A typed /effort also saves its level as the model's default in the
+# user settings; the hook puts back the default that was there before. A
 # session resumed on the fallback loses that level, so the SessionStart(resume)
-# hook types it again. The fallback inherits the level of the refused request,
-# which `/model` has usually already set to 5.5's saved level; changing the
-# level rewrites the whole cached context, so the hook skips it only when that
-# request already ran at the fallback level.
+# hook types it again. Changing the level rewrites the whole cached context, so
+# the hook skips it when the last request already ran at the wanted level (or,
+# on resume, when settings already give it), as when both models' levels are
+# the same.
 #
 # Sessions named in $STATE/pinned (one agent name per line) stay on the
 # fallback: for them 5.5 refuses almost every first request after a compaction,
@@ -34,9 +36,10 @@ set -u
 TARGET=claude-opus-5-5
 COMMAND="/model $TARGET"
 FALLBACK=claude-opus-5
-FALLBACK_EFFORT=xhigh
+FALLBACK_EFFORT=high
 TTL=180 # seconds an approval stays valid
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/opus-repin"
+USER_SETTINGS="$HOME/.claude/settings.json"
 input=$(cat)
 sid=$(jq -r '.session_id // empty' <<<"$input")
 [[ -n "$sid" ]] || exit 0
@@ -122,16 +125,50 @@ type_when_idle() {
     return 1
 }
 
-# Type `/effort $1` into the session's pane in the background. A refusal right
-# after the switch back starts a second /effort; only the latest typer keeps
-# going, so the last level submitted is the latest one asked for.
+# The level Claude Code's settings give model $1 in this session's project, or
+# nothing: the first of the local, project and user settings that sets one, each
+# by its modelSettings entry, then its top-level effortLevel. The top level of
+# the user settings counts only for older models, given by $2=legacy (the
+# fallback is one, 5.5 is not).
+settings_effort() {
+    local dir=${CLAUDE_PROJECT_DIR:-$(jq -r '.cwd // empty' <<<"$input")} f level
+    for f in "$dir/.claude/settings.local.json" "$dir/.claude/settings.json"; do
+        [[ -f "$f" ]] || continue
+        level=$(jq -r --arg m "$1" '.modelSettings[$m].effortLevel // .effortLevel // empty' "$f")
+        [[ -n "$level" ]] && { echo "$level"; return; }
+    done
+    jq -r --arg m "$1" --arg legacy "${2:-}" \
+        '.modelSettings[$m].effortLevel // (if $legacy == "legacy" then .effortLevel else null end) // empty' \
+        "$USER_SETTINGS"
+}
+
+# The default saved for model $1 in the user settings, or null.
+user_default() { jq -c --arg m "$1" '.modelSettings[$m].effortLevel // null' "$USER_SETTINGS"; }
+
+# Put back default $2 (null: none) for model $1 if the default now is the
+# level $3 a typed /effort saved. Writes in place, keeping a symlinked file.
+restore_default() {
+    local updated
+    [[ "$(user_default "$1")" == "\"$3\"" && "$2" != "\"$3\"" ]] || return 0
+    updated=$(jq --arg m "$1" --argjson v "$2" \
+        'if $v == null then del(.modelSettings[$m].effortLevel) else .modelSettings[$m].effortLevel = $v end' \
+        "$USER_SETTINGS") || return 0
+    printf '%s\n' "$updated" > "$USER_SETTINGS"
+    log "restored the user default for $1 to $2"
+}
+
+# Type `/effort $1` into the session's pane in the background, where the
+# session runs model $2. A refusal right after the switch back starts a second
+# /effort; only the latest typer keeps going, so the last level submitted is
+# the latest one asked for.
 type_effort() {
-    local effort=$1 pane=${TMUX_PANE:-} transcript token
+    local effort=$1 model=$2 pane=${TMUX_PANE:-} transcript token default
     [[ -n "$pane" ]] || return 0
     transcript=$(jq -r '.transcript_path // empty' <<<"$input")
     [[ -f "$transcript" ]] || return 0
     token="$(date +%s).$$"
     echo "$token" > "$STATE/$sid.effort"
+    default=$(user_default "$model")
     (
         # Accepting the cache-miss dialog prints no "Set effort level"; the next
         # request at that level is the only record of it.
@@ -141,6 +178,7 @@ type_effort() {
         }
         wanted() { [[ "$(cat "$STATE/$sid.effort" 2>/dev/null)" == "$token" ]]; }
         type_when_idle "$pane" "/effort $effort"
+        restore_default "$model" "$default" "$effort"
         wanted && rm -f "$STATE/$sid.effort"
     ) </dev/null >/dev/null 2>&1 &
 }
@@ -192,33 +230,39 @@ post-switch)
     to=$(jq -r '.to_model // empty' <<<"$input")
     from=${from%\[1m\]} to=${to%\[1m\]}
     if [[ "$source" == auto && "$to" == "$FALLBACK" ]]; then
-        # The refused request may already have run at the fallback level (when
-        # /model kept it); then only cancel an /effort the switch back queued.
-        transcript=$(jq -r '.transcript_path // empty' <<<"$input")
-        if [[ -f "$transcript" && "$(last_effort "$transcript")" == "$FALLBACK_EFFORT" ]]; then
-            rm -f "$STATE/$sid.effort"
-            log "switched $from -> $to ($source) at $FALLBACK_EFFORT already; keeping it"
-            exit 0
-        fi
         effort=$FALLBACK_EFFORT
     elif [[ "$from" == "$FALLBACK" && "$to" == "$TARGET" ]]; then
-        effort=$(jq -r --arg m "$TARGET" '.modelSettings[$m].effortLevel // "medium"' "$HOME/.claude/settings.json")
+        effort=$(settings_effort "$TARGET")
+        effort=${effort:-medium}
     else
         exit 0
     fi
+    # The last request may already have run at that level (the level carries
+    # over a switch); then only cancel an /effort an earlier switch queued.
+    transcript=$(jq -r '.transcript_path // empty' <<<"$input")
+    if [[ -f "$transcript" && "$(last_effort "$transcript")" == "$effort" ]]; then
+        rm -f "$STATE/$sid.effort"
+        log "switched $from -> $to ($source) at $effort already; keeping it"
+        exit 0
+    fi
     log "switched $from -> $to ($source); typing /effort $effort"
-    type_effort "$effort"
+    type_effort "$effort" "$to"
     ;;
 session-resume)
     # A resumed session on the fallback starts at the level settings give it
-    # without the one set with /effort before the restart, so set it again.
+    # without the one set with /effort before the restart, so set it again
+    # unless settings already give the fallback level.
     model=$(jq -r '.model // empty' <<<"$input")
     if [[ "${model%\[1m\]}" != "$FALLBACK" ]]; then
         log "resumed on ${model:-an unreported model}; leaving effort alone"
         exit 0
     fi
+    if [[ "$(settings_effort "$FALLBACK" legacy)" == "$FALLBACK_EFFORT" ]]; then
+        log "resumed on $model at $FALLBACK_EFFORT from settings; leaving effort alone"
+        exit 0
+    fi
     log "resumed on $model; typing /effort $FALLBACK_EFFORT"
-    type_effort "$FALLBACK_EFFORT"
+    type_effort "$FALLBACK_EFFORT" "$FALLBACK"
     ;;
 esac
 exit 0
