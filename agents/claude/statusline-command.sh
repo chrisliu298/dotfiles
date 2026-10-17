@@ -30,6 +30,7 @@ eval "$(echo "$input" | jq -r '
   @sh "cur_cache_create=\(.context_window.current_usage.cache_creation_input_tokens // "")",
   @sh "cur_cache_read=\(.context_window.current_usage.cache_read_input_tokens // "")",
   @sh "cost=\(.cost.total_cost_usd // "")",
+  @sh "transcript=\(.transcript_path // "")",
   @sh "duration_ms=\(.cost.total_duration_ms // "")",
   @sh "lines_add=\(.cost.total_lines_added // "")",
   @sh "lines_rm=\(.cost.total_lines_removed // "")",
@@ -88,6 +89,56 @@ fmt_tokens() {
   else
     echo "$n"
   fi
+}
+
+# DeepSeek session cost in CNY. Claude Code prices models it does not know at
+# Opus rates, so total_cost_usd overstates DeepSeek by ~30x; instead sum each
+# request's usage from the transcript (and its subagents') at DeepSeek's
+# per-MTok prices: cache miss ¥2, hit ¥0.04, output ¥8 in peak hours (Beijing
+# Mon-Fri 9-12, 14-18), half that otherwise. Statutory holidays count as their
+# weekday. Transcripts can reach hundreds of MB, so a cache keeps each file's
+# byte offset, running total and last message id, and only new lines are read.
+# The lines of one message share an id and its usage, so each id counts once.
+deepseek_cost_cny() {
+  local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/claude-statusline"
+  mkdir -p "$cache_dir" 2>/dev/null || return
+  perl -MJSON::PP -MTime::Local=timegm -MDigest::MD5=md5_hex -e '
+    my ($cache_dir, @files) = @ARGV;
+    my $total = 0;
+    for my $file (grep { -f } @files) {
+      my $cache = "$cache_dir/deepseek-" . md5_hex($file);
+      my ($offset, $sum, $last) = (0, 0, "");
+      if (open my $in, "<", $cache) { ($offset, $sum, $last) = split " ", (<$in> // ""); $last //= "" }
+      ($offset, $sum, $last) = (0, 0, "") if $offset > -s $file;
+      open my $fh, "<", $file or next;
+      seek $fh, $offset, 0;
+      my $read = 0;
+      while (my $line = <$fh>) {
+        last unless $line =~ /\n\z/;  # A line still being written waits for the next run.
+        $read += length $line;
+        next unless $line =~ /"model":"deepseek/;
+        my $r = eval { decode_json($line) } or next;
+        next unless ($r->{type} // "") eq "assistant";
+        my $id = $r->{message}{id} // "";
+        next if $id eq $last;
+        $last = $id;
+        my ($y, $mo, $d, $h, $mi, $s) = ($r->{timestamp} // "") =~ /^(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+)/ or next;
+        my @t = gmtime(timegm($s, $mi, $h, $d, $mo - 1, $y) + 8 * 3600);
+        my $peak = $t[6] >= 1 && $t[6] <= 5 && ($t[2] >= 9 && $t[2] < 12 || $t[2] >= 14 && $t[2] < 18);
+        my $u = $r->{message}{usage} || {};
+        $sum += ($peak ? 2 : 1) * (($u->{input_tokens} // 0) + ($u->{cache_creation_input_tokens} // 0)
+          + ($u->{cache_read_input_tokens} // 0) * 0.02 + ($u->{output_tokens} // 0) * 4) / 1e6;
+      }
+      if ($read) {
+        open my $out, ">", "$cache.$$" or next;
+        print $out join(" ", $offset + $read, $sum, $last || "-"), "\n";
+        close $out;
+        rename "$cache.$$", $cache;
+      }
+      $total += $sum;
+    }
+    print $total;
+  ' "$cache_dir" "$1" "${1%.jsonl}"/subagents/*.jsonl
 }
 
 # ── Shared helpers ────────────────────────────────────────────────
@@ -198,7 +249,11 @@ ctx_seg="${muted}ctx $(usage_color "$pct")${pct}%${ctx_tail}"
 usage_parts=("${ctx_seg}${reset}" "${usage_parts[@]}")
 
 # Cost
-if [ -n "$cost" ] && [ "$cost" != "0" ]; then
+if [[ "$model_id" == deepseek* ]] && [ -n "$transcript" ]; then
+  cny=$(deepseek_cost_cny "$transcript")
+  cny_fmt=$(printf "%.2f" "${cny:-0}")
+  [ "$cny_fmt" != "0.00" ] && usage_parts+=("${yellow}¥${cny_fmt}${reset}")
+elif [ -n "$cost" ] && [ "$cost" != "0" ]; then
   cost_fmt=$(printf "%.2f" "$cost")
   [ "$cost_fmt" != "0.00" ] && usage_parts+=("${yellow}\$${cost_fmt}${reset}")
 fi
