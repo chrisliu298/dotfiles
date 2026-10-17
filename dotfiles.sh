@@ -62,6 +62,7 @@ SKILLS=(
     # each subdir as `recall`.
     "recall|./agents/skills/recall/claude|claude"
     "recall|./agents/skills/recall/codex|codex"
+    # Muse also discovers the Claude/Codex copies natively; MUSE_DISABLED_SKILLS keeps it off there.
     # pdf is each vendor's native skill (anthropic's for Claude, this openai one for Codex),
     # not repo-owned, so Muse gets no managed copy of it. Muse still discovers the Codex
     # copy natively; keep it off there per host with `muse skills disable pdf --scope user`.
@@ -71,6 +72,10 @@ SKILLS=(
     # rest's long descriptions stay out of its skill list.
     "weekly-report|~/.agents/skills/weekly-report|claude"
 )
+
+# Skills Muse discovers natively from ~/.claude/skills or ~/.codex/skills but must not use;
+# install_skills turns each off in Muse's host-local activation settings.
+MUSE_DISABLED_SKILLS=(recall)
 
 # Skills not auto-installed (opt-in). Toggle with: ./dotfiles.sh enable/disable <name>.
 MANUAL_SKILLS=(
@@ -520,6 +525,12 @@ install_skills() {
             muse skills uninstall "$mid" >/dev/null 2>&1 \
                 && log "muse uninstall $mid (no longer selected)" || true
         done < <(jq -r '.skills // {} | to_entries[] | select(.value.source.type == "local") | [.key, .value.source.path] | @tsv' "$muse_lock" 2>/dev/null)
+    fi
+    if $muse_available; then
+        local mskill
+        for mskill in "${MUSE_DISABLED_SKILLS[@]}"; do
+            muse skills disable "$mskill" --scope user >/dev/null 2>&1 || true
+        done
     fi
 
     # Prune stale cache repos

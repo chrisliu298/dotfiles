@@ -62,9 +62,12 @@ for name in agent-team arxiv-reader gpt-pro push; do
         || fail "expected forced muse install for $name from its repo source"
 done
 
-# recall has Claude and Codex builds only; neither reaches Muse.
+# recall has Claude and Codex builds only; neither reaches Muse, and the
+# copies Muse discovers natively are turned off there.
 grep -F "skills install $repo_root/agents/skills/recall" "$calls" >/dev/null \
     && fail "recall must not be installed into Muse"
+grep -qxF "skills disable recall --scope user" "$calls" \
+    || fail "expected recall to be disabled in Muse"
 
 # Skills without the muse token never reach the Muse store: the claude-only
 # orchestrators.

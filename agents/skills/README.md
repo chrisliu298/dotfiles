@@ -30,7 +30,7 @@ Toggle manual skills with `./dotfiles.sh enable/disable <name>`; list status via
 
 Columns: **C**laude · Code**x** · **M**use. Legend: ✓ auto-installed · ✱ manual (opt-in via `enable`) · — not wired to this agent.
 
-> The Claude-only orchestration skills (relay, prism) stay off Codex and Muse. `recall` ships as two harness-specific builds (Claude, Codex) under one name; each defaults to its own complete history and can search the other agent's complete history on request through a shared entrypoint. It has no Muse build, so Muse history isn't searched. Relay and prism are additionally guarded so a dispatched peer can't trigger them.
+> The Claude-only orchestration skills (relay, prism) stay off Codex and Muse. `recall` ships as two harness-specific builds (Claude, Codex) under one name; each defaults to its own complete history and can search the other agent's complete history on request through a shared entrypoint. It has no Muse build, so Muse history isn't searched; `dotfiles.sh` also turns off the Claude/Codex copies Muse discovers natively (`MUSE_DISABLED_SKILLS`). Relay and prism are additionally guarded so a dispatched peer can't trigger them.
 
 **Enabled** (✓ auto-installed). Claude gets `pdf` and `skill-creator` from the claude.ai-synced skills (`anthropic-skills:*`), not from this repo.
 
