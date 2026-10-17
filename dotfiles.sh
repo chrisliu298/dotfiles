@@ -44,11 +44,12 @@ LINKS=(
 # name|source|agents — name * = auto-discover subdirs with SKILL.md
 # source: ./path (local), ~/path (host-local, skipped when absent), or owner/repo[/subpath] (GitHub)
 SKILLS=(
-    # The wildcard installs every skill to Claude, Codex and Muse; the explicit entries below
-    # narrow that (claude-only: relay, prism; recall has a separate build per agent).
-    # Claude/Codex get live symlinks; Muse's store owns its managed personal root,
+    # The wildcard installs every skill to Claude, Codex, Muse and DeepSeek Harness; the explicit
+    # entries below narrow that (claude-only: relay, prism; recall has a separate build per agent).
+    # Claude/Codex/DeepSeek get live symlinks; Muse's store owns its managed personal root,
     # so muse entries are copy-installed via `muse skills install` (see _muse_skill_install).
-    "*|./agents/skills|claude,codex,muse"
+    # DeepSeek is installed only on hosts where the harness has run (its ~/.dsh exists).
+    "*|./agents/skills|claude,codex,muse,deepseek"
     # Relay: claude-only caller; targets GPT via the script.
     # MANUAL (below); explicit entry keeps it claude-only when enabled (the wildcard would install it everywhere).
     "relay|./agents/skills/relay|claude"
@@ -106,6 +107,9 @@ PLUGINS=()
 SKILL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/skills-src"
 # Muse's managed personal skill root, owned by its skills store.
 MUSE_SKILLS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/muse/skills"
+# DeepSeek Harness's user skill root; scanned natively alongside ~/.agents/skills.
+DSH_HOME_DIR="${DSH_HOME:-$HOME/.dsh}"
+DSH_SKILLS_DIR="$DSH_HOME_DIR/skills"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}"
 GLOBAL_STAMP="$CACHE_DIR/dotfiles-global-stamp"
 
@@ -200,6 +204,10 @@ _is_manual() {
     for m in "${MANUAL_SKILLS[@]}"; do [[ "$m" == "$name" ]] && return 0; done
     return 1
 }
+
+# Has DeepSeek Harness been set up on this host? Its ~/.dsh (or $DSH_HOME) is
+# created on first launch; skip the directory entirely rather than seeding it.
+_dsh_available() { [[ -d "$DSH_HOME_DIR" ]]; }
 
 # Is manual skill $1 enabled in the committed set?
 _manual_enabled() {
@@ -447,13 +455,17 @@ install_skills() {
     local muse_available=false
     command -v muse >/dev/null 2>&1 && muse_available=true
     $muse_available || log "muse CLI not found; skipping Muse skills"
+    # DeepSeek Harness is likewise per host; its home exists once the app has run.
+    local dsh_available=false
+    _dsh_available && { dsh_available=true; mkdir -p "$DSH_SKILLS_DIR"; }
+    $dsh_available || log "DeepSeek Harness home not found; skipping DeepSeek skills"
     local explicit_names=$'\n'
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name _ _ <<< "$entry"
         [[ "$name" != "*" ]] && explicit_names+="$name"$'\n'
     done
 
-    local claude_expected="" codex_expected="" muse_expected=""
+    local claude_expected="" codex_expected="" muse_expected="" dsh_expected=""
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name source agents <<< "$entry"
         local base_dir; base_dir=$(_resolve_source "$source")
@@ -494,18 +506,22 @@ install_skills() {
             [[ "$agents" == *claude* ]] && { ensure_symlink "$spath" "$HOME/.claude/skills/$sname"; claude_expected+="$sname"$'\n'; }
             [[ "$agents" == *codex* ]]  && { ensure_symlink "$spath" "$HOME/.codex/skills/$sname";  codex_expected+="$sname"$'\n'; }
             [[ "$agents" == *muse* ]] && $muse_available && { _muse_skill_install "$spath" "$sname"; muse_expected+="$sname"$'\n'; }
+            [[ "$agents" == *deepseek* ]] && $dsh_available && { ensure_symlink "$spath" "$DSH_SKILLS_DIR/$sname"; dsh_expected+="$sname"$'\n'; }
         done
     done
 
     # Clean stale skill symlinks
     local dir expected
-    for dir in "$HOME/.claude/skills" "$HOME/.codex/skills"; do
+    local -a skill_dirs=("$HOME/.claude/skills" "$HOME/.codex/skills")
+    $dsh_available && skill_dirs+=("$DSH_SKILLS_DIR")
+    for dir in "${skill_dirs[@]}"; do
         [[ -d "$dir" ]] || continue
         # Exact-path match (not substring) so a $HOME containing an agent
         # token can't misclassify a dir and skip its prune set.
         case "$dir" in
             "$HOME/.claude/skills")   expected="$claude_expected" ;;
             "$HOME/.codex/skills")    expected="$codex_expected"  ;;
+            "$DSH_SKILLS_DIR")        expected="$dsh_expected"    ;;
         esac
         for entry in "$dir"/*; do
             [[ -L "$entry" ]] || continue
@@ -761,6 +777,7 @@ cmd_enable() {
         [[ "$agents" == *claude* ]] && ensure_symlink "$base_dir" "$HOME/.claude/skills/$name"
         [[ "$agents" == *codex* ]]  && ensure_symlink "$base_dir" "$HOME/.codex/skills/$name"
         [[ "$agents" == *muse* ]] && command -v muse >/dev/null 2>&1 && _muse_skill_install "$base_dir" "$name"
+        [[ "$agents" == *deepseek* ]] && _dsh_available && { mkdir -p "$DSH_SKILLS_DIR"; ensure_symlink "$base_dir" "$DSH_SKILLS_DIR/$name"; }
         found=true
     done
     # Fall back to wildcard discovery
@@ -774,6 +791,7 @@ cmd_enable() {
             [[ "$agents" == *claude* ]] && ensure_symlink "$skill_dir" "$HOME/.claude/skills/$name"
             [[ "$agents" == *codex* ]]  && ensure_symlink "$skill_dir" "$HOME/.codex/skills/$name"
             [[ "$agents" == *muse* ]] && command -v muse >/dev/null 2>&1 && _muse_skill_install "$skill_dir" "$name"
+            [[ "$agents" == *deepseek* ]] && _dsh_available && { mkdir -p "$DSH_SKILLS_DIR"; ensure_symlink "$skill_dir" "$DSH_SKILLS_DIR/$name"; }
             found=true
         done
     fi
@@ -786,7 +804,7 @@ cmd_disable() {
     local name="${1:?usage: dotfiles.sh disable <name>}"
     _is_manual "$name" || warn "'$name' is not a manual skill — next run will re-create it"
     local removed=false
-    for dir in "$HOME/.claude/skills/$name" "$HOME/.codex/skills/$name"; do
+    for dir in "$HOME/.claude/skills/$name" "$HOME/.codex/skills/$name" "$DSH_SKILLS_DIR/$name"; do
         [[ -L "$dir" ]] && { rm "$dir"; log "removed ${dir/#$HOME/~}"; removed=true; }
     done
     if [[ -d "$MUSE_SKILLS_DIR/$name" ]] && command -v muse >/dev/null 2>&1; then
@@ -805,7 +823,7 @@ cmd_skills() {
     local m
     for m in "${MANUAL_SKILLS[@]}"; do
         local status="${_DIM}off${_RST}"
-        [[ -L "$HOME/.claude/skills/$m" || -L "$HOME/.codex/skills/$m" || -d "$MUSE_SKILLS_DIR/$m" ]] && status="on "
+        [[ -L "$HOME/.claude/skills/$m" || -L "$HOME/.codex/skills/$m" || -L "$DSH_SKILLS_DIR/$m" || -d "$MUSE_SKILLS_DIR/$m" ]] && status="on "
         printf '    %-22s %s\n' "$m" "$status"
     done
     printf '\n'

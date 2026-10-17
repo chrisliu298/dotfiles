@@ -16,6 +16,9 @@ trap 'rm -rf "$test_root"' EXIT HUP INT TERM
 export HOME="$test_root/home"
 export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_CACHE_HOME="$HOME/.cache"
+# The DeepSeek column is covered by test-dotfiles-dsh-skills.sh; keep the
+# harness home derived from this temp $HOME so no real ~/.dsh is touched.
+unset DSH_HOME
 calls="$test_root/muse-calls.log"
 : > "$calls"
 
