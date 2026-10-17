@@ -29,7 +29,7 @@ output_format=text
 usage() {
     print -u2 'usage: cursor-once [cursor-agent options] [prompt]'
     print -u2 '       cursor-once [cursor-agent options] < prompt.md'
-    print -u2 '       model=claude-opus-5-5-high, effort=high, native Agent mode (fixed)'
+    print -u2 '       model=gemini-4-argon-high, effort=high, native Agent mode (fixed)'
 }
 
 while (( $# > 0 )); do
@@ -99,7 +99,7 @@ export CODEX_REVIEW_SUBAGENT_ACTIVE=1
 
 completion_instruction='Complete the entire read-only assignment in this turn. Return the requested findings, evidence, and final deliverable; do not end with an acknowledgement, an opening remark, or a promise to investigate later. If blocked, state the concrete blocker and the work actually completed.'
 run_cursor() {
-    local -a launch_args=(--print --trust --force --sandbox disabled --approve-mcps --model claude-opus-5-5-high
+    local -a launch_args=(--print --trust --force --sandbox disabled --approve-mcps --model gemini-4-argon-high
         --output-format stream-json --stream-partial-output "${cursor_args[@]}")
     local prompt=
     [[ -t 0 ]] || prompt="$(command cat)" || return $?

@@ -40,4 +40,4 @@ def test_one_shot_trusts_authorized_workspace(cursor_backend, options):
     args = json.loads(capture.read_text())
     assert args.count('--trust') == 1
     assert '--mode' not in args
-    assert args[args.index('--model') + 1] == 'claude-opus-5-5-high'
+    assert args[args.index('--model') + 1] == 'gemini-4-argon-high'

@@ -7,8 +7,8 @@ harness="$1"
 shift
 case "$harness" in
     claude) model=opus ;;
-    gpt) model=gpt-6.1-sol ;;
-    cursor) model=claude-opus-5-5-high ;;
+    gpt) model=gpt-6-astra ;;
+    cursor) model=gemini-4-argon-high ;;
     muse) model=muse-wonder-full-1.0 ;;
     *) print -u2 'unknown review harness'; exit 2 ;;
 esac

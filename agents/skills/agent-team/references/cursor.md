@@ -1,6 +1,6 @@
 # Cursor backend
 
-Uses Cursor Agent with fixed `claude-opus-5-5-high`, native Agent mode, and automatic
+Uses Cursor Agent with fixed `gemini-4-argon-high`, native Agent mode, and automatic
 `--trust` for the authorized working directory. Mode/model/effort flags are not
 exposed. The calling agent can select this backend directly when the CLI is installed.
 

@@ -1,7 +1,7 @@
 # GPT backend
 
 Uses the managed Codex CLI at `~/.local/bin/codex`, requiring version 0.159.2+.
-Model is pinned to `gpt-6.1-sol`, effort to `high`, with the existing login. Report
+Model is pinned to `gpt-6-astra`, effort to `high`, with the existing login. Report
 a missing/old CLI; do not install or silently choose another model during review.
 
 Runs like the user's `x` launcher (`--yolo`): approvals and the sandbox are

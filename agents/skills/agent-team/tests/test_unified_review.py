@@ -225,7 +225,7 @@ def test_each_backend_runs_at_most_once_per_call(unified, action, backends):
 
 
 @pytest.mark.parametrize('options', [[], ['--backend', 'unknown'], ['--backend', 'gpt', '--effort', 'high'],
-                                   ['--backend', 'gpt', '--model', 'gpt-6.1-sol'],
+                                   ['--backend', 'gpt', '--model', 'gpt-6-astra'],
                                    ['--backend', 'cursor', '--mode', 'ask'], ['--network', '--backend', 'gpt']])
 def test_invalid_selection_dispatches_nothing(unified, options):
     run, root = unified
@@ -434,4 +434,3 @@ def test_pro_submission_failure_returns_no_handle(unified):
     assert run('list').stdout == ''
     missing = run('backends', extra_env={'GPT_PRO_BIN': str(root / 'none')})
     assert {item['backend']: item['available'] for item in json.loads(missing.stdout)['backends']}['pro'] is False
-

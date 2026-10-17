@@ -367,7 +367,7 @@ def test_unified_once_uses_real_cursor_adapter(harness):
     assert json.loads(outcome.stdout) == {'result': 'review result', 'exit_code': 0, 'is_error': False}
     call = json.loads((tmp / 'call.json').read_text())
     assert call['sentinel'] == '1'
-    assert call['args'][call['args'].index('--model') + 1] == 'claude-opus-5-5-high'
+    assert call['args'][call['args'].index('--model') + 1] == 'gemini-4-argon-high'
 
 
 def muse_session(run, prompt='assignment', extra_env=None):
@@ -558,7 +558,7 @@ def test_once_pins_and_json(harness):
     assert json.loads(result.stdout) == {'result': 'review result', 'exit_code': 0, 'is_error': False}
     call = json.loads((tmp / 'call.json').read_text())
     args = call['args']
-    assert args[args.index('--model') + 1] == {'claude': 'opus', 'gpt': 'gpt-6.1-sol', 'cursor': 'claude-opus-5-5-high'}[name]
+    assert args[args.index('--model') + 1] == {'claude': 'opus', 'gpt': 'gpt-6-astra', 'cursor': 'gemini-4-argon-high'}[name]
     assert call['sentinel'] == '1'
     if name == 'claude':
         assert args[args.index('--effort') + 1] == 'high'
@@ -609,7 +609,7 @@ def test_gpt_matches_unsandboxed_launcher(harness, mode):
         if session:
             wait_for(run, session, 'capture', 'MOCK_READY')
         args = json.loads((tmp / 'call.json').read_text())['args']
-        assert args[args.index('--model') + 1] == 'gpt-6.1-sol'
+        assert args[args.index('--model') + 1] == 'gpt-6-astra'
         assert 'model_reasoning_effort="high"' in args
         # Like the user's `x --yolo`: no approvals and no sandbox, so network is always available.
         assert '--dangerously-bypass-approvals-and-sandbox' in args and '--sandbox' not in args
@@ -739,7 +739,7 @@ def test_default_tmux_lifecycle(harness):
         args = call['args']
         assert args[args.index('--resume') + 1] == 'cursor-main'
         assert '--mode' not in args
-        assert args[args.index('--model') + 1] == 'claude-opus-5-5-high'
+        assert args[args.index('--model') + 1] == 'gemini-4-argon-high'
         assert '--trust' in args
     assert run('send', session, prompt='SILENT').returncode == 0
     r = run('wait', session, '--timeout', '1')  # No new turn yet: times out instead of replaying the old one.
