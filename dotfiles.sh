@@ -68,9 +68,16 @@ SKILLS=(
     # copy natively; keep it off there per host with `muse skills disable pdf --scope user`.
     "pdf|openai/skills/skills/.curated/pdf|codex"
     # Third-party skills installed per host by `npx skills` (e.g. lark-*, merlin-*). Codex and
-    # Muse read ~/.agents/skills natively; Claude does not, and gets only the ones it uses, so the
-    # rest's long descriptions stay out of its skill list.
+    # Muse read ~/.agents/skills natively; Claude does not, and gets only the ones listed here
+    # (lark-* left out to keep their long descriptions out of its skill list).
     "weekly-report|~/.agents/skills/weekly-report|claude"
+    "merlin-cli|~/.agents/skills/merlin-cli|claude"
+    "merlin-data|~/.agents/skills/merlin-data|claude"
+    "merlin-devbox|~/.agents/skills/merlin-devbox|claude"
+    "merlin-job|~/.agents/skills/merlin-job|claude"
+    "merlin-knowledge-qa|~/.agents/skills/merlin-knowledge-qa|claude"
+    "merlin-resource|~/.agents/skills/merlin-resource|claude"
+    "merlin-tracking-experiment|~/.agents/skills/merlin-tracking-experiment|claude"
 )
 
 # Skills Muse discovers natively from ~/.claude/skills or ~/.codex/skills but must not use;

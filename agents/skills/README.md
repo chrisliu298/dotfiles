@@ -18,7 +18,7 @@ Single source of truth: own skills live in `agents/skills/`; community/third-par
 
 Repo-sourced Muse installs that the table no longer selects are uninstalled again; skills a user installed into Muse from anywhere else are never touched. Verify the wiring offline (stub `muse`, temp `$HOME`) with `./test-dotfiles-muse-skills.sh`.
 
-Host-local third-party skills installed by `npx skills` into `~/.agents/skills/` (e.g. `lark-*`, `merlin-*`) are read natively by Codex and Muse. Claude Code does not read that directory, and only the ones it uses (currently `weekly-report`) are linked into `~/.claude/skills/`, keeping the rest's long descriptions out of its skill list. Hosts without a linked skill skip its entry.
+Host-local third-party skills installed by `npx skills` into `~/.agents/skills/` (e.g. `lark-*`, `merlin-*`) are read natively by Codex and Muse. Claude Code does not read that directory, and only the ones listed in `dotfiles.sh` (currently `weekly-report` and `merlin-*`) are linked into `~/.claude/skills/`, keeping the rest's (e.g. `lark-*`) long descriptions out of its skill list. Hosts without a linked skill skip its entry.
 
 A shared/universal `SKILL.md` is written to work across agents; agent-specific scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., relay and prism are claude-only, so they never reach Codex or Muse). Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex; Muse records `allowed-tools` as advisory metadata only.
 
