@@ -38,17 +38,26 @@ EOF
 chmod +x "$test_root/bin/muse"
 export PATH="$test_root/bin:$PATH"
 
-# Pre-seed the store lockfile: one selected skill (must be kept), one stale
-# repo-sourced skill (must be pruned), one foreign install (must be left).
+# Pre-seed the store lockfile: one selected skill (must be kept), two stale
+# repo-sourced skills (must be pruned; agent-team became claude-only), one
+# foreign install (must be left).
 muse_skills="$XDG_CONFIG_HOME/muse/skills"
 mkdir -p "$muse_skills/.muse"
 cat > "$muse_skills/.muse/lock.json" <<EOF
 {"version": 1, "skills": {
+  "arxiv-reader":  {"source": {"type": "local", "path": "$repo_root/agents/skills/arxiv-reader"}},
   "agent-team":    {"source": {"type": "local", "path": "$repo_root/agents/skills/agent-team"}},
   "cursor-subagent": {"source": {"type": "local", "path": "$repo_root/agents/skills/cursor-subagent"}},
   "foreign-skill": {"source": {"type": "local", "path": "/opt/foreign/foreign-skill"}}
 }}
 EOF
+
+# Host-local skills in ~/.agents/skills: the claude-only ones must move into
+# ~/.claude/skills, lark-* must stay, and an existing Claude copy must win.
+seed_skill() { mkdir -p "$1"; printf -- '---\nname: %s\ndescription: sandbox stub\n---\n' "${1##*/}" > "$1/SKILL.md"; }
+for name in weekly-report merlin-x merlin-dup lark-y; do seed_skill "$HOME/.agents/skills/$name"; done
+seed_skill "$HOME/.claude/skills/merlin-dup"
+printf 'claude copy\n' > "$HOME/.claude/skills/merlin-dup/marker"
 
 # dotfiles.sh only runs main when executed, so sourcing loads the tables and
 # functions without side effects beyond what install_skills does in $HOME.
@@ -60,20 +69,37 @@ fail() { printf 'FAIL: %s\n' "$1" >&2; printf '%s\n' '--- recorded muse calls --
 
 # Each muse-selected universal skill is install-reconciled from its repo
 # source with --force (provenance re-recorded, copy refreshed every run).
-for name in agent-team arxiv-reader gpt-pro push; do
+for name in arxiv-reader push; do
     grep -F "skills install $repo_root/agents/skills/$name" "$calls" | grep -q -- '--force' \
         || fail "expected forced muse install for $name from its repo source"
 done
 
-# recall has Claude and Codex builds only; neither reaches Muse, and the
-# copies Muse discovers natively are turned off there.
-grep -F "skills install $repo_root/agents/skills/recall" "$calls" >/dev/null \
-    && fail "recall must not be installed into Muse"
-grep -qxF "skills disable recall --scope user" "$calls" \
-    || fail "expected recall to be disabled in Muse"
+# Skills scoped away from Muse (recall's Claude/Codex builds, the claude-only
+# skills, Codex's pdf) never reach its store, and the copies Muse discovers
+# natively in ~/.claude/skills or ~/.codex/skills are turned off there.
+for name in recall agent-team codex-exec gpt-pro pdf weekly-report merlin-x merlin-dup; do
+    grep -F "skills install $repo_root/agents/skills/$name" "$calls" >/dev/null \
+        && fail "$name must not be installed into Muse"
+    grep -qxF "skills disable $name --scope user" "$calls" \
+        || fail "expected $name to be disabled in Muse"
+done
+for name in arxiv-reader push; do
+    grep -qxF "skills disable $name --scope user" "$calls" \
+        && fail "muse-selected $name must stay enabled"
+done
 
-# Skills without the muse token never reach the Muse store: the claude-only
-# orchestrators.
+# Claude-only host-local skills moved out of ~/.agents/skills; lark-* stayed.
+for name in weekly-report merlin-x; do
+    [ -f "$HOME/.claude/skills/$name/SKILL.md" ] && [ ! -L "$HOME/.claude/skills/$name" ] \
+        || fail "$name should have moved into ~/.claude/skills"
+    [ -e "$HOME/.agents/skills/$name" ] && fail "$name must leave ~/.agents/skills"
+done
+[ -f "$HOME/.agents/skills/lark-y/SKILL.md" ] || fail "lark-* must stay in ~/.agents/skills"
+[ -e "$HOME/.claude/skills/lark-y" ] && fail "lark-* must not reach Claude"
+[ -f "$HOME/.claude/skills/merlin-dup/marker" ] && [ -d "$HOME/.agents/skills/merlin-dup" ] \
+    || fail "an existing ~/.claude/skills copy must not be overwritten"
+
+# Manual claude-only orchestrators never reach the Muse store either.
 for name in relay prism; do
     grep -F "skills install $repo_root/agents/skills/$name" "$calls" >/dev/null \
         && fail "$name must not be installed into Muse"
@@ -87,16 +113,19 @@ grep -F "skills install $pdf_src" "$calls" >/dev/null \
 
 # Claude/Codex still get live symlinks; the Muse root gets none (copies only).
 [ -L "$HOME/.claude/skills/agent-team" ] || fail "Claude symlink for agent-team missing"
-[ -L "$HOME/.codex/skills/agent-team" ]  || fail "Codex symlink for agent-team missing"
+[ -L "$HOME/.codex/skills/arxiv-reader" ] || fail "Codex symlink for arxiv-reader missing"
+[ -e "$HOME/.codex/skills/agent-team" ] && fail "agent-team must not be installed into Codex"
 [ -z "$(find "$muse_skills" -type l -print -quit)" ] \
     || fail "no symlinks may land in Muse's managed skills root"
 
 # Prune: the stale repo-sourced install is removed; selected and foreign
 # installs are untouched.
-grep -qx 'skills uninstall cursor-subagent' "$calls" \
-    || fail "stale repo-sourced cursor-subagent install should be uninstalled"
-grep -q 'skills uninstall agent-team' "$calls" \
-    && fail "selected agent-team install must be kept"
+for name in cursor-subagent agent-team; do
+    grep -qx "skills uninstall $name" "$calls" \
+        || fail "stale repo-sourced $name install should be uninstalled"
+done
+grep -q 'skills uninstall arxiv-reader' "$calls" \
+    && fail "selected arxiv-reader install must be kept"
 grep -q 'skills uninstall foreign-skill' "$calls" \
     && fail "foreign install outside this repo must be left alone"
 

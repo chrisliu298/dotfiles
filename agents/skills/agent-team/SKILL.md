@@ -5,7 +5,7 @@ description: Delegate independent read-only analysis, research, planning, or rev
 
 # Agent Team
 
-Use one workflow from either calling agent. The user chooses the backend, not a
+The user chooses the backend, not a
 model or effort tier. All backends run with their pinned model and `high`; no
 model, effort, or mode selection options are exposed. Every backend runs with the
 same full access as the user's own launchers: no approval prompts, no sandbox, and
@@ -44,7 +44,7 @@ Use `scripts/agent-team` beside this `SKILL.md`; resolve its actual installed
 location rather than assuming a particular agent's skill directory. It requires
 Node.js and zsh, plus tmux for persistent non-Pro sessions. `backends` reports configured
 availability, not a verified login or model entitlement. This skill is installed
-for Claude Code, Codex, Muse, and DeepSeek Harness. Report unavailable backends; do not substitute one.
+for Claude Code only. Report unavailable backends; do not substitute one.
 
 ## Persistent task
 

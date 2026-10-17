@@ -45,7 +45,8 @@ LINKS=(
 # source: ./path (local), ~/path (host-local, skipped when absent), or owner/repo[/subpath] (GitHub)
 SKILLS=(
     # The wildcard installs every skill to Claude, Codex, Muse and DeepSeek Harness; the explicit
-    # entries below narrow that (claude-only: relay, prism; recall has a separate build per agent).
+    # entries below narrow that (claude-only: relay, prism, codex-exec, agent-team, gpt-pro; recall
+    # has a separate build per agent).
     # Claude/Codex/DeepSeek get live symlinks; Muse's store owns its managed personal root,
     # so muse entries are copy-installed via `muse skills install` (see _muse_skill_install).
     # DeepSeek is installed only on hosts where the harness has run (its ~/.dsh exists).
@@ -57,33 +58,28 @@ SKILLS=(
     "prism|./agents/skills/prism|claude"
     # codex-exec: claude-only caller; Codex is its executor, so it must not get the skill.
     "codex-exec|./agents/skills/codex-exec|claude"
+    # agent-team: claude-only caller; the other agents reach it only as dispatched backends.
+    "agent-team|./agents/skills/agent-team|claude"
+    # gpt-pro: claude-only caller; its scripts dir is on PATH from the Claude copy (shell/.zshenv).
+    "gpt-pro|./agents/skills/gpt-pro|claude"
     # recall: one skill name, two harness-specific implementations (like pdf). Both default to
     # their own full transcript store, with an explicit cross-agent mode in a shared entrypoint.
     # agents/skills/recall/ has no SKILL.md, so the wildcard skips it; these two entries install
     # each subdir as `recall`.
     "recall|./agents/skills/recall/claude|claude"
     "recall|./agents/skills/recall/codex|codex"
-    # Muse also discovers the Claude/Codex copies natively; MUSE_DISABLED_SKILLS keeps it off there.
+    # Muse also discovers the Claude/Codex copies natively; install_skills turns off there every
+    # skill not selected for Muse.
     # pdf is each vendor's native skill (anthropic's for Claude, this openai one for Codex),
     # not repo-owned, so Muse gets no managed copy of it. Muse still discovers the Codex
     # copy natively; keep it off there per host with `muse skills disable pdf --scope user`.
     "pdf|openai/skills/skills/.curated/pdf|codex"
-    # Third-party skills installed per host by `npx skills` (e.g. lark-*, merlin-*). Codex and
-    # Muse read ~/.agents/skills natively; Claude does not, and gets only the ones listed here
-    # (lark-* left out to keep their long descriptions out of its skill list).
-    "weekly-report|~/.agents/skills/weekly-report|claude"
-    "merlin-cli|~/.agents/skills/merlin-cli|claude"
-    "merlin-data|~/.agents/skills/merlin-data|claude"
-    "merlin-devbox|~/.agents/skills/merlin-devbox|claude"
-    "merlin-job|~/.agents/skills/merlin-job|claude"
-    "merlin-knowledge-qa|~/.agents/skills/merlin-knowledge-qa|claude"
-    "merlin-resource|~/.agents/skills/merlin-resource|claude"
-    "merlin-tracking-experiment|~/.agents/skills/merlin-tracking-experiment|claude"
 )
 
-# Skills Muse discovers natively from ~/.claude/skills or ~/.codex/skills but must not use;
-# install_skills turns each off in Muse's host-local activation settings.
-MUSE_DISABLED_SKILLS=(recall)
+# Host-local third-party skills that only Claude may use. Their installers (the legacy Merlin
+# bundle script, hand copies) drop them into ~/.agents/skills, which Codex, Muse and DeepSeek
+# Harness read natively, so install_skills moves each into ~/.claude/skills. lark-* stay put.
+CLAUDE_ONLY_AGENT_SKILLS=(weekly-report 'merlin-*')
 
 # Skills not auto-installed (opt-in). Toggle with: ./dotfiles.sh enable/disable <name>.
 MANUAL_SKILLS=(
@@ -449,8 +445,27 @@ _fetch_skills_repos() {
     wait
 }
 
+# Move the CLAUDE_ONLY_AGENT_SKILLS out of ~/.agents/skills into ~/.claude/skills, replacing a
+# symlink an earlier run left there. An existing directory there is never overwritten.
+_claim_claude_only_skills() {
+    local pattern src name dest
+    for pattern in "${CLAUDE_ONLY_AGENT_SKILLS[@]}"; do
+        for src in "$HOME"/.agents/skills/$pattern; do
+            [[ -d "$src" && ! -L "$src" && -f "$src/SKILL.md" ]] || continue
+            name="${src##*/}" dest="$HOME/.claude/skills/${src##*/}"
+            if [[ -e "$dest" && ! -L "$dest" ]]; then
+                warn "keep ~/.agents/skills/$name (~/.claude/skills/$name already exists; merge by hand)"
+                continue
+            fi
+            [[ -L "$dest" ]] && rm "$dest"
+            mv "$src" "$dest" && log "move ~/.agents/skills/$name → ~/.claude/skills/$name (claude-only)"
+        done
+    done
+}
+
 install_skills() {
     mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills"
+    _claim_claude_only_skills
     # Muse is installed per host (not every machine has it yet); skip its column when absent.
     local muse_available=false
     command -v muse >/dev/null 2>&1 && muse_available=true
@@ -549,9 +564,14 @@ install_skills() {
                 && log "muse uninstall $mid (no longer selected)" || true
         done < <(jq -r '.skills // {} | to_entries[] | select(.value.source.type == "local") | [.key, .value.source.path] | @tsv' "$muse_lock" 2>/dev/null)
     fi
+    # Muse also discovers ~/.claude/skills and ~/.codex/skills natively; turn off there every
+    # skill the table does not select for Muse, so agent-scoped skills stay scoped.
     if $muse_available; then
         local mskill
-        for mskill in "${MUSE_DISABLED_SKILLS[@]}"; do
+        for mskill in "$HOME"/.claude/skills/*/SKILL.md "$HOME"/.codex/skills/*/SKILL.md; do
+            [[ -f "$mskill" ]] || continue
+            mskill="${mskill%/SKILL.md}" mskill="${mskill##*/}"
+            [[ $'\n'"$muse_expected" == *$'\n'"$mskill"$'\n'* ]] && continue
             muse skills disable "$mskill" --scope user >/dev/null 2>&1 || true
         done
     fi

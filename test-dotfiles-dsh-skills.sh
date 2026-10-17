@@ -37,14 +37,14 @@ source "$repo_root/dotfiles.sh"
 install_skills >/dev/null
 
 dsh_skills="$HOME/.dsh/skills"
-for name in agent-team arxiv-reader gpt-pro push; do
+for name in arxiv-reader push; do
     link="$dsh_skills/$name"
     [ -L "$link" ] || fail "DeepSeek symlink for $name missing"
     [ "$(readlink "$link")" = "$repo_root/agents/skills/$name" ] \
         || fail "DeepSeek symlink for $name points at $(readlink "$link")"
 done
 
-for name in codex-exec relay prism recall; do
+for name in agent-team codex-exec gpt-pro relay prism recall; do
     if [ -e "$dsh_skills/$name" ] || [ -L "$dsh_skills/$name" ]; then
         fail "$name must not be installed into DeepSeek"
     fi

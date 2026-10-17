@@ -1,4 +1,0 @@
-interface:
-  display_name: "Agent Team"
-  short_description: "Delegate analysis, planning and review to CLI agents"
-  default_prompt: "Use $agent-team to delegate this read-only task to the requested GPT, Claude, Gemini, Muse, DeepSeek, or Pro backends."
