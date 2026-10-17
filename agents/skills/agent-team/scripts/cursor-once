@@ -55,7 +55,7 @@ while (( $# > 0 )); do
             shift
             ;;
         --effort|--effort=*|--model|--model=*)
-            print -u2 'agent-team (cursor): model is fixed to Claude Opus 5.5 high; model and effort options are not supported'
+            print -u2 'agent-team (cursor): model is fixed to gemini-4-argon-high; model and effort options are not supported'
             exit 2
             ;;
         --)
