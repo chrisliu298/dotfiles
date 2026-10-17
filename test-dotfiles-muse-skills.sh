@@ -69,7 +69,7 @@ fail() { printf 'FAIL: %s\n' "$1" >&2; printf '%s\n' '--- recorded muse calls --
 
 # Each muse-selected universal skill is install-reconciled from its repo
 # source with --force (provenance re-recorded, copy refreshed every run).
-for name in arxiv-reader push; do
+for name in arxiv-reader; do
     grep -F "skills install $repo_root/agents/skills/$name" "$calls" | grep -q -- '--force' \
         || fail "expected forced muse install for $name from its repo source"
 done
@@ -83,7 +83,7 @@ for name in recall agent-team codex-exec gpt-pro pdf weekly-report merlin-x merl
     grep -qxF "skills disable $name --scope user" "$calls" \
         || fail "expected $name to be disabled in Muse"
 done
-for name in arxiv-reader push; do
+for name in arxiv-reader; do
     grep -qxF "skills disable $name --scope user" "$calls" \
         && fail "muse-selected $name must stay enabled"
 done

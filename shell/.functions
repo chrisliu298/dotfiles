@@ -654,7 +654,6 @@ cu(){ command claude update "$@"; }
 # profile must be saved under the same email cswap uses. cdswap goes first
 # because it is the one likely to refuse, which then leaves both unchanged.
 csall(){ (( $# == 1 )) || { echo "usage: csall <email>" >&2; return 2; }; cdswap use "$1" && cswap switch "$1"; }
-cpu(){ local prompt="/push"; (( $# )) && prompt+=" ${*}"; _claude -p --dangerously-skip-permissions "$prompt"; }
 # Claude Code on the ChatGPT/Codex subscription through the local CLIProxyAPI
 # brew service (127.0.0.1:8317; key in ~/.cli-proxy-api/client.key). Tibo's
 # claudex recipe, with every model tier mapped to GPT so no Claude login has

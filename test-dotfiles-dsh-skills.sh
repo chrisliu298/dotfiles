@@ -37,7 +37,7 @@ source "$repo_root/dotfiles.sh"
 install_skills >/dev/null
 
 dsh_skills="$HOME/.dsh/skills"
-for name in arxiv-reader push; do
+for name in arxiv-reader; do
     link="$dsh_skills/$name"
     [ -L "$link" ] || fail "DeepSeek symlink for $name missing"
     [ "$(readlink "$link")" = "$repo_root/agents/skills/$name" ] \
