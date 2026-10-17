@@ -704,14 +704,6 @@ _deepseek(){
 ds(){   _deepseek --dangerously-skip-permissions "$@"; }
 dsc(){  _deepseek --dangerously-skip-permissions --continue "$@"; }
 dsr(){  _deepseek --dangerously-skip-permissions --resume "$@"; }
-cch(){
-    local _claude_bin="$(command -v claude)" || return 127
-    local _cmd="${(q)_claude_bin} --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official"
-    local _arg
-    for _arg in "$@"; do _cmd+=" ${(q)_arg}"; done
-    tmux new-session -ds claude-channels "$_cmd" 2>/dev/null
-    tmux attach -t claude-channels
-}
 # Sequentially scout every awesome-list repo's Scholar Inbox feed with Claude
 # Code (Opus, high effort), printing only each run's final message.
 scout-papers-scholar-inbox-all() {
