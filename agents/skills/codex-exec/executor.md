@@ -36,8 +36,10 @@ final reply.
 
 ## Each turn
 
-Finish the whole message in the turn. Commit all your changes before you end it; leave the
-worktree clean, since the planner reviews commits. End with a reply that covers:
+Finish the whole message in the turn. Run the tests the change needs and the task's
+acceptance commands; broaden or repeat them only when a new change, a failure or an open
+concern calls for it. Commit all your changes before you end it; leave the worktree clean,
+since the planner reviews commits. End with a reply that covers:
 
 1. what changed, by file;
 2. commit SHAs, and whether the branch was pushed;

@@ -6,13 +6,14 @@
 # is saved as msg-NNN.md and sent as a one-line pointer to it; `wait` reads the thread's
 # rollout and returns once a turn that received that message has ended.
 #
-#   cx start NAME [--effort LEVEL] [--repo DIR] [--base REF] [--branch BRANCH] < task.md
+#   cx start NAME --model MODEL --effort LEVEL [--repo DIR] [--base REF] [--branch BRANCH] < task.md
 #   cx send NAME < message.md      # resumes a closed line first
 #   cx wait NAME [--timeout SECONDS]
 #   cx diff NAME                   # what the line changed since its base
+#   cx model NAME MODEL            # applies from the next open
 #   cx effort NAME LEVEL           # applies from the next open
 #   cx ask NAME < question.md      # run by Codex: message the planning Claude session
-#   cx open NAME | cx attach NAME | cx close NAME | cx ls | cx rm NAME [--force]
+#   cx open NAME | cx attach NAME | cx close NAME [--force] | cx ls | cx rm NAME [--unmerged|--force]
 emulate -L zsh
 setopt err_exit no_unset pipe_fail
 
@@ -21,11 +22,12 @@ self="${0:A}"
 skill="${0:A:h:h}"
 codex_cli="$HOME/.local/bin/codex"
 codex_home="${CODEX_HOME:-$HOME/.codex}"
-model=gpt-6-astra
+models=(gpt-6.1-sol gpt-6-astra)
 levels=(low medium high xhigh max)
 
 die() { print -u2 -- "cx: $*"; exit 1; }
 check_level() { (( ${levels[(Ie)$1]} )) || die "effort must be one of: $levels"; }
+check_model() { (( ${models[(Ie)$1]} )) || die "model must be one of: $models"; }
 
 line_dir() {
     [[ "$1" =~ '^[a-z0-9][a-z0-9-]*$' ]] || die "name must match [a-z0-9][a-z0-9-]*: $1"
@@ -104,7 +106,7 @@ launch() {
     # the same environment, credentials, PATH and Codex config as a terminal.
     local -a cmd=("$codex_cli")
     [[ -n "$thread" ]] && cmd+=(resume)
-    cmd+=(--yolo --model "$model" -c "model_reasoning_effort=\"$(<"$d/effort")\"" --no-alt-screen)
+    cmd+=(--yolo --model "$(<"$d/model")" -c "model_reasoning_effort=\"$(<"$d/effort")\"" --no-alt-screen)
     [[ -n "$thread" ]] && cmd+=("$thread")
     [[ -n "$prompt" ]] && { [[ -n "$thread" ]] && cmd+=("$prompt") || cmd+=(-- "$prompt"); }
     pane="$(tmux new-session -d -P -F '#{pane_id}' -x 200 -y 50 -s "cx-$name" -c "$(<"$d/worktree")" \
@@ -113,6 +115,34 @@ launch() {
 }
 
 screen() { tmux capture-pane -p -t "$(pane_of "$1")" 2>/dev/null; }
+
+# Whether line $1's Codex may be in a turn: its session runs and the thread's latest turn
+# event is not an end. A running session without a thread or turn event yet counts as one.
+busy() {
+    local d=$1 thread
+    running "${d:t}" || return 1
+    thread="$(thread_of "$d")"
+    local -a files=()
+    [[ -n "$thread" ]] && files=(${(f)"$(rollouts "$thread")"})
+    (( ${#files} )) || return 0
+    [[ "$(jq -Rrn 'reduce (inputs | fromjson? // empty | select(.type == "event_msg") | .payload.type
+        | select(. == "task_started" or . == "task_complete" or . == "turn_aborted")) as $t (""; $t)' \
+        "${files[@]}")" != (task_complete|turn_aborted) ]]
+}
+attached() { tmux display -p -t "$(pane_of "$1")" '#{session_attached}' 2>/dev/null || print 0; }
+
+# Stop unless line $1's session may end: no turn running and nobody attached, or $2 is --force.
+check_idle() {
+    [[ "${2:-}" == --force ]] && return 0
+    busy "$1" && die "cx-${1:t} is in a turn; cx wait for it, or pass --force to kill it mid-turn"
+    [[ "$(attached "$1")" == 0 ]] || die "someone is attached to cx-${1:t}; pass --force to close it anyway"
+}
+
+# Make the calling Claude session line $1's planner, the session `cx ask` reaches.
+claim() {
+    [[ -n "${CLAUDE_CODE_MESSAGING_SOCKET:-}" ]] && print -r -- "uds:$CLAUDE_CODE_MESSAGING_SOCKET" > "$1/planner"
+    return 0
+}
 
 # Paste a one-line message into the running composer and confirm Codex received it.
 type_line() {
@@ -139,10 +169,11 @@ type_line() {
 }
 
 cmd_start() {
-    local name=${1:?usage: cx start NAME [--effort LEVEL] [--repo DIR] [--base REF] [--branch BRANCH] < task.md}; shift
-    local effort=high repo=$PWD base=origin/main branch="codex/$name" d msg
+    local name=${1:?usage: cx start NAME --model MODEL --effort LEVEL [--repo DIR] [--base REF] [--branch BRANCH] < task.md}; shift
+    local model= effort= repo=$PWD base=origin/main branch="codex/$name" d msg
     while (( $# )); do
         case $1 in
+            --model) model=$2; shift 2 ;;
             --effort) effort=$2; shift 2 ;;
             --repo) repo=$2; shift 2 ;;
             --base) base=$2; shift 2 ;;
@@ -150,6 +181,9 @@ cmd_start() {
             *) die "unknown option: $1" ;;
         esac
     done
+    [[ -n "$model" && -n "$effort" ]] ||
+        die "choose --model and --effort for this task (see \"Model and effort\" in SKILL.md)"
+    check_model "$model"
     check_level "$effort"
     d="$(line_dir "$name")"
     [[ -e "$d" ]] && die "line $name exists; use cx send or cx open"
@@ -162,9 +196,9 @@ cmd_start() {
     fi
     print -r -- "$repo" > "$d/repo"
     git -C "$d/wt" rev-parse HEAD > "$d/base"
+    print -r -- "$model" > "$d/model"
     print -r -- "$effort" > "$d/effort"
-    # The calling Claude session's address, for `cx ask`.
-    [[ -n "${CLAUDE_CODE_MESSAGING_SOCKET:-}" ]] && print -r -- "uds:$CLAUDE_CODE_MESSAGING_SOCKET" > "$d/planner"
+    claim "$d"
     print -r -- "$d/wt" > "$d/worktree"
     msg="$(save_message "$d")"
     launch "$name" "$(pointer "$msg")"
@@ -180,6 +214,7 @@ cmd_send() {
     else
         launch "$name" "$(pointer "$msg")"
     fi
+    claim "$d"
     print -r -- "submitted ${msg:t} to cx-$name"
 }
 
@@ -220,6 +255,18 @@ cmd_diff() {
     git -C "$wt" diff "$base" HEAD
 }
 
+cmd_model() {
+    local name=${1:?usage: cx model NAME MODEL} m=${2:?usage: cx model NAME MODEL} d
+    check_model "$m"
+    d="$(existing "$name")"
+    print -r -- "$m" > "$d/model"
+    if running "$name"; then
+        print -r -- "cx-$name: $m from the next open (cx close, then cx open, once the turn is done)"
+    else
+        print -r -- "cx-$name: $m"
+    fi
+}
+
 cmd_effort() {
     local name=${1:?usage: cx effort NAME LEVEL} level=${2:?usage: cx effort NAME LEVEL} d
     check_level "$level"
@@ -257,34 +304,51 @@ END" > "$file.sent" 2>&1 || die "delivery failed: $(<"$file.sent")"
 }
 
 cmd_open() {
-    local name=${1:?usage: cx open NAME}
-    existing "$name" > /dev/null
+    local name=${1:?usage: cx open NAME} d
+    d="$(existing "$name")"
     running "$name" || launch "$name"
+    claim "$d"
     print -r -- "cx-$name"
 }
 
+# Watching a line does not take it over.
 cmd_attach() {
-    cmd_open "$1" > /dev/null
+    local name=${1:?usage: cx attach NAME}
+    existing "$name" > /dev/null
+    running "$name" || launch "$name"
     if [[ -n "${TMUX:-}" ]]; then tmux switch-client -t "=cx-$1"; else tmux attach -t "=cx-$1"; fi
 }
 
 cmd_close() {
-    local name=${1:?usage: cx close NAME}
-    existing "$name" > /dev/null
+    local name=${1:?usage: cx close NAME [--force]} d
+    d="$(existing "$name")"
+    check_idle "$d" "${2:-}"
     running "$name" && tmux kill-session -t "=cx-$name"
     print -r -- "closed cx-$name"
 }
 
 cmd_ls() {
-    local d name msg state turn
+    local d name msg state turn owner p
+    printf '%-20s %-16s %-12s %-6s %-20s %-12s %s\n' NAME STATE MODEL EFFORT LATEST OWNER BRANCH
     for d in "$root"/*(N/); do
         name=${d:t}
         msg="$(latest_message "$d")"
         if running "$name"; then
             state=open
-            screen "$d" | grep -q 'esc to interrupt' && state=working
+            busy "$d" && state=working
+            [[ "$(attached "$d")" == 0 ]] || state+=",attached"
         else
             state=closed
+        fi
+        owner=-
+        if [[ -s "$d/planner" ]]; then
+            p="$(<"$d/planner")"
+            if [[ "$p" == "uds:${CLAUDE_CODE_MESSAGING_SOCKET:-}" ]]; then
+                owner=me
+            else
+                owner="${${p:t}%.sock}"
+                [[ -S "${p#uds:}" ]] || owner+="(gone)"
+            fi
         fi
         turn=-
         if [[ -n "$msg" ]]; then
@@ -295,24 +359,42 @@ cmd_ls() {
                 *) turn="${msg:t:r} not received" ;;
             esac
         fi
-        printf '%-20s %-8s %-6s %-20s %s\n' "$name" "$state" "$(<"$d/effort")" "$turn" \
+        printf '%-20s %-16s %-12s %-6s %-20s %-12s %s\n' "$name" "$state" "$(<"$d/model")" "$(<"$d/effort")" "$turn" "$owner" \
             "$(git -C "$(<"$d/worktree")" branch --show-current 2>/dev/null)"
     done
 }
 
+# Every check, and the worktree removal, runs before the session ends, so a refused rm
+# leaves the line running as it was.
 cmd_rm() {
-    local name=${1:?usage: cx rm NAME [--force]} d
+    local name=${1:?usage: cx rm NAME [--unmerged|--force]} mode=${2:-} d wt repo ref target= n
+    [[ "$mode" == (|--unmerged|--force) ]] || die "unknown option: $mode"
     d="$(existing "$name")"
-    running "$name" && tmux kill-session -t "=cx-$name"
+    wt="$(<"$d/worktree")" repo="$(<"$d/repo")"
     local -a force=()
-    [[ "${2:-}" == --force ]] && force=(--force)
-    git -C "$(<"$d/repo")" worktree remove "${force[@]}" "$(<"$d/worktree")" ||
-        die "worktree has changes; commit them or pass --force (the branch is kept either way)"
+    if [[ "$mode" == --force ]]; then
+        force=(--force)
+    else
+        [[ -n "$mode" ]] || git -C "$repo" fetch -q origin 2>/dev/null || true
+        check_idle "$d"
+        [[ -z "$(git -C "$wt" status --porcelain)" ]] ||
+            die "the worktree has uncommitted changes; commit them, or pass --force to drop them"
+        if [[ -z "$mode" ]]; then
+            for ref in origin/HEAD origin/main origin/master; do
+                git -C "$repo" rev-parse -q --verify "$ref" > /dev/null && { target=$ref; break; }
+            done
+            [[ -n "$target" ]] || die "no origin default branch to check the branch against; pass --unmerged"
+            n="$(git -C "$wt" rev-list --count HEAD --not "$target" "$(<"$d/base")")"
+            (( n == 0 )) || die "$n commit(s) made on the line are not in $target; after a squash merge, or to drop them (the branch stays), pass --unmerged"
+        fi
+    fi
+    git -C "$repo" worktree remove "${force[@]}" "$wt" || die "could not remove the worktree; the line is unchanged"
+    running "$name" && tmux kill-session -t "=cx-$name"
     rm -rf "$d"
     print -r -- "removed $name (branch kept)"
 }
 
 case "${1:-}" in
-    start|send|wait|diff|effort|ask|open|attach|close|ls|rm) sub=$1; shift; "cmd_$sub" "$@" ;;
-    *) die "usage: cx start|send|wait|diff|effort|ask|open|attach|close|ls|rm" ;;
+    start|send|wait|diff|model|effort|ask|open|attach|close|ls|rm) sub=$1; shift; "cmd_$sub" "$@" ;;
+    *) die "usage: cx start|send|wait|diff|model|effort|ask|open|attach|close|ls|rm" ;;
 esac
