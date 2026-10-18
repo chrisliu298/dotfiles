@@ -66,15 +66,12 @@ SKILLS=(
     # not repo-owned, so Muse gets no managed copy of it. Muse still discovers the Codex
     # copy natively; keep it off there per host with `muse skills disable pdf --scope user`.
     "pdf|openai/skills/skills/.curated/pdf|codex"
-    # Lark: the six skills in use, claude-only, tracked from larksuite/cli main on every run
-    # (lark-shared holds the auth/permission rules the others depend on). They need the
-    # lark-cli binary: npm install -g @larksuite/cli.
+    # Lark: the three skills in use, claude-only, tracked from larksuite/cli main on every run
+    # (lark-shared holds the auth/permission rules lark-doc and lark-sheets depend on). They
+    # need the lark-cli binary: npm install -g @larksuite/cli.
     "lark-shared|larksuite/cli/skills/lark-shared|claude"
     "lark-doc|larksuite/cli/skills/lark-doc|claude"
-    "lark-wiki|larksuite/cli/skills/lark-wiki|claude"
-    "lark-im|larksuite/cli/skills/lark-im|claude"
     "lark-sheets|larksuite/cli/skills/lark-sheets|claude"
-    "lark-drive|larksuite/cli/skills/lark-drive|claude"
 )
 
 # Host-local third-party skills that only Claude may use. Their installers (the legacy Merlin
