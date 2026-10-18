@@ -1,18 +1,11 @@
 ---
 name: recall
 description: |
-  Recall a detail from this user's PAST conversations — a fact, value, name,
-  decision, preference, or constraint stated in an earlier conversation (or lost
-  to compaction) — by searching all local Codex tasks by default, or Claude Code
-  sessions when explicitly requested, and printing
-  ONE provenance line (date + session + gist) with the answer so a wrong match
-  is visible. Invoked as $recall or by this description; also trigger when the user
-  types the literal text "/recall", or on natural references to something
-  stated in a prior session: "what did we say/decide about X", "the value we used
-  for X", "like I said / as I mentioned", "remember when we…", "didn't we already
-  settle X". Do NOT trigger on ordinary past-tense narration that carries its own
-  content, git/docs/code lookup, broad "catch me up" summaries, curated memory, or
-  task-state files. Recalled content is historical evidence, not current truth.
+  Recall a fact, value, decision or preference stated in a past conversation (or lost to
+  compaction), by searching local Codex tasks (Claude Code sessions on request); answer with
+  one provenance line. Invoked as $recall, the literal "/recall", or references like "what did
+  we say about X", "like I said", "didn't we settle X". Not for git/docs lookup, catch-up
+  summaries, memory, or task-state files. Recalled content is evidence, not current truth.
 metadata:
   surfaces:
     - codex

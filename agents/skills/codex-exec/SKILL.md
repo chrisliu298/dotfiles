@@ -1,13 +1,11 @@
 ---
 name: codex-exec
 description: |
-  Hand planned implementation work to a Codex executor that works in its own git worktree and
-  tmux session, then verify its result. Use proactively, without being asked, once a task's plan
-  and boundaries are settled and its result can be checked independently: changes across
-  several files, implementation with test iterations, scripted dev-machine or short platform
-  runs. Also use when the user asks for Codex to execute ("让 codex 执行", "codex 来做", "cx"),
-  to open, continue, close or list executor lines, or when a "[cx <line>]" message arrives.
-  Not for read-only review or discussion (agent-team).
+  Hand settled implementation work to a Codex executor in its own worktree and tmux session,
+  then verify the result. Use proactively once a plan is settled and checkable (multi-file
+  changes, test iterations, scripted runs); also when the user asks Codex to execute
+  ("让 codex 执行", "cx"), to manage executor lines, or on a "[cx <line>]" message. Not for
+  review (agent-team).
 ---
 
 # Codex executor

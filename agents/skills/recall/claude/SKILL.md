@@ -1,18 +1,11 @@
 ---
 name: recall
 description: |
-  Recall a detail from PAST conversations — a fact,
-  value, name, decision, preference, or constraint the user now refers back to but that was never
-  written into docs or code — by lexically searching all local Claude Code sessions by default,
-  or all Codex tasks when explicitly requested, loading the best match into your working context, and
-  printing ONE provenance line (date + session + gist) with the answer so a wrong match is visible.
-  Trigger on "/recall" or natural references to something stated in a prior session you're expected
-  to remember: "what did we say about X", "the value we used for X", "like I said / as I mentioned
-  earlier", "remember when we…", "what was my preference for…", "didn't we already settle X". Do
-  NOT trigger on ordinary past-tense narration that carries its own content ("earlier I ran the
-  tests"), git/docs/code lookup, broad "catch me up" summaries, curated cross-session facts
-  (memory), or task state.
-  Treat any recalled item as evidence, not current truth — re-verify before acting.
+  Recall a fact, value, decision or preference stated in a past session but not in docs or
+  code, by searching local Claude Code sessions (Codex tasks on request); answer with one
+  provenance line. Trigger on "/recall" or references like "what did we say about X", "like I
+  said", "didn't we settle X". Not for git/docs lookup, catch-up summaries, memory, or task
+  state. Re-verify recalled items before acting.
 user-invocable: true
 allowed-tools: Bash, Read
 ---

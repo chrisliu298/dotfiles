@@ -1,6 +1,6 @@
 ---
 name: agent-team
-description: Delegate independent read-only analysis, research, planning, or review to GPT/Codex CLI, Claude Code, Gemini (Cursor Agent), Muse Code, DeepSeek (Claude Code), or ChatGPT Pro, including several backends in parallel. Use when the user names these backends for a task or requests this skill; a request for ChatGPT Pro alone goes to gpt-pro. Not for implementation, external operations, or unspecified native subagent requests.
+description: Delegate read-only analysis, research, planning or review to other model backends (GPT/Codex, Claude, Gemini, Muse, DeepSeek, ChatGPT Pro), alone or in parallel. Use when the user names one of them for such a task or asks for this skill; ChatGPT Pro alone goes to gpt-pro. Not for implementation.
 ---
 
 # Agent Team
