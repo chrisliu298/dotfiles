@@ -57,7 +57,6 @@ Claude has no `pdf` skill: `agents/claude/settings.json` turns off the claude.ai
 | Server | Purpose | Agents |
 |--------|---------|--------|
 | chrome-devtools | Chrome DevTools bridge for browser automation | Codex |
-| codex | Codex MCP server for cross-agent tool access | Codex |
 
 ## Plugins
 
