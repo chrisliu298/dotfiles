@@ -31,7 +31,7 @@ Columns: **C**laude · Code**x** · **M**use · **D**eepSeek Harness. Legend: �
 
 > The Claude-only skills (codex-exec, agent-team, gpt-pro, the three `lark-*`, and the host-local `weekly-report` and `merlin-*`) stay off Codex, Muse and DeepSeek. `recall` ships as two harness-specific builds (Claude, Codex) under one name; each defaults to its own complete history and can search the other agent's complete history on request through a shared entrypoint. It has no Muse or DeepSeek build, so Muse and `~/.dsh/sessions` history isn't searched; `dotfiles.sh` also turns off the Claude/Codex copies Muse discovers natively.
 
-Claude gets `pdf` and `skill-creator` from the claude.ai-synced skills (`anthropic-skills:*`), not from this repo.
+Claude has no `pdf` skill: `agents/claude/settings.json` turns off the claude.ai-synced skills (`syncClaudeAiSkills: false`) and the built-in skills it never uses (`skillOverrides`).
 
 | Skill | C | X | M | D | Source · Description |
 |-------|:-:|:-:|:-:|:-:|----------------------|
@@ -39,7 +39,7 @@ Claude gets `pdf` and `skill-creator` from the claude.ai-synced skills (`anthrop
 | arxiv-reader            | ✓ | ✓ | ✓ | ✓ | local — Read arxiv via TeX / HF markdown / HTML fallback |
 | gpt-pro                 | ✓ | — | — | — | local — ChatGPT Pro Extended through the local relay engine (the `gpt-pro` CLI is on PATH from the Claude copy) |
 | lark-shared, lark-doc, lark-sheets | ✓ | — | — | — | [larksuite/cli][c-lark] — Feishu auth, docs and sheets through `lark-cli` (`npm install -g @larksuite/cli`); tracks main on every run |
-| pdf                     | — | ✓ | — | — | [openai/skills][c-pdf-o] — PDF read/edit (Claude uses the claude.ai-synced `anthropic-skills:pdf`; both are the vendors' native skills, not repo-owned, so Muse gets no managed copy) |
+| pdf                     | — | ✓ | — | — | [openai/skills][c-pdf-o] — PDF read/edit (OpenAI's native skill, not repo-owned, so Muse gets no managed copy) |
 | recall                  | ✓ | ✓ | — | — | local — Recall from all past sessions of this agent, or the other agent on request (separate Claude and Codex builds with a shared entrypoint; no Muse or DeepSeek build) |
 
 > Note: SKILL.md supports an optional Claude-only `effort` frontmatter (`medium` / `high` / `max`) to set thinking budget per skill. Currently unset on every skill in this repo — they all inherit the session default.

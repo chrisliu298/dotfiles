@@ -18,6 +18,22 @@
   "cleanupPeriodDays": 3650000,
   "autoDreamEnabled": false,
   "skillListingBudgetFraction": 0.02,
+  "syncClaudeAiSkills": false,
+  "skillOverrides": {
+    "artifact-capabilities": "off",
+    "artifact-design": "off",
+    "artifact-diagramming": "off",
+    "code-review": "off",
+    "fewer-permission-prompts": "off",
+    "init": "off",
+    "keybindings-help": "off",
+    "loop": "off",
+    "run": "off",
+    "schedule": "off",
+    "security-review": "off",
+    "simplify": "off",
+    "update-config": "off"
+  },
   "showThinkingSummaries": true,
   "skipDangerousModePermissionPrompt": true,
   "autoInstallIdeExtension": false,
@@ -27,7 +43,16 @@
   "skipAutoPermissionPrompt": true,
   "agentPushNotifEnabled": true,
   "permissions": {
-    "defaultMode": "bypassPermissions"
+    "defaultMode": "bypassPermissions",
+    "deny": [
+      "Artifact",
+      "ArtifactComments",
+      "ArtifactData",
+      "DesignSync",
+      "ReportFindings",
+      "SendFeedback",
+      "Agent(statusline-setup)"
+    ]
   },
   "hooks": {
     "PreToolUse": [
@@ -60,6 +85,7 @@
   },
   "deniedMcpServers": [
     { "serverName": "claude.ai Google Drive" },
-    { "serverName": "claude.ai Google Calendar" }
+    { "serverName": "claude.ai Google Calendar" },
+    { "serverName": "claude.ai Claude Docs" }
   ]
 }

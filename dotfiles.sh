@@ -62,9 +62,9 @@ SKILLS=(
     "recall|./agents/skills/recall/codex|codex"
     # Muse also discovers the Claude/Codex copies natively; install_skills turns off there every
     # skill not selected for Muse.
-    # pdf is each vendor's native skill (anthropic's for Claude, this openai one for Codex),
-    # not repo-owned, so Muse gets no managed copy of it. Muse still discovers the Codex
-    # copy natively; keep it off there per host with `muse skills disable pdf --scope user`.
+    # pdf is OpenAI's native skill for Codex (Claude's synced one is off), not repo-owned, so
+    # Muse gets no managed copy of it. Muse still discovers the Codex copy natively; keep it
+    # off there per host with `muse skills disable pdf --scope user`.
     "pdf|openai/skills/skills/.curated/pdf|codex"
     # Lark: the three skills in use, claude-only, tracked from larksuite/cli main on every run
     # (lark-shared holds the auth/permission rules lark-doc and lark-sheets depend on). They
