@@ -75,9 +75,17 @@ answer_effort_dialog() {
     fi
 }
 
-# The pane still runs Claude Code (the binary shows up as its version number).
+# The pane still runs Claude Code (the binary shows up as its version number),
+# either as the pane's command or as a child of the shell that launched it with
+# `zsh -c "claude ...; exec zsh"`, where tmux reports the shell.
 pane_is_claude() {
-    [[ "$(tmux display -p -t "$1" '#{pane_current_command}' 2>/dev/null)" =~ ^(claude|[0-9]+\.[0-9]+\.[0-9]+)$ ]]
+    local re='^(claude|[0-9]+\.[0-9]+\.[0-9]+)$' pid child
+    [[ "$(tmux display -p -t "$1" '#{pane_current_command}' 2>/dev/null)" =~ $re ]] && return 0
+    pid=$(tmux display -p -t "$1" '#{pane_pid}' 2>/dev/null) || return 1
+    for child in $(pgrep -P "$pid"); do
+        [[ "$(basename "$(ps -o comm= -p "$child")")" =~ $re ]] && return 0
+    done
+    return 1
 }
 
 fresh() { [[ -f "$1" && $(($(date +%s) - $(/usr/bin/stat -f %m "$1"))) -lt $TTL ]]; }
