@@ -107,10 +107,12 @@ agreements, disagreements, and remaining gaps.
 ## Control and failure semantics
 
 - `send` returns JSON with `delivery`. Gemini `confirmed` means steering activation
-  or transcript receipt was confirmed; Pro `confirmed` means the relay acknowledged
-  delivery into the running answer. Claude/GPT/Muse/DeepSeek `submitted` means text was
-  pasted and Enter sent; it does not independently prove consumption or task
-  completion. Use `wait` for the resulting reply. Do not interrupt merely to add context.
+  or transcript receipt was confirmed, not that the message has joined the turn yet
+  (steering waits for the next safe boundary, as on the other backends); Pro
+  `confirmed` means the relay acknowledged delivery into the running answer.
+  Claude/GPT/Muse/DeepSeek `submitted` means text was pasted and Enter sent; it
+  does not independently prove consumption or task completion. Use `wait` for the
+  resulting reply. Do not interrupt merely to add context.
 - A Pro conversation accepts no follow-up once its answer finishes: `send` fails
   and says to start a new task that includes the answer and the new question.
 - Gemini and Pro `unconfirmed` return 124; the message may still be queued. Inspect it or

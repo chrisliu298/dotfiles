@@ -17,7 +17,11 @@ the full-permission launch flags apply when a session is started.
 `send` submits the native input and activates steering when offered. It confirms
 activation or receipt in the primary transcript, waiting up to 10 seconds. The
 supplement is consumed at a safe boundary; an in-flight action may finish first.
-If the active turn ends at arrival, it can become a follow-up in the same chat.
+`confirmed` therefore does not mean the supplement has joined the turn: Cursor
+marks it `· steering` until then, and during tool-free text generation the next
+boundary is the end of that output. The footer's `enter interrupt and send`
+discards the in-progress output, so it is not steering. If the active turn ends
+at arrival, the supplement can become a follow-up in the same chat.
 Cursor steers one message at a time; a supplement sent while another is steering
 stays queued and returns 124 (unconfirmed), and `wait` steers it once Cursor offers.
 Do not automatically resend. Do not manually press extra Enter, which can interrupt
