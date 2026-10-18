@@ -233,6 +233,12 @@ def test_invalid_selection_dispatches_nothing(unified, options):
     assert not (root / 'calls.jsonl').exists()
 
 
+def test_former_cursor_backend_names_its_replacement(unified):
+    run, _ = unified
+    outcome = run('start', '--backend', 'cursor')
+    assert outcome.returncode == 2 and 'renamed to gemini' in outcome.stderr
+
+
 def test_recursion_and_duplicate_target_guard(unified):
     run, root = unified
     assert run('start', '--backend', 'claude', extra_env={'CODEX_REVIEW_SUBAGENT_ACTIVE': '1'}).returncode == 126

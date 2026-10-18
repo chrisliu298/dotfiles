@@ -36,6 +36,7 @@ while (args.length) {
   const option = args.shift();
   if (option === '--backend' && ['start', '--once'].includes(action)) {
     const [backend, ...file] = (args.shift() || '').split('=');
+    if (backend === 'cursor') usage('backend cursor was renamed to gemini (Cursor Agent on Gemini); use --backend gemini');
     if (!names.includes(backend)) usage('backend must be claude, gpt, gemini, muse, ds, or pro');
     if (selections.some(item => item.backend === backend)) usage(`each backend runs at most once per call: ${backend}`);
     const selection = { backend };
