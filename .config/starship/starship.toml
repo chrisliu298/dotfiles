@@ -153,7 +153,7 @@ vimcmd_visual_symbol = '[❮](fg:oa_yellow)'
 # OpenAI Dark — neutral metadata with restrained semantic accents.
 # Match Ghostty's OpenAI Dark ANSI colors.
 [palettes.openai_dark]
-oa_red = "#ff6177"       # root user, errors, prompt error
+oa_red = "#ff7589"       # root user, errors, prompt error
 oa_green = "#00b889"     # git clean, prompt ok
 oa_blue = "#5aaeff"      # directory path
 oa_yellow = "#f2be59"    # git dirty/state, vim visual

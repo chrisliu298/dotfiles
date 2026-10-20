@@ -22,7 +22,7 @@
     <dict>
       <key>name</key><string>Keyword</string>
       <key>scope</key><string>keyword, storage.type, storage.modifier</string>
-      <key>settings</key><dict><key>foreground</key><string>#ff6177</string></dict>
+      <key>settings</key><dict><key>foreground</key><string>#ff7589</string></dict>
     </dict>
     <dict>
       <key>name</key><string>String</string>
@@ -52,7 +52,7 @@
     <dict>
       <key>name</key><string>Deleted and invalid</string>
       <key>scope</key><string>markup.deleted, invalid</string>
-      <key>settings</key><dict><key>foreground</key><string>#ff6177</string></dict>
+      <key>settings</key><dict><key>foreground</key><string>#ff7589</string></dict>
     </dict>
   </array>
 </dict>
