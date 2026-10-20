@@ -91,31 +91,46 @@ pane_is_claude() {
 
 fresh() { [[ -f "$1" && $(($(date +%s) - $(/usr/bin/stat -f %m "$1"))) -lt $TTL ]]; }
 
-# Transcript records, without the api-request-blob lines that replay the whole
-# conversation history (and so every earlier /model or "Set model to" in it).
-records() { grep -a -v '^{"type":"api-request-blob"' "$1"; }
+# Transcripts grow to hundreds of MB, so whole-file scans use rg (grep takes
+# seconds), and confirmations read only what was written after typing.
 
-# The main-thread request records of transcript $1.
-main_requests() { grep -a '^{"type":"api-request",' "$1" | grep -a '"querySource":"repl_main_thread"'; }
+# The last record of transcript $1 containing $2, as "LINE:RECORD", skipping the
+# api-request-blob lines that replay the whole conversation history (and so
+# every earlier /model or "Set model to" in it).
+last_record() {
+    rg -a -n -F -- "$2" "$1" | rg -v '^[0-9]+:\{"type":"api-request-blob"' | tail -1
+}
+
+# The records of transcript $1 from the first line that starts after byte $2,
+# without api-request-blob lines.
+records_after() { tail -c +"$(($2 > 0 ? $2 : 1))" "$1" | tail -n +2 | grep -a -v '^{"type":"api-request-blob"'; }
+
+# The main-thread request records on stdin.
+main_requests() { rg -a '^\{"type":"api-request",' | rg -a -F '"querySource":"repl_main_thread"'; }
 
 # The effort level of the latest main-thread request in transcript $1.
-last_effort() { main_requests "$1" | tail -1 | jq -r '.params.output_config.effort // empty'; }
+last_effort() { main_requests <"$1" | tail -1 | jq -r '.params.output_config.effort // empty'; }
 
 # Type $2 into pane $1 once its input line is empty, submit it, and wait until
-# the caller's confirmed() count rises; stop once the caller's wanted() fails.
-# Returns 1 when the pane never got ready.
+# the caller's confirmed() finds a confirmation in transcript $3 after the size
+# it had before typing; stop once the caller's wanted() fails. Checks every
+# 0.2s for up to two minutes. Returns 1 when the pane never got ready.
 type_when_idle() {
-    local pane=$1 cmd=$2 before line
-    for _ in $(seq 120); do
-        sleep 1
+    local pane=$1 cmd=$2 transcript=$3 since line
+    for _ in $(seq 600); do
         pane_is_claude "$pane" || break
         wanted || { log "superseded: $cmd"; return 0; }
         [[ "$cmd" == /effort\ * ]] && answer_effort_dialog "$pane" "${cmd#/effort }"
-        line=$(input_line "$pane") || continue
-        [[ -z "$line" || "$line" == Try\ \"* ]] || continue
-        before=$(confirmed)
+        if ! line=$(input_line "$pane") || [[ -n "$line" && "$line" != Try\ \"* ]]; then
+            sleep 0.2
+            continue
+        fi
+        since=$(/usr/bin/stat -f %z "$transcript")
         tmux send-keys -t "$pane" -l "$cmd"
-        sleep 0.5
+        for _ in $(seq 10); do
+            sleep 0.1
+            [[ "$(input_line "$pane")" == "$cmd" ]] && break
+        done
         if [[ "$(input_line "$pane")" != "$cmd" ]]; then
             log "input changed while typing; not submitting"
             return 0
@@ -123,7 +138,7 @@ type_when_idle() {
         tmux send-keys -t "$pane" Enter
         for _ in $(seq 240); do
             sleep 0.5
-            [[ $(confirmed) -gt $before ]] && { log "confirmed: $cmd"; return 0; }
+            [[ $(confirmed "$since") -gt 0 ]] && { log "confirmed: $cmd"; return 0; }
             wanted || { log "superseded: $cmd"; return 0; }
             [[ "$cmd" == /effort\ * ]] && answer_effort_dialog "$pane" "${cmd#/effort }"
         done
@@ -189,11 +204,11 @@ type_effort() {
         # Accepting the cache-miss dialog prints no "Set effort level"; the next
         # request at that level is the only record of it.
         confirmed() {
-            echo $(($(records "$transcript" | grep -a -c "Set effort level to $effort") +
-                $(main_requests "$transcript" | grep -a -c "\"effort\":\"$effort\"")))
+            echo $(($(records_after "$transcript" "$1" | grep -a -c "Set effort level to $effort") +
+                $(records_after "$transcript" "$1" | main_requests | grep -a -c "\"effort\":\"$effort\"")))
         }
         wanted() { [[ "$(cat "$STATE/$sid.effort" 2>/dev/null)" == "$token" ]]; }
-        type_when_idle "$pane" "/effort $effort"
+        type_when_idle "$pane" "/effort $effort" "$transcript"
         restore_default "$model" "$default" "$effort"
         wanted && rm -f "$STATE/$sid.effort"
     ) </dev/null >/dev/null 2>&1 &
@@ -212,7 +227,7 @@ session-start)
     [[ -n "$pane" ]] || exit 0
     transcript=$(jq -r '.transcript_path // empty' <<<"$input")
     [[ -f "$transcript" ]] || exit 0
-    fallback=$(records "$transcript" | grep -a -n '"subtype":"model_refusal_fallback"' | tail -1)
+    fallback=$(last_record "$transcript" '"subtype":"model_refusal_fallback"')
     [[ -n "$fallback" ]] || exit 0
     line=${fallback%%:*}
     fallback=${fallback#*:}
@@ -220,8 +235,9 @@ session-start)
     model=$(jq -r '.model // empty' <<<"$input")
     [[ "$model" == "$(jq -r '.fallbackModel // empty' <<<"$fallback")" ]] || exit 0
     # Only undo the fallback itself: a /model run after it is a choice to keep.
-    records "$transcript" | tail -n +"$((line + 1))" | grep -aq '<command-name>/model</command-name>' && exit 0
-    name=$(grep -a '^{"type":"agent-name"' "$transcript" | tail -1 | jq -r '.agentName // empty')
+    switched=$(last_record "$transcript" '<command-name>/model</command-name>')
+    [[ -n "$switched" && ${switched%%:*} -gt $line ]] && exit 0
+    name=$(rg -a '^\{"type":"agent-name"' "$transcript" | tail -1 | jq -r '.agentName // empty')
     if [[ -n "$name" ]] && grep -qxF "$name" "$STATE/pinned" 2>/dev/null; then
         log "compacted on $model; $name is pinned there"
         exit 0
@@ -232,9 +248,9 @@ session-start)
     (
         # A queued /model may only show up as the next request's model attachment,
         # or, when that first request is refused at once, as the refusal record.
-        confirmed() { records "$transcript" | grep -a -c -e 'Set model to `Opus 5.5`' -e "\"modelId\":\"$TARGET\"" -e "\"originalModel\":\"$TARGET\""; }
+        confirmed() { records_after "$transcript" "$1" | grep -a -c -e 'Set model to `Opus 5.5`' -e "\"modelId\":\"$TARGET\"" -e "\"originalModel\":\"$TARGET\""; }
         wanted() { :; }
-        type_when_idle "$pane" "$COMMAND" || rm -f "$STATE/$sid"
+        type_when_idle "$pane" "$COMMAND" "$transcript" || rm -f "$STATE/$sid"
     ) </dev/null >/dev/null 2>&1 &
     ;;
 post-switch)
