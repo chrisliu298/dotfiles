@@ -11,6 +11,7 @@ Zsh with Zinit plugin manager and Starship prompt.
 | `.aliases` | Command shortcuts |
 | `.functions` | Shell utility functions |
 | `remap-keys` | macOS: right Option → right Control via `hidutil`, merged with existing mappings (e.g. Raycast Hyper Key); re-applied at login by the `local.remap-keys` LaunchAgent that `dotfiles.sh` writes. `remap-keys --reset` removes it |
+| `tmux-persist` | macOS: recreate the tmux sessions named in `~/.local/state/tmux-persist/sessions` after a reboot, each resuming its Claude Code conversation in its cwd. `local.tmux-persist-save` snapshots them every 5 min, `local.tmux-persist-restore` restores at login; `tmux-persist` alone shows the snapshot. Test: `shell/test-tmux-persist.sh` |
 
 Load order: `.zshenv` → `.zshrc` (sources `.aliases` and `.functions`).
 

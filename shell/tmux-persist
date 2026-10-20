@@ -1,0 +1,81 @@
+#!/bin/zsh
+# Bring chosen tmux sessions, each running Claude Code, back after a reboot.
+# Claude Code records every live process in ~/.claude/sessions/<pid>.json with
+# its tmux pane ("name:@win.%pane") and conversation id; `save` copies those for
+# the listed sessions into a snapshot, and `restore` recreates each missing
+# session in its cwd and resumes that exact conversation.
+# LaunchAgents that dotfiles.sh installs run `restore` at login
+# (local.tmux-persist-restore) and `save` every 5 minutes (local.tmux-persist-save).
+# Usage: tmux-persist            show listed sessions and their snapshot entries
+#        tmux-persist save       refresh the snapshot from live Claude processes
+#        tmux-persist restore    recreate listed sessions that are not running
+# The list is host-local: one tmux session name per line in $STATE/sessions.
+set -euo pipefail
+
+STATE=${TMUX_PERSIST_STATE:-$HOME/.local/state/tmux-persist}
+SESSIONS_DIR=${TMUX_PERSIST_CLAUDE_SESSIONS:-$HOME/.claude/sessions}
+LAUNCH=${TMUX_PERSIST_LAUNCH:-claude --dangerously-skip-permissions --resume}
+LIST=$STATE/sessions
+SNAP=$STATE/snapshot  # name<TAB>cwd<TAB>sessionId
+
+# launchd starts us with a bare PATH.
+path=(/opt/homebrew/bin /usr/local/bin $path)
+tmux_() { tmux ${TMUX_PERSIST_SOCKET:+-L $TMUX_PERSIST_SOCKET} "$@"; }
+
+listed() { [[ -f $LIST ]] && grep -v '^[[:space:]]*\(#\|$\)' "$LIST" || true; }
+
+# True when <pid> is still the process that started at <procStart> (UTC), so a
+# pid reused after a reboot is not mistaken for the old Claude.
+# BSD date/ps by absolute path: a GNU coreutils date may lead PATH.
+alive() {
+    local started now was
+    started=$(LC_ALL=C /bin/ps -o lstart= -p "$1" 2>/dev/null) || return 1
+    now=$(LC_ALL=C /bin/date -j -f '%a %b %d %T %Y' "${(j: :)${(z)started}}" +%s) || return 1
+    was=$(LC_ALL=C /bin/date -u -j -f '%a %b %d %T %Y' "$2" +%s) || return 1
+    [[ $now == "$was" ]]
+}
+
+save() {
+    local -A want rows
+    local name f pid start tmux cwd id
+    for name in $(listed); do want[$name]=1; done
+    (( ${#want} )) || return 0
+    # Keep the last known entry for a session whose Claude is not running now.
+    [[ -f $SNAP ]] && while IFS=$'\t' read -r name cwd id; do
+        [[ -n ${want[$name]:-} ]] && rows[$name]="$cwd"$'\t'"$id"
+    done < "$SNAP"
+    for f in "$SESSIONS_DIR"/*.json(N); do
+        IFS=$'\t' read -r pid start tmux cwd id < <(
+            jq -r '[.pid, .procStart, .tmux // "", .cwd, .sessionId] | @tsv' "$f") || continue
+        name=${tmux%%:*}
+        [[ -n $name && -n ${want[$name]:-} ]] && alive "$pid" "$start" || continue
+        rows[$name]="$cwd"$'\t'"$id"
+    done
+    mkdir -p "$STATE"
+    for name in ${(ko)rows}; do print -r -- "$name"$'\t'"${rows[$name]}"; done > "$SNAP.tmp"
+    mv "$SNAP.tmp" "$SNAP"
+}
+
+restore() {
+    local name cwd id
+    [[ -f $SNAP ]] || return 0
+    while IFS=$'\t' read -r name cwd id; do
+        listed | grep -qxF -- "$name" || continue
+        tmux_ has-session -t "=$name" 2>/dev/null && continue
+        [[ -d $cwd ]] || cwd=$HOME
+        # Typed into the pane's shell, so exiting Claude leaves a shell behind.
+        tmux_ new-session -d -s "$name" -c "$cwd"
+        tmux_ send-keys -t "=$name:" "$LAUNCH $id" Enter
+        print -r -- "restored $name"
+    done < "$SNAP"
+}
+
+case ${1:-} in
+    save) save ;;
+    restore) restore ;;
+    '') for name in $(listed); do
+            awk -F'\t' -v n="$name" '$1 == n { print; f = 1 } END { if (!f) print n "\t(no snapshot)" }' \
+                "$SNAP" 2>/dev/null || print -r -- "$name"$'\t(no snapshot)'
+        done ;;
+    *) print -u2 "usage: tmux-persist [save|restore]"; exit 2 ;;
+esac

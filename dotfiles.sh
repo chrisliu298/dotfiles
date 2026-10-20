@@ -12,6 +12,7 @@ LINKS=(
     "shell/.zshrc:.zshrc"
     "shell/theme-apply:.local/bin/theme-apply"
     "shell/remap-keys:.local/bin/remap-keys"
+    "shell/tmux-persist:.local/bin/tmux-persist"
     "shell/codex-traex:.local/bin/codex-traex"
     "shell/cdswap:.local/bin/cdswap"
     ".config/starship:.config/starship"
@@ -309,11 +310,24 @@ install_links() {
     remove_legacy_delete_hooks
 }
 
-# hidutil remaps reset at reboot, so a login agent re-applies shell/remap-keys.
-# Written (not symlinked) because launchd needs this host's absolute path.
+# Login agents. Written (not symlinked) because launchd needs this host's
+# absolute paths. hidutil remaps reset at reboot, so one re-applies
+# shell/remap-keys; tmux sessions die with the machine, so the sessions listed
+# for shell/tmux-persist are restored at login and snapshotted every 5 minutes
+# (separate agents, so a session closed on purpose is not revived until reboot).
 install_launch_agents() {
     [[ "$(uname)" == Darwin ]] || return 0
-    local label=local.remap-keys
+    install_launch_agent local.remap-keys "<string>$HOME/.local/bin/remap-keys</string>"
+    install_launch_agent local.tmux-persist-restore \
+        "<string>$HOME/.local/bin/tmux-persist</string><string>restore</string>"
+    install_launch_agent local.tmux-persist-save \
+        "<string>$HOME/.local/bin/tmux-persist</string><string>save</string>" \
+        "<key>StartInterval</key><integer>300</integer>"
+}
+
+# install_launch_agent <label> <ProgramArguments strings> [extra plist keys]
+install_launch_agent() {
+    local label=$1
     local plist="$HOME/Library/LaunchAgents/$label.plist"
     local want
     want=$(cat <<EOF
@@ -322,8 +336,9 @@ install_launch_agents() {
 <plist version="1.0">
 <dict>
   <key>Label</key><string>$label</string>
-  <key>ProgramArguments</key><array><string>$HOME/.local/bin/remap-keys</string></array>
-  <key>RunAtLoad</key><true/>
+  <key>ProgramArguments</key><array>$2</array>
+  <key>RunAtLoad</key><true/>${3:+
+  $3}
 </dict>
 </plist>
 EOF
