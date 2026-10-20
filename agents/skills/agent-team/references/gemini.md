@@ -1,4 +1,4 @@
-# Gemini backend
+# `gemini` backend
 
 Uses Cursor Agent (`cursor-agent`) with fixed `gemini-4-argon-high`, native Agent mode, and automatic
 `--trust` for the authorized working directory. Mode/model/effort flags are not

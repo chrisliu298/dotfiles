@@ -1,13 +1,14 @@
 ---
 name: agent-team
-description: Delegate read-only analysis, research, planning or review to other model backends (GPT/Codex, Claude, Gemini, Muse, DeepSeek, ChatGPT Pro), alone or in parallel. Use when the user names one of them for such a task or asks for this skill; ChatGPT Pro alone goes to gpt-pro. Not for implementation.
+description: Delegate read-only analysis, research, planning or review to the gpt (Codex), claude, gemini, muse, ds (DeepSeek) and pro (ChatGPT Pro) backends, alone or in parallel. Use when the user names one of them for such a task or asks for this skill; pro alone goes to the gpt-pro skill. Not for implementation.
 ---
 
 # Agent Team
 
 The user chooses the backend, not a
-model or effort tier. All backends run with their pinned model and `high`; no
-model, effort, or mode selection options are exposed. Every backend runs with the
+model or effort tier. Each backend runs with its pinned model and effort: `xhigh`
+for gpt and claude, `high` for the rest; no model, effort, or mode selection
+options are exposed. Every backend runs with the
 same full access as the user's own launchers: no approval prompts, no sandbox, and
 network access (including SSH to dev machines). Read-only scope is an assignment
 instruction, not a permission boundary. Default to a persistent session;
@@ -19,7 +20,8 @@ Read the user's message for backend names and assignments:
 
 - “让 Claude 审查” → `claude`.
 - “Claude 和 Gemini 并行独立审查” → `claude` and `gemini`, same assignment.
-- “GPT、Claude、Gemini、Muse、DeepSeek 都看一下” → all five, same assignment.
+- “GPT、Claude、Gemini、Muse、DeepSeek 都看一下” → `gpt`, `claude`, `gemini`, `muse`
+  and `ds`, same assignment.
 - “也问问 Pro” / “ChatGPT Pro” alongside other backends → `pro`.
 - “Claude 看正确性，GPT 看测试” → `claude` and `gpt`, distinct assignments.
 
@@ -30,19 +32,21 @@ file share the stdin prompt, and `--backend NAME=FILE` gives a backend its own
 assignment (an absolute path or one relative to the working directory). Write one backend-neutral prompt; the helper adds
 each backend's completion and launch details, so do not tailor prompts per
 backend or add deadlines (`wait --timeout` bounds the wait). `--file PATH`
-(repeatable) shares local files: Pro cannot open paths, so its prompt inlines
+(repeatable) shares local files: `pro` cannot open paths, so its prompt inlines
 their contents, while the other backends receive the absolute paths to read.
 If no backend was chosen and the request does not identify one, ask which to use.
 An unspecified “subagent review” remains the caller's native subagent workflow.
-`gpt` means Codex CLI; `gemini` means Cursor Agent on Gemini; `ds` means DeepSeek
-through Claude Code; `pro` means ChatGPT Pro through the gpt-pro relay.
+Always name backends by these ids, in prompts, reports and attribution alike:
+`gpt` is Codex CLI; `claude` is Claude Code; `gemini` is Cursor Agent on Gemini;
+`muse` is Muse Code; `ds` is DeepSeek through Claude Code; `pro` is ChatGPT Pro
+through the gpt-pro relay. Product names describe only the underlying tool.
 
 Before dispatch, read only the references for the chosen backends:
-[Claude](references/claude.md), [GPT](references/gpt.md), [Gemini](references/gemini.md),
-[Muse](references/muse.md), [DeepSeek](references/ds.md), [Pro](references/pro.md).
+[`gpt`](references/gpt.md), [`claude`](references/claude.md), [`gemini`](references/gemini.md),
+[`muse`](references/muse.md), [`ds`](references/ds.md), [`pro`](references/pro.md).
 Use `scripts/agent-team` beside this `SKILL.md`; resolve its actual installed
 location rather than assuming a particular agent's skill directory. It requires
-Node.js and zsh, plus tmux for persistent non-Pro sessions. `backends` reports configured
+Node.js and zsh, plus tmux for persistent sessions other than `pro`. `backends` reports configured
 availability, not a verified login or model entitlement. This skill is installed
 for Claude Code only. Report unavailable backends; do not substitute one.
 
@@ -64,10 +68,10 @@ From the authorized working directory:
 # helper is scripts/agent-team beside this SKILL.md.
 $helper backends
 session="$($helper start --backend claude < /tmp/review.md)"
-# Same assignment for GPT, Gemini and Muse, a distinct one for Claude:
+# Same assignment for gpt, gemini and muse, a distinct one for claude:
 $helper start --backend gpt --backend gemini --backend muse \
   --backend claude=/tmp/claude-review.md < /tmp/review.md
-# Pro receives the file contents; Claude receives the path:
+# pro receives the file contents; claude receives the path:
 $helper start --backend pro --backend claude --file src/main.py < /tmp/review.md
 $helper wait "$session"
 $helper send "$session" < /tmp/supplement.md
@@ -106,29 +110,29 @@ agreements, disagreements, and remaining gaps.
 
 ## Control and failure semantics
 
-- `send` returns JSON with `delivery`. Gemini `confirmed` means steering activation
+- `send` returns JSON with `delivery`. `gemini` `confirmed` means steering activation
   or transcript receipt was confirmed, not that the message has joined the turn yet
-  (steering waits for the next safe boundary, as on the other backends); Pro
+  (steering waits for the next safe boundary, as on the other backends); `pro`
   `confirmed` means the relay acknowledged delivery into the running answer.
-  Claude/GPT/Muse/DeepSeek `submitted` means text was pasted and Enter sent; it
+  `claude`/`gpt`/`muse`/`ds` `submitted` means text was pasted and Enter sent; it
   does not independently prove consumption or task completion. Use `wait` for the
   resulting reply. Do not interrupt merely to add context.
-- A Pro conversation accepts no follow-up once its answer finishes: `send` fails
+- A `pro` conversation accepts no follow-up once its answer finishes: `send` fails
   and says to start a new task that includes the answer and the new question.
-- Gemini and Pro `unconfirmed` return 124; the message may still be queued. Inspect it or
+- `gemini` and `pro` `unconfirmed` return 124; the message may still be queued. Inspect it or
   keep waiting, without automatically resending or restarting.
 - A failed `send` leaves that session's latest request failed. `wait` reports the
   failure instead of returning its previous reply; a subsequent successful send
   clears it. In a batch, retain failed delivery entries separately from completed
   replies. Do not treat them as answers to the supplement.
 - `wait SESSION [SESSION ...] --timeout N` defaults to 3600 seconds per session,
-  7200 for Pro.
+  7200 for `pro`.
   Timeout returns 124 when all failures are timeouts; mixed failures return 1.
   Multi-session replies retain individual exit codes and diagnostics.
 - `status` and `capture` are diagnostic. `input_ready=1` does not prove the model
   is idle. `interrupt` requests an urgent stop using the backend's native key;
   it does not guarantee background work was cancelled. Inspect before new work.
-  Interrupting Pro stops its run for good.
+  Interrupting `pro` stops its run for good.
 - `list` includes sessions started by earlier entrypoints. Session actions do not
   require the backend to remain available, so cleanup is still possible.
 
@@ -151,7 +155,7 @@ $helper --once --backend gpt=/tmp/a.md --backend muse=/tmp/b.md
 Single text mode returns the final reply. Single JSON mode uses
 `{"result":"...","exit_code":0,"is_error":false}`. Multi-session and multi-backend
 one-shot actions return `{"results":[{"backend":"...","result":"...","exit_code":0,"is_error":false}],"is_error":false}`.
-Each one-shot backend has a 3600-second deadline (Pro 7200), configurable with `--timeout`.
+Each one-shot backend has a 3600-second deadline (`pro` 7200), configurable with `--timeout`.
 Timeout returns 124 and stops the owned process group, including descendants.
 Each completed one-shot reply is immediately recorded on stderr as a JSON line
 with `event: "completed"`, backend and the same result fields. Save

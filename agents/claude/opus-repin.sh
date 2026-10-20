@@ -12,7 +12,8 @@
 #
 # While on the fallback, the session keeps the effort level the refused request
 # ran at, and the fallback thinks less per level, so the PostModelSwitch hook
-# types `/effort $FALLBACK_EFFORT` after an automatic switch to the fallback,
+# types `/effort <level settings give the fallback in this project, else
+# $FALLBACK_EFFORT>` after an automatic switch to the fallback,
 # and `/effort <level settings give 5.5 in this project>` after a switch from
 # it back to 5.5, accepting the cache-miss dialog /effort shows while the cache
 # is warm. A typed /effort also saves its level as the model's default in the
@@ -36,7 +37,7 @@ set -u
 TARGET=claude-opus-5-5
 COMMAND="/model $TARGET"
 FALLBACK=claude-opus-5
-FALLBACK_EFFORT=high
+FALLBACK_EFFORT=high # when settings give the fallback no level
 TTL=180 # seconds an approval stays valid
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/opus-repin"
 USER_SETTINGS="$HOME/.claude/settings.json"
@@ -150,6 +151,13 @@ settings_effort() {
         "$USER_SETTINGS"
 }
 
+# The level for the fallback: the one settings give it here, else the default.
+fallback_effort() {
+    local level
+    level=$(settings_effort "$FALLBACK" legacy)
+    echo "${level:-$FALLBACK_EFFORT}"
+}
+
 # The default saved for model $1 in the user settings, or null.
 user_default() { jq -c --arg m "$1" '.modelSettings[$m].effortLevel // null' "$USER_SETTINGS"; }
 
@@ -238,7 +246,7 @@ post-switch)
     to=$(jq -r '.to_model // empty' <<<"$input")
     from=${from%\[1m\]} to=${to%\[1m\]}
     if [[ "$source" == auto && "$to" == "$FALLBACK" ]]; then
-        effort=$FALLBACK_EFFORT
+        effort=$(fallback_effort)
     elif [[ "$from" == "$FALLBACK" && "$to" == "$TARGET" ]]; then
         effort=$(settings_effort "$TARGET")
         effort=${effort:-medium}
@@ -265,12 +273,13 @@ session-resume)
         log "resumed on ${model:-an unreported model}; leaving effort alone"
         exit 0
     fi
-    if [[ "$(settings_effort "$FALLBACK" legacy)" == "$FALLBACK_EFFORT" ]]; then
-        log "resumed on $model at $FALLBACK_EFFORT from settings; leaving effort alone"
+    effort=$(fallback_effort)
+    if [[ "$(settings_effort "$FALLBACK" legacy)" == "$effort" ]]; then
+        log "resumed on $model at $effort from settings; leaving effort alone"
         exit 0
     fi
-    log "resumed on $model; typing /effort $FALLBACK_EFFORT"
-    type_effort "$FALLBACK_EFFORT" "$FALLBACK"
+    log "resumed on $model; typing /effort $effort"
+    type_effort "$effort" "$FALLBACK"
     ;;
 esac
 exit 0

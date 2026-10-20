@@ -27,8 +27,8 @@ cursor_args=()
 output_format=text
 
 usage() {
-    print -u2 'usage: cursor-once [cursor-agent options] [prompt]'
-    print -u2 '       cursor-once [cursor-agent options] < prompt.md'
+    print -u2 'usage: gemini-once [cursor-agent options] [prompt]'
+    print -u2 '       gemini-once [cursor-agent options] < prompt.md'
     print -u2 '       model=gemini-4-argon-high, effort=high, native Agent mode (fixed)'
 }
 
@@ -85,15 +85,15 @@ if [[ -t 0 && ${#cursor_args} -eq 0 ]]; then
     exit 2
 fi
 
-diagnostic_file="$(mktemp "${TMPDIR:-/tmp}/agent-team-cursor.err.XXXXXX")" || exit 1
-events_file="$(mktemp "${TMPDIR:-/tmp}/agent-team-cursor.events.XXXXXX")" || exit 1
-config_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-team-cursor-config.XXXXXX")" || exit 1
+diagnostic_file="$(mktemp "${TMPDIR:-/tmp}/agent-team-gemini.err.XXXXXX")" || exit 1
+events_file="$(mktemp "${TMPDIR:-/tmp}/agent-team-gemini.events.XXXXXX")" || exit 1
+config_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-team-gemini-config.XXXXXX")" || exit 1
 cleanup() {
     rm -f -- "$diagnostic_file" "$events_file"
     rm -rf -- "$config_dir"
 }
 trap cleanup EXIT HUP INT TERM
-node "${0:A:h}/cursor-session.mjs" config "$config_dir" || exit $?
+node "${0:A:h}/gemini-session.mjs" config "$config_dir" || exit $?
 
 export CODEX_REVIEW_SUBAGENT_ACTIVE=1
 

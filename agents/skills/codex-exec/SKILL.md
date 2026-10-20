@@ -32,53 +32,44 @@ Each task line is one Codex thread with its own worktree and branch, kept in a t
 `cx-<name>`. Closing the session keeps the thread, worktree
 and branch, so a line can be closed when idle and resumed later with its context.
 
-Codex runs the line's model (see below), launched as the user's own `x` launcher does (`--yolo`) from an
+Codex runs GPT-6 Astra, launched as the user's own `x` launcher does (`--yolo`) from an
 interactive shell, so it has the user's permissions, environment and credentials: no
 approvals, no sandbox, full network and SSH. It reads [executor.md](executor.md) with every
 message: it commits all its work, may push its branch and submit short platform jobs; merge requests, merges, training jobs, job priorities and messages to
 people stay with you.
 
-## Model and effort
+## Effort
 
-There is no default: decide each line's model and effort from its task with the table below,
-and pass both to `cx start` (`--model`, `--effort`), which refuses to start without them.
-Decide again when a line's next message is a different kind of work, such as a hard failure to
-diagnose after a mechanical edit: `cx model` and `cx effort` change them from the next open.
+Every line runs GPT-6 Astra; there is no model to choose. There is no default effort: decide
+each line's effort from its task with the table below and pass it to `cx start` (`--effort`),
+which refuses to start without it. Decide again when a line's next message is a different kind
+of work, such as a hard failure to diagnose after a mechanical edit: `cx effort` changes it
+from the next open.
 
-OpenAI recommends GPT-6.1 Sol for complex coding and agentic work in Codex: near-Astra
-performance at a fifth of Astra's credit rate, and about three times as many messages per
-usage window ([Codex models](https://learn.chatgpt.com/docs/models),
-[pricing](https://learn.chatgpt.com/docs/pricing)). Keep Astra for work that needs "the
-strongest capability across steps and tools". For effort, start Sol at the client default and
-Astra at low, and raise it for tasks that need more planning, analysis or checking; levels do
-not map exactly between models ([Codex models](https://learn.chatgpt.com/docs/models)). The
-[model selection guide](https://developers.openai.com/api/docs/guides/model-selection) puts
-Sol at medium for "complex technical work and coordinated deliverables you expect to revise"
-and at extra high for "decisions built from conflicting evidence". Your plan carries most of
-the reasoning, so an executor line rarely needs more:
+Start Astra at low and raise it for tasks that need more planning, analysis or checking
+([Codex models](https://learn.chatgpt.com/docs/models)). Your plan carries most of the
+reasoning, so an executor line rarely needs more:
 
-| Model · effort | For |
+| Effort | For |
 | --- | --- |
-| Sol · `low` | mechanical, well-scoped edits: renames, doc fixes, applying a fully specified diff |
-| Sol · `medium` | most lines: implementation from a settled plan, with tests and rework rounds |
-| Sol · `high` | cross-module work, dev-machine or platform steps, failures to diagnose |
-| Sol · `xhigh` | conflicting evidence, or a failure that `high` did not crack |
-| Astra · `low`/`medium` | only after Sol at `xhigh` fell short on the same kind of task |
+| `low` | most lines: mechanical edits and implementation from a settled plan, with tests and rework rounds |
+| `medium` | cross-module work, dev-machine or platform steps, failures to diagnose |
+| `high` | conflicting evidence, or a failure that `medium` did not crack |
+| `xhigh` | only after `high` fell short on the same kind of task |
 
 When a line fails acceptance for lack of reasoning rather than a bad plan, raise its effort one
-level, then switch to Astra. Leave `max` alone, and Codex's `ultra`, which delegates to
-subagents, out of executor lines.
+level. Leave `max` alone, and Codex's `ultra`, which delegates to subagents, out of executor
+lines.
 
 ## Commands
 
 `scripts/cx` beside this file (resolve its installed location):
 
 ```bash
-cx start NAME --model MODEL --effort LEVEL [--repo DIR] [--base REF] [--branch BRANCH] < task.md
+cx start NAME --effort LEVEL [--repo DIR] [--base REF] [--branch BRANCH] < task.md
 cx send NAME < message.md      # follow-up or rework; resumes a closed line first
 cx wait NAME [--timeout S]     # until the turn that got the latest message ends; prints the reply
 cx diff NAME                   # uncommitted files, commits and diff since the line's base
-cx model NAME MODEL            # gpt-6.1-sol|gpt-6-astra, from the next open
 cx effort NAME LEVEL           # low|medium|high|xhigh|max, from the next open
 cx open NAME                   # resume a closed line without a message
 cx attach NAME                 # watch or type in the session (for the user)

@@ -654,31 +654,6 @@ cu(){ command claude update "$@"; }
 # profile must be saved under the same email cswap uses. cdswap goes first
 # because it is the one likely to refuse, which then leaves both unchanged.
 csall(){ (( $# == 1 )) || { echo "usage: csall <email>" >&2; return 2; }; cdswap use "$1" && cswap switch "$1"; }
-# Claude Code on the ChatGPT/Codex subscription through the local CLIProxyAPI
-# brew service (127.0.0.1:8317; key in ~/.cli-proxy-api/client.key). Tibo's
-# claudex recipe, with every model tier mapped to GPT so no Claude login has
-# to go through the proxy. Claude Code caps unknown models at 200K, so `[1m]`
-# lifts the cap and CLAUDEX_CONTEXT (the model's real window, per Codex's
-# models_cache.json) sets where auto-compact fires.
-CLAUDEX_MODEL=gpt-6.1-sol
-CLAUDEX_CONTEXT=500000
-claudex(){
-    local model="${CLAUDEX_MODEL}[1m]"
-    ANTHROPIC_BASE_URL=http://127.0.0.1:8317 \
-    ANTHROPIC_AUTH_TOKEN="$(<"$HOME/.cli-proxy-api/client.key")" \
-    ANTHROPIC_DEFAULT_OPUS_MODEL="$model" \
-    ANTHROPIC_DEFAULT_SONNET_MODEL="$model" \
-    ANTHROPIC_DEFAULT_HAIKU_MODEL="$model" \
-    CLAUDE_CODE_SUBAGENT_MODEL="$model" \
-    CLAUDE_CODE_AUTO_COMPACT_WINDOW="$CLAUDEX_CONTEXT" \
-    CLAUDE_CODE_ALWAYS_ENABLE_EFFORT=1 \
-    CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY=3 \
-    ENABLE_TOOL_SEARCH=false \
-    _claude --model "$model" "$@"
-}
-cdx(){ claudex --dangerously-skip-permissions "$@"; }
-cdxc(){ claudex --dangerously-skip-permissions --continue "$@"; }
-cdxr(){ claudex --dangerously-skip-permissions --resume "$@"; }
 # Claude Code on DeepSeek's Anthropic-compatible endpoint, every tier on
 # deepseek-flash, per DeepSeek's official Claude Code setup
 # (api-docs.deepseek.com/zh-cn/quick_start/agent_integrations/claude_code).

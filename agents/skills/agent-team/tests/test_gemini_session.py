@@ -8,7 +8,7 @@ import time
 import pytest
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'scripts' / 'cursor-session.mjs'
+SCRIPT = Path(__file__).resolve().parents[1] / 'scripts' / 'gemini-session.mjs'
 
 
 def record(role, text):
@@ -130,7 +130,7 @@ def supplement(directory, history):
                       record('assistant', 'Supplement included.')]
 
 
-def test_cursor_injected_user_records_do_not_hide_the_supplement(session):
+def test_gemini_injected_user_records_do_not_hide_the_supplement(session):
     directory, transcript = session
     history = supplement(directory, [record('user', 'Original.'), record('assistant', 'Previous answer.')])
     history += [record('user', INTERRUPTED), record('assistant', 'Already complete.'),
@@ -141,7 +141,7 @@ def test_cursor_injected_user_records_do_not_hide_the_supplement(session):
     assert (directory / 'last').read_text() == 'Supplement included.\n\nAlready complete.\n\nBackground job done.'
 
 
-def test_cursor_stream_crash_fails_the_pending_supplement(session):
+def test_gemini_stream_crash_fails_the_pending_supplement(session):
     directory, transcript = session
     history = supplement(directory, [record('user', 'Original.'), record('assistant', 'Previous answer.')])
     history += [record('user', NOTICE), record('assistant', 'Background job done.')]

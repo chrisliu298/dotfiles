@@ -6,11 +6,10 @@
 # is saved as msg-NNN.md and sent as a one-line pointer to it; `wait` reads the thread's
 # rollout and returns once a turn that received that message has ended.
 #
-#   cx start NAME --model MODEL --effort LEVEL [--repo DIR] [--base REF] [--branch BRANCH] < task.md
+#   cx start NAME --effort LEVEL [--repo DIR] [--base REF] [--branch BRANCH] < task.md
 #   cx send NAME < message.md      # resumes a closed line first
 #   cx wait NAME [--timeout SECONDS]
 #   cx diff NAME                   # what the line changed since its base
-#   cx model NAME MODEL            # applies from the next open
 #   cx effort NAME LEVEL           # applies from the next open
 #   cx ask NAME < question.md      # run by Codex: message the planning Claude session
 #   cx open NAME | cx attach NAME | cx close NAME [--force] | cx ls | cx rm NAME [--unmerged|--force]
@@ -22,12 +21,11 @@ self="${0:A}"
 skill="${0:A:h:h}"
 codex_cli="$HOME/.local/bin/codex"
 codex_home="${CODEX_HOME:-$HOME/.codex}"
-models=(gpt-6.1-sol gpt-6-astra)
+model=gpt-6-astra
 levels=(low medium high xhigh max)
 
 die() { print -u2 -- "cx: $*"; exit 1; }
 check_level() { (( ${levels[(Ie)$1]} )) || die "effort must be one of: $levels"; }
-check_model() { (( ${models[(Ie)$1]} )) || die "model must be one of: $models"; }
 
 line_dir() {
     [[ "$1" =~ '^[a-z0-9][a-z0-9-]*$' ]] || die "name must match [a-z0-9][a-z0-9-]*: $1"
@@ -106,7 +104,7 @@ launch() {
     # the same environment, credentials, PATH and Codex config as a terminal.
     local -a cmd=("$codex_cli")
     [[ -n "$thread" ]] && cmd+=(resume)
-    cmd+=(--yolo --model "$(<"$d/model")" -c "model_reasoning_effort=\"$(<"$d/effort")\"" --no-alt-screen)
+    cmd+=(--yolo --model "$model" -c "model_reasoning_effort=\"$(<"$d/effort")\"" --no-alt-screen)
     [[ -n "$thread" ]] && cmd+=("$thread")
     [[ -n "$prompt" ]] && { [[ -n "$thread" ]] && cmd+=("$prompt") || cmd+=(-- "$prompt"); }
     pane="$(tmux new-session -d -P -F '#{pane_id}' -x 200 -y 50 -s "cx-$name" -c "$(<"$d/worktree")" \
@@ -169,11 +167,10 @@ type_line() {
 }
 
 cmd_start() {
-    local name=${1:?usage: cx start NAME --model MODEL --effort LEVEL [--repo DIR] [--base REF] [--branch BRANCH] < task.md}; shift
-    local model= effort= repo=$PWD base=origin/main branch="codex/$name" d msg
+    local name=${1:?usage: cx start NAME --effort LEVEL [--repo DIR] [--base REF] [--branch BRANCH] < task.md}; shift
+    local effort= repo=$PWD base=origin/main branch="codex/$name" d msg
     while (( $# )); do
         case $1 in
-            --model) model=$2; shift 2 ;;
             --effort) effort=$2; shift 2 ;;
             --repo) repo=$2; shift 2 ;;
             --base) base=$2; shift 2 ;;
@@ -181,9 +178,7 @@ cmd_start() {
             *) die "unknown option: $1" ;;
         esac
     done
-    [[ -n "$model" && -n "$effort" ]] ||
-        die "choose --model and --effort for this task (see \"Model and effort\" in SKILL.md)"
-    check_model "$model"
+    [[ -n "$effort" ]] || die "choose --effort for this task (see \"Effort\" in SKILL.md)"
     check_level "$effort"
     d="$(line_dir "$name")"
     [[ -e "$d" ]] && die "line $name exists; use cx send or cx open"
@@ -196,7 +191,6 @@ cmd_start() {
     fi
     print -r -- "$repo" > "$d/repo"
     git -C "$d/wt" rev-parse HEAD > "$d/base"
-    print -r -- "$model" > "$d/model"
     print -r -- "$effort" > "$d/effort"
     claim "$d"
     print -r -- "$d/wt" > "$d/worktree"
@@ -253,18 +247,6 @@ cmd_diff() {
     print -r -- "== diff"
     git -C "$wt" diff --stat "$base" HEAD
     git -C "$wt" diff "$base" HEAD
-}
-
-cmd_model() {
-    local name=${1:?usage: cx model NAME MODEL} m=${2:?usage: cx model NAME MODEL} d
-    check_model "$m"
-    d="$(existing "$name")"
-    print -r -- "$m" > "$d/model"
-    if running "$name"; then
-        print -r -- "cx-$name: $m from the next open (cx close, then cx open, once the turn is done)"
-    else
-        print -r -- "cx-$name: $m"
-    fi
 }
 
 cmd_effort() {
@@ -329,7 +311,7 @@ cmd_close() {
 
 cmd_ls() {
     local d name msg state turn owner p
-    printf '%-20s %-16s %-12s %-6s %-20s %-12s %s\n' NAME STATE MODEL EFFORT LATEST OWNER BRANCH
+    printf '%-20s %-16s %-6s %-20s %-12s %s\n' NAME STATE EFFORT LATEST OWNER BRANCH
     for d in "$root"/*(N/); do
         name=${d:t}
         msg="$(latest_message "$d")"
@@ -359,7 +341,7 @@ cmd_ls() {
                 *) turn="${msg:t:r} not received" ;;
             esac
         fi
-        printf '%-20s %-16s %-12s %-6s %-20s %-12s %s\n' "$name" "$state" "$(<"$d/model")" "$(<"$d/effort")" "$turn" "$owner" \
+        printf '%-20s %-16s %-6s %-20s %-12s %s\n' "$name" "$state" "$(<"$d/effort")" "$turn" "$owner" \
             "$(git -C "$(<"$d/worktree")" branch --show-current 2>/dev/null)"
     done
 }
@@ -395,6 +377,6 @@ cmd_rm() {
 }
 
 case "${1:-}" in
-    start|send|wait|diff|model|effort|ask|open|attach|close|ls|rm) sub=$1; shift; "cmd_$sub" "$@" ;;
-    *) die "usage: cx start|send|wait|diff|model|effort|ask|open|attach|close|ls|rm" ;;
+    start|send|wait|diff|effort|ask|open|attach|close|ls|rm) sub=$1; shift; "cmd_$sub" "$@" ;;
+    *) die "usage: cx start|send|wait|diff|effort|ask|open|attach|close|ls|rm" ;;
 esac

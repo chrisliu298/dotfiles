@@ -66,12 +66,6 @@ SKILLS=(
     # Muse gets no managed copy of it. Muse still discovers the Codex copy natively; keep it
     # off there per host with `muse skills disable pdf --scope user`.
     "pdf|openai/skills/skills/.curated/pdf|codex"
-    # Lark: the three skills in use, claude-only, tracked from larksuite/cli main on every run
-    # (lark-shared holds the auth/permission rules lark-doc and lark-sheets depend on). They
-    # need the lark-cli binary: npm install -g @larksuite/cli.
-    "lark-shared|larksuite/cli/skills/lark-shared|claude"
-    "lark-doc|larksuite/cli/skills/lark-doc|claude"
-    "lark-sheets|larksuite/cli/skills/lark-sheets|claude"
 )
 
 # Host-local third-party skills that only Claude may use. Their installers (the legacy Merlin
@@ -281,6 +275,27 @@ setup_theme_state() {
         else
             rm -f "$claude_stage"
         fi
+    fi
+}
+
+# Unattended Claude Code sessions (agent-team's claude and ds) often start in a
+# session scratchpad under /tmp/claude-<uid>, where an unanswered workspace trust
+# dialog stalls them. Trust that root once: it covers every scratchpad below it
+# except nested git repositories, which still ask. Claude Code has no setting for
+# this; projects[<path>].hasTrustDialogAccepted in ~/.claude.json is the
+# documented key (code.claude.com/docs/en/permissions.md).
+trust_claude_scratch() {
+    local config="$HOME/.claude.json" root tmp
+    [[ -f "$config" ]] && command -v jq >/dev/null 2>&1 || return 0
+    root="$(cd /tmp && pwd -P)/claude-$(id -u)"
+    jq -e --arg p "$root" '.projects[$p].hasTrustDialogAccepted == true' "$config" >/dev/null 2>&1 && return
+    tmp=$(mktemp "$config.XXXXXX") || return
+    if jq --arg p "$root" '.projects[$p].hasTrustDialogAccepted = true' "$config" > "$tmp"; then
+        mv "$tmp" "$config"
+        log "trust ${root} in ~/.claude.json"
+    else
+        rm -f "$tmp"
+        warn "could not trust $root in ~/.claude.json"
     fi
 }
 
@@ -828,6 +843,8 @@ main() {
     wait "$_plugins_pid" 2>/dev/null || true
     [[ -s "$_plugins_out" ]] && cat "$_plugins_out"
     rm -f "$_plugins_out"
+    # After MCP and plugin registration, whose claude CLI calls also write ~/.claude.json.
+    trust_claude_scratch
 
     section "Tools"
     wait "$_tools_pid" 2>/dev/null || true

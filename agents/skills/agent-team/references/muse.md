@@ -1,4 +1,4 @@
-# Muse backend
+# `muse` backend
 
 Uses Muse Code (`muse` on PATH) with the existing Meta login. Model is pinned to
 `muse-wonder-full-1.0` and effort to `high`, Muse Code's own default for it; Meta

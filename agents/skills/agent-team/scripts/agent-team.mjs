@@ -20,8 +20,8 @@ function usage(message) {
     '       agent-team capture|status|interrupt|stop SESSION [SESSION ...]\n' +
     '       agent-team list | backends\n' +
     '       NAME is claude, gpt, gemini, muse, ds, or pro; each at most once per call. NAME=PROMPT gives that\n' +
-    '       backend its own prompt file instead of stdin. --file attaches a file to Pro and lists its\n' +
-    '       path for the others. Models and high are fixed.\n');
+    '       backend its own prompt file instead of stdin. --file attaches a file to pro and lists its\n' +
+    '       path for the others. Models and effort are fixed.\n');
   process.exit(2);
 }
 
@@ -90,7 +90,7 @@ function availability(backend) {
     if (!command(process.env.MUSE_BIN || 'muse')) return 'muse is missing or not executable';
   } else if (backend === 'gemini') {
     if (!command(process.env.CURSOR_AGENT_BIN || 'cursor-agent')) return 'cursor-agent is missing or not executable';
-    if (!command('jq')) return 'jq is required for Cursor';
+    if (!command('jq')) return 'jq is required for gemini';
   } else if (backend === 'gpt') {
     const cli = join(homedir(), '.local/bin/codex');
     if (!executable(cli)) return 'managed Codex CLI is missing; run ./dotfiles.sh';
@@ -100,13 +100,13 @@ function availability(backend) {
     const [major, minor, patch] = match.slice(1).map(Number);
     if (major === 0 && (minor < 159 || minor === 159 && patch < 2)) return 'Codex CLI 0.159.2+ is required';
   } else {
-    // Claude and DeepSeek both run Claude Code through the user's shell launchers.
-    const [label, launcher] = backend === 'ds' ? ['DeepSeek', 'ds'] : ['Claude', 'c'];
+    // claude and ds both run Claude Code through the user's shell launchers.
+    const launcher = backend === 'ds' ? 'ds' : 'c';
     const shell = command('zsh');
-    if (!shell) return `zsh is required for the ${label} launcher`;
+    if (!shell) return `zsh is required for the ${launcher} launcher`;
     const check = spawnSync(shell, ['-c', `source "$HOME/.functions" >/dev/null || exit 127; (( $+functions[${launcher}] ))`],
       { encoding: 'utf8', timeout: 5000 });
-    if (check.status !== 0) return `the configured ${label} ${launcher} launcher is unavailable`;
+    if (check.status !== 0) return `the configured ${launcher} launcher is unavailable`;
     // The launcher's zsh reads the key from ~/.zshenv.local, which the caller may not have loaded.
     if (backend === 'ds' && spawnSync(shell, ['-c', '[[ -n "${DEEPSEEK_API_KEY:-}" ]]'], { timeout: 5000 }).status !== 0) {
       return 'DEEPSEEK_API_KEY is not set (see ~/.zshenv.local)';

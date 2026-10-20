@@ -6,11 +6,12 @@ setopt pipe_fail
 harness="$1"
 shift
 case "$harness" in
-    claude) model=opus ;;
-    gpt) model=gpt-6-astra ;;
-    gemini) model=gemini-4-argon-high ;;
-    muse) model=muse-wonder-full-1.0 ;;
-    ds) model='deepseek-flash[1m]' ;;
+    claude) model=opus effort=xhigh ;;
+    gpt) model=gpt-6-astra effort=xhigh ;;
+    gemini) model=gemini-4-argon-high effort=high ;;
+    muse) model=muse-wonder-full-1.0 effort=high ;;
+    # DeepSeek maps xhigh to high, so high is its real top tier below max.
+    ds) model='deepseek-flash[1m]' effort=high ;;
     *) print -u2 'unknown review harness'; exit 2 ;;
 esac
 # Diagnostics name the public entrypoint; temp files carry the backend.
@@ -81,7 +82,7 @@ parse_options() {
                     return 2
                 fi
                 case "$option" in
-                    --effort) [[ "$value" == high ]] || { print -u2 "$helper: effort is fixed to high"; return 2; } ;;
+                    --effort) [[ "$value" == "$effort" ]] || { print -u2 "$helper: effort is fixed to $effort"; return 2; } ;;
                     --model) [[ "$value" == "$model" ]] || { print -u2 "$helper: model is fixed to $model"; return 2; } ;;
                     --output-format) [[ "$action" == --once && ( "$value" == text || "$value" == json ) ]] || { usage; return 2; }; output_format="$value" ;;
                 esac
@@ -89,6 +90,26 @@ parse_options() {
                 ;;
             *) usage; return 2 ;;
         esac
+    done
+}
+
+# Claude Code asks whether to trust an unfamiliar launch directory before the first turn, and
+# nobody is at the pane to answer. Trust it for the run, as gemini (--trust) and muse already do:
+# move the selection to Yes, confirm once it is selected, and stop once the main screen is up.
+accept_trust() {
+    local screen
+    repeat 300; do
+        screen="$(tmux capture-pane -p -t "$TMUX_PANE")" || return
+        if [[ "$screen" == *'❯ Yes, I trust this folder'* ]]; then
+            tmux send-keys -t "$TMUX_PANE" Enter
+            return
+        elif [[ "$screen" == *'❯ No, exit'* ]]; then
+            tmux send-keys -t "$TMUX_PANE" Down
+            sleep 0.5
+        elif [[ "$screen" == *'bypass permissions'* ]]; then
+            return
+        fi
+        sleep 0.2
     done
 }
 
@@ -102,17 +123,23 @@ launch() {
         source "$HOME/.functions" || return 127
         (( $+functions[$launcher] )) || { print -u2 "$helper: $launcher is not defined"; return 127; }
         if [[ "$mode" == once ]]; then
-            print -rn -- "$prompt" | "$launcher" -p --no-session-persistence --model "$model" --effort high
+            print -rn -- "$prompt" | "$launcher" -p --no-session-persistence --model "$model" --effort "$effort"
         else
+            accept_trust &
+            local watcher=$!
             # The Stop hook records each finished turn for `wait`.
-            "$launcher" --model "$model" --effort high \
+            "$launcher" --model "$model" --effort "$effort" \
                 --settings "{\"hooks\":{\"Stop\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"'$notifier'\"}]}]}}" \
                 -- "$prompt"
+            local rc=$?
+            kill "$watcher" 2>/dev/null || true
+            wait "$watcher" 2>/dev/null || true
+            return "$rc"
         fi
     elif [[ "$harness" == muse ]]; then
         # Match the user's `m` launcher: no approvals (which would hang an unattended turn), no
         # sandbox, full network. Read-only scope is an assignment instruction, as for Claude.
-        local -a options=(--model "$model" --reasoning-effort high --yolo)
+        local -a options=(--model "$model" --reasoning-effort "$effort" --yolo)
         if [[ "$mode" == once ]]; then
             # exec takes the prompt as an argument (stdin is not read), so no prompt file can leak.
             command "$muse_cli" exec "${options[@]}" --no-session-log -- "$prompt"
@@ -129,12 +156,12 @@ launch() {
         if [[ "$mode" == once ]]; then
             # The internal one-shot adapter reinstates the sentinel for its Cursor child.
             print -rn -- "$prompt" | CODEX_REVIEW_SUBAGENT_ACTIVE=0 CURSOR_AGENT_BIN="$cursor_cli" \
-                "${runner:h}/cursor-once"
+                "${runner:h}/gemini-once"
         else
             # Native input supports steering the active turn. The primary transcript's
             # explicit turn_ended marker supplies the full completion signal for wait.
             prompt+=$'\n\nComplete the entire read-only assignment in this turn. Return the requested findings, evidence, and final deliverable; do not end with an acknowledgement, an opening remark, or a promise to investigate later. If blocked, state the concrete blocker and the work actually completed.'
-            node "${runner:h}/cursor-session.mjs" watch "$REVIEW_SUBAGENT_TURN_DIR" &
+            node "${runner:h}/gemini-session.mjs" watch "$REVIEW_SUBAGENT_TURN_DIR" &
             local watcher=$!
             CURSOR_CONFIG_DIR="$REVIEW_SUBAGENT_TURN_DIR/cursor-config" \
                 "$cursor_cli" --trust --force --sandbox disabled --approve-mcps --model "$model" \
@@ -148,7 +175,7 @@ launch() {
         # Match the user's `x` launcher (--yolo): no approvals, no sandbox, full network.
         # Read-only scope is an assignment instruction, as for Claude and Cursor.
         local -a options=(--dangerously-bypass-approvals-and-sandbox --model "$model"
-            -c 'model_reasoning_effort="high"' -c 'shell_environment_policy.inherit="all"')
+            -c "model_reasoning_effort=\"$effort\"" -c 'shell_environment_policy.inherit="all"')
         if [[ "$mode" == once ]]; then
             print -rn -- "$prompt" | command "$codex_cli" "${options[@]}" exec --ephemeral --skip-git-repo-check --color never -
         else
@@ -164,7 +191,7 @@ usage() {
     print -u2 "       ${runner:t} $harness send SESSION < message.md"
     print -u2 "       ${runner:t} $harness wait SESSION [--timeout SECONDS]  (default: 3600)"
     print -u2 "       ${runner:t} $harness list | capture|status|interrupt|stop SESSION"
-    print -u2 "       model=$model, effort=high (fixed)"
+    print -u2 "       model=$model, effort=$effort (fixed)"
 }
 
 tracker="${runner:h}/paste-mode-tracker"
@@ -334,11 +361,11 @@ case "$action" in
         fi
         harness_env=()
         if [[ "$harness" == gemini ]]; then
-            if ! node "${runner:h}/cursor-session.mjs" config "$turn_dir/cursor-config" || \
+            if ! node "${runner:h}/gemini-session.mjs" config "$turn_dir/cursor-config" || \
                 ! conversation="$("$cursor_cli" --trust create-chat)" || \
                 [[ -z "$conversation" || "$conversation" == *[^a-zA-Z0-9_-]* ]] || \
                 ! print -r -- "$conversation" > "$turn_dir/conversation" || \
-                ! node "${runner:h}/cursor-session.mjs" paths "$turn_dir" "$PWD" "$conversation"; then
+                ! node "${runner:h}/gemini-session.mjs" paths "$turn_dir" "$PWD" "$conversation"; then
                 print -u2 "$helper: could not prepare the native Cursor conversation"
                 command rm -rf -- "$turn_dir" "$scratch_dir"
                 exit 1
@@ -441,7 +468,7 @@ case "$action" in
                 if [[ "$harness" == gemini ]]; then
                     turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir)" || exit 1
                     command rm -f -- "$turn_dir/error" "$turn_dir/partial"
-                    if ! node "${runner:h}/cursor-session.mjs" mark-send "$turn_dir" "$message_file"; then
+                    if ! node "${runner:h}/gemini-session.mjs" mark-send "$turn_dir" "$message_file"; then
                         command rm -f -- "$message_file"
                         exit 1
                     fi
@@ -498,7 +525,7 @@ case "$action" in
                             tmux send-keys -t "$pane" Enter || exit 1
                             steering_sent=1
                         elif { (( steering_sent )) && print -r -- "$screen" | command grep -Eq "${cursor_footer}interrupt and send[[:space:]]*·"; } || \
-                            node "${runner:h}/cursor-session.mjs" received "$turn_dir"; then
+                            node "${runner:h}/gemini-session.mjs" received "$turn_dir"; then
                             delivery_confirmed=1
                             break
                         elif (( ! steering_sent && SECONDS >= retry_at )) && [[ "$(cursor_draft)" == "$draft" ]]; then
@@ -538,6 +565,7 @@ case "$action" in
             wait)
                 turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir)" || exit 1
                 deadline=$(( SECONDS + timeout ))
+                trust_since=-1
                 while true; do
                     delivery="$(tmux show-options -v -t "$session" @review_send_state 2>/dev/null)" || delivery=submitted
                     if [[ "$delivery" == failed ]]; then
@@ -562,6 +590,19 @@ case "$action" in
                         [[ "$(tmux display-message -p -t "$pane" '#{pane_dead}')" != 0 ]]; then
                         print -u2 "$helper: review pane exited before the turn finished: $session"
                         exit 1
+                    fi
+                    # Claude Code's workspace trust dialog blocks before any turn starts and fires no
+                    # hook, so it would otherwise look like a running turn until the deadline. The
+                    # launcher accepts it within seconds; one still showing after 10 is stuck.
+                    if [[ "$harness" == (claude|ds) ]] && \
+                        tmux capture-pane -p -t "$pane" | command grep -Fq 'Yes, I trust this folder'; then
+                        (( trust_since >= 0 )) || trust_since=$SECONDS
+                        if (( SECONDS - trust_since >= 10 )); then
+                            print -u2 "$helper: Claude Code is stuck on its workspace trust dialog for $(tmux display-message -p -t "$pane" '#{pane_current_path}'); inspect \`$helper capture $session\`, then stop it"
+                            exit 1
+                        fi
+                    else
+                        trust_since=-1
                     fi
                     if (( SECONDS >= deadline )); then
                         print -u2 "$helper: no finished turn after $timeout seconds: $session"

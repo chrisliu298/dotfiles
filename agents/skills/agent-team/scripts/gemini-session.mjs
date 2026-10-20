@@ -111,5 +111,5 @@ if (action === 'config') {
   }, 100);
   for (const signal of ['SIGTERM', 'SIGHUP', 'SIGINT']) process.on(signal, () => { clearInterval(timer); process.exit(0); });
 } else {
-  throw new Error('usage: cursor-session.mjs config|paths|mark-send|received|watch DIR [WORKSPACE|MESSAGE_FILE] [CONVERSATION]');
+  throw new Error('usage: gemini-session.mjs config|paths|mark-send|received|watch DIR [WORKSPACE|MESSAGE_FILE] [CONVERSATION]');
 }

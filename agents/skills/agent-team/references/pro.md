@@ -1,4 +1,4 @@
-# Pro backend
+# `pro` backend
 
 Uses ChatGPT Pro through the gpt-pro skill's wrapper (`GPT_PRO_BIN`, else
 `gpt-pro` on PATH, else the gpt-pro skill installed beside this one) and its

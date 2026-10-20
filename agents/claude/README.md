@@ -11,6 +11,8 @@ Config for [Claude Code](https://claude.com/claude-code). Everything here target
 | `themes/openai-{dark,light}.json` | symlinks | Claude themes based on the built-in ANSI variants, with tuned text hierarchy, surfaces, and diff backgrounds. |
 | `themes/{anthropic,openai}.json` | generated files | Active "Anthropic (follows theme)" and "OpenAI (follows theme)" entries, replaced by `theme` so running Claude sessions can reload their colors. |
 
+`dotfiles.sh` also marks Claude Code's scratch root (`/tmp/claude-<uid>`, real path) trusted in `~/.claude.json` — the only key it writes there — so unattended sessions launched in a session scratchpad (agent-team's `claude` and `ds`) don't stall on the workspace trust dialog. Trust covers every subdirectory except nested git repositories.
+
 Skills are not here — they are symlinked into `~/.claude/skills/` from `agents/skills/` by the
 `SKILLS` table in `dotfiles.sh`.
 
@@ -72,4 +74,6 @@ Word highlights use softer green/red shades than the built-in ANSI palette;
 the same theme tokens also color `+N` and `-N` counts. Inside tmux, Claude
 quantizes light RGB word colors to indices 72 and 174; Ghostty remaps those
 along with row colors to keep the appearance consistent. The empty usage-meter track stays neutral.
+Dark mode sets `error` (errors and the bypass-permissions indicator) to
+normal `ansi:red` instead of the preset's bright red, matching the status line's red.
 Ghostty's `faint-opacity = 0.75` helps dimmed deletion text remain legible.
