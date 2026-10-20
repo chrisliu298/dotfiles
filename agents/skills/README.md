@@ -64,4 +64,4 @@ Managed by the `PLUGINS` table in `dotfiles.sh` — each is installed and enable
 
 None are currently managed (the table is empty).
 
-User scope keeps them available across all projects (vs. per-project pinning, which drifts between machines). Plugin install state lives in `~/.claude/plugins/` and is **not** synced by `dfs` — `./dotfiles.sh` reconciles it on each machine. Other marketplace plugins can still be added ad hoc with `claude plugin install`.
+User scope keeps them available across all projects (vs. per-project pinning, which drifts between machines). Plugin install state lives in `~/.claude/plugins/`, outside the repo — `./dotfiles.sh` reconciles it. Other marketplace plugins can still be added ad hoc with `claude plugin install`.

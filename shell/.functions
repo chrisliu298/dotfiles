@@ -119,15 +119,6 @@ disable_mouse_tracking() {
     printf '\e[?1000l\e[?1002l\e[?1003l\e[?1006l' >/dev/tty 2>/dev/null
 }
 
-# The machines this repo is kept in sync across, as `ssh-alias:hostname -s` pairs.
-# Single source of truth: both `theme --all` and `dfs` fan out over this list and
-# skip whichever entry is the current host. Keeping two copies drifted once —
-# `theme --all` omitted macbookpro16, so a mode set from another machine never
-# reached it while `dfs` had already shipped it the definitions.
-_dotfiles_peers() {
-    printf '%s\n' macbookpro16:MacBookPro16 macmini-fast:macmini l40s:lambda-scalar
-}
-
 _theme_resolve_mode() {
     local mode="${1:-toggle}"
     local state_dir="${DOTFILES_THEME_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme}"
@@ -142,7 +133,7 @@ _theme_resolve_mode() {
     esac
 }
 
-_theme_local() {
+theme() {
     local mode="${1:-toggle}"
     local state_dir="${DOTFILES_THEME_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme}"
     local mode_file="$state_dir/mode"
@@ -173,7 +164,7 @@ _theme_local() {
             return 0
             ;;
         *)
-            printf 'Usage: theme [light|dark|toggle|status] | theme --all|-a <light|dark|toggle|status>\n' >&2
+            printf 'Usage: theme [light|dark|toggle|status]\n' >&2
             return 2
             ;;
     esac
@@ -264,129 +255,6 @@ _theme_local() {
     printf '  Muse:    %s (next start)\n' "$muse_theme"
 }
 
-theme() {
-    local all=false mode="" arg
-    for arg in "$@"; do
-        case "$arg" in
-            --all|-a) all=true ;;
-            light|dark|toggle|status)
-                if [[ -n "$mode" ]]; then
-                    printf 'Usage: theme [light|dark|toggle|status] | theme --all|-a <light|dark|toggle|status>\n' >&2
-                    return 2
-                fi
-                mode="$arg"
-                ;;
-            *)
-                printf 'Usage: theme [light|dark|toggle|status] | theme --all|-a <light|dark|toggle|status>\n' >&2
-                return 2
-                ;;
-        esac
-    done
-    if [[ "$all" == true && -z "$mode" ]]; then
-        printf 'Usage: theme [light|dark|toggle|status] | theme --all|-a <light|dark|toggle|status>\n' >&2
-        return 2
-    fi
-    mode="${mode:-toggle}"
-
-    if [[ "$all" != true ]]; then
-        _theme_local "$mode"
-        return $?
-    fi
-
-    local _c=$'\033[1;36m' _g=$'\033[32m' _r=$'\033[31m' _d=$'\033[2m' _0=$'\033[0m'
-    local peers=("${(@f)$(_dotfiles_peers)}")
-    local self_host self_host_l peer peer_alias peer_host hosts=()
-    self_host=$(hostname -s 2>/dev/null)
-    self_host_l=${self_host:l}
-    for peer in "${peers[@]}"; do
-        peer_alias=${peer%%:*}
-        peer_host=${peer#*:}
-        [[ "$self_host_l" == "${peer_alias:l}" || "$self_host_l" == "${peer_host:l}" ]] && continue
-        hosts+=("$peer_alias")
-    done
-
-    if [[ "$mode" == status ]]; then
-        printf '\n  %stheme%s  %sstatus everywhere%s\n\n' "$_c" "$_0" "$_d" "$_0"
-        printf '  %slocal%s\n' "$_c" "$_0"
-        _theme_local status | sed 's/^/     /'
-        local h status_rc=0 status_log
-        for h in "${hosts[@]}"; do
-            printf '\n  %s%s%s\n' "$_c" "$h" "$_0"
-            status_log=$(mktemp) || return 1
-            command ssh -o ConnectTimeout=10 -o BatchMode=yes "$h" \
-                    "zsh -lc 'source ~/dotfiles/shell/.functions && theme status'" > "$status_log" 2>&1
-            if (( $? )); then
-                status_rc=1
-            fi
-            sed 's/^/     /' "$status_log"
-            rm -f "$status_log"
-        done
-        printf '\n'
-        return $status_rc
-    fi
-
-    local new_mode
-    new_mode="$(_theme_resolve_mode "$mode")" || {
-        printf 'Usage: theme [light|dark|toggle|status] | theme --all|-a <light|dark|toggle|status>\n' >&2
-        return 2
-    }
-
-    printf '\n  %stheme%s  %sapply %s everywhere%s\n\n' "$_c" "$_0" "$_d" "$new_mode" "$_0"
-    printf '  %slocal%s\n' "$_c" "$_0"
-    local local_log local_rc
-    local_log=$(mktemp) || return 1
-    _theme_local "$new_mode" > "$local_log" 2>&1
-    local_rc=$?
-    sed 's/^/     /' "$local_log"
-    rm -f "$local_log"
-    if (( local_rc )); then
-        printf '\n  %s✗ local theme failed; remotes skipped%s\n\n' "$_r" "$_0"
-        return 1
-    fi
-
-    local tmpdir h failed_hosts=() pids=() pid
-    tmpdir=$(mktemp -d) || return 1
-    local _was_monitor=0
-    [[ -o monitor ]] && { _was_monitor=1; set +m; }
-    for h in "${hosts[@]}"; do
-        command ssh -o ConnectTimeout=10 -o BatchMode=yes "$h" \
-            "zsh -lc 'source ~/dotfiles/shell/.functions && theme $new_mode'" \
-            > "$tmpdir/$h.log" 2>&1 &
-        pids+=($!)
-    done
-    for pid in "${pids[@]}"; do
-        wait "$pid"
-    done
-    (( _was_monitor )) && set -m
-
-    if (( ${#hosts[@]} )); then
-        printf '\n  %sRemotes%s ' "$_c" "$_0"
-        for h in "${hosts[@]}"; do
-            if grep -q "^Theme: ${new_mode}$" "$tmpdir/$h.log"; then
-                printf ' %s✓%s %s' "$_g" "$_0" "$h"
-            else
-                printf ' %s✗%s %s' "$_r" "$_0" "$h"
-                failed_hosts+=("$h")
-            fi
-        done
-        printf '\n'
-        if (( ${#failed_hosts[@]} )); then
-            printf '\n'
-            for h in "${failed_hosts[@]}"; do
-                printf '  %s%s:%s\n' "$_d" "$h" "$_0"
-                sed "s/^/     ${_d}│${_0} /" "$tmpdir/$h.log"
-            done
-        fi
-    fi
-    rm -rf "$tmpdir"
-
-    if (( ${#failed_hosts[@]} )); then
-        printf '\n  %s✗ %d remote theme update(s) failed%s\n\n' "$_r" "${#failed_hosts[@]}" "$_0"
-        return ${#failed_hosts[@]}
-    fi
-    printf '\n  %s✓ theme applied everywhere%s\n\n' "$_g" "$_0"
-}
-
 ghostty-theme() {
     theme "$@"
 }
@@ -404,176 +272,6 @@ if (( IS_MACOS )); then
         scutil --set ComputerName "$1"
     }
 fi
-
-# =============================================================================
-# Dotfiles
-# =============================================================================
-
-dfs() {
-    local _c=$'\033[1;36m' _g=$'\033[32m' _r=$'\033[31m' _d=$'\033[2m' _0=$'\033[0m'
-    printf '\n  %sdfs%s  %ssync dotfiles everywhere%s\n\n' "$_c" "$_0" "$_d" "$_0"
-
-    # SSH alias:hostname -s
-    local dfs_peers=("${(@f)$(_dotfiles_peers)}")
-    local self_host=$(hostname -s 2>/dev/null)
-    local self_host_l=${self_host:l}
-    local self_alias="" peer peer_alias peer_host hosts=() failed_hosts=()
-
-    for peer in "${dfs_peers[@]}"; do
-        peer_alias=${peer%%:*}
-        peer_host=${peer#*:}
-        if [[ "$self_host_l" == "${peer_alias:l}" || "$self_host_l" == "${peer_host:l}" ]]; then
-            self_alias=$peer_alias
-            continue
-        fi
-        hosts+=("$peer_alias")
-    done
-
-    if [[ -z "$self_alias" ]]; then
-        printf '  %sHost%s     %s✗%s unknown host: %s\n\n  %saborted.%s\n\n' "$_c" "$_0" "$_r" "$_0" "${self_host:-unknown}" "$_r" "$_0"
-        return 1
-    fi
-
-    if git -C ~/dotfiles pull --ff-only >/dev/null 2>&1; then
-        printf '  %sPull%s     %s✓%s up to date\n\n' "$_c" "$_0" "$_g" "$_0"
-    else
-        printf '  %sPull%s     %s✗%s pull failed\n\n  %saborted.%s\n\n' "$_c" "$_0" "$_r" "$_0" "$_r" "$_0"
-        return 1
-    fi
-
-    # Run local install and remote sync concurrently
-    local tmpdir=$(mktemp -d) local_rc=0
-    local _was_monitor=0
-    [[ -o monitor ]] && { _was_monitor=1; set +m; }
-
-    ~/dotfiles/dotfiles.sh > "$tmpdir/local.log" 2>&1 &
-    local local_pid=$!
-
-    for h in "${hosts[@]}"; do
-        command ssh -o ConnectTimeout=10 -o BatchMode=yes "$h" "cd ~/dotfiles && git pull --ff-only 2>&1 && ./dotfiles.sh 2>&1; printf '\\n__RC__=%d\\n' \$?" \
-            > "$tmpdir/$h.log" 2>&1 &
-    done
-
-    wait $local_pid; local_rc=$?; wait
-    (( _was_monitor )) && set -m
-
-    printf '  %sInstall%s\n' "$_c" "$_0"
-    if (( local_rc )); then
-        printf '           %s✗%s local install failed\n\n' "$_r" "$_0"
-    else
-        printf '           %s✓%s local\n\n' "$_g" "$_0"
-    fi
-
-    if (( ${#hosts[@]} )); then
-        printf '  %sSync%s    ' "$_c" "$_0"
-        for h in "${hosts[@]}"; do
-            if tail -1 "$tmpdir/$h.log" | grep -q '^__RC__=0$'; then
-                printf ' %s✓%s %s' "$_g" "$_0" "$h"
-            else
-                printf ' %s✗%s %s' "$_r" "$_0" "$h"
-                failed_hosts+=("$h")
-            fi
-        done
-        printf '\n'
-        if (( ${#failed_hosts[@]} )); then
-            printf '\n'
-            for h in "${failed_hosts[@]}"; do
-                printf '  %s%s:%s\n' "$_d" "$h" "$_0"
-                sed '/^__RC__=/d' "$tmpdir/$h.log" | sed "s/^/     ${_d}│${_0} /"
-            done
-        fi
-    fi
-    rm -rf "$tmpdir"
-
-    # Summary
-    local n=${#failed_hosts[@]}
-    local noun="host"; (( n > 1 )) && noun="hosts"
-    if (( local_rc && n )); then
-        printf '\n  %s✗ local + %d remote %s failed%s\n\n' "$_r" "$n" "$noun" "$_0"; return 1
-    elif (( local_rc )); then
-        printf '  %s✗ local install failed%s\n\n' "$_r" "$_0"; return 1
-    elif (( n )); then
-        printf '\n  %s✗ %d %s failed%s\n\n' "$_r" "$n" "$noun" "$_0"; return $n
-    else
-        printf '\n  %s✨ all synced%s\n\n' "$_d" "$_0"; return 0
-    fi
-}
-
-# synckeys — propagate this machine's ~/.zshenv.local API/plan keys to dfs peers.
-# ~/.zshenv.local holds secrets (API and plan keys) and is
-# intentionally NOT in the dotfiles repo, so `dfs` never carries it — a
-# new `export FOO_API_KEY=...` added here must reach the other machines separately.
-# synckeys upserts the local `export *_API_KEY=` / `*_PLAN_KEY=` lines onto each peer (adds
-# missing, updates changed), never deletes peer-only lines or touches non-key
-# config, and never prints key values (the diff lists variable names only). Each
-# applied peer keeps a ~/.zshenv.local.bak for rollback. Dry-run by default; pass
-# `apply` (or `-y`) to write. Usage: synckeys [apply]
-synckeys() {
-    local _c=$'\033[1;36m' _g=$'\033[32m' _y=$'\033[33m' _r=$'\033[31m' _d=$'\033[2m' _0=$'\033[0m'
-    local apply=false
-    [[ "${1:-}" == apply || "${1:-}" == -y ]] && apply=true
-    printf '\n  %ssynckeys%s  %s%s ~/.zshenv.local API/plan keys to peers%s\n\n' \
-        "$_c" "$_0" "$_d" "$([[ $apply == true ]] && print propagating || print 'dry-run —')" "$_0"
-
-    local src="$HOME/.zshenv.local"
-    [[ -f "$src" ]] || { printf '  %s✗%s no %s\n\n' "$_r" "$_0" "$src"; return 1; }
-    local local_keys
-    local_keys=$(grep -E '^export [A-Za-z_][A-Za-z0-9_]*_(API|PLAN)_KEY(_[A-Za-z0-9]+)?=' "$src")
-    [[ -n "$local_keys" ]] || { printf '  %s✗%s no *_API_KEY / *_PLAN_KEY exports in %s\n\n' "$_r" "$_0" "$src"; return 1; }
-
-    # SSH alias:hostname -s (same peer set + self-skip as dfs)
-    local dfs_peers=(macbookpro16:MacBookPro16 macmini-fast:macmini l40s:lambda-scalar)
-    local self_host=$(hostname -s 2>/dev/null); local self_host_l=${self_host:l}
-    local peer peer_alias peer_host hosts=()
-    for peer in "${dfs_peers[@]}"; do
-        peer_alias=${peer%%:*}; peer_host=${peer#*:}
-        [[ "$self_host_l" == "${peer_alias:l}" || "$self_host_l" == "${peer_host:l}" ]] && continue
-        hosts+=("$peer_alias")
-    done
-
-    # Declare loop-locals ONCE here, not inside the loop: in zsh a bare `local x`
-    # re-declaration of an already-valued var prints `x=value` (would leak keys).
-    local h rc=0 peer_keys add upd ok push line var peer_line
-    for h in "${hosts[@]}"; do
-        if ! peer_keys=$(command ssh -o ConnectTimeout=10 -o BatchMode=yes "$h" \
-                'grep -E "^export [A-Za-z_][A-Za-z0-9_]*_(API|PLAN)_KEY(_[A-Za-z0-9]+)?=" ~/.zshenv.local 2>/dev/null'); then
-            printf '  %s%s%s  %s✗ unreachable%s\n' "$_c" "$h" "$_0" "$_r" "$_0"; rc=1; continue
-        fi
-        add=() upd=() ok=() push=""
-        while IFS= read -r line; do
-            [[ -n "$line" ]] || continue
-            var=${${line#export }%%=*}
-            peer_line=$(print -r -- "$peer_keys" | grep -E "^export ${var}=" | head -1)
-            if [[ -z "$peer_line" ]]; then add+=("$var"); push+="$line"$'\n'
-            elif [[ "$peer_line" != "$line" ]]; then upd+=("$var"); push+="$line"$'\n'
-            else ok+=("$var"); fi
-        done <<< "$local_keys"
-
-        printf '  %s%s%s  ' "$_c" "$h" "$_0"
-        (( ${#add[@]} )) && printf '%sadd:%s %s   ' "$_g" "$_0" "${add[*]}"
-        (( ${#upd[@]} )) && printf '%supdate:%s %s   ' "$_y" "$_0" "${upd[*]}"
-        printf '%sin-sync: %d%s\n' "$_d" "${#ok[@]}" "$_0"
-
-        if $apply && [[ -n "$push" ]]; then
-            if print -rn -- "$push" | command ssh -o ConnectTimeout=10 -o BatchMode=yes "$h" '
-                set -e; f="$HOME/.zshenv.local"; [ -f "$f" ] || touch "$f"
-                new=$(cat); cp "$f" "$f.bak"
-                vars=$(printf "%s\n" "$new" | sed -E "s/^export ([A-Za-z0-9_]+)=.*/\1/" | paste -sd"|" -)
-                tmp=$(mktemp)
-                grep -vE "^export (${vars})=" "$f" > "$tmp" || true
-                { [ -s "$tmp" ] && [ -n "$(tail -c1 "$tmp")" ] && printf "\n" >> "$tmp"; } || true
-                printf "%s\n" "$new" >> "$tmp"; mv "$tmp" "$f"
-            '; then
-                printf '           %s✓%s applied  %s(backup: ~/.zshenv.local.bak)%s\n' "$_g" "$_0" "$_d" "$_0"
-            else
-                printf '           %s✗%s apply failed\n' "$_r" "$_0"; rc=1
-            fi
-        fi
-    done
-
-    $apply || printf '\n  %srun%s synckeys apply %sto write%s\n' "$_d" "$_0" "$_d" "$_0"
-    printf '\n'; return $rc
-}
 
 # =============================================================================
 # Arxiv

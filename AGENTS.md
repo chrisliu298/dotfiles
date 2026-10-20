@@ -25,7 +25,7 @@ Elsewhere:
 ## Conventions
 
 - **Shell load order**: `shell/.zshenv` (platform detection, env, PATH) → `shell/.zshrc` (plugins, sources `.aliases` + `.functions`)
-- **Themes**: `theme light|dark|toggle|status` (`theme --all <mode>` also hits every peer in `_dotfiles_peers`) switches all themed tools at once. The active mode is **host-local** (`~/.local/state/dotfiles-theme/mode`, never tracked, so switching never dirties git); theme definitions stay in-repo, and `shell/theme-apply` is the only writer of live theme config. Per-tool mechanics and rationale live in `shell/theme-apply` comments and `agents/claude/README.md` — read them before changing theme behavior.
+- **Themes**: `theme light|dark|toggle|status` switches all themed tools at once. The active mode is **host-local** (`~/.local/state/dotfiles-theme/mode`, never tracked, so switching never dirties git); theme definitions stay in-repo, and `shell/theme-apply` is the only writer of live theme config. Per-tool mechanics and rationale live in `shell/theme-apply` comments and `agents/claude/README.md` — read them before changing theme behavior.
 
 ## Skills, MCP Servers & Plugins
 
@@ -45,7 +45,6 @@ Run `./dotfiles.sh` after changes to installation logic, skill wiring, or manage
 - Match existing history: imperative, concise subjects (`Add ...`, `Update ...`, `Remove ...`, `Refactor ...`).
 - Keep commits atomic by logical change (docs vs scripts vs skill content).
 - PRs include: purpose, changed paths, verification commands run, and any migration/symlink impact. Link related issues; add screenshots only for UI-facing documentation changes.
-- **Peer sync is explicit-only**: run `dfs` only when the user explicitly requests it. Otherwise, do not run it or mention it in updates or the final response.
 
 ## Maintaining Docs
 
@@ -54,4 +53,4 @@ Run `./dotfiles.sh` after changes to installation logic, skill wiring, or manage
 
 ## Not Backed Up
 
-OAuth tokens, command history, local settings, the host-local active theme (`~/.local/state/dotfiles-theme/`, so each machine keeps its own light/dark), per-project data, and cache files. API keys live in `~/.zshenv.local` (not in the repo, so `dfs` never carries them) — after adding a new `export *_API_KEY=` or `*_PLAN_KEY=` locally, run `synckeys` (a `shell/.functions` helper, not a `dotfiles.sh` subcommand) — dry-run first, then `synckeys apply` — to propagate it to the other machines.
+OAuth tokens, command history, local settings, the host-local active theme (`~/.local/state/dotfiles-theme/`, so each machine keeps its own light/dark), per-project data, and cache files. API keys live in `~/.zshenv.local` (not in the repo).

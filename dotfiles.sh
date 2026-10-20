@@ -647,8 +647,7 @@ install_tmux_plugins() {
     local user_conf="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/tmux.conf"
     [[ -r "$user_conf" ]] || { warn "no tmux.conf at $user_conf; skipping tmux plugins"; return; }
 
-    # TPM parses the conf itself, so this needs no running server -- it works
-    # over dfs's ssh.
+    # TPM parses the conf itself, so this needs no running server.
     local stamp_file="$CACHE_DIR/dotfiles-tmux-plugins-stamp"
     stamp_fresh "$stamp_file" "$(tmux_plugins_fingerprint "$user_conf")" && return
 

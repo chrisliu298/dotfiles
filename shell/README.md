@@ -142,7 +142,7 @@ Verify with `shell/test-cdswap.sh`.
 
 See `.aliases` and `.functions` for the full list. Highlights:
 
-- **Shell**: `ez` (reload), `o` (open), `b` (btop), `theme [light|dark|toggle|status]` / `theme --all <mode>` (OpenAI light/dark across terminal tools and macOS appearance)
+- **Shell**: `ez` (reload), `o` (open), `b` (btop), `theme [light|dark|toggle|status]` (OpenAI light/dark across terminal tools and macOS appearance)
 - **Tmux**: `t`, `ta`, `tl`, `tn`, `tk`, `to` (new/attach to `$PWD` name), `tka` (kill all)
 - **Python/uv**: `sv` (source venv), `us` (sync), `ua` (add)
 - **Claude Code**: `c` (auto-accept), `cc` (continue), `cr` (resume), `csd` / `csall` (Claude Desktop account / switch CLI + Desktop together), `scout-papers-scholar-inbox-all` (sequentially scout five awesome lists with Opus at high effort, showing final messages only)
@@ -150,7 +150,7 @@ See `.aliases` and `.functions` for the full list. Highlights:
 - **Codex**: `x` / `ct` (official / TraeX), `xc` / `ctc` (resume --last), `xr` / `ctr` (resume picker or session ID), `xu` / `ctu` (update shared CLI), `cal`/`cas`/`caw`/`caa` (codex-auth list/status/switch/login)
 - **Muse Code**: `m` (--yolo), `mc` (resume --last), `mr` (resume picker, or session name/ID); no `mu` — Muse has no update subcommand
 - **Homebrew**: `bi`/`bu`/`bic` (install/uninstall/cask), `bupd`/`bupg` (update/upgrade)
-- **Functions**: `dfs` (pull + install + sync remote), `theme [light|dark|toggle|status]` / `theme --all <mode>` (Ghostty + Starship + btop + tmux + Neovim + Codex TUI + Claude Code OpenAI/Anthropic themes + Muse Code + macOS; fastfetch follows ANSI; `--all` also applies to macmini and l40s), `synckeys` (propagate `~/.zshenv.local` API/plan keys to peers; dry-run by default, `synckeys apply` to write), `rename_device`
+- **Functions**: `theme [light|dark|toggle|status]` (Ghostty + Starship + btop + tmux + Neovim + Codex TUI + Claude Code OpenAI/Anthropic themes + Muse Code + macOS; fastfetch follows ANSI), `rename_device`
 
 ### Reasoning effort
 
