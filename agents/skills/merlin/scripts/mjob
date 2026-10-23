@@ -1,0 +1,317 @@
+#!/usr/bin/env python3
+"""Read-only Merlin job summaries. Requires merlin-cli; Python stdlib only."""
+import argparse
+from collections import deque
+from datetime import datetime
+import json
+import re
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+
+
+class MjobError(Exception):
+    """An actionable error safe to show without CLI payloads or signed URLs."""
+
+
+def redact(text):
+    text = re.sub(r'(https?://[^\s?]+)\?[^\s]+', r'\1?[redacted]', str(text))
+    text = re.sub(r'(?i)\bBearer\s+\S+', 'Bearer [redacted]', text)
+    return re.sub(
+        r'(?i)(\b(?:[\w-]*token|[\w-]*secret|api[_-]?key|authorization)\b[\s"\x27:=]+)'
+        r'[^\s,;"\x27}]+', r'\1[redacted]', text)
+
+
+def decode_response(output):
+    """Discard warning prefixes and unwrap either known CLI envelope."""
+    decoder = json.JSONDecoder()
+    response = None
+    for match in re.finditer(r'\{', output):
+        try:
+            candidate, _ = decoder.raw_decode(output, match.start())
+        except ValueError:
+            continue
+        if isinstance(candidate, dict) and any(
+                key in candidate for key in ('ResponseBase', 'data', 'group', 'result')):
+            response = candidate
+            break
+    if response is None:
+        raise MjobError('merlin-cli returned no JSON response')
+    while isinstance(response, dict):
+        base = response.get('ResponseBase') or {}
+        if base.get('code', 0) != 0:
+            raise MjobError(redact(
+                f"{base.get('code_name') or 'MerlinError'} ({base['code']}): "
+                f"{base.get('message', '')}"))
+        if isinstance(response.get('result'), dict):
+            response = response['result']
+        elif isinstance(response.get('data'), dict) and isinstance(
+                response['data'].get('result'), dict):
+            response = response['data']
+        else:
+            return response
+    raise MjobError('unsupported merlin-cli response envelope')
+
+
+class Client:
+    def call(self, command, body):
+        argv = ['merlin-cli', '--control-plane', 'cn-seed', *command,
+                '--json', json.dumps(body)]
+        try:
+            result = subprocess.run(argv, capture_output=True, text=True, timeout=120)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise MjobError(f"merlin-cli {' '.join(command)}: {type(exc).__name__}") from None
+        try:
+            response = decode_response(result.stdout)
+        except MjobError:
+            # Some CLI versions send the structured API error to stderr.
+            if not result.stdout.strip() and result.stderr.strip():
+                response = decode_response(result.stderr)
+            else:
+                raise
+        if result.returncode:
+            raise MjobError(f"merlin-cli {' '.join(command)} exited {result.returncode}")
+        return response
+
+    def pages(self, command, body):
+        query = {'page_size': 100, **body}
+        seen = set()
+        while True:
+            response = self.call(command, query)
+            rows = response.get('data')
+            if not isinstance(rows, list):
+                raise MjobError(f"{' '.join(command)}: expected a data array")
+            yield from rows
+            token = (response.get('pagination') or {}).get('next_page_token')
+            if not token:
+                return
+            if token in seen:
+                raise MjobError('merlin-cli repeated a page token')
+            seen.add(token)
+            query['page_token'] = token
+
+
+def arnold(run):
+    return (run.get('resource_config') or {}).get('arnold_resource_config') or {}
+
+
+def gpu_count(run):
+    return sum((role.get('num') or 0) * (role.get('gpu') or 0)
+               for role in arnold(run).get('roles') or [])
+
+
+def priority(run):
+    for attachment in run.get('attachments') or []:
+        control = attachment.get('arnold_cluster_control_attachment')
+        if control is not None:
+            return control.get('queue_priority')
+    return None
+
+
+def trial_id(run):
+    return str((run.get('runtime_context') or {}).get('trial_id') or '')
+
+
+def trial_starts(client, runs):
+    starts = {}
+    # Batch trial lookups, matching the current trial rather than an old restart.
+    sids = [r['sid'] for r in runs if trial_id(r)]
+    for offset in range(0, len(sids), 100):
+        rows = client.pages(('job-v2', 'run-trials', 'list'), {
+            'filter': {'job_run_sid_any': sids[offset:offset + 100]}})
+        for row in rows:
+            starts[(row.get('job_run_sid'), str(row.get('sid')))] = row.get('start_at')
+    return starts
+
+
+def field(value):
+    return ' '.join(redact(value).split()) if value not in (None, '') else '-'
+
+
+def brief_line(run, starts):
+    status = run.get('status') or ''
+    context = run.get('runtime_context') or {}
+    values = {
+        'status': status, 'state': 'queued' if status == 'started' else status,
+        'trial_status': context.get('trial_status'), 'queue_priority': priority(run),
+        'gpus': gpu_count(run), 'trial_id': trial_id(run),
+        'start_at': starts.get((run['sid'], trial_id(run))),
+        'created_by': run.get('created_by'), 'name': field(run.get('name'))[:46],
+    }
+    return '\t'.join([field(run['sid']), *(f'{key}={field(value)}' for key, value in values.items())])
+
+
+def show_runs(client, runs):
+    starts = trial_starts(client, runs)
+    for run in runs:
+        print(brief_line(run, starts))
+
+
+def run_filter(args):
+    query = {'arnold_group_id_any': [args.group]}
+    if args.since:
+        query['created_at_from'] = args.since
+    return query
+
+
+def mine_runs(client, args):
+    query = {**run_filter(args), 'created_by_any': [args.user],
+             'status_any': ['running', 'started', 'launching']}
+    return [run for run in client.pages(('job-v2', 'runs', 'list'), {'filter': query})
+            if run.get('created_by') == args.user
+            and run.get('status') in query['status_any']
+            and str(arnold(run).get('group_id')) == str(args.group)
+            and (not args.gpu_only or (gpu_count(run) > 0 and run.get('job_type') == 'train'))]
+
+
+def queue_runs(runs):
+    queued = [run for run in runs if (run.get('runtime_context') or {}).get('trial_status')
+              in ('queued', 'staging', 'pending', 'initializing')]
+    # Same key and absent-priority fallback as queue_order.py.
+    return sorted(queued, key=lambda run: (
+        priority(run) if priority(run) is not None else 99, trial_id(run)))
+
+
+def capacity(response, cluster):
+    clusters = (response.get('group') or {}).get('resources', {}).get('clusters', [])
+    matches = [item for item in clusters if str(item.get('cluster_sid')) == str(cluster)]
+    if not matches:
+        raise MjobError(f'cluster {cluster} is absent from group resources')
+    queues = [queue for item in matches for queue in item.get('queues') or []
+              if queue.get('node_type') == 'gpu']
+    if not any('NVIDIA-H20' in (queue.get('total') or {}).get('gpu', {}) for queue in queues):
+        raise MjobError(f'cluster {cluster} has no H20 GPU totals')
+    def count(key):
+        return sum((queue.get(key) or {}).get('gpu', {}).get('NVIDIA-H20', 0)
+                   for queue in queues)
+    total, used = count('total'), count('used')
+    return total, used, total - used
+
+
+def select_pod(pods, rank):
+    matches = [pod for pod in pods if re.search(rf'-{rank}$', pod.get('pod_name', ''))]
+    if not matches:
+        raise MjobError(f'no pod with rank {rank}')
+    if len(matches) != 1:
+        raise MjobError(f'ambiguous rank {rank}: {len(matches)} pods match')
+    return matches[0]
+
+
+def log_lines(client, args):
+    run = client.call(('job-v2', 'runs', 'get'), {'sid': args.sid})['data']
+    trial = trial_id(run)
+    if not trial:
+        raise MjobError(f'{args.sid}: no current trial')
+    pod = select_pod(list(client.pages(('job-v2', 'run-trial-pods', 'list'), {
+        'filter': {'trial_sid_any': [trial]}})), args.rank)
+    local = client.call(('job-v2', 'run-trial-local-logs', 'get'), {
+        'trial_pod_sid': pod['sid'], 'stream': 'stdout'})
+    url = (local.get('data') or {}).get('url')
+    if url:
+        if not url.startswith(('https://', 'http://')):
+            raise MjobError('unsupported log URL scheme')
+        try:
+            with urllib.request.urlopen(url, timeout=120) as response:
+                for line in response:
+                    yield line.decode('utf-8', errors='replace').rstrip('\r\n')
+        except (OSError, urllib.error.URLError) as exc:
+            # Exceptions may contain the signed URL. Never echo it.
+            raise MjobError(f'log download failed: {type(exc).__name__}') from None
+        return
+    now_ms = int(time.time() * 1000)
+    rows = client.pages(('job-v2', 'run-trial-tls-logs', 'get'), {
+        'filter': {'trial_sid': trial, 'trial_pod_sid': pod['sid'], 'stream': 'std',
+                   'timestamp_ms_from': now_ms - args.since_min * 60_000,
+                   'timestamp_ms_to': now_ms, 'paginated': True}, 'page_size': 500})
+    for row in rows:
+        yield from (row.get('content') or '').splitlines()
+
+
+def show_logs(client, args):
+    try:
+        pattern = re.compile(args.grep) if args.grep is not None else None
+    except re.error as exc:
+        raise MjobError(f'invalid --grep regular expression: {exc.msg}') from None
+    lines = (redact(line) for line in log_lines(client, args)
+             if pattern is None or pattern.search(line))
+    if args.tail is not None:
+        lines = deque(lines, maxlen=args.tail)
+    for line in lines:
+        print(line)
+
+
+def nonnegative(value):
+    number = int(value)
+    if number < 0:
+        raise argparse.ArgumentTypeError('must be nonnegative')
+    return number
+
+
+def positive(value):
+    number = nonnegative(value)
+    if not number:
+        raise argparse.ArgumentTypeError('must be positive')
+    return number
+
+
+def rfc3339(value):
+    try:
+        if 'T' not in value or datetime.fromisoformat(value.replace('Z', '+00:00')).tzinfo is None:
+            raise ValueError
+    except ValueError:
+        raise argparse.ArgumentTypeError('expected RFC3339 with timezone') from None
+    return value
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest='command', required=True)
+    brief = commands.add_parser('brief', help='one summary line per JobRun')
+    brief.add_argument('sids', nargs='+')
+    free = commands.add_parser('free', help='total, used and free H20 GPUs')
+    free.add_argument('--group', type=positive, default=1043)
+    free.add_argument('--cluster', type=positive, default=47)
+    for name in ('mine', 'queue'):
+        sub = commands.add_parser(name, help='active personal runs' if name == 'mine' else 'group queue order')
+        sub.add_argument('--group', type=positive, default=1043)
+        sub.add_argument('--since', type=rfc3339, help='creation time lower bound; default: all history')
+        if name == 'mine':
+            sub.add_argument('--user', default='liuyuhao.chris')
+            sub.add_argument('--gpu-only', action='store_true',
+                             help='only job_type=train runs requesting more than zero GPUs')
+    logs = commands.add_parser('logs', help='one pod stdout, with TLS fallback')
+    logs.add_argument('sid')
+    logs.add_argument('--rank', type=nonnegative, default=0,
+                      help='pod name suffix, not distributed global rank (default: 0)')
+    logs.add_argument('--grep', metavar='RE')
+    logs.add_argument('--tail', type=nonnegative, metavar='N')
+    logs.add_argument('--since-min', type=positive, default=60, help='TLS fallback window (default: 60)')
+    args = parser.parse_args(argv)
+    client = Client()
+    try:
+        if args.command == 'brief':
+            show_runs(client, [client.call(('job-v2', 'runs', 'get'), {'sid': sid})['data']
+                               for sid in args.sids])
+        elif args.command == 'free':
+            response = client.call(('resource', 'groups', 'get'), {
+                'sid': str(args.group), 'options': {'include_resources': True}})
+            total, used, free_count = capacity(response, args.cluster)
+            print(f'H20 total={total} used={used} free={free_count}')
+        elif args.command == 'mine':
+            show_runs(client, mine_runs(client, args))
+        elif args.command == 'queue':
+            rows = client.pages(('job-v2', 'runs', 'list'), {'filter': run_filter(args)})
+            show_runs(client, queue_runs(run for run in rows
+                       if str(arnold(run).get('group_id')) == str(args.group)))
+        else:
+            show_logs(client, args)
+    except MjobError as exc:
+        print(f'mjob: {exc}', file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -39,16 +39,15 @@ M="merlin-cli --control-plane cn-seed"     # seed.bytedance.net; ml.bytedance.ne
 ## Read a job
 
 ```bash
-$M job-v2 runs get --sid <run> --json
-$M job-v2 run-trials list --filter '{"job_run_sid_any":["<run>"]}' --json   # queue_at, start_at
-$M job-v2 runs list --filter '{"arnold_group_id_any":[1043],"created_at_from":"<RFC3339>",
-  "created_by_any":["<user>"],"status_any":["running","started"]}' --page-size 100 --json
+$M job-v2 runs get --json '{"sid":"<run>"}'
+$M job-v2 run-trials list --json '{"filter":{"job_run_sid_any":["<run>"]}}'   # queue_at, start_at
+$M job-v2 runs list --json '{"filter":{"arnold_group_id_any":[1043],"created_at_from":"<RFC3339>",
+  "created_by_any":["<user>"],"status_any":["running","started"]},"page_size":100}'
 ```
 
-- **入参是具名选项，不是 `--json '{...}'`**（2026-10-19 实测）：`--json` / `-j` 现在只是「只输出 JSON」的开关。
-  传 `--json '{"sid":...}'` 报 `too many arguments for 'get'`；`--sid` 传对了但走 `--json` 当入参会 404。
-  `--arg key=value` 也不能用来传含逗号的 JSON（按逗号切，报 `Expected key=value`）。
-  真实响应在 `.data.result.data`（外面还包了一层 `{tool, arguments, result}`），不是 `.data`。
+- CLI 0.2.528 verified 2026-10-23: `--json '<body>'` supplies the request; use the examples
+  above, not named `--sid` / `--filter` flags. Responses may be direct (`.data`) or wrapped
+  (`.data.result.data`); check `ResponseBase` inside the wrapper too.
 - `runs get` fields: `.data.status` goes `launching` → `started` (**still queued**) →
   `running` → `done|failed|stopped`; `.data.runtime_context.{trial_id,trial_status}`;
   priority at `.data.attachments[].arnold_cluster_control_attachment.queue_priority`;
@@ -62,6 +61,42 @@ $M job-v2 runs list --filter '{"arnold_group_id_any":[1043],"created_at_from":"<
   `created_by_any`, `status_any`, `keyword_contains`. A misnamed filter field is silently
   ignored — confirm `pagination.total` actually shrank, and still check `created_by` on the
   rows you act on.
+- Group 1043 with `created_at_from=2026-10-20T00:00:00Z`, checked 2026-10-23: omitting
+  `created_by_any` and passing `["*"]` both returned 251 runs with identical SIDs and 14
+  creators. Group queries therefore omit it; personal queries still pass and re-check it.
+
+## Read-only summaries with mjob
+
+Prefer this skill's executable `scripts/mjob` for routine reads (Python 3 stdlib plus
+`merlin-cli` on PATH). It always uses `--control-plane cn-seed`, handles warning prefixes
+and both response envelopes, and fails on API errors without printing credentials or signed
+URL queries. No installation or platform mutation is needed. From this skill directory:
+
+```bash
+scripts/mjob brief ee445eb08a202165 1d4eaf79cca17bfc
+scripts/mjob free                         # --group 1043 --cluster 47
+scripts/mjob mine                         # --user liuyuhao.chris --group 1043 --since RFC3339
+scripts/mjob mine --gpu-only               # positive GPU count and job_type=train
+scripts/mjob queue --since 2026-10-20T00:00:00Z  # --group 1043
+scripts/mjob logs ee445eb08a202165 --rank 0 --grep 'global_step' --tail 3
+```
+
+`brief`, `mine`, and `queue` print tab-separated, labelled fields with no header (one run
+per line); `started` gets `state=queued`, and absent trial `start_at` is `-`. GPUs sum
+`num × gpu` across all roles. `mine` walks every page for running/started/launching runs;
+it includes Devboxes by default; `--gpu-only` keeps positive-GPU runs whose `job_type` is
+`train` (other types are excluded even if they request GPUs).
+`scripts/mjob mine | wc -l` recomputes the row count. Both list commands search all history
+unless `--since` is supplied. `queue` uses queued/staging/pending/initializing trial states
+and the reference `(queue_priority, trial_id)` ordering (missing priority sorts as 99).
+This is a queue-order view, not a guarantee of allocation or resource fit.
+
+`logs` selects the pod name's rank suffix (default 0, not the distributed global rank),
+downloads stdout, applies the Python
+regular expression locally, then takes the last N matching lines. An empty download URL
+falls back to paginated TLS `std` logs for that same trial and pod over the last hour
+(`--since-min` changes this window). Missing or ambiguous ranks fail explicitly.
+Offline verification: `uv run --with pytest pytest tests/test_mjob.py`.
 
 ## Logs and failure evidence
 
