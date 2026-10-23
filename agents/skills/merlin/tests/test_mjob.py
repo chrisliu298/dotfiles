@@ -143,12 +143,20 @@ def test_logs_filter_then_tail_and_tls_pagination(monkeypatch, capsys, local):
         seen.append((command, body))
         if command[1] == 'runs':
             return reply(run())
+        if command[1] == 'run-trial-tls-log-configs':
+            return reply([{'name': 'Std', 'stream': 'std'}])
+        if command[1] == 'run-trial-tls-log-files':
+            return reply(['/var/log/custom/stdout', '/var/log/custom/stderr'])
         return reply({'url': 'https://logs.test/signed' if local else ''})
     def pages(command, body):
         seen.append((command, body))
         if command[1] == 'run-trial-pods':
             return iter([{'sid': 'pod0', 'pod_name': 'trial-executor-0'}])
-        return iter([{'content': 'step=1\nnoise'}, {'content': 'step=2\nstep=3'}])
+        return iter([
+            {'pod_file_path': 'custom/stdout', 'content': 'step=1\nnoise'},
+            {'pod_file_path': 'custom/stderr', 'content': 'step=stderr'},
+            {'pod_file_path': 'custom/stdout', 'content': 'step=2\nstep=3'},
+            {'pod_file_path': 'custom/stderr', 'content': 'step=stderr-tail'}])
     monkeypatch.setattr(client, 'call', call)
     monkeypatch.setattr(client, 'pages', pages)
     monkeypatch.setattr(m.urllib.request, 'urlopen', lambda *a, **kw:
@@ -159,8 +167,37 @@ def test_logs_filter_then_tail_and_tls_pagination(monkeypatch, capsys, local):
     if not local:
         query = seen[-1][1]['filter']
         assert query['trial_pod_sid'] == 'pod0' and query['trial_sid'] == '10'
+        assert query['pod_file_path'] == '/var/log/custom/stdout'
         assert query['timestamp_ms_to'] - query['timestamp_ms_from'] == 3600000
         assert 'keyword' not in query
+        files_query = next(body['filter'] for command, body in seen
+                           if command[1] == 'run-trial-tls-log-files')
+        assert files_query == {key: value for key, value in query.items()
+                               if key not in ('pod_file_path', 'paginated')}
+
+
+@pytest.mark.parametrize('configs, files', [
+    ([{'stream': 'std'}], []),
+    ([{'stream': 'std'}], ['/var/log/a/stdout', '/var/log/b/stdout']),
+    ([{'stream': 'ray_job_stdout'}], ['/var/log/a/stdout']),
+])
+def test_tls_stdout_missing_or_ambiguous_fails(monkeypatch, configs, files):
+    client = m.Client()
+    monkeypatch.setattr(client, 'call', lambda command, body:
+                        reply(configs if command[1] == 'run-trial-tls-log-configs' else files))
+    with pytest.raises(m.MjobError):
+        m.tls_stdout_path(client, {'trial_pod_sid': 'pod0', 'stream': 'std',
+                                  'timestamp_ms_from': 1, 'timestamp_ms_to': 2})
+
+
+def test_tls_stdout_nested_config_and_dynamic_path(monkeypatch):
+    client = m.Client()
+    monkeypatch.setattr(client, 'call', lambda command, body:
+                        reply([{'name': 'group', 'sub_types': [{'stream': 'std'}]}]
+                              if command[1] == 'run-trial-tls-log-configs'
+                              else ['/var/log/another/stdout', '/var/log/another/stderr']))
+    assert m.tls_stdout_path(client, {'trial_pod_sid': 'pod0', 'stream': 'std',
+                                    'timestamp_ms_from': 1, 'timestamp_ms_to': 2}) == '/var/log/another/stdout'
 
 
 def test_cli_transport_is_read_only_json_body(monkeypatch):
@@ -170,3 +207,36 @@ def test_cli_transport_is_read_only_json_body(monkeypatch):
         return SimpleNamespace(returncode=0, stdout=json.dumps(reply(run())), stderr='')
     monkeypatch.setattr(m.subprocess, 'run', process)
     assert m.Client().call(('job-v2', 'runs', 'get'), {'sid': 'one'})['data']['sid'] == 'one'
+
+
+def test_queue_numeric_trial_order_with_missing_last():
+    rows = [run('ten', trial='10'), run('missing', trial=None), run('two', trial='2'),
+            run('urgent-missing', trial=None, priority=0)]
+    assert [r['sid'] for r in m.queue_runs(rows)] == ['urgent-missing', 'two', 'ten', 'missing']
+
+
+def test_queue_requests_active_statuses_and_keeps_trial_filter(monkeypatch, capsys):
+    seen = []
+    running = run('running', status='running')
+    running['runtime_context']['trial_status'] = 'running'
+    def pages(self, command, body):
+        seen.append((command, body))
+        if command == ('job-v2', 'runs', 'list'):
+            return iter([running, run('queued')])
+        return iter([])
+    monkeypatch.setattr(m.Client, 'pages', pages)
+    assert m.main(['queue']) == 0
+    assert seen[0][1]['filter']['status_any'] == ['running', 'started', 'launching']
+    assert capsys.readouterr().out.split('\t')[0] == 'queued'
+
+
+@pytest.mark.parametrize('command', ['brief', 'logs'])
+@pytest.mark.parametrize('response', [{}, reply(None), reply({}), reply([]),
+                                      reply({'sid': 'different'})])
+def test_invalid_run_has_readable_error_without_traceback(monkeypatch, capsys, command, response):
+    monkeypatch.setattr(m.Client, 'call', lambda *a: response)
+    assert m.main([command, 'missing']) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ''
+    assert 'missing' in captured.err and 'run' in captured.err.lower()
+    assert 'Traceback' not in captured.err

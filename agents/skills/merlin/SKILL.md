@@ -87,15 +87,22 @@ per line); `started` gets `state=queued`, and absent trial `start_at` is `-`. GP
 it includes Devboxes by default; `--gpu-only` keeps positive-GPU runs whose `job_type` is
 `train` (other types are excluded even if they request GPUs).
 `scripts/mjob mine | wc -l` recomputes the row count. Both list commands search all history
-unless `--since` is supplied. `queue` uses queued/staging/pending/initializing trial states
-and the reference `(queue_priority, trial_id)` ordering (missing priority sorts as 99).
+unless `--since` is supplied. `queue` requests `status_any=["running","started","launching"]`:
+unfiltered server pagination was observed to omit queued runs inconsistently. It retains
+the local queued/staging/pending/initializing trial-state filter, then sorts by
+`(queue_priority, numeric trial_id)` (missing priority sorts as 99; missing trial IDs go
+last within their priority).
 This is a queue-order view, not a guarantee of allocation or resource fit.
 
 `logs` selects the pod name's rank suffix (default 0, not the distributed global rank),
 downloads stdout, applies the Python
 regular expression locally, then takes the last N matching lines. An empty download URL
 falls back to paginated TLS `std` logs for that same trial and pod over the last hour
-(`--since-min` changes this window). Missing or ambiguous ranks fail explicitly.
+(`--since-min` changes this window). The fallback checks `run-trial-tls-log-configs`, then
+uses `run-trial-tls-log-files get` in that same window to find the unique file named
+`stdout`. It passes that path as `pod_file_path` and re-checks returned paths locally so
+the shared `std` stream cannot mix in stderr. Missing/ambiguous stdout files or ranks fail
+explicitly; missing or invalid run data also produces a readable error with a nonzero exit.
 Offline verification: `uv run --with pytest pytest tests/test_mjob.py`.
 
 ## Logs and failure evidence
