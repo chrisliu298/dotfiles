@@ -11,7 +11,7 @@ Zsh with Zinit plugin manager and Starship prompt.
 | `.aliases` | Command shortcuts |
 | `.functions` | Shell utility functions |
 | `remap-keys` | macOS: right Option → right Control via `hidutil`, merged with existing mappings (e.g. Raycast Hyper Key); re-applied at login by the `local.remap-keys` LaunchAgent that `dotfiles.sh` writes. `remap-keys --reset` removes it |
-| `tmux-persist` | macOS: recreate the tmux sessions named in `~/.local/state/tmux-persist/sessions` after a reboot, each resuming its Claude Code conversation in its cwd. `local.tmux-persist-save` snapshots them every 5 min, `local.tmux-persist-restore` restores at login; `tmux-persist` alone shows the snapshot. Test: `shell/test-tmux-persist.sh` |
+| `tmux-persist` | macOS: recreate the `*-r2v` and `adapt-clf` tmux sessions after a reboot, each resuming its Claude Code conversation in its cwd. `local.tmux-persist-save` snapshots them every 5 min (a session closed on purpose drops out), `local.tmux-persist-restore` restores at login; `tmux-persist` alone shows the snapshot. `tmux-persist restart <session>...` restarts the Claude in running sessions (e.g. after an update) in place and in parallel, resuming the same conversations; `tmux-persist stale` lists the sessions whose Claude predates the installed version (the ones showing "Restart to update"), so `tpr $(tps)` restarts them all. Both resume on Opus 5.5, since `claude --resume` alone takes the model of the transcript's last reply. Test: `shell/test-tmux-persist.sh` |
 
 Load order: `.zshenv` → `.zshrc` (sources `.aliases` and `.functions`).
 

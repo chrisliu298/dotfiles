@@ -1,28 +1,35 @@
 #!/bin/zsh
-# Bring chosen tmux sessions, each running Claude Code, back after a reboot.
+# Bring the *-r2v and adapt-clf tmux sessions, each running Claude Code, back after a reboot.
 # Claude Code records every live process in ~/.claude/sessions/<pid>.json with
-# its tmux pane ("name:@win.%pane") and conversation id; `save` copies those for
-# the listed sessions into a snapshot, and `restore` recreates each missing
+# its tmux pane ("name:@win.%pane") and conversation id; `save` copies the entries
+# of those sessions into a snapshot, and `restore` recreates each missing
 # session in its cwd and resumes that exact conversation.
 # LaunchAgents that dotfiles.sh installs run `restore` at login
 # (local.tmux-persist-restore) and `save` every 5 minutes (local.tmux-persist-save).
-# Usage: tmux-persist            show listed sessions and their snapshot entries
+# Usage: tmux-persist            show those sessions and their snapshot entries
 #        tmux-persist save       refresh the snapshot from live Claude processes
-#        tmux-persist restore    recreate listed sessions that are not running
-# The list is host-local: one tmux session name per line in $STATE/sessions.
+#        tmux-persist restore    recreate snapshot sessions that are not running
+#        tmux-persist restart <name>...
+#                                restart the Claude in running sessions (e.g.
+#                                after an update), resuming the same conversations
+#        tmux-persist stale      sessions whose Claude predates the installed
+#                                version (shows "Restart to update"): tpr $(tps)
 set -euo pipefail
 
 STATE=${TMUX_PERSIST_STATE:-$HOME/.local/state/tmux-persist}
 SESSIONS_DIR=${TMUX_PERSIST_CLAUDE_SESSIONS:-$HOME/.claude/sessions}
-LAUNCH=${TMUX_PERSIST_LAUNCH:-claude --dangerously-skip-permissions --resume}
-LIST=$STATE/sessions
+# --model: `claude --resume` otherwise takes the model of the transcript's last
+# reply, which is Opus 5 after a refusal fallback even once /model switched back.
+LAUNCH=${TMUX_PERSIST_LAUNCH:-claude --dangerously-skip-permissions --model claude-opus-5-5 --resume}
+PATTERN='(*-r2v|adapt-clf)'
 SNAP=$STATE/snapshot  # name<TAB>cwd<TAB>sessionId
+SELF=${0:A}
 
 # launchd starts us with a bare PATH.
 path=(/opt/homebrew/bin /usr/local/bin $path)
-tmux_() { tmux ${TMUX_PERSIST_SOCKET:+-L $TMUX_PERSIST_SOCKET} "$@"; }
+tmux_() { tmux ${TMUX_PERSIST_SOCKET:+-L} ${TMUX_PERSIST_SOCKET:-} "$@"; }
 
-listed() { [[ -f $LIST ]] && grep -v '^[[:space:]]*\(#\|$\)' "$LIST" || true; }
+persisted() { [[ $1 == ${~PATTERN} ]]; }
 
 # True when <pid> is still the process that started at <procStart> (UTC), so a
 # pid reused after a reboot is not mistaken for the old Claude.
@@ -35,22 +42,51 @@ alive() {
     [[ $now == "$was" ]]
 }
 
-save() {
-    local -A want rows
-    local name f pid start tmux cwd id
-    for name in $(listed); do want[$name]=1; done
-    (( ${#want} )) || return 0
-    # Keep the last known entry for a session whose Claude is not running now.
-    [[ -f $SNAP ]] && while IFS=$'\t' read -r name cwd id; do
-        [[ -n ${want[$name]:-} ]] && rows[$name]="$cwd"$'\t'"$id"
-    done < "$SNAP"
-    for f in "$SESSIONS_DIR"/*.json(N); do
-        IFS=$'\t' read -r pid start tmux cwd id < <(
-            jq -r '[.pid, .procStart, .tmux // "", .cwd, .sessionId] | @tsv' "$f") || continue
-        name=${tmux%%:*}
-        [[ -n $name && -n ${want[$name]:-} ]] && alive "$pid" "$start" || continue
-        rows[$name]="$cwd"$'\t'"$id"
+# claudes: "name<TAB>pid<TAB>pane<TAB>cwd<TAB>sessionId<TAB>version" for each
+# live Claude in a tmux pane. The session file keeps the session name from Claude's start, so
+# the current name comes from the pane id, which survives a rename.
+claudes() {
+    local -A owner
+    local row f pid start tmux cwd id ver name
+    for row in ${(f)"$(tmux_ list-panes -a -F '#{pane_id} #{session_name}' 2>/dev/null || true)"}; do
+        owner[${row%% *}]=${row#* }
     done
+    for f in "$SESSIONS_DIR"/*.json(N); do
+        IFS=$'\t' read -r pid start tmux cwd id ver < <(
+            jq -r '[.pid, .procStart, .tmux // "", .cwd, .sessionId, .version // ""] | @tsv' "$f") || continue
+        [[ -n $tmux ]] && name=${owner[${tmux##*.}]:-} && [[ -n $name ]] || continue
+        alive "$pid" "$start" || continue
+        print -r -- "$name"$'\t'"$pid"$'\t'"${tmux##*.}"$'\t'"$cwd"$'\t'"$id"$'\t'"$ver"
+    done
+}
+
+# live <name>: "pid<TAB>pane<TAB>cwd<TAB>sessionId<TAB>version" for each live Claude in <name>.
+live() {
+    local name rest
+    claudes | while IFS=$'\t' read -r name rest; do
+        [[ $name == "$1" ]] || continue
+        print -r -- "$rest"
+    done
+}
+
+save() {
+    local -A rows
+    local -a open
+    local name pid pane cwd id ver
+    open=(${(f)"$(tmux_ list-sessions -F '#S' 2>/dev/null || true)"})
+    # No tmux server (e.g. at boot, before restore) says nothing about which
+    # sessions were closed, so the snapshot stays as it is.
+    (( ${#open} )) || return 0
+    # Keep the last known entry for a session that is still open but whose
+    # Claude is not running now; a session closed on purpose drops out.
+    [[ -f $SNAP ]] && while IFS=$'\t' read -r name cwd id; do
+        persisted "$name" && (( ${open[(Ie)$name]} )) || continue
+        rows[$name]="$cwd"$'\t'"$id"
+    done < "$SNAP"
+    while IFS=$'\t' read -r name pid pane cwd id ver; do
+        persisted "$name" || continue
+        rows[$name]="$cwd"$'\t'"$id"
+    done < <(claudes)
     mkdir -p "$STATE"
     for name in ${(ko)rows}; do print -r -- "$name"$'\t'"${rows[$name]}"; done > "$SNAP.tmp"
     mv "$SNAP.tmp" "$SNAP"
@@ -60,7 +96,7 @@ restore() {
     local name cwd id
     [[ -f $SNAP ]] || return 0
     while IFS=$'\t' read -r name cwd id; do
-        listed | grep -qxF -- "$name" || continue
+        persisted "$name" || continue
         tmux_ has-session -t "=$name" 2>/dev/null && continue
         [[ -d $cwd ]] || cwd=$HOME
         # Typed into the pane's shell, so exiting Claude leaves a shell behind.
@@ -70,12 +106,75 @@ restore() {
     done < "$SNAP"
 }
 
+# restart_pane <shell> <name> <pid> <pane> <cwd> <id>: same pane, window and
+# attached clients; only the pane's process is replaced, by a login <shell>.
+restart_pane() {
+    local shell=$1 name=$2 pid=$3 pane=$4 cwd=$5 id=$6 tries=0
+    [[ -d $cwd ]] || cwd=$HOME
+    # An explicit command, since a bare respawn reruns the pane's original one.
+    tmux_ respawn-pane -k -t "$pane" -c "$cwd" "exec ${(q)shell} -l"
+    # Two Claude processes must not share one transcript.
+    while kill -0 "$pid" 2>/dev/null; do
+        (( ++tries < 100 )) || { kill -9 "$pid" 2>/dev/null; break; }
+        sleep 0.1
+    done
+    tmux_ send-keys -t "$pane" "$LAUNCH $id" Enter
+    print -r -- "restarted $name ($pane)"
+}
+
+# restart <name>...: every Claude in the named sessions, in parallel. Nothing
+# restarts unless each session has one.
+restart() {
+    local name row pid pane cwd id ver v shell missing=0
+    local -a rows found env
+    for name in "$@"; do
+        found=("${(@f)$(live "$name")}")
+        if [[ -z ${found[1]} ]]; then
+            print -u2 "tmux-persist: no running Claude in session $name"; missing=1; continue
+        fi
+        for row in "${found[@]}"; do rows+=("$name"$'\t'"$row"); done
+    done
+    (( ! missing )) || exit 1
+    # Run from inside one of those Claudes (e.g. via `!`), killing its pane would
+    # kill us, so the tmux server reruns us outside the pane.
+    for row in "${rows[@]}"; do
+        IFS=$'\t' read -r name pid pane cwd id ver <<< "$row"
+        [[ $pane == "${TMUX_PANE:-}" ]] || continue
+        env=(TMUX_PANE=)
+        for v in ${(k)parameters[(I)TMUX_PERSIST_*]}; do env+=("$v=${(P)v}"); done
+        tmux_ run-shell -b "${(j: :)${(q)env}} ${(q)SELF} restart ${(j: :)${(q)@}}"
+        return
+    done
+    shell=$(tmux_ show -gv default-shell)
+    for row in "${rows[@]}"; do
+        IFS=$'\t' read -r name pid pane cwd id ver <<< "$row"
+        restart_pane "$shell" "$name" "$pid" "$pane" "$cwd" "$id" &
+    done
+    wait
+}
+
+# stale: each session with a Claude older than the installed one, the version
+# Claude Code's "Restart to update" refers to.
+stale() {
+    local name pid pane cwd id ver installed
+    installed=${TMUX_PERSIST_VERSION:-$(claude --version)}
+    installed=${installed%% *}  # "2.1.310 (Claude Code)"
+    claudes | while IFS=$'\t' read -r name pid pane cwd id ver; do
+        [[ -n $ver && $ver != "$installed" ]] && print -r -- "$name"
+    done | sort -u
+}
+
 case ${1:-} in
     save) save ;;
     restore) restore ;;
-    '') for name in $(listed); do
-            awk -F'\t' -v n="$name" '$1 == n { print; f = 1 } END { if (!f) print n "\t(no snapshot)" }' \
-                "$SNAP" 2>/dev/null || print -r -- "$name"$'\t(no snapshot)'
+    stale) stale ;;
+    restart) (( $# >= 2 )) || { print -u2 "usage: tmux-persist restart <session>..."; exit 2; }
+        restart "${@:2}" ;;
+    '') [[ -f $SNAP ]] && cat "$SNAP"
+        for name in ${(f)"$(tmux_ list-sessions -F '#S' 2>/dev/null || true)"}; do
+            persisted "$name" || continue
+            [[ -f $SNAP ]] && cut -f1 "$SNAP" | grep -qxF -- "$name" && continue
+            print -r -- "$name"$'\t(no snapshot)'
         done ;;
-    *) print -u2 "usage: tmux-persist [save|restore]"; exit 2 ;;
+    *) print -u2 "usage: tmux-persist [save|restore|stale|restart <session>...]"; exit 2 ;;
 esac

@@ -26,6 +26,9 @@ alias tk="tmux kill-session -t"
 alias tka="tmux kill-server"
 alias to='tmux new-session -A -s "$(basename $PWD)"'
 alias trs="tmux rename-session -t"
+alias tp="tmux-persist"           # *-r2v sessions + snapshot (tp save / tp restore)
+alias tpr="tmux-persist restart"  # restart the Claude in a session, same conversation: tpr <session>
+alias tps="tmux-persist stale"    # sessions showing "Restart to update": tpr $(tps)
 
 # =============================================================================
 # Python / uv

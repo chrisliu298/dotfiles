@@ -311,9 +311,9 @@ install_links() {
 
 # Login agents. Written (not symlinked) because launchd needs this host's
 # absolute paths. hidutil remaps reset at reboot, so one re-applies
-# shell/remap-keys; tmux sessions die with the machine, so the sessions listed
-# for shell/tmux-persist are restored at login and snapshotted every 5 minutes
-# (separate agents, so a session closed on purpose is not revived until reboot).
+# shell/remap-keys; tmux sessions die with the machine, so shell/tmux-persist
+# snapshots the *-r2v sessions every 5 minutes and restores them at login
+# (separate agents, so a session closed on purpose is not revived).
 install_launch_agents() {
     [[ "$(uname)" == Darwin ]] || return 0
     install_launch_agent local.remap-keys "<string>$HOME/.local/bin/remap-keys</string>"

@@ -77,6 +77,19 @@ _interview_prep_completion="$HOME/Developer/GitHub/interview-prep/completions/_i
 [[ -f "$_interview_prep_completion" ]] && source "$_interview_prep_completion"
 unset _interview_prep_completion
 
+# tmux-persist: subcommands, then live tmux sessions for `restart` (also via the tpr alias)
+_tmux-persist() {
+    local -a sessions
+    if (( CURRENT == 2 )); then
+        compadd save restore restart stale
+    elif [[ $words[2] == restart ]]; then
+        sessions=(${(f)"$(tmux list-sessions -F '#S' 2>/dev/null)"})
+        sessions=(${sessions:|words})  # each session once
+        compadd -a sessions
+    fi
+}
+compdef _tmux-persist tmux-persist
+
 # =============================================================================
 # Keybindings
 # =============================================================================
