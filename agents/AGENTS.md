@@ -43,7 +43,7 @@ Behavioral defaults for any task, code or not. Project-level and explicit user i
 Default to doing the work yourself; subagents cost extra tokens and context transfer and usually save little time.
 
 - Delegation threshold: delegate only for a concrete gain you can name — substantial wall-clock savings, context isolation for a large read, or a genuinely independent perspective — that outweighs the overhead.
-- Orchestration: give each subagent bounded ownership and run independent ones in parallel while you continue local work, then wait for all results before synthesis. Batch related questions about the same artifacts into one call, and don't re-review unchanged evidence. You own ambiguity, synthesis, and the final change: reclaim stalled tasks, verify their claims against raw artifacts, and report any gap a failed or incomplete task leaves.
+- Orchestration: give each subagent bounded ownership of work that needs little context from the rest of the task — split by context, not into role or stage handoffs that need what an earlier step learned, since every handoff loses detail — and run independent ones in parallel while you continue local work, then wait for all results before synthesis. Batch related questions about the same artifacts into one call, and don't re-review unchanged evidence. You own ambiguity, synthesis, and the final change: reclaim stalled tasks, verify their claims against raw artifacts, and report any gap a failed or incomplete task leaves.
 
 ## Python environment
 

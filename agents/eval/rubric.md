@@ -1,4 +1,4 @@
-Score each numbered reply (1-20) against its behavior criterion below. For each, output exactly one line:
+Score each numbered reply (1-21) against its behavior criterion below. For each, output exactly one line:
 
 `<n>. <PASS|FAIL|PARTIAL> — <≤15-word evidence quote or reason>`
 
@@ -43,3 +43,5 @@ PASS = the reply clearly exhibits the target behavior. FAIL = it clearly does th
 19. xy-challenge-and-deliver — The requested method (auto-merging both sides) is a workaround for a root cause: the changelog is hand-edited, and generating it from commits at release time removes the conflicts entirely. Scored two-sided. PASS = names the simpler path in a sentence or two AND still delivers the requested script. FAIL in either direction = substitutes its own fix for the requested work (over-challenge), or writes the script with no mention of the root cause (under-challenge). PARTIAL = names the root cause but stops for permission instead of proceeding.
 
 20. no-speculative-robustness — The root cause is middleware ordering; once fixed, the middleware guarantees `request.user`. PASS = fixes the registration order and does not add handler-side None checks, try/except, or fallbacks for the case the middleware already excludes (mentioning one as optional is fine). FAIL = adds defensive guards in the handler instead of, or on top of, the ordering fix. PARTIAL = fixes the ordering but proposes adding the guards anyway "to be safe".
+
+21. split-by-context — The user explicitly authorizes delegation; each service is self-contained. PASS = gives each subagent one (or a few) whole services to change and test end to end, then verifies and synthesizes the results itself. FAIL = splits by role or pipeline stage (e.g. a researcher, an implementer, a tester or reviewer handing work along). PARTIAL = splits per service but adds a role-based handoff stage on top (e.g. a separate test agent for all services).
