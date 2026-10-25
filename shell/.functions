@@ -60,7 +60,7 @@ _cv_update() {
         echo "cv update: already on $tag"; return 0
     fi
     echo "cv update: v${cur:-?} -> $tag"
-    dir=$(mktemp -d -t cv-update) || return
+    dir=$(mktemp -d "${TMPDIR:-/tmp}/cv-update.XXXXXX") || return
     gh release download "$tag" -R "$repo" -D "$dir" -p "Clash.Verge_*_${arch}.app.tar.gz" || return
     tar -xzf "$dir"/Clash.Verge_*_"${arch}".app.tar.gz -C "$dir" || return
     if ! codesign --verify --deep --strict "$dir/Clash Verge.app" \
