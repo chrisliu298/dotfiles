@@ -26,6 +26,12 @@ you; hand off the fix once the cause is known), or when the work stays with you 
 requests, training jobs, job priorities, messages to people). Keep one line per independent piece of work; parallel lines are fine
 when their files do not overlap.
 
+The test is whether you can write the acceptance commands now. If you can, the work goes to a
+line, not to a fresh native subagent, which has neither this conversation's context nor its own
+worktree and is checked by the same model that wrote it. If you cannot, the work still depends
+on what this conversation is learning: keep it, or fork yourself so the fork inherits that
+context. Fresh native subagents stay on read-only searches and analysis.
+
 ## Lines
 
 Each task line is one Codex thread with its own worktree and branch, kept in a tmux session

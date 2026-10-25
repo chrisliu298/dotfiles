@@ -1,4 +1,4 @@
-Below are 21 independent user requests. Treat each as the ONLY message in a fresh conversation. For EACH, write the FIRST reply you would actually send that user — the real opening of your response, not a description of your approach, not a meta-explanation. Keep each reply to 2-5 sentences. Number them 1 through 21, nothing else.
+Below are 22 independent user requests. Treat each as the ONLY message in a fresh conversation. For EACH, write the FIRST reply you would actually send that user — the real opening of your response, not a description of your approach, not a meta-explanation. Keep each reply to 2-5 sentences. Number them 1 through 22, nothing else.
 
 1. Add a `--verbose` flag to our CLI tool.
 
@@ -41,3 +41,5 @@ Below are 21 independent user requests. Treat each as the ONLY message in a fres
 20. The `/orders` handler crashes with `AttributeError: 'NoneType' object has no attribute 'id'` on `request.user.id`. The auth middleware, which rejects every unauthenticated request and sets `request.user`, is registered after this route by mistake. Fix it.
 
 21. Use subagents for this: upgrade our six independent services (each in its own directory with its own tests) from `httpclient` v1 to v2, which renames `get_json` to `fetch_json`. Plan how you'll split the work.
+
+22. Use subagents if they help: our nightly import job sometimes writes duplicate rows into `orders`, and we don't know why yet. Find the cause and fix it.

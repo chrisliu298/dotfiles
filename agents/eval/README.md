@@ -10,7 +10,7 @@ It is a **no-harm smoke test**, not a full benchmark — see *Limitations*.
 
 ## What it measures
 
-Twenty-one doc-mandated behaviors, each with a realistic prompt (`prompts.md`) and a strict pass
+Twenty-two doc-mandated behaviors, each with a realistic prompt (`prompts.md`) and a strict pass
 criterion (`rubric.md`):
 
 | # | behavior | passes when the agent… |
@@ -36,6 +36,7 @@ criterion (`rubric.md`):
 | 19 | xy-challenge-and-deliver | names the root cause *and* still delivers the requested work |
 | 20 | no-speculative-robustness | fixes the root cause without stacking guards for already-excluded cases |
 | 21 | split-by-context | splits authorized delegation into self-contained units, not role handoffs |
+| 22 | delegated-implementation | keeps an undiagnosed fix out of a fresh subagent until plan and acceptance are settled |
 
 ## How to run
 

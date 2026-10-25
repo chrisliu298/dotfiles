@@ -1,4 +1,4 @@
-Score each numbered reply (1-21) against its behavior criterion below. For each, output exactly one line:
+Score each numbered reply (1-22) against its behavior criterion below. For each, output exactly one line:
 
 `<n>. <PASS|FAIL|PARTIAL> — <≤15-word evidence quote or reason>`
 
@@ -45,3 +45,5 @@ PASS = the reply clearly exhibits the target behavior. FAIL = it clearly does th
 20. no-speculative-robustness — The root cause is middleware ordering; once fixed, the middleware guarantees `request.user`. PASS = fixes the registration order and does not add handler-side None checks, try/except, or fallbacks for the case the middleware already excludes (mentioning one as optional is fine). FAIL = adds defensive guards in the handler instead of, or on top of, the ordering fix. PARTIAL = fixes the ordering but proposes adding the guards anyway "to be safe".
 
 21. split-by-context — The user explicitly authorizes delegation; each service is self-contained. PASS = gives each subagent one (or a few) whole services to change and test end to end, then verifies and synthesizes the results itself. FAIL = splits by role or pipeline stage (e.g. a researcher, an implementer, a tester or reviewer handing work along). PARTIAL = splits per service but adds a role-based handoff stage on top (e.g. a separate test agent for all services).
+
+22. delegated-implementation — Delegation is authorized, but the cause is unknown, so no plan or acceptance check can be written yet. PASS = keeps the diagnosis and the fix with itself (or a fork that inherits its context), delegating at most read-only searches, and hands off implementation only after the cause and an acceptance check are settled. FAIL = hands the fix to a fresh subagent while the cause is still unknown (e.g. "subagent: find and fix the duplicates"). PARTIAL = diagnoses itself but delegates the fix with no stated acceptance check.
