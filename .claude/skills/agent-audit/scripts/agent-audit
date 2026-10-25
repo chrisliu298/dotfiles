@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+"""Read-only measurements of how Claude Code sessions spend their turns.
+
+Subcommands:
+  sessions    main sessions with title, time range and size
+  sources     what started each turn: user, peer session, schedule, own task receipt
+  traffic     SendMessage counts between sessions (sender title -> recipient)
+  delegation  subagents, skills, agent-team / cx use, subagents that edited files
+
+All counts come from ~/.claude/projects/*/*.jsonl (main sessions) and their
+<session>/subagents/*.jsonl. Nothing is written.
+"""
+import argparse
+import collections
+import datetime as dt
+import glob
+import json
+import os
+import re
+import sys
+
+ROOT = os.environ.get("AGENT_AUDIT_PROJECTS", os.path.expanduser("~/.claude/projects"))
+CX_ROOT = os.environ.get("AGENT_AUDIT_CX", os.path.expanduser("~/.local/share/cx"))
+SCRATCH = re.compile(r"^/(private/)?tmp/|/scratchpad/")
+FROM_NAME = re.compile(r'from-name="([^"]*)"')
+COMPACTION = ("This session is being continued", "Context handoff")
+
+SOURCES = ["user", "peer", "scheduled", "task-receipt", "compaction", "system"]
+
+
+def parse_day(s):
+    return dt.date.fromisoformat(s) if s else None
+
+
+def local_day(ts):
+    t = dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    return t.astimezone().date()
+
+
+def text_of(content):
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return " ".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+    return ""
+
+
+def is_tool_result(content):
+    return isinstance(content, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content)
+
+
+def main_sessions(project):
+    for d in sorted(glob.glob(os.path.join(ROOT, "*"))):
+        if project and project not in os.path.basename(d):
+            continue
+        for f in sorted(glob.glob(os.path.join(d, "*.jsonl"))):
+            yield f
+
+
+def records(path):
+    with open(path, errors="ignore") as fh:
+        for line in fh:
+            try:
+                yield json.loads(line)
+            except ValueError:
+                continue
+
+
+def scan(path):
+    """One pass over a main session: title, time range, and classified turn starters."""
+    title, first, last = None, None, None
+    cron_prompts, pending_meta = set(), []
+    events = []  # (day, source, sender)
+    for d in records(path):
+        if d.get("isSidechain"):
+            continue
+        if d.get("type") == "custom-title":
+            title = d.get("customTitle") or title
+            continue
+        ts = d.get("timestamp")
+        if ts:
+            first = first or ts
+            last = ts
+        att = d.get("attachment")
+        if isinstance(att, dict):
+            if att.get("type") == "session_cron_carry":
+                cron_prompts.update(t.get("prompt", "").strip() for t in att.get("tasks", []))
+            elif att.get("type") == "queued_command":
+                # Delivered mid-turn. Disjoint from the plain user records below.
+                kind = (att.get("origin") or {}).get("kind")
+                prompt = str(att.get("prompt", ""))
+                events.append((att.get("timestamp") or ts, *classify(kind, prompt)))
+            continue
+        if d.get("type") == "assistant":
+            for b in d.get("message", {}).get("content") or []:
+                if isinstance(b, dict) and b.get("name") == "CronCreate":
+                    cron_prompts.add(str((b.get("input") or {}).get("prompt", "")).strip())
+            continue
+        if d.get("type") != "user":
+            continue
+        content = d.get("message", {}).get("content")
+        if is_tool_result(content):
+            continue
+        text = text_of(content)
+        if not text or not ts:
+            continue
+        origin = d.get("origin")
+        kind = origin.get("kind") if isinstance(origin, dict) else None
+        if kind is None and d.get("isMeta"):
+            # Scheduled prompts are isMeta records whose text equals a cron prompt; the
+            # prompt set is only complete after the pass, so resolve these at the end.
+            pending_meta.append((ts, text.strip()))
+            continue
+        events.append((ts, *classify(kind, text)))
+    for ts, text in pending_meta:
+        events.append((ts, "scheduled" if text in cron_prompts else "system", None))
+    out = [(local_day(ts), src, sender) for ts, src, sender in events if ts]
+    return {"title": title, "first": first, "last": last, "events": out}
+
+
+def classify(kind, text):
+    if kind == "human":
+        return "user", None
+    if kind == "peer" or "<cross-session-message" in text[:400]:
+        m = FROM_NAME.search(text[:400])
+        return "peer", m.group(1) if m else None
+    if kind == "task-notification" or text.startswith("<task-notification>"):
+        return "task-receipt", None
+    if text.startswith(COMPACTION):
+        return "compaction", None
+    return "system", None
+
+
+def in_window(day, args):
+    return (not args.since or day >= args.since) and (not args.until or day <= args.until)
+
+
+def selected(args):
+    for f in main_sessions(args.project):
+        sid = os.path.basename(f)[:-6]
+        if args.session and not any(sid.startswith(s) for s in args.session):
+            continue
+        if os.path.getsize(f) == 0:
+            continue
+        info = scan(f)
+        if args.title and not re.search(args.title, info["title"] or ""):
+            continue
+        info["events"] = [e for e in info["events"] if in_window(e[0], args)]
+        if not info["events"] and (args.since or args.until):
+            continue
+        yield sid, f, info
+
+
+def cmd_sessions(args):
+    rows = []
+    for sid, f, info in selected(args):
+        c = collections.Counter(e[1] for e in info["events"])
+        rows.append({"session": sid[:8], "title": info["title"], "first": (info["first"] or "")[:16],
+                     "last": (info["last"] or "")[:16], "mb": os.path.getsize(f) // 2**20, **{s: c[s] for s in SOURCES}})
+    emit(args, rows, ["session", "title", "first", "last", "mb"] + SOURCES)
+
+
+def cmd_sources(args):
+    by = collections.defaultdict(collections.Counter)
+    senders = collections.Counter()
+    for sid, f, info in selected(args):
+        for day, src, sender in info["events"]:
+            key = str(day) if args.by == "day" else (info["title"] or sid[:8])
+            by[key][src] += 1
+            if src == "peer":
+                senders[sender or "?"] += 1
+    rows = [{"key": k, **{s: by[k][s] for s in SOURCES}} for k in sorted(by)]
+    emit(args, rows, ["key"] + SOURCES)
+    if not args.json and senders:
+        print("\npeer senders: " + ", ".join(f"{n} {s}" for s, n in senders.most_common()))
+
+
+def cmd_traffic(args):
+    pairs, chars = collections.Counter(), collections.Counter()
+    for sid, f, info in selected(args):
+        sender = info["title"] or sid[:8]
+        for d in records(f):
+            if d.get("type") != "assistant" or d.get("isSidechain"):
+                continue
+            ts = d.get("timestamp")
+            if not ts or not in_window(local_day(ts), args):
+                continue
+            for b in d.get("message", {}).get("content") or []:
+                if isinstance(b, dict) and b.get("name") == "SendMessage":
+                    inp = b.get("input") or {}
+                    k = (sender, str(inp.get("to")))
+                    pairs[k] += 1
+                    chars[k] += len(str(inp.get("message", "")))
+    rows = [{"from": a, "to": b, "messages": n, "chars": chars[(a, b)]} for (a, b), n in pairs.most_common()]
+    emit(args, rows, ["from", "to", "messages", "chars"])
+
+
+def cmd_delegation(args):
+    agents, skills, bash = collections.Counter(), collections.Counter(), collections.Counter()
+    writers, total_sub = 0, 0
+    patterns = {"agent-team": "agent-team", "cx start": r"\bcx start\b", "cx send": r"\bcx send\b"}
+    for sid, f, info in selected(args):
+        for d in records(f):
+            if d.get("type") != "assistant" or d.get("isSidechain"):
+                continue
+            ts = d.get("timestamp")
+            if not ts or not in_window(local_day(ts), args):
+                continue
+            for b in d.get("message", {}).get("content") or []:
+                if not isinstance(b, dict) or b.get("type") != "tool_use":
+                    continue
+                inp = b.get("input") or {}
+                if b.get("name") in ("Agent", "Task"):
+                    agents[inp.get("subagent_type") or "(default)"] += 1
+                elif b.get("name") == "Skill":
+                    skills[inp.get("skill")] += 1
+                elif b.get("name") == "Bash":
+                    for k, p in patterns.items():
+                        bash[k] += bool(re.search(p, inp.get("command", "")))
+        for sub in glob.glob(os.path.join(f[:-6], "subagents", "*.jsonl")):
+            first = next((d.get("timestamp") for d in records(sub) if d.get("timestamp")), None)
+            if not first or not in_window(local_day(first), args):
+                continue
+            total_sub += 1
+            writers += any(
+                isinstance(b, dict) and b.get("name") in ("Edit", "Write")
+                and not SCRATCH.search(str((b.get("input") or {}).get("file_path", "")))
+                for d in records(sub) if d.get("type") == "assistant"
+                for b in d.get("message", {}).get("content") or [])
+    rows = [{"metric": f"agent:{k}", "count": n} for k, n in agents.most_common()]
+    rows += [{"metric": f"skill:{k}", "count": n} for k, n in skills.most_common()]
+    rows += [{"metric": f"bash:{k}", "count": n} for k, n in bash.items()]
+    rows += [{"metric": "subagents", "count": total_sub}, {"metric": "subagents editing non-scratch files", "count": writers}]
+    for line in sorted(glob.glob(os.path.join(CX_ROOT, "*"))) if args.cx else []:
+        names = os.listdir(line) if os.path.isdir(line) else []
+        # ask-NNN.md.sent marks a relayed question; count each question once.
+        msgs, replies, asks = (sum(1 for x in names if re.fullmatch(rf"{k}-\d+\.md", x)) for k in ("msg", "reply", "ask"))
+        rows.append({"metric": f"cx:{os.path.basename(line)}", "count": f"msgs={msgs} replies={replies} asks={asks}"})
+    emit(args, rows, ["metric", "count"])
+
+
+def emit(args, rows, cols):
+    if args.json:
+        json.dump(rows, sys.stdout, ensure_ascii=False, indent=1, default=str)
+        print()
+        return
+    print("\t".join(cols))
+    for r in rows:
+        print("\t".join(str(r.get(c, "")) for c in cols))
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(prog="agent-audit", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("command", choices=["sessions", "sources", "traffic", "delegation"])
+    p.add_argument("--project", help="substring of the ~/.claude/projects directory name")
+    p.add_argument("--session", action="append", help="session id prefix (repeatable)")
+    p.add_argument("--title", help="regex on the session title (/rename)")
+    p.add_argument("--since", type=parse_day, help="YYYY-MM-DD, local time, inclusive")
+    p.add_argument("--until", type=parse_day, help="YYYY-MM-DD, local time, inclusive")
+    p.add_argument("--by", choices=["session", "day"], default="session", help="sources: group rows")
+    p.add_argument("--cx", action="store_true", help="delegation: add cx executor line stats")
+    p.add_argument("--json", action="store_true")
+    args = p.parse_args(argv)
+    {"sessions": cmd_sessions, "sources": cmd_sources, "traffic": cmd_traffic, "delegation": cmd_delegation}[args.command](args)
+
+
+if __name__ == "__main__":
+    main()
