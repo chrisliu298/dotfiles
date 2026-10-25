@@ -7,7 +7,7 @@ vim.g.colors_name = 'openai-dark'
 
 -- Palette (from Ghostty OpenAI Dark theme, with neutral UI surfaces)
 local c = {
-  bg           = '#000000',
+  bg           = '#0a0a0a',
   fg           = '#f2f2f2',
   cursor       = '#f2f2f2',
   selection    = '#303030',
