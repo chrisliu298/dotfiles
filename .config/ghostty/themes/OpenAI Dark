@@ -35,7 +35,7 @@ palette = 88=#3b2320
 palette = 107=#5f7d43
 palette = 167=#a8554a
 
-background = #0B0B0B
+background = #0a0a0a
 foreground = #f2f2f2
 selection-background = #303030
 selection-foreground = #ffffff

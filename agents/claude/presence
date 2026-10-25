@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+"""User presence shared by every agent session on this Mac.
+
+  presence                 print the current state
+  presence away [NOTE]     the user said they are leaving (NOTE: e.g. "回来约 22:00")
+  presence back            the user said they are back
+  presence ask TEXT        add a question for the user to this session's queue (asked when they are back)
+  presence questions [--all]  list this session's queued questions (--all: every session's)
+  presence resolved [ID..] drop asked or obsolete questions from this session's queue (no ID: all)
+  presence hook-prompt     UserPromptSubmit hook: a prompt the user typed marks them present
+  presence hook-ask        PreToolUse hook on AskUserQuestion: while the user is away, queue it and deny
+  presence hook-post       PostToolUse hook: once the user is back, remind the session of its queued questions
+
+State lives in ~/.claude/presence/state.json. Only an explicit `away` makes the user away; any prompt the
+user types afterwards, in any session, makes them present again. Prompts from agent-team reviewers
+(CODEX_REVIEW_SUBAGENT_ACTIVE=1) do not count.
+
+Questions are queued per session in ~/.claude/presence/questions/<session_id>.json, so each agent keeps its
+own list across compaction and asks it when the user is back: in the next prompt the user types to it, or
+after its next tool call once the user is back anywhere.
+"""
+import calendar, fcntl, glob, json, os, subprocess, sys, time
+
+STATE = os.path.expanduser("~/.claude/presence/state.json")
+QDIR = os.path.expanduser("~/.claude/presence/questions")
+# Prompts T3 Code sends by itself; everything else it records as turnOrigin "sdk" was typed by the user.
+T3_AUTO = ("[定时", "Context handoff", "Note: the T3 server", "This session is being continued")
+
+
+def now():
+    return time.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
+def load():
+    try:
+        return json.load(open(STATE))
+    except (OSError, ValueError):
+        return {"state": "present", "since": None}
+
+
+def save(s):
+    tmp = f"{STATE}.{os.getpid()}.tmp"
+    json.dump(s, open(tmp, "w"), ensure_ascii=False, indent=1)
+    os.replace(tmp, STATE)
+
+
+def qpath(sid):
+    return os.path.join(QDIR, f"{sid}.json")
+
+
+def qload(sid):
+    try:
+        return json.load(open(qpath(sid)))
+    except (OSError, ValueError):
+        return {"items": []}
+
+
+def qupdate(sid, change):
+    """Read-modify-write a session's queue under a lock, since parallel tool calls and their hooks hit the same
+    file. Writes only if `change` altered the queue; an emptied queue is removed. Returns (queue, change's result)."""
+    os.makedirs(QDIR, exist_ok=True)
+    with open(os.path.join(QDIR, ".lock"), "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        q = qload(sid)
+        before = json.dumps(q)
+        out = change(q)
+        if json.dumps(q) != before:
+            if q["items"]:
+                tmp = f"{qpath(sid)}.{os.getpid()}.tmp"
+                json.dump(q, open(tmp, "w"), ensure_ascii=False, indent=1)
+                os.replace(tmp, qpath(sid))
+            elif os.path.exists(qpath(sid)):
+                os.remove(qpath(sid))
+    return q, out
+
+
+def qadd(sid, entries, label=None):
+    """entries: (text, question) pairs; question is the AskUserQuestion text used to match it once asked.
+    A question already queued keeps its ID instead of being queued twice."""
+    def change(q):
+        if label:
+            q["label"] = label
+        q.setdefault("label", f"{os.path.basename(os.getcwd())}（{sid[:8]}）")
+        ids = []
+        for text, question in entries:
+            item = next((i for i in q["items"] if i["text"] == text), None)
+            if item is None:
+                item = {"id": max((i["id"] for i in q["items"]), default=0) + 1, "at": now(), "text": text, "question": question}
+                q["items"].append(item)
+            ids.append(item["id"])
+        return ids
+    return qupdate(sid, change)[1]
+
+
+def qlist(q):
+    return "\n".join(f"#{i['id']}（{i['at'][5:16].replace('T', ' ')}）{i['text']}" for i in q["items"])
+
+
+def qremind(q):
+    return (f"[presence] 这个会话有 {len(q['items'])} 个用户不在时记下的待问问题：\n{qlist(q)}\n"
+            "用户已经回来：在当前这步收尾后一起问他（离散选择用 AskUserQuestion，每次最多 4 个；开放问题写在回复里），"
+            "已经不需要问的直接说明。问完或作废的用 `~/.claude/presence/presence resolved <ID>` 清掉。")
+
+
+def own_sid():
+    sid = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    if not sid:
+        sys.exit("presence: 没有 CLAUDE_CODE_SESSION_ID，只能在 Claude Code 会话里记问题")
+    return sid
+
+
+def describe(s):
+    if s["state"] == "away":
+        note = f"，{s['note']}" if s.get("note") else ""
+        return f"用户不在（{s['since']} 起{note}）"
+    seen = f"，最近一次亲自发消息 {s['last_prompt']}（{s.get('last_session', '?')}）" if s.get("last_prompt") else ""
+    return f"用户在{seen}"
+
+
+def pending_summary():
+    queues = [json.load(open(f)) for f in sorted(glob.glob(os.path.join(QDIR, "*.json")))]
+    rows = [f"{q.get('label')} {len(q['items'])} 条" for q in queues]
+    return f"\n待问：{'；'.join(rows)}（presence questions --all 看全文）" if rows else ""
+
+
+def origin_rows(path):
+    """User prompt rows of a session transcript that carry turnOrigin (human / peer / scheduled / sdk /
+    task_notification), with their epoch time."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 2_000_000))
+            lines = f.read().decode("utf-8", "ignore").splitlines()[1:]
+    except OSError:
+        return []
+    rows = []
+    for line in lines:
+        if '"turnOrigin"' in line:
+            r = json.loads(line)
+            if r.get("type") == "user" and "turnOrigin" in r:
+                r["_t"] = calendar.timegm(time.strptime(r["timestamp"][:19], "%Y-%m-%dT%H:%M:%S"))
+                rows.append(r)
+    return rows
+
+
+def typed_by_user(r):
+    """CLI sessions record the user's prompts as human; T3 Code (sdk-ts) records them as sdk, alongside its own
+    handoff, restart and scheduled-task prompts."""
+    if r["turnOrigin"] == "human":
+        return True
+    c = r["message"].get("content")
+    text = c if isinstance(c, str) else " ".join(b.get("text", "") for b in c or [] if isinstance(b, dict))
+    return r["turnOrigin"] == "sdk" and r.get("entrypoint") == "sdk-ts" and not text.lstrip().startswith(T3_AUTO)
+
+
+def hook_prompt():
+    """The transcript records a prompt's turnOrigin only after this hook returns, so the check that it was
+    typed by the user runs in a detached `settle`; here we only drop what is recognisable from the text."""
+    event = json.load(sys.stdin)
+    prompt = str(event.get("prompt", "")).strip()
+    if os.environ.get("CODEX_REVIEW_SUBAGENT_ACTIVE") == "1" or prompt.startswith(("<cross-session-message", "<task-notification")):
+        return
+    path = event.get("transcript_path", "")
+    if any(r["turnOrigin"] == "scheduled" and str(r["message"].get("content", "")).strip() == prompt for r in origin_rows(path)):
+        return  # a recurring scheduled prompt that already fired in this session
+    sid = event.get("session_id") or "?"
+    title = event.get("session_title") or sid
+    subprocess.Popen([sys.executable, os.path.abspath(__file__), "settle", path, str(time.time() - 2), title, sid],
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    s = load()
+
+    def change(q):
+        if not q["items"]:
+            return False
+        q["label"] = event.get("session_title") or q.get("label")
+        if s["state"] == "away" or q.get("reminded", "") == s["since"]:
+            return False
+        q["reminded"] = s["since"]
+        return True
+    q, remind = qupdate(sid, change)
+    if s["state"] == "away":
+        note = f"，备注：{s['note']}" if s.get("note") else ""
+        own = f"\n本会话的待问清单：\n{qlist(q)}" if q["items"] else ""
+        print(f"[presence] 当前记录是用户不在（{s['since']} 起{note}）。如果这条消息是用户亲自发的，说明他回来了"
+              "（状态几秒内自动改回「在」）：先把本会话的待问清单和离开期间要他拍板的事一起问他，"
+              "并告诉他其他会话还攒着几条。如果是定时任务或其他 agent 发来的，照常按用户不在处理。"
+              f"{own}{pending_summary()}")
+    elif remind:
+        print(qremind(q))
+
+
+def settle(path, since, title, sid):
+    """Wait for the prompt's transcript row; mark the user present only if it was typed by them."""
+    for _ in range(30):
+        time.sleep(1)
+        rows = [r for r in origin_rows(path) if r["_t"] >= float(since)]
+        if rows:
+            break
+    else:
+        return
+    if not typed_by_user(rows[0]):
+        return
+    s = load()
+    s.update(last_prompt=now(), last_session=title)
+    if s["state"] == "away":
+        s.update(state="present", since=s["last_prompt"], note=None)
+    save(s)
+    qupdate(sid, lambda q: q["items"] and q.update(reminded=s["since"]))
+
+
+def hook_ask():
+    event = json.load(sys.stdin)
+    s = load()
+    if s["state"] != "away":
+        return
+    entries = []
+    for item in event.get("tool_input", {}).get("questions", []):
+        options = " / ".join(o.get("label", "") for o in item.get("options", []))
+        entries.append((f"{item.get('question', '')}（选项：{options}）", item.get("question", "")))
+    ids = qadd(event.get("session_id") or "?", entries, event.get("session_title"))
+    reason = (f"{describe(s)}。这些问题已记进本会话的待问清单（{' '.join(f'#{i}' for i in ids)}），"
+              "用户回来后会提醒你一起问。不要等用户：能按可逆默认推进的就推进，"
+              "先按某个默认推进了的，把该条换成带默认的版本：`~/.claude/presence/presence resolved <ID>` 后 "
+              "`~/.claude/presence/presence ask \"<问题>（已先按 X 推进，待确认）\"`；"
+              "没有安全默认的就停在那一步。"
+              "如果用户刚刚亲自在你的对话里发了消息，说明已经回来，运行 `~/.claude/presence/presence back` 后再问。")
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                             "permissionDecisionReason": reason}}, ensure_ascii=False))
+
+
+def hook_post():
+    """Remind once per return; questions re-asked verbatim with AskUserQuestion leave the queue."""
+    event = json.load(sys.stdin)
+    sid = event.get("session_id") or "?"
+    # A subagent shares its parent's session_id but cannot ask the user, so it must not consume the reminder.
+    if os.environ.get("CODEX_REVIEW_SUBAGENT_ACTIVE") == "1" or event.get("agent_id") or not os.path.exists(qpath(sid)):
+        return
+    s = load()
+
+    def change(q):
+        if event.get("tool_name") == "AskUserQuestion":
+            asked = {item.get("question") for item in event.get("tool_input", {}).get("questions", [])}
+            q["items"] = [i for i in q["items"] if i["question"] not in asked]
+        if q["items"] and s["state"] == "present" and q.get("reminded", "") != s["since"]:
+            q["reminded"] = s["since"]
+            return True
+    q, remind = qupdate(sid, change)
+    if remind:
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": qremind(q)}},
+                         ensure_ascii=False))
+
+
+def main(argv):
+    cmd = argv[0] if argv else "show"
+    if cmd == "hook-prompt":
+        return hook_prompt()
+    if cmd == "hook-ask":
+        return hook_ask()
+    if cmd == "hook-post":
+        return hook_post()
+    if cmd == "settle":
+        return settle(*argv[1:5])
+    if cmd == "ask":
+        if not argv[1:]:
+            sys.exit(__doc__)
+        ids = qadd(own_sid(), [(" ".join(argv[1:]), None)])
+        return print(f"已记入本会话待问清单 #{ids[0]}")
+    if cmd == "questions":
+        if argv[1:] == ["--all"]:
+            for f in sorted(glob.glob(os.path.join(QDIR, "*.json"))):
+                q = json.load(open(f))
+                print(f"== {q.get('label')}（{f}）\n{qlist(q)}")
+            return
+        return print(qlist(qload(own_sid())) or "本会话没有待问问题")
+    if cmd == "resolved":
+        drop = [a.lstrip("#") for a in argv[1:]]
+        if not all(d.isdigit() for d in drop):
+            sys.exit("用法：presence resolved [ID ...]（不给 ID 清掉本会话全部）")
+        drop = {int(d) for d in drop}
+        q, _ = qupdate(own_sid(), lambda q: q.update(items=[i for i in q["items"] if drop and i["id"] not in drop]))
+        return print(f"本会话还剩 {len(q['items'])} 个待问问题")
+    s = load()
+    if cmd == "away":
+        s.update(state="away", since=now(), note=" ".join(argv[1:]) or None)
+        save(s)
+    elif cmd == "back":
+        s.update(state="present", since=now(), note=None)
+        save(s)
+    elif cmd != "show":
+        sys.exit(__doc__)
+    print(describe(s) + pending_summary())
+
+
+if __name__ == "__main__":
+    try:
+        main(sys.argv[1:])
+    except Exception as e:  # a broken hook must never block a prompt or a question
+        if sys.argv[1:2] and sys.argv[1].startswith("hook-"):
+            print(f"[presence] hook error: {e}", file=sys.stderr)
+            sys.exit(0)
+        raise

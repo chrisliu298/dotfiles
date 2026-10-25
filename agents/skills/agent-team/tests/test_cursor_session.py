@@ -8,7 +8,7 @@ import time
 import pytest
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'scripts' / 'gemini-session.mjs'
+SCRIPT = Path(__file__).resolve().parents[1] / 'scripts' / 'cursor-session.mjs'
 
 
 def record(role, text):
@@ -29,7 +29,8 @@ def session(tmp_path):
     transcript = tmp_path / 'primary.jsonl'
     (tmp_path / 'transcript-paths.json').write_text(json.dumps([str(transcript)]))
     watcher = subprocess.Popen(['node', str(SCRIPT), 'watch', str(tmp_path)],
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               env=os.environ | {'AGENT_TEAM_CURSOR_UNDELIVERED_MS': '500'})
     try:
         yield tmp_path, transcript
         assert watcher.poll() is None
@@ -130,7 +131,7 @@ def supplement(directory, history):
                       record('assistant', 'Supplement included.')]
 
 
-def test_gemini_injected_user_records_do_not_hide_the_supplement(session):
+def test_cursor_injected_user_records_do_not_hide_the_supplement(session):
     directory, transcript = session
     history = supplement(directory, [record('user', 'Original.'), record('assistant', 'Previous answer.')])
     history += [record('user', INTERRUPTED), record('assistant', 'Already complete.'),
@@ -141,7 +142,7 @@ def test_gemini_injected_user_records_do_not_hide_the_supplement(session):
     assert (directory / 'last').read_text() == 'Supplement included.\n\nAlready complete.\n\nBackground job done.'
 
 
-def test_gemini_stream_crash_fails_the_pending_supplement(session):
+def test_cursor_stream_crash_fails_the_pending_supplement(session):
     directory, transcript = session
     history = supplement(directory, [record('user', 'Original.'), record('assistant', 'Previous answer.')])
     history += [record('user', NOTICE), record('assistant', 'Background job done.')]
@@ -154,3 +155,55 @@ def test_gemini_stream_crash_fails_the_pending_supplement(session):
     write(transcript, history + [{'type': 'turn_ended', 'status': 'success'}])
     until(lambda: (directory / 'done').read_text() == '2')
     assert not (directory / 'partial').exists()
+
+
+def pending(directory, history):
+    """Mark a supplement that Cursor holds as steering or queued, outside the transcript."""
+    write(directory / 'primary.jsonl', history + [{'type': 'turn_ended', 'status': 'success'}])
+    until(lambda: (directory / 'done').exists())
+    message = directory / 'message.txt'
+    message.write_text('补充信息\n')
+    subprocess.run(['node', str(SCRIPT), 'mark-send', str(directory), str(message)], check=True)
+    return history + [record('user', 'Second request.'), record('assistant', 'Partial work.')]
+
+
+def test_cursor_crash_before_the_supplement_joins_reports_it_undelivered(session):
+    directory, transcript = session
+    history = pending(directory, [record('user', 'Original.'), record('assistant', 'Previous answer.')])
+    write(transcript, history + [{'type': 'turn_ended', 'status': 'error', 'error': 'Connection stalled'}])
+    until(lambda: (directory / 'error').exists())
+    error = (directory / 'error').read_text()
+    assert 'Connection stalled' in error and 'not delivered' in error
+    # The marker stays, so wait does not resume the turn and silently drop the message.
+    assert (directory / 'latest-message.json').exists()
+    assert (directory / 'done').read_text() == '1'
+
+
+def test_cursor_crash_before_the_supplement_joins_waits_for_its_follow_up(session):
+    directory, transcript = session
+    history = pending(directory, [record('user', 'Original.'), record('assistant', 'Previous answer.')])
+    history += [{'type': 'turn_ended', 'status': 'error', 'error': 'Connection stalled'}]
+    write(transcript, history)
+    time.sleep(0.2)
+    # Cursor submits the queued message as a follow-up within the grace period.
+    history += [record('user', TIMESTAMP + '\n<user_query>\n补充信息\n</user_query>'), record('assistant', 'Follow-up answer.')]
+    write(transcript, history + [{'type': 'turn_ended', 'status': 'success'}])
+    until(lambda: (directory / 'done').read_text() == '2')
+    time.sleep(0.6)
+    assert not (directory / 'error').exists()
+    assert (directory / 'last').read_text() == 'Follow-up answer.'
+
+
+def test_cursor_turn_that_ended_before_the_supplement_is_never_replayed(session):
+    directory, transcript = session
+    history = pending(directory, [record('user', 'Original.'), record('assistant', 'Previous answer.')])
+    history += [{'type': 'turn_ended', 'status': 'success'}]
+    write(transcript, history)
+    time.sleep(0.2)
+    # The queued message runs as a follow-up; the turn it missed must not count afterwards.
+    history += [record('user', TIMESTAMP + '\n<user_query>\n补充信息\n</user_query>'), record('assistant', 'Follow-up answer.')]
+    write(transcript, history + [{'type': 'turn_ended', 'status': 'success'}])
+    until(lambda: (directory / 'done').read_text() == '2')
+    time.sleep(0.3)
+    assert (directory / 'done').read_text() == '2'
+    assert (directory / 'last').read_text() == 'Follow-up answer.'

@@ -1,0 +1,100 @@
+#!/bin/zsh
+# Push local conversation titles to their Remote Control sessions after an
+# account switch. A conversation started under one account and reconnected
+# under another is marked cross-account ("history-suppression" in its
+# transcript): Claude Code then names the new remote session with a random
+# "<id>-adjective-noun" title and never pushes /rename to it. This script reads
+# each marked transcript's latest bridge session and title, and sets that title
+# on the remote session through the endpoint Claude Code itself uses
+# (PUT /v1/code/sessions/<cse_id>), with the logged-in account's OAuth token.
+# Each reconnect of such a conversation also leaves its previous remote session
+# active, so the remote list keeps stale copies, often under the same title;
+# those are archived (POST /v1/code/sessions/<cse_id>/archive, as Claude Code
+# does) unless still connected or some transcript's latest bridge session.
+# Only bridge sessions owned by the current account are touched.
+# Usage: rc-title          archive superseded sessions, rename live (non-archived)
+#                          sessions whose title differs
+#        rc-title -n       show what would change, change nothing
+#        rc-title -a       include archived sessions
+#        rc-title -h       show this help
+set -euo pipefail
+
+PROJECTS=${RC_TITLE_PROJECTS:-$HOME/.claude/projects}
+API=${RC_TITLE_API:-https://api.anthropic.com}
+
+dry=0 archived=0
+while getopts :hna opt; do
+  case $opt in
+    n) dry=1 ;;
+    a) archived=1 ;;
+    h) sed -n '/^# Usage:/,/^set /{/^set /d;s/^# \{0,1\}//;p;}' ${0:A}; exit 0 ;;
+    *) print -u2 "rc-title: bad option -$OPTARG"; print -u2 "usage: rc-title [-n] [-a] [-h]"; exit 2 ;;
+  esac
+done
+
+account=$(jq -r '.oauthAccount.accountUuid // empty' ~/.claude.json)
+token=$(security find-generic-password -s 'Claude Code-credentials' -w |
+  jq -r '.claudeAiOauth.accessToken // empty')
+[[ -n $account && -n $token ]] || { print -u2 "rc-title: not logged in to Claude Code"; exit 1; }
+
+api() {  # api METHOD cse_id [json-body] -> prints body, returns 1 on non-200
+  local out code
+  out=$(curl -sS -X $1 "$API/v1/code/sessions/$2" \
+    -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+    -H 'anthropic-version: 2023-06-01' ${3:+--data} ${3:+"$3"} -w '\n%{http_code}')
+  code=${out##*$'\n'}
+  print -r -- "${out%$'\n'*}"
+  [[ $code == 200 ]] || { print -u2 "rc-title: $1 $2 -> HTTP $code"; return 1; }
+}
+
+session() { api GET $1 | jq -c '.session // .response_shape // .'; }
+
+# Every transcript's latest bridge session: a resumed or forked conversation may
+# still be on one that an older transcript shows as superseded.
+typeset -A latest
+for f in ${(f)"$(grep -rl '^{"type":"bridge-session"' "$PROJECTS" --include='*.jsonl' || true)"}; do
+  cse=$(grep '^{"type":"bridge-session"' "$f" | jq -rs 'map(.bridgeSessionId | select(. != "")) | last // empty')
+  [[ -z $cse ]] || latest[$cse]=1
+done
+
+changed=0 retired=0
+typeset -A seen
+files=(${(f)"$(grep -rl '^{"type":"history-suppression"' "$PROJECTS" --include='*.jsonl' || true)"})
+# Newest first: a resumed or forked conversation shares the bridge session of
+# the one it came from, and the transcript touched last holds the live title.
+for f in ${(f)"$( (( $#files )) && ls -t -- $files )"}; do
+  # Latest bridge session and title; a custom title wins over the AI title.
+  meta=$(grep -E '^\{"type":"(bridge-session|custom-title|ai-title)"' "$f" | jq -sc --arg a "$account" '
+    map(select(.type == "bridge-session")) as $b | {
+    bridge: ($b | last),
+    old: ($b | map(select(.ownerAccountUuid == $a) | .bridgeSessionId) | unique - [$b[-1].bridgeSessionId]),
+    title: ((map(select(.type == "custom-title")) | last | .customTitle)
+            // (map(select(.type == "ai-title")) | last | .aiTitle))}')
+  cse=$(jq -r '.bridge.bridgeSessionId // empty' <<<$meta)
+  owner=$(jq -r '.bridge.ownerAccountUuid // empty' <<<$meta)
+  title=$(jq -r '.title // empty' <<<$meta)
+
+  for old in ${(f)"$(jq -r '.old[]' <<<$meta)"}; do
+    [[ -z ${latest[$old]:-} && -z ${seen[$old]:-} ]] || continue
+    seen[$old]=1
+    remote=$(session $old) || continue
+    jq -e '.status != "archived" and .connection_status != "connected"' <<<$remote >/dev/null || continue
+    print -r -- "$old: archive superseded $(jq -r '.title // "<none>"' <<<$remote)"
+    (( dry )) && continue
+    api POST $old/archive '{}' >/dev/null && (( ++retired ))
+  done
+
+  [[ -n $cse && -n $title && $owner == "$account" && -z ${seen[$cse]:-} ]] || continue
+  seen[$cse]=1
+
+  remote=$(session $cse) || continue
+  state=$(jq -r '.status // empty' <<<$remote)
+  current=$(jq -r '.title // empty' <<<$remote)
+  [[ $current == "$title" ]] && continue
+  (( archived )) || [[ $state != archived ]] || continue
+
+  print -r -- "$cse ($state): ${current:-<none>} -> $title"
+  (( dry )) && continue
+  api PUT $cse "$(jq -nc --arg t "$title" '{title: $t}')" >/dev/null && (( ++changed ))
+done
+(( dry )) || print "rc-title: renamed $changed, archived $retired session(s)"

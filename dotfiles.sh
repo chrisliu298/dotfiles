@@ -15,6 +15,7 @@ LINKS=(
     "shell/tmux-persist:.local/bin/tmux-persist"
     "shell/codex-traex:.local/bin/codex-traex"
     "shell/cdswap:.local/bin/cdswap"
+    "shell/rc-title:.local/bin/rc-title"
     ".config/starship:.config/starship"
     # btop has no config include and rewrites its own config, so its live
     # ~/.config/btop/btop.conf is host-local (generated, outside git). Only the
@@ -28,8 +29,8 @@ LINKS=(
     "agents/AGENTS.md:.claude/CLAUDE.md"
     "agents/claude/keybindings.json:.claude/keybindings.json"
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
-    "agents/claude/opus-repin.sh:.claude/opus-repin.sh"
-    "agents/claude/bash-syntax-check.sh:.claude/bash-syntax-check.sh"
+    "agents/claude/lang-guard.py:.claude/lang-guard.py"
+    "agents/claude/presence:.claude/presence/presence"
     "agents/claude/themes/anthropic-dark.json:.claude/themes/anthropic-dark.json"
     "agents/claude/themes/anthropic-light.json:.claude/themes/anthropic-light.json"
     "agents/claude/themes/openai-dark.json:.claude/themes/openai-dark.json"
@@ -312,9 +313,9 @@ install_links() {
 
 # Login agents. Written (not symlinked) because launchd needs this host's
 # absolute paths. hidutil remaps reset at reboot, so one re-applies
-# shell/remap-keys; tmux sessions die with the machine, so the sessions listed
-# for shell/tmux-persist are restored at login and snapshotted every 5 minutes
-# (separate agents, so a session closed on purpose is not revived until reboot).
+# shell/remap-keys; tmux sessions die with the machine, so shell/tmux-persist
+# snapshots the *-r2v sessions every 5 minutes and restores them at login
+# (separate agents, so a session closed on purpose is not revived).
 install_launch_agents() {
     [[ "$(uname)" == Darwin ]] || return 0
     install_launch_agent local.remap-keys "<string>$HOME/.local/bin/remap-keys</string>"
