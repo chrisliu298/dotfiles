@@ -56,7 +56,11 @@ Write a bounded read-only assignment to a scratch file outside the repository:
 goal, relevant paths, constraints, expected deliverable, and conversation context.
 The deliverable can be an analysis, a research synthesis, a proposed plan, or a
 review. Preserve the user's requested task rather than turning every assignment
-into a code review. Backend tool capabilities still limit what can be executed.
+into a code review. For a review or an independent proposal, hand over the
+artifacts (code, request, outputs, data paths) and the question, not your own
+conclusion or candidate answer: a reviewer that sees your reasoning tends to
+confirm it. Ask for evidence you can check against the primary artifacts
+(paths, line numbers, commands and their outputs). Backend tool capabilities still limit what can be executed.
 Explicitly prohibit file and external-system changes. Native reviewer subagents
 may handle bounded parts under the same scope unless the user says otherwise.
 The reviewer owns its evidence and synthesis; a child failure matters when it

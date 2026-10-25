@@ -183,8 +183,9 @@ Hot update (build `hot.json` from `get-request-config`, change only
 round: the new config takes effect at the next Robust restart, in the same pods, without
 requeueing. It returns code 0 with no `[CONFIRM]`, logs one `robust_hot_update` timeline
 event, and `get-request-config` / `runs get` keep showing the old entrypoint — verify via the
-next round's `set -x` echo in the logs. It can't change guaranteed/unguaranteed quota. Read
-state back after every other change.
+next round's `set -x` echo in the logs. It can't change guaranteed/unguaranteed quota. The body
+also needs a fresh create precheck sid in `request_context.precheck_sid`, same as Submit steps
+1–2 (2026-10-25, d3c51d73). Read state back after every other change.
 
 ## Capacity, devboxes, data
 
