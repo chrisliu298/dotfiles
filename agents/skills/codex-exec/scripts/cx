@@ -21,7 +21,7 @@ self="${0:A}"
 skill="${0:A:h:h}"
 codex_cli="$HOME/.local/bin/codex"
 codex_home="${CODEX_HOME:-$HOME/.codex}"
-model=gpt-6-astra
+model=gpt-6.1-sol
 levels=(low medium high xhigh max)
 
 die() { print -u2 -- "cx: $*"; exit 1; }
@@ -127,7 +127,8 @@ busy() {
         | select(. == "task_started" or . == "task_complete" or . == "turn_aborted")) as $t (""; $t)' \
         "${files[@]}")" != (task_complete|turn_aborted) ]]
 }
-attached() { tmux display -p -t "$(pane_of "$1")" '#{session_attached}' 2>/dev/null || print 0; }
+# A pane that no longer exists makes tmux print nothing and still exit 0: count that as unattached.
+attached() { local n; n=$(tmux display -p -t "$(pane_of "$1")" '#{session_attached}' 2>/dev/null); print -r -- "${n:-0}"; }
 
 # Stop unless line $1's session may end: no turn running and nobody attached, or $2 is --force.
 check_idle() {
@@ -231,6 +232,7 @@ cmd_wait() {
         esac
         running "$name" || die "cx-$name closed before ${msg:t} was answered"
         screen "$d" | grep -q 'Trust this folder?' && die "Codex asks to trust the repository; answer it with cx attach $name"
+        screen "$d" | grep -q 'Hooks need review' && die "Codex asks to review new or changed hooks before starting; answer it with cx attach $name"
         (( SECONDS < deadline )) || { print -u2 "cx: timed out after ${timeout}s; ${msg:t} is still being worked on"; exit 124; }
         sleep 2
     done
