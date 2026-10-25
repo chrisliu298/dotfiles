@@ -54,6 +54,18 @@
       "Agent(statusline-setup)"
     ]
   },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [{ "type": "command", "command": "python3 ~/.claude/lang-guard.py post-tool" }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [{ "type": "command", "command": "python3 ~/.claude/lang-guard.py stop" }]
+      }
+    ]
+  },
   "deniedMcpServers": [
     { "serverName": "claude.ai Google Drive" },
     { "serverName": "claude.ai Google Calendar" },

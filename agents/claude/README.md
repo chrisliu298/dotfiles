@@ -6,6 +6,7 @@ Config for [Claude Code](https://claude.com/claude-code). Everything here target
 |------|--------------|-------|
 | `keybindings.json` | symlink | Custom key and chord bindings. |
 | `settings.json` | **merged** by `dotfiles.sh` | Merged onto the live file so keys Claude Code writes (e.g. `/effort`'s `modelSettings`) survive; repo values win and arrays are replaced whole, so a key deleted here must also be deleted from `~/.claude/settings.json`. `~/` is expanded to an absolute path, which Claude Code requires. `theme` is not set here; `shell/theme-apply` owns it (see below). |
+| `lang-guard.py` | symlink | Stop and PostToolUse hooks that keep interactive replies in Simplified Chinese: an English final reply is blocked once and rewritten, English narration before a tool call adds a reminder to the context. |
 | `statusline-command.sh` | symlink | Status line renderer. ANSI *named* colors only, so it follows the terminal palette — see below. |
 | `themes/anthropic-{dark,light}.json` | symlinks | Claude themes in Anthropic's brand palette, built on the ANSI variants so code syntax follows the terminal. |
 | `themes/openai-{dark,light}.json` | symlinks | Claude themes based on the built-in ANSI variants, with tuned text hierarchy, surfaces, and diff backgrounds. |
