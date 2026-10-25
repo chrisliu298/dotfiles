@@ -1,6 +1,6 @@
 ---
 name: agent-team
-description: Delegate read-only analysis, research, planning or review to the gpt (Codex), claude, gemini, muse, ds (DeepSeek) and pro (ChatGPT Pro) backends, alone or in parallel. Use when the user names one of them for such a task or asks for this skill; pro alone goes to the gpt-pro skill. Not for implementation.
+description: Delegate read-only analysis, research, planning or review to the gpt (Codex), claude, cursor (Cursor Agent on Gemini), muse, ds (DeepSeek) and pro (ChatGPT Pro) backends, alone or in parallel. Use when the user names one of them for such a task or asks for this skill; pro alone goes to the gpt-pro skill. Not for implementation.
 ---
 
 # Agent Team
@@ -19,8 +19,8 @@ use `--once` only for a request that needs no follow-ups.
 Read the user's message for backend names and assignments:
 
 - “让 Claude 审查” → `claude`.
-- “Claude 和 Gemini 并行独立审查” → `claude` and `gemini`, same assignment.
-- “GPT、Claude、Gemini、Muse、DeepSeek 都看一下” → `gpt`, `claude`, `gemini`, `muse`
+- “Claude 和 Cursor 并行独立审查” → `claude` and `cursor`, same assignment.
+- “GPT、Claude、Cursor、Muse、DeepSeek 都看一下” → `gpt`, `claude`, `cursor`, `muse`
   and `ds`, same assignment.
 - “也问问 Pro” / “ChatGPT Pro” alongside other backends → `pro`.
 - “Claude 看正确性，GPT 看测试” → `claude` and `gpt`, distinct assignments.
@@ -37,12 +37,12 @@ their contents, while the other backends receive the absolute paths to read.
 If no backend was chosen and the request does not identify one, ask which to use.
 An unspecified “subagent review” remains the caller's native subagent workflow.
 Always name backends by these ids, in prompts, reports and attribution alike:
-`gpt` is Codex CLI; `claude` is Claude Code; `gemini` is Cursor Agent on Gemini;
+`gpt` is Codex CLI; `claude` is Claude Code; `cursor` is Cursor Agent on Gemini;
 `muse` is Muse Code; `ds` is DeepSeek through Claude Code; `pro` is ChatGPT Pro
 through the gpt-pro relay. Product names describe only the underlying tool.
 
 Before dispatch, read only the references for the chosen backends:
-[`gpt`](references/gpt.md), [`claude`](references/claude.md), [`gemini`](references/gemini.md),
+[`gpt`](references/gpt.md), [`claude`](references/claude.md), [`cursor`](references/cursor.md),
 [`muse`](references/muse.md), [`ds`](references/ds.md), [`pro`](references/pro.md).
 Use `scripts/agent-team` beside this `SKILL.md`; resolve its actual installed
 location rather than assuming a particular agent's skill directory. It requires
@@ -68,8 +68,8 @@ From the authorized working directory:
 # helper is scripts/agent-team beside this SKILL.md.
 $helper backends
 session="$($helper start --backend claude < /tmp/review.md)"
-# Same assignment for gpt, gemini and muse, a distinct one for claude:
-$helper start --backend gpt --backend gemini --backend muse \
+# Same assignment for gpt, cursor and muse, a distinct one for claude:
+$helper start --backend gpt --backend cursor --backend muse \
   --backend claude=/tmp/claude-review.md < /tmp/review.md
 # pro receives the file contents; claude receives the path:
 $helper start --backend pro --backend claude --file src/main.py < /tmp/review.md
@@ -110,7 +110,7 @@ agreements, disagreements, and remaining gaps.
 
 ## Control and failure semantics
 
-- `send` returns JSON with `delivery`. `gemini` `confirmed` means steering activation
+- `send` returns JSON with `delivery`. `cursor` `confirmed` means steering activation
   or transcript receipt was confirmed, not that the message has joined the turn yet
   (steering waits for the next safe boundary, as on the other backends); `pro`
   `confirmed` means the relay acknowledged delivery into the running answer.
@@ -119,7 +119,7 @@ agreements, disagreements, and remaining gaps.
   resulting reply. Do not interrupt merely to add context.
 - A `pro` conversation accepts no follow-up once its answer finishes: `send` fails
   and says to start a new task that includes the answer and the new question.
-- `gemini` and `pro` `unconfirmed` return 124; the message may still be queued. Inspect it or
+- `cursor` and `pro` `unconfirmed` return 124; the message may still be queued. Inspect it or
   keep waiting, without automatically resending or restarting.
 - A failed `send` leaves that session's latest request failed. `wait` reports the
   failure instead of returning its previous reply; a subsequent successful send
@@ -129,6 +129,10 @@ agreements, disagreements, and remaining gaps.
   7200 for `pro`.
   Timeout returns 124 when all failures are timeouts; mixed failures return 1.
   Multi-session replies retain individual exit codes and diagnostics.
+- For `muse` and `cursor`, `wait` resumes a turn that ended in a transient network or
+  provider error by sending a continuation itself, at most twice per request, and
+  notes each on stderr. Do not also send "continue"; a failure it reports already
+  used those attempts.
 - `status` and `capture` are diagnostic. `input_ready=1` does not prove the model
   is idle. `interrupt` requests an urgent stop using the backend's native key;
   it does not guarantee background work was cancelled. Inspect before new work.

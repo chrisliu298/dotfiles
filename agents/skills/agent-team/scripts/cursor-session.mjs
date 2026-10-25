@@ -70,8 +70,15 @@ if (action === 'config') {
   // A removed marker means the watcher already saw this message finish.
   process.exit(!expected || received(snapshot(), expected) ? 0 : 1);
 } else if (action === 'watch') {
-  let done = 0;
+  let done = 0, undelivered = null;
   const seen = new Set();
+  // Cursor submits a message that missed a failed turn as a follow-up within seconds, if at all.
+  const grace = Number(process.env.AGENT_TEAM_CURSOR_UNDELIVERED_MS || 30000);
+  const failure = record => `Cursor turn ${record.status || 'ended without status'}${record.error ? `: ${record.error}` : ''}`;
+  const pending = () => {
+    try { return JSON.parse(readFileSync(join(dir, 'latest-message.json'), 'utf8')); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  };
   function poll() {
     const records = snapshot();
     const prefix = [], replies = [];
@@ -84,13 +91,15 @@ if (action === 'config') {
       }
       const key = hash([prefix, record]);
       if (seen.has(key)) continue;
-      let expected;
-      try { expected = JSON.parse(readFileSync(join(dir, 'latest-message.json'), 'utf8')); }
-      catch (error) { if (error.code !== 'ENOENT') throw error; }
-      if (expected && !received(prefix, expected)) continue;
+      const expected = pending();
       seen.add(key);
+      if (expected && !received(prefix, expected)) {
+        // The turn ended before the latest message joined it, so it never answers that message.
+        if (record.status !== 'success') undelivered = { id: expected.id, since: Date.now(), error: failure(record) };
+        continue;
+      }
       if (record.status !== 'success' || replies.length === 0) {
-        publish('error', `Cursor turn ${record.status || 'ended without status'}${record.error ? `: ${record.error}` : ''}${replies.length ? '' : ' without a complete response'}`);
+        publish('error', `${failure(record)}${replies.length ? '' : ' without a complete response'}`);
         // Text written before the failure may be complete, but nothing proves it.
         if (replies.length) publish('partial', replies.join('\n\n'));
         else rmSync(join(dir, 'partial'), { force: true });
@@ -105,11 +114,20 @@ if (action === 'config') {
         if (current.id === expected.id) rmSync(join(dir, 'latest-message.json'), { force: true });
       }
     }
+    if (undelivered) {
+      const current = pending();
+      if (!current || current.id !== undelivered.id || received(records, current)) undelivered = null;
+      else if (Date.now() - undelivered.since >= grace) {
+        // The marker stays: `wait` must not resume the turn and silently drop the message.
+        publish('error', `${undelivered.error} before the latest message joined the turn; it was not delivered, so resending it is safe`);
+        undelivered = null;
+      }
+    }
   }
   const timer = setInterval(() => {
     try { poll(); } catch (error) { publish('error', `Cursor transcript tracker failed: ${error.message}`); }
   }, 100);
   for (const signal of ['SIGTERM', 'SIGHUP', 'SIGINT']) process.on(signal, () => { clearInterval(timer); process.exit(0); });
 } else {
-  throw new Error('usage: gemini-session.mjs config|paths|mark-send|received|watch DIR [WORKSPACE|MESSAGE_FILE] [CONVERSATION]');
+  throw new Error('usage: cursor-session.mjs config|paths|mark-send|received|watch DIR [WORKSPACE|MESSAGE_FILE] [CONVERSATION]');
 }

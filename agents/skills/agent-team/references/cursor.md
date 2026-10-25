@@ -1,4 +1,4 @@
-# `gemini` backend
+# `cursor` backend
 
 Uses Cursor Agent (`cursor-agent`) with fixed `gemini-4-argon-high`, native Agent mode, and automatic
 `--trust` for the authorized working directory. Mode/model/effort flags are not
@@ -34,7 +34,14 @@ Cursor injects itself (steering continuations, background-task notices) neither
 start a new reply nor hide the latest message, so the reply spans them. A turn
 ending in error (e.g. `WritableIterable is closed`) fails `wait` with that error
 rather than leaving it to time out; any text written before it follows on stderr,
-marked unverified. Treat it as possibly incomplete. `interrupt`
+marked unverified. Treat it as possibly incomplete. Transient stream and provider
+errors (`WritableIterable is closed`, `Connection stalled`, `Provider Error`) are
+first resumed: `wait` sends a continuation and keeps waiting, at most twice per
+request, noting each on stderr; only a further failure is reported. A turn that
+fails before a steered or queued message joins it is not resumed: if Cursor does
+not submit that message as a follow-up within 30 seconds, `wait` fails saying it
+was not delivered, so resending it is safe. A turn that ended before the message
+joined never counts as its reply. `interrupt`
 sends Ctrl-C. Inspect status/pane before relying on cancellation of background work.
 
 On macOS, Cursor uses Keychain for login. `SecItemCopyMatching failed -50` with

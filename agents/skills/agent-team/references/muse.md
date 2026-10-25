@@ -12,8 +12,11 @@ profile such as `:read-only`, stalls the turn until `wait` times out. Read-only
 scope is an assignment instruction, not a permission boundary.
 
 `Stop` and `StopFailure` hooks passed through `-c hooks=...` record each finished
-or failed turn; `wait` reports a failed turn as an error. Muse runs hooks with a
-scrubbed environment, so the hook command carries the turn directory itself.
+or failed turn; `wait` reports a failed turn as an error. A transient network
+failure (`transport error`, `net-timeout`), which Muse has already retried itself,
+is instead resumed: `wait` sends a continuation and keeps waiting, at most twice
+per request, noting each on stderr. Muse runs hooks with a scrubbed environment,
+so the hook command carries the turn directory itself.
 
 `send` pastes the message and presses Enter; `submitted` does not prove
 consumption. Input sent during a turn is queued: Muse steers it into the running

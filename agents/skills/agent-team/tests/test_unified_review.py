@@ -58,7 +58,7 @@ elif action == '--once':
 elif action == 'wait':
     if os.environ.get('EMPTY_BACKEND') == backend: sys.exit(0)
     print('ANSWER:' + backend + ':' + args[0])
-elif action == 'send' and backend == 'gemini':
+elif action == 'send' and backend == 'cursor':
     print('delivery unconfirmed; do not resend automatically', file=sys.stderr)
     sys.exit(124)
 if os.environ.get('FAIL_BACKEND') == backend: sys.exit(7)
@@ -165,21 +165,21 @@ def test_all_backends_use_one_skill(unified):
     run, _ = unified
     backends = run('backends')
     assert all(item['available'] for item in json.loads(backends.stdout)['backends'])
-    outcome = run('--once', '--backend', 'claude', '--backend', 'gpt', '--backend', 'gemini', '--backend', 'muse',
+    outcome = run('--once', '--backend', 'claude', '--backend', 'gpt', '--backend', 'cursor', '--backend', 'muse',
                   '--backend', 'ds', '--backend', 'pro')
     assert outcome.returncode == 0, outcome.stderr
     replies = json.loads(outcome.stdout)['results']
-    assert [item['backend'] for item in replies] == ['claude', 'gpt', 'gemini', 'muse', 'ds', 'pro']
+    assert [item['backend'] for item in replies] == ['claude', 'gpt', 'cursor', 'muse', 'ds', 'pro']
     assert all(item['result'] == '结论🙂' for item in replies[:5]) and replies[5]['result'] == 'PRO ONCE'
 
 
-def test_batch_retains_each_failure_and_gemini_delivery_uncertainty(unified):
+def test_batch_retains_each_failure_and_cursor_delivery_uncertainty(unified):
     run, _ = unified
     outcome = run('--once', '--backend', 'claude', '--backend', 'gpt', extra_env={'FAIL_BACKEND': 'gpt'})
     assert outcome.returncode == 1
     replies = json.loads(outcome.stdout)['results']
     assert replies[0]['exit_code'] == 0 and replies[1]['exit_code'] == 7
-    sent = run('send', 'gemini-review-old', 'claude-review-old')
+    sent = run('send', 'cursor-review-old', 'claude-review-old')
     assert sent.returncode == 124
     replies = json.loads(sent.stdout)['results']
     assert replies[0]['delivery'] == 'unconfirmed' and replies[1]['delivery'] == 'submitted'
@@ -190,11 +190,11 @@ def test_per_instance_prompt_files_start_distinct_assignments_in_one_call(unifie
     (root / 'correctness.md').write_text('看正确性')
     (root / 'tests.md').write_text('看测试')
     outcome = run('start', '--backend', f'claude={root / "correctness.md"}', '--backend', 'gpt',
-                  '--backend', f'gemini={root / "tests.md"}', prompt='共享任务', extra_env={'EXPECTED_STARTS': '3'})
+                  '--backend', f'cursor={root / "tests.md"}', prompt='共享任务', extra_env={'EXPECTED_STARTS': '3'})
     assert outcome.returncode == 0, outcome.stderr
     calls = {call['backend']: call['prompt'] for call in
              map(json.loads, (root / 'calls.jsonl').read_text().splitlines())}
-    assert calls == {'claude': '看正确性', 'gpt': '共享任务', 'gemini': '看测试'}
+    assert calls == {'claude': '看正确性', 'gpt': '共享任务', 'cursor': '看测试'}
 
 
 def test_prompt_files_make_stdin_optional(unified):
@@ -225,18 +225,18 @@ def test_each_backend_runs_at_most_once_per_call(unified, action, backends):
 
 
 @pytest.mark.parametrize('options', [[], ['--backend', 'unknown'], ['--backend', 'gpt', '--effort', 'high'],
-                                   ['--backend', 'gpt', '--model', 'gpt-6-astra'],
-                                   ['--backend', 'gemini', '--mode', 'ask'], ['--backend', 'cursor'], ['--network', '--backend', 'gpt']])
+                                   ['--backend', 'gpt', '--model', 'gpt-6.1-sol'],
+                                   ['--backend', 'cursor', '--mode', 'ask'], ['--backend', 'gemini'], ['--network', '--backend', 'gpt']])
 def test_invalid_selection_dispatches_nothing(unified, options):
     run, root = unified
     assert run('start', *options).returncode == 2
     assert not (root / 'calls.jsonl').exists()
 
 
-def test_former_cursor_backend_names_its_replacement(unified):
+def test_former_gemini_backend_names_its_replacement(unified):
     run, _ = unified
-    outcome = run('start', '--backend', 'cursor')
-    assert outcome.returncode == 2 and 'renamed to gemini' in outcome.stderr
+    outcome = run('start', '--backend', 'gemini')
+    assert outcome.returncode == 2 and 'renamed to cursor' in outcome.stderr
 
 
 def test_recursion_and_duplicate_target_guard(unified):

@@ -14,7 +14,7 @@ message has already influenced the active turn. Use `wait` and inspect the reply
 for incorporation. `interrupt` sends Escape; already-backgrounded work may survive.
 
 The helper answers Claude Code's workspace trust dialog for the launch directory,
-as `gemini` and `muse` trust theirs; a dialog still showing after 10 seconds fails
+as `cursor` and `muse` trust theirs; a dialog still showing after 10 seconds fails
 `wait`. If any other startup or permission prompt blocks work, inspect `capture`
 and report the blocker without approving broader access automatically. One-shot
 mode uses `--no-session-persistence`.

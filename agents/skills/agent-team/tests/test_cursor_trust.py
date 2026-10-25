@@ -33,7 +33,7 @@ print(json.dumps({{'type': 'result', 'is_error': False, 'result': 'review comple
 @pytest.mark.parametrize('options', [[], ['--output-format', 'json']])
 def test_one_shot_trusts_authorized_workspace(cursor_backend, options):
     env, capture = cursor_backend
-    result = subprocess.run([str(SCRIPTS / 'review-subagent'), 'gemini', '--once', *options],
+    result = subprocess.run([str(SCRIPTS / 'review-subagent'), 'cursor', '--once', *options],
                             input='Read only this brief.', text=True,
                             capture_output=True, env=env, timeout=10)
     assert result.returncode == 0, result.stderr
