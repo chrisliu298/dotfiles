@@ -54,35 +54,6 @@
       "Agent(statusline-setup)"
     ]
   },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "bash ~/.claude/bash-syntax-check.sh" }]
-      }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "compact",
-        "hooks": [{ "type": "command", "command": "bash ~/.claude/opus-repin.sh session-start" }]
-      },
-      {
-        "matcher": "resume",
-        "hooks": [{ "type": "command", "command": "bash ~/.claude/opus-repin.sh session-resume" }]
-      }
-    ],
-    "PreModelSwitch": [
-      {
-        "hooks": [{ "type": "command", "command": "bash ~/.claude/opus-repin.sh pre-switch" }]
-      }
-    ],
-    "PostModelSwitch": [
-      {
-        "matcher": "claude-opus-5|claude-opus-5-5",
-        "hooks": [{ "type": "command", "command": "bash ~/.claude/opus-repin.sh post-switch" }]
-      }
-    ]
-  },
   "deniedMcpServers": [
     { "serverName": "claude.ai Google Drive" },
     { "serverName": "claude.ai Google Calendar" },

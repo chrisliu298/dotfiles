@@ -28,8 +28,6 @@ LINKS=(
     "agents/AGENTS.md:.claude/CLAUDE.md"
     "agents/claude/keybindings.json:.claude/keybindings.json"
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
-    "agents/claude/opus-repin.sh:.claude/opus-repin.sh"
-    "agents/claude/bash-syntax-check.sh:.claude/bash-syntax-check.sh"
     "agents/claude/themes/anthropic-dark.json:.claude/themes/anthropic-dark.json"
     "agents/claude/themes/anthropic-light.json:.claude/themes/anthropic-light.json"
     "agents/claude/themes/openai-dark.json:.claude/themes/openai-dark.json"
