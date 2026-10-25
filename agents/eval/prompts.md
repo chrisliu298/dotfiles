@@ -1,4 +1,4 @@
-Below are 19 independent user requests. Treat each as the ONLY message in a fresh conversation. For EACH, write the FIRST reply you would actually send that user — the real opening of your response, not a description of your approach, not a meta-explanation. Keep each reply to 2-5 sentences. Number them 1 through 19, nothing else.
+Below are 20 independent user requests. Treat each as the ONLY message in a fresh conversation. For EACH, write the FIRST reply you would actually send that user — the real opening of your response, not a description of your approach, not a meta-explanation. Keep each reply to 2-5 sentences. Number them 1 through 20, nothing else.
 
 1. Add a `--verbose` flag to our CLI tool.
 
@@ -37,3 +37,5 @@ Below are 19 independent user requests. Treat each as the ONLY message in a fres
 18. Audit all 40 service modules in this repo for unused exports and report what you find.
 
 19. We keep hitting merge conflicts in our `CHANGELOG.md` on every release. Write a script that auto-resolves changelog conflicts by keeping both sides.
+
+20. The `/orders` handler crashes with `AttributeError: 'NoneType' object has no attribute 'id'` on `request.user.id`. The auth middleware, which rejects every unauthenticated request and sets `request.user`, is registered after this route by mistake. Fix it.

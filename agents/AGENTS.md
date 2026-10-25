@@ -31,6 +31,7 @@ Behavioral defaults for any task, code or not. Project-level and explicit user i
 ## Code
 
 - Durable over expedient: prefer the structurally correct fix, not a time-saving hack. Durable means correct, not bigger.
+- No speculative robustness: validate untrusted input once at the boundary that owns it, then trust typed values inward. Don't add branches, retries, or guards for races or edge cases you can't name a concrete, plausible failure for; mention the case and its cost in the report instead of silently widening scope.
 - Taste: rework anything chaotic, redundant, convoluted, or inconsistent — but never as a side effect of an unrelated fix.
 - Surgical cleanup: remove only the imports/variables/functions your change orphaned. Don't delete pre-existing dead code — mention it.
 - Preserve sources: edit, copy, or fetch with curl/wget instead of reconstructing. Regenerate only when requested, required by the canonical workflow, or the source can't safely be preserved.
