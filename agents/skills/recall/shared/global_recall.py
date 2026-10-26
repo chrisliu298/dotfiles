@@ -43,12 +43,13 @@ def run_source(source: str, args: list[str]) -> dict:
 
 
 def search(query: str | list[str], cwd: str, sources: list[str], limit: int, roles: str = "both",
-           since: str | None = None, until: str | None = None) -> dict:
+           since: str | None = None, until: str | None = None, project: str | None = None,
+           session: str | None = None) -> dict:
     queries = list(dict.fromkeys([query] if isinstance(query, str) else query))
     command = ["search", "--cwd", cwd, "--limit", str(limit), "--roles", roles]
     for value in queries:
         command.extend(["--query", value])
-    for flag, value in (("--since", since), ("--until", until)):
+    for flag, value in (("--since", since), ("--until", until), ("--project", project), ("--session", session)):
         if value:
             command.extend([flag, value])
     commands = {source: command for source in sources}
@@ -114,6 +115,8 @@ def main(argv: list[str] | None = None) -> int:
     find.add_argument("--roles", choices=("both", "user", "assistant"), default="both")
     find.add_argument("--since", type=date.fromisoformat, help="Inclusive message date YYYY-MM-DD")
     find.add_argument("--until", type=date.fromisoformat, help="Inclusive message date YYYY-MM-DD")
+    find.add_argument("--project", help="Case-insensitive substring of the session's working directory")
+    find.add_argument("--session", help="Search only inside sessions whose id starts with this prefix")
     context = commands.add_parser("show")
     context.add_argument("--offset", type=int, default=0, help="Character offset in the anchor message")
     context.add_argument("--before", type=int, choices=range(21), default=3)
@@ -137,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         result = search(args.query, args.cwd, sources, args.limit, args.roles,
                         args.since.isoformat() if args.since else None,
-                        args.until.isoformat() if args.until else None)
+                        args.until.isoformat() if args.until else None, args.project, args.session)
     else:
         result = show(args.source, args)
     print(json.dumps(result, indent=2, ensure_ascii=False))

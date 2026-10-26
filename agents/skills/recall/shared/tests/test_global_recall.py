@@ -70,6 +70,25 @@ class GlobalRecallTests(unittest.TestCase):
                 self.assertEqual(result["candidates"][0]["evidence"][0]["session"], "fixture")
                 self.assertEqual(result["sources"]["claude"]["coverage"]["messages_searched"], 1)
 
+    def test_real_worker_returns_title_and_applies_project_filter(self) -> None:
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, cwd in (("demo", "/work/dotfiles"), ("other", "/work/other")):
+                project = root / "claude" / "projects" / name
+                project.mkdir(parents=True)
+                records = [{"type": "mode", "mode": "normal"},
+                           {"type": "user", "timestamp": "2026-09-01T00:00:00Z", "cwd": cwd,
+                            "message": {"content": "orchard retry budget seven"}},
+                           {"type": "ai-title", "aiTitle": f"Retry policy {name}"}]
+                (project / f"{name}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+            with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(root / "claude"),
+                                              "RECALL_CACHE_DIR": str(root / "cache")}):
+                result = recall.search(["retry budget"], directory, ["claude"], 5, project="DOTFILES")
+        self.assertEqual([c["title"] for c in result["candidates"]], ["Retry policy demo"])
+        self.assertEqual(result["candidates"][0]["opening"], "orchard retry budget seven")
+
     def test_other_source_is_explicit(self) -> None:
         with mock.patch.object(recall, "run_source", side_effect=lambda source, _: hit(source)) as run:
             result = self.invoke("--agent", "codex", "--source", "other")

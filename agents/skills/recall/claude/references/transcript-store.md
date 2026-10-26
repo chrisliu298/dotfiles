@@ -39,6 +39,11 @@ sessions, not one.
 Seen `type` values: `user`, `assistant`, `attachment`, `system`, `permission-mode`, `mode`,
 `ai-title`, `last-prompt`, `file-history-snapshot`, `queue-operation`.
 
+Session titles come from `ai-title` (`aiTitle`, regenerated as the session goes) and
+`custom-title` (`customTitle`, a user `/rename`); `session_title()` takes the latest rename, else
+the latest generated title. Codex thread names live in `~/.codex/session_index.jsonl`
+(`id`, `thread_name`; later rows are renames).
+
 - **`isSidechain: true`** marks subagent/sidechain branches — parallel exploration, not the main
   thread. Filtered out of the corpus.
 - Only `type` ∈ {`user`, `assistant`} carry searchable turns. Message content is `message.content`:

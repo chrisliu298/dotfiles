@@ -168,6 +168,24 @@ def session_root() -> Path:
     return (codex_home / "sessions").resolve()
 
 
+def thread_titles(root: Path) -> dict[str, str]:
+    """Thread names from Codex's session_index.jsonl beside the sessions root; later rows are
+    renames and win. A missing index or malformed row yields no title, never an error."""
+    titles = {}
+    try:
+        lines = (root.parent / "session_index.jsonl").read_text(errors="replace").splitlines()
+    except OSError:
+        return titles
+    for line in lines:
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict) and isinstance(row.get("id"), str) and isinstance(row.get("thread_name"), str):
+            titles[row["id"]] = redact(row["thread_name"].strip())[0]
+    return titles
+
+
 def current_session_id(explicit: str | None = None) -> str:
     return explicit or os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID") or ""
 

@@ -57,6 +57,53 @@ class RetrievalTests(unittest.TestCase):
         result = r.retrieve(rows, ["retry budget"], limit=2)
         self.assertEqual({c["session"] for c in result["candidates"]}, {"a", "b"})
 
+    def test_session_fill_finds_description_spread_across_a_session(self):
+        rows = [row("a", "Why is the orchard dashboard slow?"),
+                row("a", "unrelated filler", 2, "assistant"), row("a", "more filler", 3),
+                row("a", "unrelated filler again", 4, "assistant"),
+                row("a", "The nightly websocket reconnect was the cause.", 5, "assistant"),
+                row("b", "orchard pricing notes")]
+        result = r.retrieve(rows, ["orchard dashboard slow nightly websocket reconnect"])
+        self.assertEqual(result["candidates"][0]["session"], "a")
+        self.assertEqual(result["candidates"][0]["match"], "session")
+        self.assertEqual({e["line"] for e in result["candidates"][0]["evidence"]}, {1, 5})
+
+    def test_session_fill_accepts_conversational_cjk_description(self):
+        rows = [row("a", "看下多账号切换工具现在是自动还是手动"), row("a", "无关内容", 2, "assistant"),
+                row("a", "无关", 3), row("a", "其他", 4, "assistant"),
+                row("a", "已经打开自动切换", 5, "assistant"), row("b", "午饭吃什么")]
+        result = r.retrieve(rows, ["之前问过多账号切换那个工具到底是自动换号还是要我手动换，后来让你直接打开了"])
+        self.assertEqual([c["session"] for c in result["candidates"]], ["a"])
+
+    def test_message_matches_rank_before_session_fill(self):
+        rows = [row("a", "orchard dashboard"), row("a", "filler", 2), row("a", "filler", 3),
+                row("a", "filler", 4), row("a", "nightly websocket", 5),
+                row("c", "orchard dashboard nightly websocket")]
+        candidates = r.retrieve(rows, ["orchard dashboard nightly websocket"])["candidates"]
+        self.assertEqual([(c["session"], c["match"]) for c in candidates], [("c", "message"), ("a", "session")])
+
+    def test_session_fill_counts_title_terms(self):
+        rows = [dict(row("a", "it keeps timing out"), title="Orchard websocket outage"),
+                dict(row("b", "lunch plans"), title="Weekend")]
+        candidates = r.retrieve(rows, ["orchard websocket timing"])["candidates"]
+        self.assertEqual([c["session"] for c in candidates], ["a"])
+
+    def test_candidates_carry_title_and_opening(self):
+        rows = [row("a", "Some setup question", 1),
+                dict(row("a", "retry budget is seven", 2, "assistant"), title="Retry policy")]
+        candidate = r.retrieve(rows, ["retry budget"])["candidates"][0]
+        self.assertEqual(candidate["title"], "Retry policy")
+        self.assertEqual(candidate["opening"], "Some setup question")
+
+    def test_project_and_session_filters(self):
+        rows = [dict(row("a1", "retry budget"), project="/Users/me/dotfiles"),
+                dict(row("b2", "retry budget"), project="/Users/me/other-repo")]
+        found = r.retrieve(rows, ["retry budget"], project="DOTFILES")["candidates"]
+        self.assertEqual([c["session"] for c in found], ["a1"])
+        found = r.retrieve(rows, ["retry budget"], session="b")
+        self.assertEqual([c["session"] for c in found["candidates"]], ["b2"])
+        self.assertEqual(found["coverage"]["session"], "b")
+
     def test_excerpt_is_centered_on_match(self):
         text = "preface " * 200 + "unique_marker is 42" + " tail" * 200
         self.assertIn("unique_marker", r.excerpt(text, ["unique_marker"]))

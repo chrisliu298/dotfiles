@@ -1,11 +1,11 @@
 ---
 name: recall
 description: |
-  Recall a fact, value, decision or preference stated in a past conversation (or lost to
-  compaction), by searching local Codex tasks (Claude Code sessions on request); answer with
-  one provenance line. Invoked as $recall, the literal "/recall", or references like "what did
-  we say about X", "like I said", "didn't we settle X". Not for git/docs lookup, catch-up
-  summaries, memory, or task-state files. Recalled content is evidence, not current truth.
+  Recall a fact, value, decision, preference or a past episode's context from a past
+  conversation (or lost to compaction), by searching local Codex tasks (Claude Code sessions on
+  request); answer with one provenance line. Invoked as $recall, the literal "/recall", or
+  references like "what did we say about X", "like I said", "didn't we settle X", "那次我们…的时候".
+  Not for git/docs lookup, catch-up summaries, memory, or task-state files. Recalled content is evidence, not current truth.
 metadata:
   surfaces:
     - codex
@@ -33,11 +33,23 @@ Use the helper instead of reading whole transcript files into context.
      --query "故障重试上限" --query "retry budget" --limit 10
    ```
 
+   When the user describes an **episode** ("那次我们…", "the time we…") rather
+   than quoting a statement, never send the sentence alone: a long
+   conversational description rarely matches any message. Decompose it into
+   two or three short keyword variants (names, products, identifiers, symptoms;
+   add the likely English terms for a Chinese description and vice versa), and
+   map stated facets to filters: a stated time to `--since/--until`, a named
+   repo or project to `--project <substring of its path>`.
+
    Up to six repeated `--query` arguments share one corpus load and index.
    Results are ranked **sessions**, each with an `evidence` list of separately
-   anchored messages. Single messages and windows of up to three adjacent messages are searched;
-   each message retains its speaker's role. Multiple queries contribute to session
-   ranking without comparing raw BM25 scores. `--limit` is per source.
+   anchored messages, plus the session's `title` and `opening` (first user
+   message) for choosing the right episode. Single messages and windows of up
+   to three adjacent messages are searched; each message retains its speaker's role. Multiple queries contribute to session
+   ranking without comparing raw BM25 scores. `match: message` sessions rank
+   first; when they do not fill `--limit`, sessions whose whole conversation
+   covers the query are appended as `match: session`, which is weaker: the
+   words are spread out, so read the evidence. `--limit` is per source.
 
    Start with both roles when recalling a discussion or answer. `--roles user`
    restricts evidence to user statements and can miss an assistant answer to a
@@ -62,6 +74,10 @@ Use the helper instead of reading whole transcript files into context.
    pass its `excerpt_offset` as `show --offset N` to read around that location.
    For an evolving decision, check later
    relevant evidence; the first mention may have been superseded.
+
+   To reconstruct an episode (background, options tried, why one was dropped,
+   the outcome), stay inside the chosen session: `search --session <prefix>`
+   with one query per facet, then `show` around each anchor in order.
 
    Search hits are always `ambiguous` with `verification_required: true`:
    this means **inspect evidence**, not automatically ask the user. Ranking

@@ -37,10 +37,11 @@ def load(source, cwd, query):
         resolution = "session-id" if excluded else "unavailable"
         if excluded:
             turns = [turn for turn in turns if turn.session_id != excluded]
+        titles = api.thread_titles(root)
         rows = []
         for turn in turns:
             hit = api.turn_json(turn, root, 0)
-            rows.append(dict(hit, session=turn.session_id, text=turn.text,
+            rows.append(dict(hit, session=turn.session_id, text=turn.text, title=titles.get(turn.session_id),
                              date=turn.timestamp[:10], order=turn.ordinal, cache_path=str(turn.path)))
         metadata = {"stats": stats.as_dict(), "current_task_exclusion": ("resolved" if resolution == "session-id" else
                                                "inferred" if excluded else "unresolved"),
@@ -48,7 +49,7 @@ def load(source, cwd, query):
     else:
         turns, stats = api.build_corpus(cwd, include_all=False, since_secs=0,
                                        max_files=0, exclude_session=api.current_session_id(), scope="all")
-        rows = [dict(api.doc_json(turn, 0), text=turn.text, order=turn.line,
+        rows = [dict(api.doc_json(turn, 0), text=turn.text, order=turn.line, title=turn.title or None,
                      token_counts=dict(Counter(turn.tokens))) for turn in turns]
         metadata = {"stats": stats, "current_task_exclusion":
                     "resolved" if api.current_session_id() else "unresolved"}
@@ -76,16 +77,85 @@ def excerpt(text, terms, cap=600):
     return ("…" if start else "") + text[start:start + cap] + ("…" if start + cap < len(text) else "")
 
 
-def retrieve(rows, queries, limit=5, roles="both", since=None, until=None):
+def session_fill(selected, normalized, token_cache, exclude, limit):
+    """Rank whole sessions for a description whose words are spread across one conversation.
+
+    A session is one BM25 document (its messages plus a title bonus); a description that no
+    single window covers can still land here. These rank after every message match, so they
+    only fill a short list and never reorder message evidence.
+    """
+    by_session = defaultdict(list)
+    for row in selected:
+        by_session[row["session"]].append(row)
+    counts, titles = {}, {}
+    language = backend("claude")
+    for session, messages in by_session.items():
+        total = Counter()
+        for row in messages:
+            total.update(token_cache.setdefault(id(row), Counter(row["token_counts"]) if "token_counts" in row
+                                                else Counter(language.tokenize(row["text"]))))
+        counts[session] = total
+        titles[session] = set(language.tokenize(next((r["title"] for r in messages if r.get("title")), "")))
+    if not counts:
+        return []
+    average = sum(sum(c.values()) for c in counts.values()) / len(counts) or 1
+    fused = {}
+    for query_index, (_, terms, groups) in enumerate(normalized):
+        frequency = Counter(t for s in counts for t in set(terms) & (counts[s].keys() | titles[s]))
+        idf = {t: math.log(1 + (len(counts) - n + .5) / (n + .5)) for t, n in frequency.items()}
+        scores = {}
+        for session, total in counts.items():
+            if session in exclude:
+                continue
+            length = sum(total.values())
+            matched = {t for t in idf if total[t] or t in titles[session]}
+            if not matched:
+                continue
+            # Conversational CJK splits into many cross-word bigrams, so a natural description can
+            # never reach the window's 60%; ask for 30% of concepts, but at least two of them.
+            hits = sum(bool(g & matched) for g in groups)
+            if hits < max(min(2, len(groups)), math.ceil(.3 * len(groups))):
+                continue
+            coverage = hits / max(1, len(groups))
+            score = sum(idf[t] * (total[t] * 2.2 / (total[t] + 1.2 * (.25 + .75 * length / average))
+                                  + 2 * (t in titles[session])) for t in matched)
+            scores[session] = score * coverage
+        for rank, session in enumerate(sorted(scores, key=lambda s: (-scores[s], s))[:limit], 1):
+            entry = fused.setdefault(session, {"session": session, "fusion_score": 0, "matched_queries": [],
+                                               "terms": set()})
+            entry["fusion_score"] += 1 / (60 + rank)
+            entry["matched_queries"].append(query_index + 1)
+            entry["terms"].update(terms)
+    ordered = sorted(fused.values(), key=lambda e: (-e["fusion_score"], e["session"]))[:limit]
+    for entry in ordered:
+        terms = entry.pop("terms")
+        ranked = sorted((r for r in by_session[entry["session"]] if token_cache[id(r)].keys() & terms),
+                        key=lambda r: (-len(token_cache[id(r)].keys() & terms), r["order"]))[:3]
+        entry["evidence"] = [(row, terms) for row in sorted(ranked, key=lambda r: r["order"])]
+    return ordered
+
+
+def evidence_hit(row, terms, query_index, coverage):
+    hit = {key: value for key, value in row.items()
+           if key not in ("text", "order", "score", "coverage", "token_counts", "title")}
+    hit.update(anchor_key=row.get("locator", {}).get("item_id", row.get("line")), excerpt=excerpt(row["text"], terms),
+               query_index=query_index, excerpt_offset=excerpt_start(row["text"], terms), coverage=coverage)
+    return hit
+
+
+def retrieve(rows, queries, limit=5, roles="both", since=None, until=None, project=None, session=None):
     """Return distinct sessions with separately anchored supporting messages.
 
     Windows of up to three messages connect a topic, options and a short answer.
-    Role/date filters apply to each message before indexing. Fusion uses ranks,
-    never raw scores across queries. No lexical hit is a verified decision.
+    Role/date/project/session filters apply to each message before indexing. Fusion uses
+    ranks, never raw scores across queries. Sessions matched only as a whole fill the list
+    after message matches. No lexical hit is a verified decision.
     """
     language = backend("claude")
     selected = [r for r in rows if (roles == "both" or r["role"] == roles)
-                and (not since or r["date"] >= since) and (not until or r["date"] <= until)]
+                and (not since or r["date"] >= since) and (not until or r["date"] <= until)
+                and (not project or project.lower() in (r.get("project") or r.get("cwd") or "").lower())
+                and (not session or r["session"].startswith(session))]
     sessions = defaultdict(list)
     for row in rows:
         sessions[row["session"]].append(row)
@@ -143,12 +213,12 @@ def retrieve(rows, queries, limit=5, roles="both", since=None, until=None):
         seen = set()
         for score, i, coverage in ranked:
             unit = units[i]
-            session = unit[0]["session"]
-            if session in seen:
+            owner = unit[0]["session"]
+            if owner in seen:
                 continue
-            seen.add(session)
+            seen.add(owner)
             rank = len(seen)
-            entry = fused.setdefault(session, {"session": session, "fusion_score": 0,
+            entry = fused.setdefault(owner, {"session": owner, "fusion_score": 0,
                                                "matched_queries": [], "evidence": []})
             entry["fusion_score"] += coverage ** 2 / (60 + rank)
             entry["matched_queries"].append(query_index + 1)
@@ -156,34 +226,39 @@ def retrieve(rows, queries, limit=5, roles="both", since=None, until=None):
                 anchor = row.get("locator", {}).get("item_id", row.get("line"))
                 if any(e["anchor_key"] == anchor for e in entry["evidence"]):
                     continue
-                hit = {key: value for key, value in row.items() if key not in ("text", "order", "score", "coverage", "token_counts")}
-                hit.update(anchor_key=anchor, excerpt=excerpt(row["text"], terms),
-                           query_index=query_index + 1, excerpt_offset=excerpt_start(row["text"], terms),
-                           coverage=round(coverage, 3))
-                entry["evidence"].append(hit)
+                entry["evidence"].append(evidence_hit(row, terms, query_index + 1, round(coverage, 3)))
         attempts.append({"query": language.redact(query), "matching_sessions": len(seen),
                          "searchable_terms": len(groups)})
-    ordered = sorted(fused.values(), key=lambda e: (-e["fusion_score"], e["session"]))[:limit]
+    ordered = [dict(e, match="message") for e in
+               sorted(fused.values(), key=lambda e: (-e["fusion_score"], e["session"]))[:limit]]
+    if len(ordered) < limit:
+        for entry in session_fill(selected, normalized, token_cache, fused.keys(), limit - len(ordered)):
+            entry["evidence"] = [evidence_hit(row, terms, None, None) for row, terms in entry["evidence"]]
+            ordered.append(dict(entry, match="session"))
     candidates = []
-    for rank, session in enumerate(ordered, 1):
-        evidence = session["evidence"][:6]
+    for rank, entry in enumerate(ordered, 1):
+        evidence = entry["evidence"][:6]
+        messages = sessions[entry["session"]]
+        opening = next((r["text"] for r in messages if r["role"] == "user"), "")
         candidate = dict(evidence[0])
-        candidate.update(rank=rank, fusion_score=round(session["fusion_score"], 6),
-                         matched_queries=session["matched_queries"], evidence=evidence)
+        candidate.update(rank=rank, fusion_score=round(entry["fusion_score"], 6), match=entry["match"],
+                         title=next((r["title"] for r in messages if r.get("title")), None),
+                         opening=" ".join(opening.split())[:200],
+                         matched_queries=entry["matched_queries"], evidence=evidence)
         candidates.append(candidate)
     return {"status": "ambiguous" if candidates else
             "empty_query" if not any(a["searchable_terms"] for a in attempts) else "no_match",
             "candidates": candidates, "queries": attempts,
             "coverage": {"messages_available": len(rows), "messages_searched": len(selected),
                          "sessions_searched": len({r["session"] for r in selected}),
-                         "roles": roles, "since": since, "until": until},
+                         "roles": roles, "since": since, "until": until, "project": project, "session": session},
             "verification_required": True}
 
 
-def search(source, queries, cwd, limit, roles, since=None, until=None):
+def search(source, queries, cwd, limit, roles, since=None, until=None, project=None, session=None):
     started = time.monotonic()
     rows, metadata = load(source, cwd, queries[0])
-    result = retrieve(rows, queries, limit, roles, since, until)
+    result = retrieve(rows, queries, limit, roles, since, until, project, session)
     result.update(metadata, elapsed_ms=round((time.monotonic() - started) * 1000))
     return result
 
@@ -199,9 +274,12 @@ if __name__ == "__main__":
     parser.add_argument("--roles", default="both")
     parser.add_argument("--since")
     parser.add_argument("--until")
+    parser.add_argument("--project")
+    parser.add_argument("--session")
     args = parser.parse_args()
     try:
-        output = search(args.source, args.query, args.cwd, args.limit, args.roles, args.since, args.until)
+        output = search(args.source, args.query, args.cwd, args.limit, args.roles, args.since, args.until,
+                        args.project, args.session)
     except Exception as exc:
         output = {"status": "error", "reason": f"{type(exc).__name__}: {exc}"}
     print(json.dumps(output, ensure_ascii=False))

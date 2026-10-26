@@ -558,6 +558,17 @@ class RecallTests(unittest.TestCase):
         self.assertEqual(empty["status"], "empty_query")
         self.assertTrue(hangul["candidates"])
 
+    def test_thread_titles_take_latest_rename(self) -> None:
+        index = self.root.parent / "session_index.jsonl"
+        index.write_text("\n".join(json.dumps(r) for r in [
+            {"id": self.session, "thread_name": "First name"},
+            {"id": "22222222-2222-2222-2222-222222222222", "thread_name": "Other"},
+            {"id": self.session, "thread_name": "Renamed"},
+        ]) + "\nnot json\n")
+        self.assertEqual(recall.thread_titles(self.root),
+                         {self.session: "Renamed", "22222222-2222-2222-2222-222222222222": "Other"})
+        self.assertEqual(recall.thread_titles(self.root / "missing"), {})
+
     def test_deeply_nested_malformed_record_is_skipped(self) -> None:
         nested = (
             '{"type":"response_item","payload":{"type":"message","junk":'

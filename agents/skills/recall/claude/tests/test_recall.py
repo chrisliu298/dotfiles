@@ -353,6 +353,20 @@ class RecallTests(unittest.TestCase):
         self.assertEqual(len(groups), 3)                 # browser, claude-in-chrome, attach
         self.assertIn("chrome", terms)                   # sub-parts still reach BM25
 
+    def test_session_title_prefers_latest_rename(self):
+        path = self.write(S_OLD, [
+            {"type": "ai-title", "aiTitle": "First guess", "sessionId": S_OLD},
+            user("orchard websocket"),
+            {"type": "ai-title", "aiTitle": "Orchard transport", "sessionId": S_OLD},
+        ])
+        self.assertEqual(recall.session_title(path), "Orchard transport")
+        with path.open("a") as fh:
+            fh.write(json.dumps({"type": "custom-title", "customTitle": "My rename"}) + "\n")
+        self.assertEqual(recall.session_title(path), "My rename")
+        docs, _ = recall.build_corpus(self.cwd, include_all=False, since_secs=0, max_files=0,
+                                      exclude_session=None)
+        self.assertEqual({d.title for d in docs}, {"My rename"})
+
     def test_encode_cwd(self):
         self.assertEqual(recall.encode_cwd("/Users/you/proj/.config/ghostty"),
                          "-Users-you-proj--config-ghostty")

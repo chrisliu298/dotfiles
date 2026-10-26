@@ -143,6 +143,7 @@ class Doc:
     tokens: list[str] = field(default_factory=list)
     project: str = ""    # cwd the session ran in
     session_rank: float = 0.0   # 0=oldest session in scan .. 1=newest (recency boost input)
+    title: str = ""             # session title: latest /rename, else latest ai-title
     score: float = 0.0
     coverage: float = 0.0       # fraction of query words matched
     matched: int = 0            # count of query words matched
@@ -259,6 +260,28 @@ def candidates(cwd: str, scope: str = "project"):
 
 def current_session_id() -> str | None:
     return os.environ.get("CLAUDE_CODE_SESSION_ID")
+
+
+def session_title(path) -> str:
+    """The session's display title: the latest user rename (custom-title) wins over the latest
+    generated ai-title. Substring prefilter keeps the full-file pass cheap; '' when untitled."""
+    custom = generated = ""
+    try:
+        with Path(path).open("r", errors="replace") as fh:
+            for line in fh:
+                if '"custom-title"' not in line and '"ai-title"' not in line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if rec.get("type") == "custom-title" and isinstance(rec.get("customTitle"), str):
+                    custom = rec["customTitle"]
+                elif rec.get("type") == "ai-title" and isinstance(rec.get("aiTitle"), str):
+                    generated = rec["aiTitle"]
+    except OSError:
+        return ""
+    return redact((custom or generated).strip())
 
 
 def is_interactive(path, probe=150) -> bool:
@@ -512,7 +535,8 @@ def build_corpus(cwd, *, include_all, since_secs, max_files, exclude_session, sc
             return rows
 
         rows = get_or_build(f, "claude", PARSER_VERSION, build)
-        docs.extend(Doc(f.stem, str(f), line, role, text, date, toks, project, rank)
+        title = get_or_build(f, "claude-title", PARSER_VERSION, lambda: session_title(f))
+        docs.extend(Doc(f.stem, str(f), line, role, text, date, toks, project, rank, title=title)
                     for line, role, text, date, toks, project in rows)
     stats = {"scope": scope, "files_total": len(files), "files_scanned": nfiles, "docs": len(docs),
              "skipped_noninteractive": skipped_noninteractive, "skipped_old": skipped_old,
