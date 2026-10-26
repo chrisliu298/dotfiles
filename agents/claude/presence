@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""User presence shared by every agent session on this Mac.
+"""User presence for the agent sessions working in the projects listed in ~/.claude/presence/projects.
 
   presence                 print the current state
   presence away [NOTE]     the user said they are leaving (NOTE: e.g. "回来约 22:00")
@@ -11,13 +11,11 @@
   presence hook-ask        PreToolUse hook on AskUserQuestion: while the user is away, queue it and deny
   presence hook-post       PostToolUse hook: once the user is back, remind the session of its queued questions
 
-State lives in ~/.claude/presence/state.json. Only an explicit `away` makes the user away; any prompt the
-user types afterwards, in any session, makes them present again. Prompts from agent-team reviewers
-(CODEX_REVIEW_SUBAGENT_ACTIVE=1) do not count.
-
-Check-in projects (one directory per line in ~/.claude/presence/checkin-projects): there a prompt the user types
-while away is a check-in, not a return. They stay away, and for CHECKIN_MINUTES that session may ask them
-questions (AskUserQuestion is not blocked, the queue is shown); only `presence back` ends the away.
+The hooks act only in sessions whose cwd is inside a listed project (one directory per line); everywhere else
+they do nothing. State lives in ~/.claude/presence/state.json. Only an explicit `away` makes the user away and
+only `presence back` ends it: a prompt the user types while away is a check-in, so for CHECKIN_MINUTES that
+session may ask them questions (AskUserQuestion is not blocked, the queue is shown). Prompts from agent-team
+reviewers (CODEX_REVIEW_SUBAGENT_ACTIVE=1) do not count.
 
 Questions are queued per session in ~/.claude/presence/questions/<session_id>.json, so each agent keeps its
 own list across compaction and asks it when the user is back: in the next prompt the user types to it, or
@@ -27,7 +25,7 @@ import calendar, fcntl, glob, json, os, subprocess, sys, time
 
 STATE = os.path.expanduser("~/.claude/presence/state.json")
 QDIR = os.path.expanduser("~/.claude/presence/questions")
-CHECKIN = os.path.expanduser("~/.claude/presence/checkin-projects")
+PROJECTS = os.path.expanduser("~/.claude/presence/projects")
 CHECKIN_MINUTES = 15
 # Prompts T3 Code sends by itself; everything else it records as turnOrigin "sdk" was typed by the user.
 T3_AUTO = ("[定时", "Context handoff", "Note: the T3 server", "This session is being continued")
@@ -115,9 +113,9 @@ def own_sid():
     return sid
 
 
-def checkin_project(cwd):
+def in_scope(cwd):
     try:
-        roots = [os.path.realpath(os.path.expanduser(l.strip())) for l in open(CHECKIN) if l.strip()]
+        roots = [os.path.realpath(os.path.expanduser(l.strip())) for l in open(PROJECTS) if l.strip()]
     except OSError:
         return False
     cwd = os.path.realpath(cwd or ".")
@@ -186,15 +184,16 @@ def hook_prompt():
     typed by the user runs in a detached `settle`; here we only drop what is recognisable from the text."""
     event = json.load(sys.stdin)
     prompt = str(event.get("prompt", "")).strip()
-    if os.environ.get("CODEX_REVIEW_SUBAGENT_ACTIVE") == "1" or prompt.startswith(("<cross-session-message", "<task-notification")):
+    cwd = event.get("cwd") or os.getcwd()
+    if (not in_scope(cwd) or os.environ.get("CODEX_REVIEW_SUBAGENT_ACTIVE") == "1"
+            or prompt.startswith(("<cross-session-message", "<task-notification"))):
         return
     path = event.get("transcript_path", "")
     if any(r["turnOrigin"] == "scheduled" and str(r["message"].get("content", "")).strip() == prompt for r in origin_rows(path)):
         return  # a recurring scheduled prompt that already fired in this session
     sid = event.get("session_id") or "?"
     title = event.get("session_title") or sid
-    cwd = event.get("cwd") or os.getcwd()
-    subprocess.Popen([sys.executable, os.path.abspath(__file__), "settle", path, str(time.time() - 2), title, sid, cwd],
+    subprocess.Popen([sys.executable, os.path.abspath(__file__), "settle", path, str(time.time() - 2), title, sid],
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     s = load()
 
@@ -207,7 +206,7 @@ def hook_prompt():
         q["reminded"] = s["since"]
         return True
     q, remind = qupdate(sid, change)
-    if s["state"] == "away" and checkin_project(cwd):
+    if s["state"] == "away":
         note = f"，备注：{s['note']}" if s.get("note") else ""
         own = f"\n本会话的待问清单：\n{qlist(q)}" if q["items"] else ""
         print(f"[presence] 当前记录是用户不在（{s['since']} 起{note}）。如果这条消息是用户亲自发的，这是他回来查看"
@@ -216,18 +215,11 @@ def hook_prompt():
               "之后照常按不在推进。只有他明确说回来了，才运行 `~/.claude/presence/presence back`。"
               "如果是定时任务或其他 agent 发来的，照常按用户不在处理。"
               f"{own}{pending_summary()}")
-    elif s["state"] == "away":
-        note = f"，备注：{s['note']}" if s.get("note") else ""
-        own = f"\n本会话的待问清单：\n{qlist(q)}" if q["items"] else ""
-        print(f"[presence] 当前记录是用户不在（{s['since']} 起{note}）。如果这条消息是用户亲自发的，说明他回来了"
-              "（状态几秒内自动改回「在」）：先把本会话的待问清单和离开期间要他拍板的事一起问他，"
-              "并告诉他其他会话还攒着几条。如果是定时任务或其他 agent 发来的，照常按用户不在处理。"
-              f"{own}{pending_summary()}")
     elif remind:
         print(qremind(q))
 
 
-def settle(path, since, title, sid, cwd=""):
+def settle(path, since, title, sid):
     """Wait for the prompt's transcript row; mark the user present only if it was typed by them."""
     for _ in range(30):
         time.sleep(1)
@@ -240,20 +232,15 @@ def settle(path, since, title, sid, cwd=""):
         return
     s = load()
     s.update(last_prompt=now(), last_session=title)
-    if s["state"] == "away" and checkin_project(cwd):
-        s.setdefault("checkins", {})[sid] = time.time()
-        save(s)
-        return
     if s["state"] == "away":
-        s.update(state="present", since=s["last_prompt"], note=None, checkins={})
+        s.setdefault("checkins", {})[sid] = time.time()
     save(s)
-    qupdate(sid, lambda q: q["items"] and q.update(reminded=s["since"]))
 
 
 def hook_ask():
     event = json.load(sys.stdin)
     s = load()
-    if s["state"] != "away" or checked_in(s, event.get("session_id") or "?"):
+    if not in_scope(event.get("cwd")) or s["state"] != "away" or checked_in(s, event.get("session_id") or "?"):
         return
     entries = []
     for item in event.get("tool_input", {}).get("questions", []):
@@ -265,9 +252,8 @@ def hook_ask():
               "先按某个默认推进了的，把该条换成带默认的版本：`~/.claude/presence/presence resolved <ID>` 后 "
               "`~/.claude/presence/presence ask \"<问题>（已先按 X 推进，待确认）\"`；"
               "没有安全默认的就停在那一步。"
-              + (f"用户在这里发消息只算回来查看，查看后 {CHECKIN_MINUTES} 分钟内才放行提问；只有他明确说回来了才运行 "
-                 "`~/.claude/presence/presence back`。" if checkin_project(event.get("cwd")) else
-                 "如果用户刚刚亲自在你的对话里发了消息，说明已经回来，运行 `~/.claude/presence/presence back` 后再问。"))
+              + f"用户在这里发消息只算回来查看，查看后 {CHECKIN_MINUTES} 分钟内才放行提问；只有他明确说回来了才运行 "
+              "`~/.claude/presence/presence back`。")
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
                                              "permissionDecisionReason": reason}}, ensure_ascii=False))
 
@@ -277,7 +263,8 @@ def hook_post():
     event = json.load(sys.stdin)
     sid = event.get("session_id") or "?"
     # A subagent shares its parent's session_id but cannot ask the user, so it must not consume the reminder.
-    if os.environ.get("CODEX_REVIEW_SUBAGENT_ACTIVE") == "1" or event.get("agent_id") or not os.path.exists(qpath(sid)):
+    if (not in_scope(event.get("cwd")) or os.environ.get("CODEX_REVIEW_SUBAGENT_ACTIVE") == "1" or event.get("agent_id")
+            or not os.path.exists(qpath(sid))):
         return
     s = load()
 
@@ -303,7 +290,7 @@ def main(argv):
     if cmd == "hook-post":
         return hook_post()
     if cmd == "settle":
-        return settle(*argv[1:6])
+        return settle(*argv[1:5])
     if cmd == "ask":
         if not argv[1:]:
             sys.exit(__doc__)
