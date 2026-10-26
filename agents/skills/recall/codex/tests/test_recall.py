@@ -558,6 +558,23 @@ class RecallTests(unittest.TestCase):
         self.assertEqual(empty["status"], "empty_query")
         self.assertTrue(hangul["candidates"])
 
+    def test_incremental_extract_matches_full_extract(self) -> None:
+        path = self.write_rollout("rollout-inc.jsonl", [
+            self.meta(), message("m1", "user", "orchard transport?", 1, "2026-09-09T10:00:00Z")])
+        cursor = recall.new_cursor(path)
+        first, stats_one = recall.extract_turns(path, cursor=cursor)
+        with path.open("a") as handle:
+            handle.write(json.dumps(message("m2", "assistant", "Use websocket.", 2, "2026-09-09T10:00:05Z")) + "\n")
+            handle.write('{"timestamp": "2026-09-09T10:00:09Z", "type": "response_item", "payl')
+        second, stats_two = recall.extract_turns(path, cursor=cursor)
+        full, stats_full = recall.extract_turns(path, cursor=recall.new_cursor(path))
+        strip = lambda turns: [dict(vars(t), mtime=0) for t in turns]
+        self.assertEqual(strip(first + second), strip(full))
+        self.assertEqual([t.text for t in second], ["Use websocket."])
+        self.assertEqual(second[0].cwd, self.cwd)                       # session_meta carried over
+        stats_one.add(stats_two)
+        self.assertEqual(stats_one.as_dict(), stats_full.as_dict())
+
     def test_thread_titles_take_latest_rename(self) -> None:
         index = self.root.parent / "session_index.jsonl"
         index.write_text("\n".join(json.dumps(r) for r in [

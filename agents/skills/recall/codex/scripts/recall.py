@@ -202,14 +202,20 @@ def _fallback_session_id(path: Path) -> str:
     return ids[0] if ids else path.stem
 
 
-def iter_bounded_lines(path: Path) -> Iterator[tuple[int, bytes | None]]:
-    """Yield physical 1-based lines without loading huge records into memory."""
+def iter_bounded_lines(path: Path, cursor: dict | None = None) -> Iterator[tuple[int, bytes | None]]:
+    """Yield physical 1-based lines without loading huge records into memory.
+
+    With a `cursor` (new_cursor), resume at its byte offset/line and advance it past each
+    complete line; a trailing line without its newline is left for the next pass.
+    """
     try:
         fh = path.open("rb")
     except OSError:
         return
     with fh:
-        line_no = 0
+        line_no = cursor["line"] if cursor else 0
+        if cursor:
+            fh.seek(cursor["offset"])
         while True:
             try:
                 chunk = fh.readline(LINE_CAP + 1)
@@ -217,18 +223,26 @@ def iter_bounded_lines(path: Path) -> Iterator[tuple[int, bytes | None]]:
                 return
             if not chunk:
                 return
-            line_no += 1
             if len(chunk) <= LINE_CAP and chunk.endswith(b"\n"):
+                line_no += 1
+                if cursor:
+                    cursor.update(offset=fh.tell(), line=line_no)
                 yield line_no, chunk
                 continue
             if len(chunk) <= LINE_CAP and not chunk.endswith(b"\n"):
-                yield line_no, chunk
+                if not cursor:
+                    yield line_no + 1, chunk
                 return
             while chunk and not chunk.endswith(b"\n"):
                 try:
                     chunk = fh.readline(LINE_CAP + 1)
                 except OSError:
                     chunk = b""
+            if cursor and not chunk:
+                return
+            line_no += 1
+            if cursor:
+                cursor.update(offset=fh.tell(), line=line_no)
             yield line_no, None
 
 
@@ -361,12 +375,28 @@ def _message_text(payload: dict, role: str) -> tuple[str, int]:
     return "\n\n".join(parts), skipped
 
 
-def extract_turns(path: Path, *, include_non_human: bool = False) -> tuple[list[Turn], Stats]:
-    stats = Stats(files_scanned=1)
+def new_cursor(path: Path) -> dict:
+    """Resume point for an append-only rollout: consumed byte offset and line, plus the file's
+    session metadata (it heads the file and applies to every later turn)."""
+    meta = FileMeta(path=path, session_id=_fallback_session_id(path))
+    return {"offset": 0, "line": 0, "own_meta_seen": False,
+            "meta": {name: getattr(meta, name) for name in ("session_id", "cwd", "thread_source",
+                                                            "originator", "git_branch", "started_at")}}
+
+
+def extract_turns(path: Path, *, include_non_human: bool = False,
+                  cursor: dict | None = None) -> tuple[list[Turn], Stats]:
+    """Turns of one rollout; with a cursor, only those appended since its last pass (the cursor
+    carries the session metadata forward)."""
+    stats = Stats(files_scanned=0 if cursor and cursor["offset"] else 1)
     meta = FileMeta(path=path, session_id=_fallback_session_id(path), mtime=safe_mtime(path))
     own_meta_seen = False
+    if cursor:
+        for name, value in cursor["meta"].items():
+            setattr(meta, name, value)
+        own_meta_seen = cursor["own_meta_seen"]
     turns: list[Turn] = []
-    for line_no, raw in iter_bounded_lines(path):
+    for line_no, raw in iter_bounded_lines(path, cursor):
         if raw is None:
             stats.records_seen += 1
             stats.oversized_records += 1
@@ -424,6 +454,9 @@ def extract_turns(path: Path, *, include_non_human: bool = False) -> tuple[list[
             )
         )
         stats.messages_kept += 1
+    if cursor:
+        cursor["own_meta_seen"] = own_meta_seen
+        cursor["meta"] = {name: getattr(meta, name) for name in cursor["meta"]}
     return turns, stats
 
 

@@ -176,36 +176,68 @@ def iso_date(ts, fallback_path=None) -> str:
     return "?"
 
 
-def iter_lines(path: Path):
+def new_cursor() -> dict:
+    """Resume point for an append-only transcript: byte offset and physical line already consumed,
+    plus the cross-line state events() carries (question-tool ids, latest titles)."""
+    return {"offset": 0, "line": 0, "questions": [], "title_ai": "", "title_custom": ""}
+
+
+def cursor_title(cursor: dict) -> str:
+    """The title session_title() would return for the part of the file the cursor has consumed."""
+    return redact((cursor["title_custom"] or cursor["title_ai"]).strip())
+
+
+def iter_lines(path: Path, cursor: dict | None = None):
     """Yield (line_no, raw_record_or_None, head_str), 1-based by physical line.
 
-    Bounded read (verbatim from rehydrate): readline(HUGE_LINE+1) never pulls more than the cap
-    into memory, so a multi-hundred-MB record is peeked (head only) and drained, never fully
-    parsed. A vanished/locked file is skipped rather than crashing the run.
+    Bounded read (verbatim from rehydrate): a record over HUGE_LINE characters is peeked (head
+    only) and drained, never fully parsed; at most 4×HUGE_LINE bytes (a UTF-8 character is at
+    most 4 bytes) are in memory. A vanished/locked file is skipped rather than crashing the run.
+    With a `cursor`, resume at its byte offset and line and advance it past each complete line;
+    a trailing line without its newline is left for the next pass (the writer is mid-record), so
+    repeated passes never see a record twice.
     """
+    cap = 4 * HUGE_LINE + 4
     try:
-        fh = path.open("r", errors="replace")
+        fh = Path(path).open("rb")
     except OSError:
         return
     with fh:
-        i = 0
+        i = cursor["line"] if cursor else 0
+        if cursor:
+            fh.seek(cursor["offset"])
         while True:
             try:
-                chunk = fh.readline(HUGE_LINE + 1)
+                chunk = fh.readline(cap + 1)
             except OSError:
                 return
             if not chunk:
                 break
-            i += 1
-            if len(chunk) > HUGE_LINE and not chunk.endswith("\n"):
-                head = chunk[:600]
+            if len(chunk) > cap and not chunk.endswith(b"\n"):
+                head = chunk[:2400].decode("utf-8", "replace")[:600]
                 while True:                       # drain the rest of this physical line
-                    more = fh.readline(HUGE_LINE)
-                    if not more or more.endswith("\n"):
+                    more = fh.readline(cap)
+                    if not more:
+                        if cursor:
+                            return
                         break
+                    if more.endswith(b"\n"):
+                        break
+                i += 1
+                if cursor:
+                    cursor.update(offset=fh.tell(), line=i)
                 yield i, None, head
                 continue
-            line = chunk.rstrip("\n")
+            if cursor and not chunk.endswith(b"\n"):
+                return
+            i += 1
+            if cursor:
+                cursor.update(offset=fh.tell(), line=i)
+            line = chunk.decode("utf-8", "replace")
+            line = line[:-2] if line.endswith("\r\n") else line.rstrip("\n")
+            if len(line) > HUGE_LINE:
+                yield i, None, line[:600]
+                continue
             if not line.strip():
                 continue
             try:
@@ -299,16 +331,21 @@ def is_interactive(path, probe=150) -> bool:
     return False
 
 
-def events(path):
+def events(path, cursor: dict | None = None):
     """Normalize a Claude transcript into user/assistant/tool Events (verbatim extraction from
     rehydrate, minus the boundary cutoff — recall reads the FULL file). A type:"user" record
     carrying tool_result blocks is a TOOL OUTPUT turn, not a genuine user message: kept apart so
-    the user-vs-agent attribution stays clean."""
-    question_tools = set()
-    for ln, rec, head in iter_lines(path):
+    the user-vs-agent attribution stays clean. A `cursor` (new_cursor) resumes after the part
+    already consumed and keeps the question-tool ids and titles across passes."""
+    question_tools = set(cursor["questions"]) if cursor else set()
+    for ln, rec, head in iter_lines(path, cursor):
         if rec is None:
             continue
         t = rec.get("type")
+        if cursor is not None and t in ("ai-title", "custom-title"):
+            field = "customTitle" if t == "custom-title" else "aiTitle"
+            if isinstance(rec.get(field), str):
+                cursor["title_custom" if t == "custom-title" else "title_ai"] = rec[field]
         if t not in ("user", "assistant"):
             continue
         if t == "user" and rec.get("isCompactSummary"):
@@ -331,6 +368,8 @@ def events(path):
                 elif bt == "tool_use":
                     if b.get("name") == "AskUserQuestion" and b.get("id"):
                         question_tools.add(b["id"])
+                        if cursor is not None:
+                            cursor["questions"].append(b["id"])
                     inp = b.get("input") or {}
                     for k in ("file_path", "path", "notebook_path"):
                         if inp.get(k):
@@ -492,6 +531,22 @@ def normalize_query(q: str) -> tuple[str, list[str], list[frozenset[str]]]:
     return cleaned, list(dict.fromkeys(tokenize(cleaned))), query_groups(cleaned)
 
 
+def file_rows(path, cursor: dict | None = None) -> list:
+    """Searchable statements of one transcript as [line, role, text, date, tokens, project]; with a
+    cursor, only those appended since its last pass."""
+    path = Path(path)
+    rows = []
+    for e in events(path, cursor):
+        if e.sidechain or e.kind not in ("user_message", "assistant_message") or not e.text:
+            continue
+        if is_injected(e.text):
+            continue
+        toks = tokenize(e.text)
+        if toks:
+            rows.append([e.line, e.role, e.text, iso_date(e.ts, path), toks, e.cwd or path.parent.name])
+    return rows
+
+
 def build_corpus(cwd, *, include_all, since_secs, max_files, exclude_session, scope="project"):
     """Scan the project's transcripts (or every project's, scope=all; interactive-only by default,
     newest-first) into Docs. Returns (docs, stats). An optional per-file cache stores
@@ -522,19 +577,7 @@ def build_corpus(cwd, *, include_all, since_secs, max_files, exclude_session, sc
     for idx, f in enumerate(selected):
         # session_rank: 1.0 for the newest selected file .. ~0 for the oldest
         rank = 1.0 - (idx / nfiles) if nfiles > 1 else 1.0
-        def build():
-            rows = []
-            for e in events(f):
-                if e.sidechain or e.kind not in ("user_message", "assistant_message") or not e.text:
-                    continue
-                if is_injected(e.text):
-                    continue
-                toks = tokenize(e.text)
-                if toks:
-                    rows.append([e.line, e.role, e.text, iso_date(e.ts, f), toks, e.cwd or f.parent.name])
-            return rows
-
-        rows = get_or_build(f, "claude", PARSER_VERSION, build)
+        rows = get_or_build(f, "claude", PARSER_VERSION, lambda: file_rows(f))
         title = get_or_build(f, "claude-title", PARSER_VERSION, lambda: session_title(f))
         docs.extend(Doc(f.stem, str(f), line, role, text, date, toks, project, rank, title=title)
                     for line, role, text, date, toks, project in rows)

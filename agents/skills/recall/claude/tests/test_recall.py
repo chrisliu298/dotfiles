@@ -367,6 +367,30 @@ class RecallTests(unittest.TestCase):
                                       exclude_session=None)
         self.assertEqual({d.title for d in docs}, {"My rename"})
 
+    def test_incremental_scan_matches_full_scan(self):
+        path = self.write(S_OLD, [
+            {"type": "ai-title", "aiTitle": "First", "sessionId": S_OLD},
+            user("Pick the orchard transport"),
+            {"type": "assistant", "timestamp": "2026-09-01T10:00:05Z", "message": {"role": "assistant", "content": [
+                {"type": "tool_use", "id": "q1", "name": "AskUserQuestion", "input": {}}]}},
+        ])
+        cursor = recall.new_cursor()
+        first = recall.file_rows(path, cursor)
+        with path.open("a") as fh:
+            fh.write(json.dumps({"type": "user", "timestamp": "2026-09-01T10:01:00Z", "cwd": self.cwd,
+                                 "isSidechain": False, "message": {"role": "user", "content": [
+                                     {"type": "tool_result", "tool_use_id": "q1", "content": "websocket"}]}}) + "\n")
+            fh.write(json.dumps({"type": "custom-title", "customTitle": "Renamed"}) + "\n")
+            fh.write(json.dumps(assistant("Using websocket now.")) + "\n")
+            fh.write('{"type": "user", "message": {"content": "half writ')       # writer mid-line
+        second = recall.file_rows(path, cursor)
+        self.assertEqual(first + second, recall.file_rows(path, recall.new_cursor()))
+        self.assertEqual([r[2] for r in second], ["websocket", "Using websocket now."])
+        self.assertEqual(recall.cursor_title(cursor), "Renamed")
+        with path.open("a") as fh:
+            fh.write('ten"}}\n')
+        self.assertEqual([r[2] for r in recall.file_rows(path, cursor)], ["half written"])
+
     def test_encode_cwd(self):
         self.assertEqual(recall.encode_cwd("/Users/you/proj/.config/ghostty"),
                          "-Users-you-proj--config-ghostty")
