@@ -54,6 +54,12 @@ def anchor(row):
     return row.get("locator", {}).get("item_id", row.get("line"))
 
 
+def run(r, source, cwd, queries, limit):
+    """retrieve() on index-backed rows for these queries, plus an anchor -> row map for scoring."""
+    rows, _ = r.load(source, cwd, queries)
+    return r.retrieve(rows, queries, limit=limit), {(row["session"], anchor(row)): row for row in rows}
+
+
 def score(result, rows_by_anchor, item, k_evidence):
     """(session rank or None, evidence rank or None): first candidate in the gold session set, and
     first candidate whose evidence text contains an expect keyword."""
@@ -64,11 +70,15 @@ def score(result, rows_by_anchor, item, k_evidence):
         if session_rank is None and any(candidate["session"].startswith(s) for s in sessions):
             session_rank, match = rank, candidate.get("match")
         if evidence_rank is None and expect and rank <= k_evidence:
-            texts = (rows_by_anchor.get((candidate["session"], e["anchor_key"]), "")
+            texts = (r_text(rows_by_anchor.get((candidate["session"], e["anchor_key"])))
                      for e in candidate["evidence"])
             if any(any(k in text.lower() for k in expect) for text in texts):
                 evidence_rank = rank
     return session_rank, evidence_rank, match
+
+
+def r_text(row):
+    return row["text"] if row and "text" in row else row["fetch"]() if row else ""
 
 
 def pct(hits, total):
@@ -88,13 +98,12 @@ def main():
     r = load_retrieve()
     episodes = read_gold(args.episodes)
     facts = [dict(item, source="claude") for item in read_gold(FACTS) if not item.get("negative")]
-    corpora = {}
+    present = {}
     for source in sorted({item["source"] for item in episodes + facts}):
         started = time.monotonic()
-        rows, metadata = r.load(source, args.cwd, "")
-        corpora[source] = (rows, {(row["session"], anchor(row)): row["text"] for row in rows},
-                           {row["session"] for row in rows})
-        print(f"corpus {source}: {len(rows)} messages, {len(corpora[source][2])} sessions "
+        rows, _ = r.load(source, args.cwd, [])          # refreshes the index; no terms needed
+        present[source] = {row["session"] for row in rows}
+        print(f"corpus {source}: {len(rows)} messages, {len(present[source])} sessions "
               f"({time.monotonic() - started:.1f}s)")
 
     query_sets = ("raw", "variants") if args.queries == "both" else (args.queries,)
@@ -102,12 +111,11 @@ def main():
         print(f"\n## queries={query_set}")
         rows_out, session_hits, evidence_hits, absent = [], {k: 0 for k in KS}, 0, []
         for item in episodes:
-            rows, by_anchor, present = corpora[item["source"]]
-            if not any(s.startswith(p) for p in item["sessions"] for s in present):
+            if not any(s.startswith(p) for p in item["sessions"] for s in present[item["source"]]):
                 absent.append(item["id"])
                 continue
             queries = [item["query"]] + (item.get("variants", []) if query_set == "variants" else [])
-            result = r.retrieve(rows, queries, limit=max(KS))
+            result, by_anchor = run(r, item["source"], args.cwd, queries, max(KS))
             session_rank, evidence_rank, match = score(result, by_anchor, item, args.evidence_k)
             for k in KS:
                 session_hits[k] += session_rank is not None and session_rank <= k
@@ -126,9 +134,8 @@ def main():
         if query_set == "raw":   # fact gold has no variants; it is the regression check
             fact_hits = 0
             for item in facts:
-                rows, by_anchor, _ = corpora["claude"]
-                _, evidence_rank, _ = score(r.retrieve(rows, [item["query"]], limit=args.evidence_k),
-                                         by_anchor, item, args.evidence_k)
+                result, by_anchor = run(r, "claude", args.cwd, [item["query"]], args.evidence_k)
+                _, evidence_rank, _ = score(result, by_anchor, item, args.evidence_k)
                 fact_hits += evidence_rank is not None
             print(f"facts (claude gold.jsonl) answer@{args.evidence_k}: {pct(fact_hits, len(facts))}")
 

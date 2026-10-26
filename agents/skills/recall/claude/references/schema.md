@@ -92,10 +92,16 @@ Each run ranks one corpus; BM25 scores are never compared across runs/scopes —
 on `no_match`, and the narrower scope's hit is preferred.
 
 The shared entrypoint sets `RECALL_CACHE_DIR` and searches the complete selected
-store. It keeps one private JSON cache file per transcript with only the redacted,
-searchable turns. Source size and nanosecond mtime invalidate the file's cache;
-new transcripts are parsed on the next search. The native script can still run
-without a cache when called directly. There is no daemon or database.
+store through `shared/index.py`: one SQLite file per agent under `index/` with the
+redacted searchable turns, their token lengths, and per-(term, file) posting blobs.
+Each search stats the transcripts and resumes each changed file from its saved
+cursor (byte offset, line, cross-line parser state), so a growing session costs
+only its new bytes; a file that shrank or whose last indexed 4 KB changed is
+re-indexed whole, and a deleted one is dropped. Queries read postings only for
+their own terms and fetch text only for rendered evidence. The schema constant
+plus both parsers' file hashes version the index, so editing a parser rebuilds it.
+The native script keeps its per-transcript JSON caches and can run without either.
+There is no daemon.
 
 ## Redaction
 

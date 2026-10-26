@@ -1,7 +1,7 @@
 """Batched local retrieval. Source parsers own redaction and transcript semantics.
 
-One in-memory inverted index per invocation; the existing per-file cache remains
-our only persistent state. Query variants come from the invoking agent.
+Rows come from a persistent incremental index (index.py) holding only the query's terms;
+scoring materializes only windows that contain one. Query variants come from the invoking agent.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from file_cache import get_or_build
+from index import Index
 
 
 def backend(source):
@@ -27,43 +27,11 @@ def backend(source):
     return sys.modules[name]
 
 
-def load(source, cwd, query):
-    api = backend(source)
-    if source == "codex":
-        root = api.session_root()
-        inventory = api.file_inventory(root)
-        turns, stats = api.load_turns(api.files_for_scope(inventory, "all", cwd=cwd, session_id=""))
-        excluded = api.current_session_id()
-        resolution = "session-id" if excluded else "unavailable"
-        if excluded:
-            turns = [turn for turn in turns if turn.session_id != excluded]
-        titles = api.thread_titles(root)
-        rows = []
-        for turn in turns:
-            hit = api.turn_json(turn, root, 0)
-            rows.append(dict(hit, session=turn.session_id, text=turn.text, title=titles.get(turn.session_id),
-                             date=turn.timestamp[:10], order=turn.ordinal, cache_path=str(turn.path)))
-        metadata = {"stats": stats.as_dict(), "current_task_exclusion": ("resolved" if resolution == "session-id" else
-                                               "inferred" if excluded else "unresolved"),
-                    "excluded_current_task": excluded or None}
-    else:
-        turns, stats = api.build_corpus(cwd, include_all=False, since_secs=0,
-                                       max_files=0, exclude_session=api.current_session_id(), scope="all")
-        rows = [dict(api.doc_json(turn, 0), text=turn.text, order=turn.line, title=turn.title or None,
-                     token_counts=dict(Counter(turn.tokens))) for turn in turns]
-        metadata = {"stats": stats, "current_task_exclusion":
-                    "resolved" if api.current_session_id() else "unresolved"}
-    if source == "codex":
-        by_file = defaultdict(list)
-        for row in rows:
-            by_file[row.pop("cache_path")].append(row)
-        language = backend("claude")
-        for path, messages in by_file.items():
-            counts = get_or_build(Path(path), f"{source}-search-tokens", api.PARSER_VERSION + language.PARSER_VERSION, lambda: {
-                r["locator"]["item_id"]: dict(Counter(language.tokenize(r["text"]))) for r in messages})
-            for row in messages:
-                row["token_counts"] = counts.get(row["locator"]["item_id"], {})
-    return rows, metadata
+def load(source, cwd, queries):
+    """Index-backed rows for `queries`: refresh the source's index, then read only their terms."""
+    language = backend("claude")
+    terms = {term for query in queries for term in language.normalize_query(query)[1]}
+    return Index(source, backend).rows(cwd, terms, backend(source).current_session_id() or None)
 
 
 def excerpt_start(text, terms):
@@ -77,7 +45,12 @@ def excerpt(text, terms, cap=600):
     return ("…" if start else "") + text[start:start + cap] + ("…" if start + cap < len(text) else "")
 
 
-def session_fill(selected, normalized, token_cache, exclude, limit):
+def text_of(row):
+    """Message text; index-backed rows fetch it only when evidence is rendered."""
+    return row["text"] if "text" in row else row["fetch"]()
+
+
+def session_fill(selected, normalized, hot, length, exclude, limit):
     """Rank whole sessions for a description whose words are spread across one conversation.
 
     A session is one BM25 document (its messages plus a title bonus); a description that no
@@ -87,18 +60,18 @@ def session_fill(selected, normalized, token_cache, exclude, limit):
     by_session = defaultdict(list)
     for row in selected:
         by_session[row["session"]].append(row)
-    counts, titles = {}, {}
+    counts, sizes, titles = {}, {}, {}
     language = backend("claude")
     for session, messages in by_session.items():
         total = Counter()
         for row in messages:
-            total.update(token_cache.setdefault(id(row), Counter(row["token_counts"]) if "token_counts" in row
-                                                else Counter(language.tokenize(row["text"]))))
+            total.update(hot.get(id(row), {}))
         counts[session] = total
+        sizes[session] = sum(length[id(row)] for row in messages)
         titles[session] = set(language.tokenize(next((r["title"] for r in messages if r.get("title")), "")))
     if not counts:
         return []
-    average = sum(sum(c.values()) for c in counts.values()) / len(counts) or 1
+    average = sum(sizes.values()) / len(counts) or 1
     fused = {}
     for query_index, (_, terms, groups) in enumerate(normalized):
         frequency = Counter(t for s in counts for t in set(terms) & (counts[s].keys() | titles[s]))
@@ -107,7 +80,6 @@ def session_fill(selected, normalized, token_cache, exclude, limit):
         for session, total in counts.items():
             if session in exclude:
                 continue
-            length = sum(total.values())
             matched = {t for t in idf if total[t] or t in titles[session]}
             if not matched:
                 continue
@@ -117,7 +89,7 @@ def session_fill(selected, normalized, token_cache, exclude, limit):
             if hits < max(min(2, len(groups)), math.ceil(.3 * len(groups))):
                 continue
             coverage = hits / max(1, len(groups))
-            score = sum(idf[t] * (total[t] * 2.2 / (total[t] + 1.2 * (.25 + .75 * length / average))
+            score = sum(idf[t] * (total[t] * 2.2 / (total[t] + 1.2 * (.25 + .75 * sizes[session] / average))
                                   + 2 * (t in titles[session])) for t in matched)
             scores[session] = score * coverage
         for rank, session in enumerate(sorted(scores, key=lambda s: (-scores[s], s))[:limit], 1):
@@ -129,17 +101,23 @@ def session_fill(selected, normalized, token_cache, exclude, limit):
     ordered = sorted(fused.values(), key=lambda e: (-e["fusion_score"], e["session"]))[:limit]
     for entry in ordered:
         terms = entry.pop("terms")
-        ranked = sorted((r for r in by_session[entry["session"]] if token_cache[id(r)].keys() & terms),
-                        key=lambda r: (-len(token_cache[id(r)].keys() & terms), r["order"]))[:3]
+        ranked = sorted((r for r in by_session[entry["session"]] if hot.get(id(r), {}).keys() & terms),
+                        key=lambda r: (-len(hot[id(r)].keys() & terms), r["order"]))[:3]
         entry["evidence"] = [(row, terms) for row in sorted(ranked, key=lambda r: r["order"])]
     return ordered
 
 
+PRIVATE = ("text", "order", "score", "coverage", "token_counts", "title", "render", "fetch", "length")
+
+
 def evidence_hit(row, terms, query_index, coverage):
-    hit = {key: value for key, value in row.items()
-           if key not in ("text", "order", "score", "coverage", "token_counts", "title")}
-    hit.update(anchor_key=row.get("locator", {}).get("item_id", row.get("line")), excerpt=excerpt(row["text"], terms),
-               query_index=query_index, excerpt_offset=excerpt_start(row["text"], terms), coverage=coverage)
+    hit = {key: value for key, value in (row["render"]() if "render" in row else {}).items() if key not in PRIVATE}
+    for key, value in row.items():   # rendered fields win: rows keep only an index-time subset
+        if key not in PRIVATE:
+            hit.setdefault(key, value)
+    text = text_of(row)
+    hit.update(anchor_key=row.get("locator", {}).get("item_id", row.get("line")), excerpt=excerpt(text, terms),
+               query_index=query_index, excerpt_offset=excerpt_start(text, terms), coverage=coverage)
     return hit
 
 
@@ -150,64 +128,91 @@ def retrieve(rows, queries, limit=5, roles="both", since=None, until=None, proje
     Role/date/project/session filters apply to each message before indexing. Fusion uses
     ranks, never raw scores across queries. Sessions matched only as a whole fill the list
     after message matches. No lexical hit is a verified decision.
+
+    Only windows holding a query term are materialized; the window count and mean length
+    that BM25 needs are accumulated arithmetically. Rows may carry `token_counts` restricted
+    to the query terms plus an explicit `length` (index-backed) or full counts (in memory).
     """
     language = backend("claude")
     selected = [r for r in rows if (roles == "both" or r["role"] == roles)
                 and (not since or r["date"] >= since) and (not until or r["date"] <= until)
                 and (not project or project.lower() in (r.get("project") or r.get("cwd") or "").lower())
                 and (not session or r["session"].startswith(session))]
+    normalized = [language.normalize_query(q) for q in queries]
+    query_terms = {term for _, terms, _ in normalized for term in terms}
+    hot, length = {}, {}
+    for row in selected:
+        counts = row["token_counts"] if "token_counts" in row else Counter(language.tokenize(row["text"]))
+        length[id(row)] = row["length"] if "length" in row else sum(counts.values())
+        found = {term: counts[term] for term in query_terms if term in counts}
+        if found:
+            hot[id(row)] = found
     sessions = defaultdict(list)
     for row in rows:
         sessions[row["session"]].append(row)
-    eligible = {id(row) for row in selected}
-    units = []
-    for messages in sessions.values():
+    unit_count = unit_length = 0
+    units = {}   # (session order, end position, size) -> messages; tuple order = creation order
+    for order, messages in enumerate(sessions.values()):
         messages.sort(key=lambda r: (r.get("timestamp", r.get("date", "")), r["order"]))
+        # Never bridge a filtered-out turn or a different session.
+        flags = [id(row) in length for row in messages]
+        run = 0
         for i, row in enumerate(messages):
-            if id(row) not in eligible:
+            run = run + 1 if flags[i] else 0
+            if not run:
                 continue
-            units.append([row])
-            # Never bridge a filtered-out turn or a different session.
-            for size in (2, 3):
-                window = messages[max(0, i - size + 1):i + 1]
-                if len(window) == size and all(id(item) in eligible for item in window):
-                    units.append(window)
-    normalized = [language.normalize_query(q) for q in queries]
-    query_terms = {term for _, terms, _ in normalized for term in terms}
-    postings = defaultdict(list)
-    lengths = []
-    token_cache = {}
-    for i, unit in enumerate(units):
-        counts = Counter()
+            size = length[id(row)]
+            unit_count += 1
+            unit_length += size
+            if run >= 2:
+                size += length[id(messages[i - 1])]
+                unit_count += 1
+                unit_length += size
+                if run >= 3:
+                    unit_count += 1
+                    unit_length += size + length[id(messages[i - 2])]
+            if id(row) in hot:
+                for end in range(i, min(i + 3, len(messages))):
+                    for width in range(end - i + 1, 4):
+                        first = end - width + 1
+                        if first >= 0 and all(flags[first:end + 1]):
+                            units.setdefault((order, end, width), messages[first:end + 1])
+    unit_counts, lengths, frequency = {}, {}, Counter()
+    for key, unit in units.items():
+        counts = {}
         for row in unit:
-            key = id(row)
-            if key not in token_cache:
-                token_cache[key] = Counter(row["token_counts"]) if "token_counts" in row else Counter(language.tokenize(row["text"]))
-            counts.update(token_cache[key])
-        lengths.append(sum(counts.values()))
-        for term in query_terms & counts.keys():
-            postings[term].append((i, counts[term]))
-    average = sum(lengths) / max(1, len(lengths)) or 1
+            for term, count in hot.get(id(row), {}).items():
+                counts[term] = counts.get(term, 0) + count
+        unit_counts[key] = counts
+        lengths[key] = sum(length[id(row)] for row in unit)
+        frequency.update(counts.keys())
+    average = unit_length / max(1, unit_count) or 1
     fused = {}
     attempts = []
     for query_index, query in enumerate(queries):
         cleaned, terms, groups = normalized[query_index]
-        scores, matched = defaultdict(float), defaultdict(set)
-        for term in terms:
-            hits = postings.get(term, [])
-            weight = math.log(1 + (len(units) - len(hits) + .5) / (len(hits) + .5))
-            for i, count in hits:
-                scores[i] += weight * count * 2.5 / (count + 1.5 * (.25 + .75 * lengths[i] / average))
-                matched[i].add(term)
+        # A term's bits are the concept groups it belongs to; a unit's coverage is the popcount
+        # of its terms' bits. Only units over the gate are scored, in query-term order as before.
+        bits = {term: sum(1 << g for g, group in enumerate(groups) if term in group) for term in terms}
+        weight = {term: math.log(1 + (unit_count - frequency[term] + .5) / (frequency[term] + .5)) for term in terms}
         ranked = []
-        for i, score in scores.items():
-            coverage = sum(bool(group & matched[i]) for group in groups) / max(1, len(groups))
+        for i, counts in unit_counts.items():
+            mask = 0
+            for term in counts:
+                mask |= bits.get(term, 0)
+            coverage = mask.bit_count() / max(1, len(groups))
             if coverage < .6:
                 continue
+            matched = {term for term in counts if term in bits}
             unit = units[i]
             # A window must contribute evidence beyond a single message.
-            if len(unit) > 1 and any(matched[i] <= token_cache[id(row)].keys() for row in unit):
+            if len(unit) > 1 and any(matched <= hot.get(id(row), {}).keys() for row in unit):
                 continue
+            score, scale = 0.0, 1.5 * (.25 + .75 * lengths[i] / average)
+            for term in terms:
+                count = counts.get(term)
+                if count:
+                    score += weight[term] * count * 2.5 / (count + scale)
             ranked.append((score * coverage * (1.4 if any(r["role"] == "user" for r in unit) else 1), i, coverage))
         ranked.sort(key=lambda hit: (-hit[0], -hit[2], hit[1]))
         seen = set()
@@ -232,14 +237,14 @@ def retrieve(rows, queries, limit=5, roles="both", since=None, until=None, proje
     ordered = [dict(e, match="message") for e in
                sorted(fused.values(), key=lambda e: (-e["fusion_score"], e["session"]))[:limit]]
     if len(ordered) < limit:
-        for entry in session_fill(selected, normalized, token_cache, fused.keys(), limit - len(ordered)):
+        for entry in session_fill(selected, normalized, hot, length, fused.keys(), limit - len(ordered)):
             entry["evidence"] = [evidence_hit(row, terms, None, None) for row, terms in entry["evidence"]]
             ordered.append(dict(entry, match="session"))
     candidates = []
     for rank, entry in enumerate(ordered, 1):
         evidence = entry["evidence"][:6]
         messages = sessions[entry["session"]]
-        opening = next((r["text"] for r in messages if r["role"] == "user"), "")
+        opening = next((text_of(r) for r in messages if r["role"] == "user"), "")
         candidate = dict(evidence[0])
         candidate.update(rank=rank, fusion_score=round(entry["fusion_score"], 6), match=entry["match"],
                          title=next((r["title"] for r in messages if r.get("title")), None),
@@ -257,7 +262,7 @@ def retrieve(rows, queries, limit=5, roles="both", since=None, until=None, proje
 
 def search(source, queries, cwd, limit, roles, since=None, until=None, project=None, session=None):
     started = time.monotonic()
-    rows, metadata = load(source, cwd, queries[0])
+    rows, metadata = load(source, cwd, queries)
     result = retrieve(rows, queries, limit, roles, since, until, project, session)
     result.update(metadata, elapsed_ms=round((time.monotonic() - started) * 1000))
     return result
