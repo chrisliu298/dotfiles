@@ -78,6 +78,10 @@ These gates, plus the one-line confirmation, carry the highest design risk: sile
 wrong match. The margin is only a weak tiebreak (at corpus scale there is almost always a
 near-scoring runner-up), so coverage + the user-turn requirement do the real gating. Re-run
 `eval/run_eval.py` after any threshold change — it fails closed on a single false-confident.
+The shared entrypoint's ranking (`shared/retrieve.py`, which `global_recall.py search` uses) is
+measured separately by `shared/eval/run_eval.py`: descriptive episode recall for both stores, from a host-local gold
+file (`~/.local/state/recall-eval/episodes.jsonl`, never committed: it quotes private
+conversations), plus this gold set's positives as a regression check.
 
 ## Latency & scope
 
