@@ -42,6 +42,21 @@ below the table, `wt-*` are cx executor questions relayed by `cx ask`), `schedul
 3. **One change at a time**, then re-run the same commands over the window after it, with the
    same filters. Revert a change whose numbers got worse.
 
+## Re-check after a change
+
+Besides re-running the numbers, check each time:
+
+- **Same clock window.** Compare days over the same hours (e.g. 00:00 to now on every day); a
+  night after a change against a daytime before it shows nothing.
+- **Why peer traffic moved.** Read the messages, not just the count: deliverables of work the
+  session handed out are expected; pure receipts ("收到", "已登记") and status sync are the cost a
+  routing change is meant to remove.
+- **Each session's live crons against its role.** The latest `session_cron_carry` attachment
+  lists the crons carried into the session; add `CronCreate` / `CronDelete` calls after it.
+  Polling a session's role doc keeps out of it (a lead re-adding its own watch loop) is drift.
+- **Retired sessions are gone.** Every session the plan closes has no tmux session and no
+  process left.
+
 ## Counting rules the helper encodes
 
 Check these before trusting a hand-rolled count:
