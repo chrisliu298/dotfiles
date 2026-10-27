@@ -1,6 +1,6 @@
 ---
 name: agent-audit
-description: Measure how Claude Code sessions and agents spend their turns (who interrupts whom, cross-session message traffic, subagent / skill / agent-team / codex-exec use) from local transcripts, and run the baseline → one change → re-measure loop for multi-agent workflow changes. Use when the user wants to review, restructure or re-check an agent workflow, or asks how much an agent is interrupted or delegates.
+description: Measure how Claude Code sessions and agents spend their turns from local transcripts (interruptions, cross-session messages, subagent/skill/agent-team/codex-exec use), and run baseline → one change → re-measure for workflow changes. Use to review, restructure or re-check an agent workflow.
 user-invocable: true
 allowed-tools: Bash, Read
 ---

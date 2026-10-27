@@ -1,7 +1,7 @@
 ---
 name: arxiv-reader
 user-invocable: true
-description: Read an arxiv paper from its TeX source for exact math, tables and figures. Use when the user shares an arxiv URL (abs/pdf/html) or ID like "2401.12345", or asks to explain a paper.
+description: Read an arxiv paper from its TeX source for exact math, tables and figures. Use for an arxiv URL or an ID like "2401.12345", or a request to explain a paper.
 allowed-tools: Bash(curl:*), Bash(file:*), Bash(tar:*), Bash(mkdir:*), Bash(mv:*), Bash(rm:*), Bash(head:*), Bash(defuddle:*), Read, Grep
 ---
 

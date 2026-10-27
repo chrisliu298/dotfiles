@@ -1,7 +1,7 @@
 ---
 effort: low
 name: gpt-pro
-description: Ask ChatGPT Pro alone for a take or second opinion when the user requests GPT-Pro. Pro alongside other backends goes to agent-team.
+description: Ask ChatGPT Pro (GPT-Pro) alone for a take or second opinion, only when the user asks for it. Pro alongside other backends goes to agent-team.
 allowed-tools: Bash(gpt-pro:*), Bash(${CLAUDE_SKILL_DIR}/scripts/gpt-pro:*), Read, Write
 user-invocable: true
 ---

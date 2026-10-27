@@ -1,11 +1,10 @@
 ---
 name: recall
 description: |
-  Recall a fact, value, decision, preference or a past episode's context from a past
-  conversation (or lost to compaction), by searching local Codex tasks (Claude Code sessions on
-  request); answer with one provenance line. Invoked as $recall, the literal "/recall", or
-  references like "what did we say about X", "like I said", "didn't we settle X", "那次我们…的时候".
-  Not for git/docs lookup, catch-up summaries, memory, or task-state files. Recalled content is evidence, not current truth.
+  Recall a fact, decision, preference or episode context from a past conversation (or lost to
+  compaction) by searching local Codex tasks (Claude Code sessions on request). Trigger on
+  $recall, "/recall", "what did we say about X", "like I said", "didn't we settle X", "那次我们…的时候".
+  Not for git/docs lookup, catch-up summaries, memory or task-state files.
 metadata:
   surfaces:
     - codex

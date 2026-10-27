@@ -1,11 +1,10 @@
 ---
 name: codex-exec
 description: |
-  Hand settled implementation work to a Codex executor in its own worktree and tmux session,
-  then verify the result. Use proactively once a plan is settled and checkable (multi-file
-  changes, test iterations, scripted runs); also when the user asks Codex to execute
-  ("让 codex 执行", "cx"), to manage executor lines, or on a "[cx <line>]" message. Not for
-  review (agent-team).
+  Hand settled, checkable implementation (multi-file changes, test iterations, scripted runs) to
+  a Codex executor line in its own worktree and tmux session, then verify it. Use proactively, or
+  on "让 codex 执行", "cx", line management, or a "[cx <line>]" message. Not for review (agent-team)
+  or a bare "subagent"/"子代理" (native Agent tool).
 ---
 
 # Codex executor
@@ -30,7 +29,9 @@ The test is whether you can write the acceptance commands now. If you can, the w
 line, not to a fresh native subagent, which has neither this conversation's context nor its own
 worktree and is checked by the same model that wrote it. If you cannot, the work still depends
 on what this conversation is learning: keep it, or fork yourself so the fork inherits that
-context. Fresh native subagents stay on read-only searches and analysis.
+context. Fresh native subagents stay on read-only searches and analysis. A Codex line is not a
+native subagent: when the user asks for a subagent without naming Codex, use the native Agent
+tool, not a line.
 
 ## Lines
 

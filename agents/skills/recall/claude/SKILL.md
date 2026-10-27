@@ -1,11 +1,10 @@
 ---
 name: recall
 description: |
-  Recall a fact, value, decision, preference or a past episode's context stated in a past
-  session but not in docs or code, by searching local Claude Code sessions (Codex tasks on
-  request); answer with one provenance line. Trigger on "/recall" or references like "what did
-  we say about X", "like I said", "didn't we settle X", "那次我们…的时候". Not for git/docs
-  lookup, catch-up summaries, memory, or task state. Re-verify recalled items before acting.
+  Recall a fact, decision, preference or episode context from a past session that is not in docs
+  or code, by searching local Claude Code sessions (Codex tasks on request). Trigger on
+  "/recall", "what did we say about X", "like I said", "didn't we settle X", "那次我们…的时候". Not for
+  git/docs lookup, catch-up summaries, memory files or task state.
 user-invocable: true
 allowed-tools: Bash, Read
 ---

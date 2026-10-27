@@ -1,10 +1,10 @@
 ---
 name: merlin
 description: |
-  Submit, read back, reprioritize, debug and stop Merlin/Seed training jobs, read their logs,
-  check group GPU headroom and devboxes through merlin-cli (job-v2). Use for any JobRun sid,
-  seed.bytedance.net job URL, precheck, queue_priority, trial/pod logs, Robust restarts,
-  execute-script, free GPUs, or merlin-cli 401/403 (提交任务、查任务、日志、优先级、卡位、预检、停任务).
+  Submit, read, reprioritize, debug and stop Merlin/Seed training jobs, read their logs, and
+  check free GPUs and devboxes via merlin-cli (job-v2). Use for a JobRun sid, seed.bytedance.net
+  job URL, precheck, queue_priority, trial/pod logs, Robust restarts, execute-script, or
+  merlin-cli 401/403 (提交任务、查任务、日志、优先级、卡位、预检、停任务).
 ---
 
 # merlin-cli (job-v2)

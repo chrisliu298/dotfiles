@@ -1,6 +1,6 @@
 ---
 name: agent-team
-description: Delegate read-only analysis, research, planning or review to the gpt (Codex), claude, cursor (Cursor Agent on Gemini), muse, ds (DeepSeek) and pro (ChatGPT Pro) backends, alone or in parallel. Use when the user names one of them for such a task or asks for this skill; pro alone goes to the gpt-pro skill. Not for implementation.
+description: Delegate read-only analysis, research, planning or review to the gpt (Codex), claude, cursor (Gemini), muse, ds (DeepSeek) or pro (ChatGPT Pro) backends, alone or in parallel, when the user names one. Not for implementation (codex-exec), pro alone (gpt-pro), or a bare "subagent"/"子代理" (native Agent tool).
 ---
 
 # Agent Team
@@ -35,7 +35,9 @@ backend or add deadlines (`wait --timeout` bounds the wait). `--file PATH`
 (repeatable) shares local files: `pro` cannot open paths, so its prompt inlines
 their contents, while the other backends receive the absolute paths to read.
 If no backend was chosen and the request does not identify one, ask which to use.
-An unspecified “subagent review” remains the caller's native subagent workflow.
+These backends are separate CLI sessions, not the caller's native subagents (the
+Agent tool). A request for a “subagent” or “subagent review” that names no backend
+uses the native subagent workflow, not this skill.
 Always name backends by these ids, in prompts, reports and attribution alike:
 `gpt` is Codex CLI; `claude` is Claude Code; `cursor` is Cursor Agent on Gemini;
 `muse` is Muse Code; `ds` is DeepSeek through Claude Code; `pro` is ChatGPT Pro

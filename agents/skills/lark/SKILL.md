@@ -1,10 +1,8 @@
 ---
 name: lark
 description: |
-  Read and edit Feishu/Lark docs, wiki pages, sheets and chat history through lark-cli. Use
-  when the task touches a larkoffice.com / feishu.cn URL or token (docx, wiki, sheets), the
-  project OnePage or weekly report, a Feishu group's messages, or lark-cli auth/scope errors
-  (飞书文档、知识库、表格、群消息、周报、OnePage).
+  Read and edit Feishu/Lark docs, wiki pages and sheets, and read group chats, via lark-cli. Use
+  for a larkoffice.com / feishu.cn URL or token, or lark-cli auth/scope errors (飞书文档、知识库、表格、群消息).
 ---
 
 # lark-cli
