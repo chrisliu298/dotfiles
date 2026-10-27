@@ -19,6 +19,10 @@ Before Pro starts answering, `send` fails as not ready; resend the same text sho
 Once the answer has finished the conversation accepts nothing further; start a
 new task that includes that answer and the new question.
 
+A failure after submission leaves the conversation in ChatGPT. `wait` on the same
+handle again: it collects that conversation's answer without spending quota. A
+fresh run after a failure spends quota again and needs the user's decision.
+
 `interrupt` and `stop` both stop the run, which cannot resume. `status` reports
 `running`, `finished`, `stopped`, or a failure; `capture` adds the local engine's
 recent progress trace when the relay runs on this host.

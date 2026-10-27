@@ -71,7 +71,7 @@ The wrapper's **exit code** is the agent's decision key — every code maps to o
 | exit | meaning | do next |
 |---|---|---|
 | 0 | response on stdout (non-empty) | use it |
-| 1 | engine error, or rc 0 with an empty body (extraction failure) | read the `reason` in stderr → reason table below; if none, inspect `run_dir`. Do **not** blindly resubmit (would re-burn quota) |
+| 1 | engine error, or rc 0 with an empty body (extraction failure) | if stderr has `recoverable: true`, first reattach with `gpt-pro --run-id <id>`: it collects the original conversation's answer without quota. Otherwise read the `reason` in stderr → reason table below; if none, inspect `run_dir`. Do **not** blindly resubmit (would re-burn quota) |
 | 2 | usage error (empty/oversized prompt, bad run-id, bad flag) — no quota burned | fix the call from the stderr message; do **not** reattach |
 | 3 | `status: "timeout"` — only from a worker started before the engine's generation cap was removed; current workers never time out | terminal — don't reattach (a re-fetch just re-times-out); inspect `streaming-*.png`, surface to the user |
 | 4 | run_dir not found (reattach to a run that never landed) | the submit never reached the engine — start a **fresh** run (drop `--run-id`) |
@@ -98,6 +98,7 @@ The **`sent?`** column is the resubmit-safety key: **pre-send** = the failure ha
 | `browser_disconnected_after_send` | 1 | **post-send** | Chrome dropped after the send — the run may still be live | **never auto-resubmit**; check `worker.stderr`/reattach first |
 | `send_outcome_unknown` | 1 | **ambiguous** | the send click raised with no conversation captured — may or may not have sent | **never resend blind**; surface to the user |
 | `page_closed_before_conversation_url` | 1 | **ambiguous** | tab closed before the conversation URL was captured | same — never resend blind |
+| `recovery_turn_drift` | 1 | **post-send** | a recovered conversation holds user messages beyond the original prompt and delivered supplements (someone continued it by hand) | nothing is published; surface the conversation URL to the user — never resubmit automatically |
 | `page_recovery_exhausted` | 1 | **post-send** | tab kept closing; recovery attempts exhausted | terminal; surface `run_dir` |
 | `worker_exception` | 1 | depends | Python exception in the worker | inspect `run_dir/worker.stderr` (structured stage trace) — the last `stage` before the error tells you where it died, and whether `sent` had fired |
 | *(none — `status: "timeout"`)* | 3 | post-send | legacy only: no completion within the generation cap that older workers had. Arrives as a **status, not a reason** (the dict carries no `reason` key) | terminal — inspect `run_dir/streaming-*.png`. `response.partial.md` holds a partial body, never an answer |

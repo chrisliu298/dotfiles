@@ -91,6 +91,8 @@ reference for grounding and judgment checks.
   the initial prompt. Explicitly queued supplements keep their separate send/receipt
   lifecycle; normal completion checks, model audit, and browser cleanup still apply.
   Without a usable saved URL, it exits 6; inspect the artifacts and report the failure.
+  A post-send error whose stderr says `recoverable: true` restores the same way:
+  the answer may already be finished in the original conversation.
   Empty output without a completion event means the call may still be running.
 - To stop generation, use `gpt-pro --stop <literal-id>`. `TaskStop` or `kill` on a
   background task can kill its detached collector while browser generation continues.
