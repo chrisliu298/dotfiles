@@ -12,25 +12,14 @@
 # those are archived (POST /v1/code/sessions/<cse_id>/archive, as Claude Code
 # does) unless still connected or some transcript's latest bridge session.
 # Only bridge sessions owned by the current account are touched.
-# Usage: rc-title          archive superseded sessions, rename live (non-archived)
-#                          sessions whose title differs
-#        rc-title -n       show what would change, change nothing
-#        rc-title -a       include archived sessions
-#        rc-title -h       show this help
+# Usage: rc-title   archive superseded sessions, rename live (non-archived)
+#                   sessions whose title differs; takes no options
 set -euo pipefail
 
 PROJECTS=${RC_TITLE_PROJECTS:-$HOME/.claude/projects}
 API=${RC_TITLE_API:-https://api.anthropic.com}
 
-dry=0 archived=0
-while getopts :hna opt; do
-  case $opt in
-    n) dry=1 ;;
-    a) archived=1 ;;
-    h) sed -n '/^# Usage:/,/^set /{/^set /d;s/^# \{0,1\}//;p;}' ${0:A}; exit 0 ;;
-    *) print -u2 "rc-title: bad option -$OPTARG"; print -u2 "usage: rc-title [-n] [-a] [-h]"; exit 2 ;;
-  esac
-done
+(( $# == 0 )) || { print -u2 "usage: rc-title (takes no options)"; exit 2; }
 
 account=$(jq -r '.oauthAccount.accountUuid // empty' ~/.claude.json)
 token=$(security find-generic-password -s 'Claude Code-credentials' -w |
@@ -80,7 +69,6 @@ for f in ${(f)"$( (( $#files )) && ls -t -- $files )"}; do
     remote=$(session $old) || continue
     jq -e '.status != "archived" and .connection_status != "connected"' <<<$remote >/dev/null || continue
     print -r -- "$old: archive superseded $(jq -r '.title // "<none>"' <<<$remote)"
-    (( dry )) && continue
     api POST $old/archive '{}' >/dev/null && (( ++retired ))
   done
 
@@ -91,10 +79,9 @@ for f in ${(f)"$( (( $#files )) && ls -t -- $files )"}; do
   state=$(jq -r '.status // empty' <<<$remote)
   current=$(jq -r '.title // empty' <<<$remote)
   [[ $current == "$title" ]] && continue
-  (( archived )) || [[ $state != archived ]] || continue
+  [[ $state != archived ]] || continue
 
   print -r -- "$cse ($state): ${current:-<none>} -> $title"
-  (( dry )) && continue
   api PUT $cse "$(jq -nc --arg t "$title" '{title: $t}')" >/dev/null && (( ++changed ))
 done
-(( dry )) || print "rc-title: renamed $changed, archived $retired session(s)"
+print "rc-title: renamed $changed, archived $retired session(s)"
