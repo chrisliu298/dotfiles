@@ -32,6 +32,7 @@ LINKS=(
     "agents/claude/keybindings.json:.claude/keybindings.json"
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
     "agents/claude/lang-guard.py:.claude/lang-guard.py"
+    "agents/claude/opus-repin.sh:.claude/opus-repin.sh"
     "agents/claude/presence:.claude/presence/presence"
     "agents/claude/themes/anthropic-dark.json:.claude/themes/anthropic-dark.json"
     "agents/claude/themes/anthropic-light.json:.claude/themes/anthropic-light.json"

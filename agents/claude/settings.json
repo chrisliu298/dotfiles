@@ -78,6 +78,27 @@
       {
         "hooks": [{ "type": "command", "command": "python3 ~/.claude/lang-guard.py stop" }]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [{ "type": "command", "command": "bash ~/.claude/opus-repin.sh session-start" }]
+      },
+      {
+        "matcher": "resume",
+        "hooks": [{ "type": "command", "command": "bash ~/.claude/opus-repin.sh session-resume" }]
+      }
+    ],
+    "PreModelSwitch": [
+      {
+        "hooks": [{ "type": "command", "command": "bash ~/.claude/opus-repin.sh pre-switch" }]
+      }
+    ],
+    "PostModelSwitch": [
+      {
+        "matcher": "claude-opus-5|claude-opus-5-5",
+        "hooks": [{ "type": "command", "command": "bash ~/.claude/opus-repin.sh post-switch" }]
+      }
     ]
   },
   "deniedMcpServers": [
