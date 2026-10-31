@@ -43,7 +43,7 @@ require('readline').createInterface({ input: process.stdin }).on('line', (line) 
   if (m.method === 'initialize') return reply({ protocolVersion: '2025-06-18', capabilities: {}, serverInfo: { name: 'fake' }, instructions: 'base' });
   if (m.method === 'tools/list') {
     send({ jsonrpc: '2.0', id: m.id, method: 'ping' }); // server request reusing the client's id
-    return reply({ tools: [{ name: 'js', inputSchema: {} }, { name: 'turn_ended', inputSchema: {} }] });
+    return reply({ tools: [{ name: 'js', inputSchema: {} }, { name: 'js_add_node_module_dir', inputSchema: {} }, { name: 'turn_ended', inputSchema: {} }] });
   }
   if (m.method !== 'tools/call') return;
   const code = m.params.arguments?.code;
@@ -59,6 +59,13 @@ require('readline').createInterface({ input: process.stdin }).on('line', (line) 
     return send({ jsonrpc: '2.0', id: 'e2', method: 'elicitation/create', params: {
       message: 'Allow Computer Use to use "Notes"?', mode: 'form', requestedSchema: { type: 'object', properties: {} },
       _meta: { codex_approval_kind: 'mcp_tool_call', persist: ['session', 'always'] },
+    } });
+  }
+  if (code === 'approve-1password') {
+    waiting.set('e3', (r) => reply({ content: [{ type: 'text', text: 'answer:' + r.result.action }] }));
+    return send({ jsonrpc: '2.0', id: 'e3', method: 'elicitation/create', params: {
+      message: 'Allow Computer Use to use "1Password"?', mode: 'form', requestedSchema: { type: 'object', properties: {} },
+      _meta: { codex_approval_kind: 'mcp_tool_call', persist: ['session', 'always'], tool_params: { app: 'com.1password.1password' } },
     } });
   }
   reply({ content: [{ type: 'text', text: 'ok' }] });
@@ -116,7 +123,7 @@ test('a malformed line from the host does not kill the proxy', async (t) => {
   assert.equal(r.result.content[0].text, 'ok');
 });
 
-test('tools/list: js gets maxResultSizeChars despite an id-colliding server request; turn_ended is hidden', async (t) => {
+test('tools/list: js gets maxResultSizeChars despite an id-colliding server request; other tools are hidden', async (t) => {
   const p = start(t);
   const r = await p.request('tools/list', {});
   const names = r.result.tools.map((x) => x.name);
@@ -147,6 +154,13 @@ test('a Codex app approval is granted for the session without a dialog or reachi
   const p = start(t);
   const r = await p.call('codex-approval');
   assert.equal(r.result.content[0].text, 'answer:' + JSON.stringify({ action: 'accept', content: {}, _meta: { persist: 'session' } }));
+  assert.ok(!p.fromProxy.some((m) => m.method === 'elicitation/create'));
+});
+
+test('a 1Password approval is declined', async (t) => {
+  const p = start(t);
+  const r = await p.call('approve-1password');
+  assert.equal(r.result.content[0].text, 'answer:decline');
   assert.ok(!p.fromProxy.some((m) => m.method === 'elicitation/create'));
 });
 

@@ -4,7 +4,8 @@
     "CLAUDE_CODE_NO_FLICKER": "1",
     "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
-    "CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION": "9007199254740991"
+    "CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION": "9007199254740991",
+    "CLAUDE_CODE_ENABLE_CFC": "0"
   },
   "statusLine": {
     "type": "command",
@@ -24,7 +25,6 @@
     "artifact-design": "off",
     "artifact-diagramming": "off",
     "code-review": "off",
-    "codex-exec": "off",
     "fewer-permission-prompts": "off",
     "init": "off",
     "keybindings-help": "off",
@@ -52,7 +52,9 @@
       "DesignSync",
       "ReportFindings",
       "SendFeedback",
-      "Agent(statusline-setup)"
+      "Agent(statusline-setup)",
+      "mcp__computer-use__*",
+      "mcp__claude-in-chrome__*"
     ]
   },
   "hooks": {

@@ -308,20 +308,20 @@ trust_claude_scratch() {
     fi
 }
 
-# Browser work goes through the codex-computer-use MCP server (Helium), so keep
-# Claude in Chrome off by default; `claude --chrome` still turns it on per session.
-# claudeInChromeDefaultEnabled is what /chrome's "Enabled by default" toggle writes.
-disable_claude_chrome() {
+# codex-computer-use is the only computer-use tool, so drop the per-project opt-ins for the
+# built-in server. settings.json denies its tools; this also keeps the server from starting.
+disable_builtin_computer_use() {
     local config="$HOME/.claude.json" tmp
+    local filter='.projects[]? |= if has("enabledMcpServers") then .enabledMcpServers -= ["computer-use"] else . end'
     [[ -f "$config" ]] && command -v jq >/dev/null 2>&1 || return 0
-    jq -e '.claudeInChromeDefaultEnabled == false' "$config" >/dev/null 2>&1 && return
+    jq -e '[.projects[]?.enabledMcpServers // [] | index("computer-use")] | any | not' "$config" >/dev/null 2>&1 && return
     tmp=$(mktemp "$config.XXXXXX") || return
-    if jq '.claudeInChromeDefaultEnabled = false' "$config" > "$tmp"; then
+    if jq "$filter" "$config" > "$tmp"; then
         mv "$tmp" "$config"
-        log "disable Claude in Chrome by default in ~/.claude.json"
+        log "disable built-in computer-use in ~/.claude.json"
     else
         rm -f "$tmp"
-        warn "could not disable Claude in Chrome in ~/.claude.json"
+        warn "could not disable built-in computer-use in ~/.claude.json"
     fi
 }
 
@@ -884,7 +884,7 @@ main() {
     rm -f "$_plugins_out"
     # After MCP and plugin registration, whose claude CLI calls also write ~/.claude.json.
     trust_claude_scratch
-    disable_claude_chrome
+    disable_builtin_computer_use
 
     section "Tools"
     wait "$_tools_pid" 2>/dev/null || true

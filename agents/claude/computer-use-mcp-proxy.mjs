@@ -1,8 +1,9 @@
 // Stdio MCP proxy in front of @oai/cua-repl that makes it behave the same in every Claude host
 // (CLI, T3 Code, Agent SDK apps), with the agent at full permission:
 // - Approvals: the server always sees an elicitation-capable client. The proxy grants every
-//   Codex app approval itself for this session (no dialog, never forwarded to the host) and
-//   declines any other elicitation, e.g. one the model's own JS raises, since nobody answers.
+//   Codex app approval itself for this session (no dialog, never forwarded to the host), except
+//   DENIED_APPS, and declines any other elicitation, e.g. one the model's own JS raises, since
+//   nobody answers. This guards against accidents; it is no boundary, since `js` can run a shell.
 // - Screenshots: downscaled so the long edge is at most MAX_EDGE (Claude Code's built-in
 //   computer use sends ~1372x887), with the factor the model must multiply coordinates by,
 //   since cua clicks/drags/scrolls take original screenshot pixels. Unreadable images pass
@@ -12,6 +13,7 @@
 //   request metadata; concurrent Claude sessions then keep separate tabs. Codex ends each
 //   turn through the hidden turn_ended tool, which closes the agent's tabs; here the whole
 //   process is one turn, so the proxy hides that tool and calls it once on shutdown.
+// - Tools: only `js` and `js_reset` reach the model.
 // - Result size: the first call returns the cua API docs, which can pass Claude Code's
 //   50,000-character persist-to-file threshold, so `js` declares a higher
 //   anthropic/maxResultSizeChars and the docs stay inline.
@@ -29,12 +31,11 @@ const MAX_EDGE = 1372;
 const MAX_RESULT_CHARS = 200000;
 const TURN_ENDED_TIMEOUT_MS = 5000;
 const TURN_ENDED_ID = 'computer-use-mcp-proxy/turn-ended';
+const HIDDEN_TOOLS = new Set(['turn_ended', 'js_add_node_module_dir']);
+const DENIED_APPS = new Set(['com.1password.1password']);
 
-const env = { ...process.env };
-env.NODE_REPL_REQUEST_META ??= JSON.stringify({
-  'x-codex-turn-metadata': { session_id: randomUUID(), turn_id: randomUUID() },
-});
-const turn = JSON.parse(env.NODE_REPL_REQUEST_META)['x-codex-turn-metadata'] ?? {};
+const turn = { session_id: randomUUID(), turn_id: randomUUID() };
+const env = { ...process.env, NODE_REPL_REQUEST_META: JSON.stringify({ 'x-codex-turn-metadata': turn }) };
 
 const [cmd, ...args] = process.argv.slice(2);
 const server = spawn(cmd, args, { stdio: ['pipe', 'pipe', 'inherit'], env });
@@ -65,11 +66,9 @@ function shutdown(stop) {
   ended ??= new Promise((resolve) => {
     turnEndedReply = resolve;
     setTimeout(resolve, TURN_ENDED_TIMEOUT_MS);
-    if (turn.session_id && turn.turn_id) {
-      toServer({ jsonrpc: '2.0', id: TURN_ENDED_ID, method: 'tools/call', params: {
-        name: 'turn_ended', arguments: { hook_event_name: 'Stop', session_id: turn.session_id, turn_id: turn.turn_id },
-      } });
-    } else resolve();
+    toServer({ jsonrpc: '2.0', id: TURN_ENDED_ID, method: 'tools/call', params: {
+      name: 'turn_ended', arguments: { hook_event_name: 'Stop', session_id: turn.session_id, turn_id: turn.turn_id },
+    } });
   });
   ended.then(stop);
 }
@@ -89,7 +88,8 @@ relay(process.stdin, (msg) => {
 }, toServer);
 
 function answerElicitation(params) {
-  if (!params?._meta?.codex_approval_kind) return { action: 'decline' };
+  const meta = params?._meta;
+  if (!meta?.codex_approval_kind || DENIED_APPS.has(meta.tool_params?.app)) return { action: 'decline' };
   return { action: 'accept', content: {}, _meta: { persist: 'session' } };
 }
 
@@ -135,7 +135,7 @@ relay(server.stdout, (msg) => {
     msg.result.instructions = [msg.result.instructions, process.env.CU_EXTRA_INSTRUCTIONS].filter(Boolean).join('\n\n');
   }
   if (toolsListIds.delete(msg.id) && Array.isArray(msg.result?.tools)) {
-    msg.result.tools = msg.result.tools.filter((tool) => tool.name !== 'turn_ended');
+    msg.result.tools = msg.result.tools.filter((tool) => !HIDDEN_TOOLS.has(tool.name));
     for (const tool of msg.result.tools) {
       if (tool.name === 'js') tool._meta = { ...tool._meta, 'anthropic/maxResultSizeChars': MAX_RESULT_CHARS };
     }
