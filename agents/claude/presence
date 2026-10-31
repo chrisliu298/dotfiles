@@ -17,11 +17,18 @@ only `presence back` ends it: a prompt the user types while away is a check-in, 
 session may ask them questions (AskUserQuestion is not blocked, the queue is shown). Prompts from agent-team
 reviewers (CODEX_REVIEW_SUBAGENT_ACTIVE=1) do not count.
 
+What is blocked while the user is away is WAITING on them, not asking: an AskUserQuestion that nobody will
+answer for hours stalls the session. So the first call is always denied and queued, but a session whose queue
+is already non-empty may ask again and is let through whenever the user typed anywhere in the last
+CHECKIN_MINUTES (`global_checkin`) — he is at the keyboard, walking his windows, and should not have to type
+into each one first. The deny reason tells the agent to retry on that path. Queueing stays mandatory, so a
+question is never lost even if the retry goes unanswered.
+
 Questions are queued per session in ~/.claude/presence/questions/<session_id>.json, so each agent keeps its
 own list across compaction and asks it when the user is back: in the next prompt the user types to it, or
 after its next tool call once the user is back anywhere.
 """
-import calendar, fcntl, glob, json, os, subprocess, sys, time
+import calendar, datetime, fcntl, glob, json, os, subprocess, sys, time
 
 STATE = os.path.expanduser("~/.claude/presence/state.json")
 QDIR = os.path.expanduser("~/.claude/presence/questions")
@@ -124,6 +131,22 @@ def in_scope(cwd):
 
 def checked_in(s, sid):
     return time.time() - s.get("checkins", {}).get(sid, 0) < CHECKIN_MINUTES * 60
+
+
+def global_checkin(s):
+    """The user typed somewhere in the last CHECKIN_MINUTES, so he is at the keyboard right now.
+
+    `checked_in` is per session and only frees the window he typed into; this one is global and frees any
+    session that already has a queue to re-ask it. `away` clears `checkins` but never `last_prompt`, so the
+    few minutes between announcing he leaves and actually leaving are covered too."""
+    stamp = s.get("last_prompt")
+    if not stamp:
+        return False
+    try:
+        at = datetime.datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%S%z").timestamp()
+    except ValueError:
+        return False
+    return time.time() - at < CHECKIN_MINUTES * 60
 
 
 def describe(s):
@@ -240,20 +263,26 @@ def settle(path, since, title, sid):
 def hook_ask():
     event = json.load(sys.stdin)
     s = load()
-    if not in_scope(event.get("cwd")) or s["state"] != "away" or checked_in(s, event.get("session_id") or "?"):
+    sid = event.get("session_id") or "?"
+    if not in_scope(event.get("cwd")) or s["state"] != "away" or checked_in(s, sid):
         return
+    if global_checkin(s) and qload(sid)["items"]:
+        return  # he is at the keyboard and this session already queued its questions: let it re-ask
     entries = []
     for item in event.get("tool_input", {}).get("questions", []):
         options = " / ".join(o.get("label", "") for o in item.get("options", []))
         entries.append((f"{item.get('question', '')}（选项：{options}）", item.get("question", "")))
-    ids = qadd(event.get("session_id") or "?", entries, event.get("session_title"))
-    reason = (f"{describe(s)}。这些问题已记进本会话的待问清单（{' '.join(f'#{i}' for i in ids)}），"
-              "用户回来后会提醒你一起问。不要等用户：能按可逆默认推进的就推进，"
+    ids = qadd(sid, entries, event.get("session_title"))
+    retry = ("用户此刻就在电脑前（刚在某个窗口发过消息）：**现在把这几个问题原样再问一次，这次会放行**，"
+             "他正在逐个窗口看。" if global_checkin(s) else
+             f"等他回来：他在任一窗口发过消息后的 {CHECKIN_MINUTES} 分钟内，本会话只要清单非空就可以原样重问。")
+    reason = (f"{describe(s)}。拦的是「等」不是「问」：没人答的提问会把这个会话挂住，所以第一次调用一定先入清单。"
+              f"这些问题已记进本会话的待问清单（{' '.join(f'#{i}' for i in ids)}）。{retry}"
+              "同时不要等用户：能按可逆默认推进的就推进，"
               "先按某个默认推进了的，把该条换成带默认的版本：`~/.claude/presence/presence resolved <ID>` 后 "
               "`~/.claude/presence/presence ask \"<问题>（已先按 X 推进，待确认）\"`；"
               "没有安全默认的就停在那一步。"
-              + f"用户在这里发消息只算回来查看，查看后 {CHECKIN_MINUTES} 分钟内才放行提问；只有他明确说回来了才运行 "
-              "`~/.claude/presence/presence back`。")
+              "只有他明确说回来了才运行 `~/.claude/presence/presence back`。")
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
                                              "permissionDecisionReason": reason}}, ensure_ascii=False))
 
