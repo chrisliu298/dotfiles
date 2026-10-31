@@ -29,6 +29,9 @@ the computer-use runtime of the ChatGPT app: one `js` tool with a `cua` API for 
 Helium. `dotfiles.sh` registers it at user scope only on machines with the ChatGPT app and
 `~/.codex/computer-use`.
 
+This is our minimal version based on [amontlabs/lcu](https://github.com/amontlabs/lcu). When a
+ChatGPT update or the Computer Use service breaks it, check how lcu handled the problem first.
+
 - **How it runs.** `computer-use-mcp.sh` starts the app's own `@oai/cua-repl` under the app's
   OpenAI-signed Node, the only caller the Computer Use service accepts. Only the `computer`
   surface and the `chrome` (extension) browser backend are on; Codex's in-app browser is not
