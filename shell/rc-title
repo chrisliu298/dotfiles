@@ -20,6 +20,7 @@ PROJECTS=${RC_TITLE_PROJECTS:-$HOME/.claude/projects}
 API=${RC_TITLE_API:-https://api.anthropic.com}
 
 (( $# == 0 )) || { print -u2 "usage: rc-title (takes no options)"; exit 2; }
+(( $+commands[rg] )) || { print -u2 "rc-title: ripgrep (rg) not on PATH"; exit 1; }
 
 account=$(jq -r '.oauthAccount.accountUuid // empty' ~/.claude.json)
 token=$(security find-generic-password -s 'Claude Code-credentials' -w |
@@ -36,29 +37,58 @@ api() {  # api METHOD cse_id [json-body] -> prints body, returns 1 on non-200
   [[ $code == 200 ]] || { print -u2 "rc-title: $1 $2 -> HTTP $code"; return 1; }
 }
 
-session() { api GET $1 | jq -c '.session // .response_shape // .'; }
+tmp=$(mktemp -d)
+trap 'rm -rf $tmp' EXIT
+
+# GET the sessions in parallel into $tmp/<id>; a failed one leaves no file.
+fetch_sessions() {
+  local id code file
+  for id in $@; do print -r -- "url = \"$API/v1/code/sessions/$id\""$'\n'"output = \"$tmp/$id\""; done >$tmp/curl.cfg
+  curl -sS --parallel --parallel-max 8 --config $tmp/curl.cfg -w '%{http_code} %{filename_effective}\n' \
+    -H "Authorization: Bearer $token" -H 'anthropic-version: 2023-06-01' |
+    while read -r code file; do
+      [[ $code == 200 ]] && continue
+      print -u2 "rc-title: GET ${file:t} -> HTTP $code"
+      rm -f -- $file
+    done || true
+}
+
+session() { [[ -f $tmp/$1 ]] && jq -c '.session // .response_shape // .' $tmp/$1; }
+
+# Transcripts total gigabytes and only a few match, so scan them with rg.
+scan() { rg --no-config --no-ignore --hidden --no-filename -N "$@"; }
 
 # Every transcript's latest bridge session: a resumed or forked conversation may
 # still be on one that an older transcript shows as superseded.
 typeset -A latest
-for f in ${(f)"$(grep -rl '^{"type":"bridge-session"' "$PROJECTS" --include='*.jsonl' || true)"}; do
-  cse=$(grep '^{"type":"bridge-session"' "$f" | jq -rs 'map(.bridgeSessionId | select(. != "")) | last // empty')
+for f in ${(f)"$(scan -l -g '*.jsonl' '^\{"type":"bridge-session"' "$PROJECTS" || true)"}; do
+  cse=$(scan '^\{"type":"bridge-session"' "$f" | jq -rs 'map(.bridgeSessionId | select(. != "")) | last // empty')
   [[ -z $cse ]] || latest[$cse]=1
 done
 
 changed=0 retired=0
 typeset -A seen
-files=(${(f)"$(grep -rl '^{"type":"history-suppression"' "$PROJECTS" --include='*.jsonl' || true)"})
+files=(${(f)"$(scan -l -g '*.jsonl' '^\{"type":"history-suppression"' "$PROJECTS" || true)"})
 # Newest first: a resumed or forked conversation shares the bridge session of
 # the one it came from, and the transcript touched last holds the live title.
+metas=() ids=()
 for f in ${(f)"$( (( $#files )) && ls -t -- $files )"}; do
   # Latest bridge session and title; a custom title wins over the AI title.
-  meta=$(grep -E '^\{"type":"(bridge-session|custom-title|ai-title)"' "$f" | jq -sc --arg a "$account" '
+  meta=$(scan '^\{"type":"(bridge-session|custom-title|ai-title)"' "$f" | jq -sc --arg a "$account" '
     map(select(.type == "bridge-session")) as $b | {
     bridge: ($b | last),
     old: ($b | map(select(.ownerAccountUuid == $a) | .bridgeSessionId) | unique - [$b[-1].bridgeSessionId]),
     title: ((map(select(.type == "custom-title")) | last | .customTitle)
             // (map(select(.type == "ai-title")) | last | .aiTitle))}')
+  metas+=$meta
+  for old in ${(f)"$(jq -r '.old[]' <<<$meta)"}; do
+    [[ -n ${latest[$old]:-} ]] || ids+=$old
+  done
+  ids+=(${(f)"$(jq -r --arg a "$account" 'select(.title and .bridge.ownerAccountUuid == $a) | .bridge.bridgeSessionId // empty' <<<$meta)"})
+done
+(( $#ids )) && fetch_sessions ${(u)ids}
+
+for meta in "${metas[@]}"; do
   cse=$(jq -r '.bridge.bridgeSessionId // empty' <<<$meta)
   owner=$(jq -r '.bridge.ownerAccountUuid // empty' <<<$meta)
   title=$(jq -r '.title // empty' <<<$meta)
