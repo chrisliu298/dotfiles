@@ -24,6 +24,7 @@
     "artifact-design": "off",
     "artifact-diagramming": "off",
     "code-review": "off",
+    "codex-exec": "off",
     "fewer-permission-prompts": "off",
     "init": "off",
     "keybindings-help": "off",
