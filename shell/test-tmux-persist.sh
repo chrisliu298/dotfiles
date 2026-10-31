@@ -27,27 +27,28 @@ session() {
         '{pid: $p, procStart: $s, tmux: $t, cwd: $c, sessionId: $i}' \
         > "$TMUX_PERSIST_CLAUDE_SESSIONS/$1.json"
 }
-# busy <session> <id>: start a fake Claude in <session>, record its session file,
-# and leave its pid and pane in busy_pid and busy_pane.
+# busy <session> <id> [<flag>...]: start a fake Claude in <session> launched with
+# <flag>s, record its session file, and leave its pid and pane in busy_pid and busy_pane.
 busy() {
     t kill-session -t "=$1" 2>/dev/null || true
-    t new-session -d -s "$1" -c "$test_root" "sleep 600"
+    t new-session -d -s "$1" -c "$test_root" "perl -e 'sleep 600' -- ${*:3}"
     busy=$(t display -p -t "=$1:" '#{pane_pid} #{pane_id}')
     busy_pid=${busy% *} busy_pane=${busy#* }
     busy_epoch=$(LC_ALL=C /bin/date -j -f '%a %b %d %T %Y' "$(LC_ALL=C /bin/ps -o lstart= -p "$busy_pid" | xargs)" +%s)
     session "$busy_pid" "$(LC_ALL=C /bin/date -u -r "$busy_epoch" '+%a %b %d %T %Y')" "$1:@9.$busy_pane" "$2"
 }
-# resumed <pid> <pane> <id>: wait until <pane> resumed <id> and the old Claude <pid> is gone.
+# resumed <pid> <pane> <id>: wait until <pane> resumed <id>, telling it about the
+# restart, and the old Claude <pid> is gone.
 resumed() {
     tries=0
-    until t capture-pane -p -t "$2" | grep -qxF "resumed $3"; do
+    until t capture-pane -p -J -t "$2" | grep -q "^resumed $3 .*重启"; do
         tries=$((tries + 1)); [ "$tries" -lt 50 ] || fail "resume $3 not run in restarted pane"
         sleep 0.1
     done
     ! kill -0 "$1" 2>/dev/null || fail "old Claude still running"
 }
 snap() { cat "$TMUX_PERSIST_STATE/snapshot"; }
-row() { printf '%s\t%s\t%s' "$1" "$test_root" "$2"; }
+row() { printf '%s\t%s\t%s\t%s' "$1" "$test_root" "$2" "${3:-}"; }
 
 # No tmux server yet (as at boot): save leaves the snapshot alone.
 printf 'gone-r2v\t/x\tid-gone\n' > "$TMUX_PERSIST_STATE/snapshot"
@@ -95,6 +96,19 @@ done
 [ "$(t display -p -t "=keep-r2v:" '#{pane_current_path}')" = "$(cd "$test_root" && pwd -P)" ] \
     || fail "pane not in snapshot cwd"
 
+# The effort a Claude was launched with is saved and restored with it.
+t kill-session -t "=keep-r2v"
+busy keep-r2v id-keep --effort high
+"$tp" save
+[ "$(snap)" = "$(row keep-r2v id-keep high)" ] || fail "effort not saved: $(snap)"
+t kill-server
+"$tp" restore > /dev/null
+tries=0
+until t capture-pane -p -t "=keep-r2v:" | grep -qxF "resumed id-keep --effort high"; do
+    tries=$((tries + 1)); [ "$tries" -lt 50 ] || fail "effort not restored: $(t capture-pane -p -t "=keep-r2v:")"
+    sleep 0.1
+done
+
 # Running sessions are left alone.
 [ -z "$("$tp" restore)" ] || fail "restore touched a running session"
 
@@ -115,6 +129,19 @@ busy two id-two
     || fail "restart did not report both sessions"
 resumed "$one_pid" "$one_pane" id-one
 resumed "$busy_pid" "$busy_pane" id-two
+
+# restart keeps the effort the old Claude was launched with, as --effort or --effort=.
+busy busy id-high --effort high
+"$tp" restart busy > /dev/null
+resumed "$busy_pid" "$busy_pane" "id-high --effort high"
+busy busy id-eq --effort=xhigh
+"$tp" restart busy > /dev/null
+resumed "$busy_pid" "$busy_pane" "id-eq --effort xhigh"
+
+# restart --effort sets the level for the restarted sessions.
+busy busy id-set --effort high
+"$tp" restart --effort medium busy > /dev/null
+resumed "$busy_pid" "$busy_pane" "id-set --effort medium"
 
 # A session without a running Claude stops the whole restart.
 busy busy id-untouched
