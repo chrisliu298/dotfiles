@@ -23,6 +23,10 @@ minimum-contrast = 1.1
 # faint-opacity = 0.75
 
 font-family = Berkeley Mono
+font-style = SemiCondensed
+font-style-bold = Bold SemiCondensed
+font-style-italic = SemiCondensed Oblique
+font-style-bold-italic = Bold SemiCondensed Oblique
 # Pin the Han fallback. Ghostty reuses whichever fallback face it loaded first,
 # so one Hangul or kana glyph otherwise makes shared Han characters render in a
 # Korean or Japanese font while simplified-only ones use PingFang, mixing weights.
@@ -35,7 +39,7 @@ cursor-style-blink = false
 adjust-cursor-thickness = 4
 
 adjust-cell-height = 10%
-adjust-cell-width = -10%
+# adjust-cell-width = -10%x
 
 scrollback-limit = 134217728
 

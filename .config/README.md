@@ -6,7 +6,7 @@ Terminal application configs.
 
 | App | Config | Notes |
 |-----|--------|-------|
-| Ghostty | `ghostty/config` | Berkeley Mono font, OpenAI Light/Dark themes |
+| Ghostty | `ghostty/config` | Berkeley Mono SemiCondensed font, OpenAI Light/Dark themes |
 | Starship | `starship/starship.toml` | Prompt with OpenAI Light/Dark palettes |
 | Neovim | `nvim/init.lua` | OpenAI Light/Dark colorschemes, selected from the host-local mode at startup |
 | tmux | `tmux/tmux.conf` | Prefix: `C-a`, vi mode, mouse enabled, OpenAI Light/Dark themes |
