@@ -7,14 +7,18 @@
 
 The rule sits at the top of the system prompt while long sessions fill up with English thinking and tool
 output, so replies drift into English and each English reply makes the next one likelier. A reminder at the
-end of the context breaks that chain. Only interactive sessions are checked: `claude -p` output feeds scripts,
-and agent-team reviewers (CODEX_REVIEW_SUBAGENT_ACTIVE=1) report to the lead, not the user.
+end of the context breaks that chain. Every session the user reads is checked (terminal CLI, VS Code, Claude
+Desktop, T3 Code); sessions whose output feeds a program are not: `claude -p` (sdk-cli), Agent SDK callers
+other than T3 Code (sdk-ts with T3CODE_CLI_PATH set), GitHub Actions, bench, and agent-team reviewers
+(CODEX_REVIEW_SUBAGENT_ACTIVE=1), which report to the lead.
 """
 import json, os, re, sys
 
 CODE = re.compile(r"```.*?```|`[^`\n]*`|https?://\S+", re.S)
 CJK = re.compile(r"[一-鿿]")
 WORD = re.compile(r"[A-Za-z]+(?:'[a-z]+)?")
+# CLAUDE_CODE_ENTRYPOINT values whose output feeds a program rather than the user
+PROGRAMMATIC = {"sdk-cli", "sdk-ts", "sdk-py", "claude-code-github-action", "bench"}
 STOPWORDS = {"a", "an", "the", "and", "but", "or", "so", "as", "is", "are", "was", "be", "to", "of", "in", "on", "for",
              "from", "with", "it", "its", "that", "this", "they", "their", "i", "i'm", "i'll", "my", "not", "now", "next",
              "then", "also", "still", "than"}
@@ -68,7 +72,9 @@ def main(cmd):
         print("english" if is_english(sys.stdin.read()) else "ok")
         return
     event = json.load(sys.stdin)
-    if os.environ.get("CLAUDE_CODE_ENTRYPOINT") != "cli" or os.environ.get("CODEX_REVIEW_SUBAGENT_ACTIVE") == "1":
+    entry = os.environ.get("CLAUDE_CODE_ENTRYPOINT")
+    t3 = entry == "sdk-ts" and "T3CODE_CLI_PATH" in os.environ
+    if (entry in PROGRAMMATIC and not t3) or os.environ.get("CODEX_REVIEW_SUBAGENT_ACTIVE") == "1":
         return
     if cmd == "stop":
         text = str(event.get("last_assistant_message") or "")
