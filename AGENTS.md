@@ -10,7 +10,7 @@ Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/
 
 - `agents/AGENTS.md` — the single global instruction file, symlinked as both `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`.
 - `agents/eval/` — instruction-following harness for the shared agent doc (prompts, rubric, runner scripts).
-- `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` installs each into the agents the `SKILLS` table selects (most to Claude, Codex, Muse, and DeepSeek Harness; some are Claude- or Codex-only): live symlinks for Claude/Codex/DeepSeek Harness, and copy-installs into Muse's store-owned personal root via `muse skills install`.
+- `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` installs each into the agents the `SKILLS` table selects (most to Claude, Codex, Muse, and DeepSeek Harness; some are Claude- or Codex-only): live symlinks for Claude/Codex/DeepSeek Harness, and copy-installs into Muse's store-owned personal root via `muse skills install`. The one exception is `agent-audit`, a project skill in `.claude/skills/` that loads only in this repo.
 
 Elsewhere:
 
@@ -29,7 +29,7 @@ Elsewhere:
 
 ## Skills, MCP Servers & Plugins
 
-Never edit in `~/.claude/skills/`, `~/.codex/skills/`, or `~/.dsh/skills/` — those are symlinks. Check `agents/skills/README.md` for source.
+Never edit repo-owned skills through `~/.claude/skills/`, `~/.codex/skills/`, or `~/.dsh/skills/` — those entries are symlinks. Check `agents/skills/README.md` for source. Host-local skills such as `weekly-report` are real directories there and are edited in place.
 
 Run `./dotfiles.sh` after changes to installation logic, skill wiring, or managed configuration. Instruction-only edits use the existing symlinks; run `./dotfiles.sh lint` and verify the affected links resolve instead.
 
