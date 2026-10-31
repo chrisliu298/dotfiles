@@ -80,6 +80,10 @@ CLAUDE_ONLY_AGENT_SKILLS=(weekly-report 'merlin-*')
 MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: claude,codex or omit for both)
     "chrome-devtools|npx|chrome-devtools-mcp@latest --autoConnect --channel stable --no-usage-statistics|codex"
 )
+# Codex Computer Use for Claude runs on the ChatGPT app's runtime: register it only where that is installed.
+if [[ -x /Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node && -d "$HOME/.codex/computer-use" ]]; then
+    MCP_SERVERS+=("codex-computer-use|$ROOT/agents/claude/computer-use-mcp.sh||claude")
+fi
 
 # name|marketplace — Claude plugins installed + enabled at user scope (claude-only)
 PLUGINS=()
@@ -300,6 +304,23 @@ trust_claude_scratch() {
     else
         rm -f "$tmp"
         warn "could not trust $root in ~/.claude.json"
+    fi
+}
+
+# Browser work goes through the codex-computer-use MCP server (Helium), so keep
+# Claude in Chrome off by default; `claude --chrome` still turns it on per session.
+# claudeInChromeDefaultEnabled is what /chrome's "Enabled by default" toggle writes.
+disable_claude_chrome() {
+    local config="$HOME/.claude.json" tmp
+    [[ -f "$config" ]] && command -v jq >/dev/null 2>&1 || return 0
+    jq -e '.claudeInChromeDefaultEnabled == false' "$config" >/dev/null 2>&1 && return
+    tmp=$(mktemp "$config.XXXXXX") || return
+    if jq '.claudeInChromeDefaultEnabled = false' "$config" > "$tmp"; then
+        mv "$tmp" "$config"
+        log "disable Claude in Chrome by default in ~/.claude.json"
+    else
+        rm -f "$tmp"
+        warn "could not disable Claude in Chrome in ~/.claude.json"
     fi
 }
 
@@ -862,6 +883,7 @@ main() {
     rm -f "$_plugins_out"
     # After MCP and plugin registration, whose claude CLI calls also write ~/.claude.json.
     trust_claude_scratch
+    disable_claude_chrome
 
     section "Tools"
     wait "$_tools_pid" 2>/dev/null || true
