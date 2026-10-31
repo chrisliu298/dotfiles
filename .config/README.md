@@ -11,6 +11,7 @@ Terminal application configs.
 | Neovim | `nvim/init.lua` | OpenAI Light/Dark colorschemes, selected from the host-local mode at startup |
 | tmux | `tmux/tmux.conf` | Prefix: `C-a`, vi mode, mouse enabled, OpenAI Light/Dark themes |
 | btop | `btop/btop.conf.template` | OpenAI Light/Dark themes, braille graphs |
+| Rex | `rex/init.lua` | Cmd+Left/Right send Home/End, Shift/Opt+Enter send LF (fixes for keys tmux mangles) |
 | fastfetch | `fastfetch/config.jsonc` | ANSI colors follow the terminal theme |
 
 ## Tmux Keybindings

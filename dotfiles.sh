@@ -26,6 +26,7 @@ LINKS=(
     ".config/nvim:.config/nvim"
     ".config/tmux:.config/tmux"
     ".config/ghostty:.config/ghostty"
+    ".config/rex:.config/rex"
     "agents/AGENTS.md:.claude/CLAUDE.md"
     "agents/claude/keybindings.json:.claude/keybindings.json"
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
