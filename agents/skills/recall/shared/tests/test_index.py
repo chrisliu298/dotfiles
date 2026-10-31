@@ -5,7 +5,9 @@ import os
 import sqlite3
 import sys
 import tempfile
+import time
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -77,6 +79,67 @@ class IndexTests(unittest.TestCase):
         result = r.search("codex", ["zeppelin hangar"], str(self.root), 5, "both")
         self.assertEqual(result["candidates"][0]["cwd"], "/work/app")
         self.assertEqual(result["stats"]["messages_kept"], 2)
+
+    def test_claude_dates_are_local_not_utc(self):
+        with mock.patch.dict(os.environ, {"TZ": "Asia/Shanghai"}):
+            time.tzset()
+            self.addCleanup(time.tzset)
+            path = self.root / "claude" / "projects" / "app" / "s1.jsonl"
+            self.write(path, [{"type": "mode", "mode": "normal"},
+                              claude_record("user", "orchard websocket", "2026-10-30T23:30:00Z")])
+            found = r.search("claude", ["orchard websocket"], str(self.root), 5, "both", since="2026-10-31")
+        self.assertEqual([c["session"] for c in found["candidates"]], ["s1"])
+
+    def test_codex_dates_are_local_not_utc(self):
+        with mock.patch.dict(os.environ, {"TZ": "Asia/Shanghai"}):
+            time.tzset()
+            self.addCleanup(time.tzset)
+            path = self.root / "codex" / "sessions" / "2026" / "10" / "31" / "rollout-a.jsonl"
+            meta = {"timestamp": "2026-10-30T23:30:00Z", "type": "session_meta",
+                    "payload": {"id": "sess-a", "cwd": "/work/app", "thread_source": "user"}}
+            record = codex_record("m1", "user", "orchard websocket", 1)
+            record["timestamp"] = "2026-10-30T23:30:00Z"
+            self.write(path, [meta, record])
+            found = r.search("codex", ["orchard websocket"], str(self.root), 5, "both", since="2026-10-31")
+        self.assertEqual([c["session"] for c in found["candidates"]], ["sess-a"])
+
+    def test_timeline_keeps_tokenless_replies_current_session_and_drops_system_turns(self):
+        path = self.root / "claude" / "projects" / "app" / "s1.jsonl"
+        scheduled = dict(claude_record("user", "scheduled tick"), isMeta=True, promptSource="system")
+        self.write(path, [{"type": "mode", "mode": "normal"}, claude_record("user", "go"), scheduled])
+        with mock.patch.dict(os.environ, {"CLAUDE_CODE_SESSION_ID": "s1"}):
+            found = r.timeline("claude", str(self.root), 0)
+        self.assertEqual([m["text"] for m in found["sessions"][0]["messages"]], ["go"])
+        self.assertEqual(found["coverage"]["messages_filtered"], 1)
+        self.assertEqual(found["current_task_exclusion"], "included")
+
+    def test_timezone_change_rebuilds_local_dates(self):
+        path = self.root / "claude" / "projects" / "app" / "s1.jsonl"
+        self.write(path, [{"type": "mode", "mode": "normal"},
+                          claude_record("user", "orchard websocket", "2026-10-30T23:30:00Z")])
+        self.addCleanup(time.tzset)
+        for zone, day, hits in (("Asia/Shanghai", "2026-10-31", ["s1"]), ("UTC", "2026-10-31", [])):
+            with mock.patch.dict(os.environ, {"TZ": zone}):
+                time.tzset()
+                found = r.search("claude", ["orchard websocket"], str(self.root), 5, "both", since=day)
+            self.assertEqual([c["session"] for c in found["candidates"]], hits)
+
+    def test_timeline_lists_window_without_a_query(self):
+        path = self.root / "claude" / "projects" / "app" / "s1.jsonl"
+        self.write(path, [{"type": "mode", "mode": "normal"},
+                          claude_record("user", "too early", "2026-09-01T07:59:00Z"),
+                          claude_record("user", "ship the fix", "2026-09-01T08:00:00Z"),
+                          claude_record("assistant", "done", "2026-09-01T08:01:00Z"),
+                          claude_record("user", "too late", "2026-09-01T12:01:00Z")])
+        since = datetime(2026, 9, 1, 8, tzinfo=timezone.utc).timestamp()
+        until = datetime(2026, 9, 1, 12, tzinfo=timezone.utc).timestamp()
+        found = r.timeline("claude", str(self.root), since, until)
+        self.assertEqual(found["status"], "ok")
+        session = found["sessions"][0]
+        self.assertEqual(session["session"], "s1")
+        self.assertEqual([(m["line"], m["text"]) for m in session["messages"]], [(3, "ship the fix")])
+        both = r.timeline("claude", str(self.root), since, until, roles="both")
+        self.assertEqual(both["coverage"]["messages_listed"], 2)
 
 
 if __name__ == "__main__":

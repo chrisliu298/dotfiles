@@ -15,13 +15,14 @@ import json
 import os
 import sqlite3
 import sys
+import time
 from array import array
 from collections import Counter, defaultdict
 from datetime import datetime
 from functools import partial
 from pathlib import Path
 
-SCHEMA = 2
+SCHEMA = 3
 TAIL = 4096          # bytes before the cursor that must be unchanged for an append-only update
 
 
@@ -40,6 +41,13 @@ def _pairs(blob: bytes):
     if sys.byteorder != "little":
         data.byteswap()
     return zip(data[::2], data[1::2])
+
+
+def _epoch(timestamp, fallback: float) -> float:
+    try:
+        return datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp()
+    except (ValueError, AttributeError):
+        return fallback
 
 
 class Index:
@@ -61,7 +69,8 @@ class Index:
         for pragma in ("journal_mode=WAL", "synchronous=NORMAL", "temp_store=MEMORY",
                        "cache_size=-262144", "mmap_size=4294967296"):
             self.db.execute(f"PRAGMA {pragma}")
-        version = f"{SCHEMA}:{self.api.PARSER_VERSION}:{self.language.PARSER_VERSION}"
+        # Stored dates are local, so a timezone change invalidates them.
+        version = f"{SCHEMA}:{self.api.PARSER_VERSION}:{self.language.PARSER_VERSION}:{time.tzname}:{time.timezone}"
         self.db.execute("CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)")
         found = self.db.execute("SELECT value FROM meta WHERE key='version'").fetchone()
         if not found or found[0] != version:
@@ -152,9 +161,9 @@ class Index:
             info, terms = {}, set()
         records = []
         if self.source == "claude":
-            for line, role, text, date, tokens, project in api.file_rows(path, cursor):
-                records.append(((path.stem, line, line, role, None, None, date, project, None, None, None,
-                                 None), text, Counter(tokens)))
+            for line, role, text, date, tokens, project, timestamp, system in api.file_rows(path, cursor):
+                records.append(((path.stem, line, line, role, timestamp, _epoch(timestamp, mtime_ns / 1e9), date,
+                                 project, None, "system" if system else None, None, None), text, Counter(tokens)))
             if not info.get("interactive"):
                 info["interactive"] = api.is_interactive(path)
             info["title"] = api.cursor_title(cursor)
@@ -167,12 +176,8 @@ class Index:
             total.add(stats)
             info["stats"] = total.as_dict()
             for turn in turns:
-                try:
-                    epoch = datetime.fromisoformat(turn.timestamp.replace("Z", "+00:00")).timestamp()
-                except (ValueError, AttributeError):
-                    epoch = turn.mtime
-                records.append(((turn.session_id, turn.line, turn.ordinal, turn.role, turn.timestamp, epoch,
-                                 turn.timestamp[:10], turn.cwd, turn.item_id, turn.thread_source,
+                records.append(((turn.session_id, turn.line, turn.ordinal, turn.role, turn.timestamp,
+                                 _epoch(turn.timestamp, turn.mtime), api._local_date(turn), turn.cwd, turn.item_id, turn.thread_source,
                                  turn.git_branch, turn.mtime), turn.text, Counter(language.tokenize(turn.text))))
         postings = defaultdict(list)
         for fields, text, counts in records:
@@ -237,7 +242,8 @@ class Index:
             title = info[file_id].get("title") or ""
             for m in messages[file_id]:
                 doc = partial(self._doc, path, m, title)
-                rows.append(dict(session=m[2], role=m[5], date=m[8], line=m[3], project=m[9], order=m[3],
+                rows.append(dict(session=m[2], role=m[5], date=m[8], epoch=m[7], system=m[11] == "system", line=m[3],
+                                 project=m[9], order=m[3],
                                  title=title or None, token_counts=counts.get(m[0], {}), length=m[14],
                                  fetch=partial(self.text, m[0]), render=doc))
         stats = {"scope": "all", "files_total": len(files), "files_scanned": len(selected), "docs": len(rows),
@@ -272,7 +278,7 @@ class Index:
             if exclude and m[2] == exclude:
                 continue
             rows.append(dict(session=m[2], role=m[5], timestamp=m[6], cwd=m[9], locator={"item_id": m[10]},
-                             title=titles.get(m[2]), date=m[6][:10], order=m[4], token_counts=counts.get(m[0], {}),
+                             title=titles.get(m[2]), date=m[8], epoch=m[7], order=m[4], token_counts=counts.get(m[0], {}),
                              length=m[14], fetch=partial(self.text, m[0]), render=partial(self._turn, path, m, root)))
         return rows, {"stats": total.as_dict(),
                       "current_task_exclusion": "resolved" if exclude else "unresolved",

@@ -108,6 +108,32 @@ class GlobalRecallTests(unittest.TestCase):
         self.assertEqual(result["status"], "ambiguous")
         self.assertEqual({c["source"] for c in result["candidates"]}, {"codex", "claude"})
 
+    def test_timeline_needs_no_query_and_merges_sources(self) -> None:
+        session = {"session": "s", "messages": [{"time": "2026-09-01T09:00"}]}
+        reply = {"status": "ok", "sessions": [session], "coverage": {}}
+        output = io.StringIO()
+        with mock.patch.object(recall, "run_source", return_value=reply) as run, contextlib.redirect_stdout(output):
+            recall.main(["timeline", "--agent", "claude", "--source", "all",
+                         "--since", "2026-09-01", "--until", "2026-09-01T12:00"])
+        result = json.loads(output.getvalue())
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual({s["source"] for s in result["sessions"]}, {"codex", "claude"})
+        command = run.call_args.args[1]
+        self.assertEqual(command[0], "timeline")
+        self.assertNotIn("--query", command)
+
+    def test_invalid_since_is_a_usage_error(self) -> None:
+        with self.assertRaises(SystemExit) as caught, contextlib.redirect_stderr(io.StringIO()):
+            recall.main(["timeline", "--agent", "claude", "--since", "2026-13-01"])
+        self.assertEqual(caught.exception.code, 2)
+
+    def test_time_bounds_are_local(self) -> None:
+        from datetime import datetime
+        self.assertEqual(recall.moment("2026-09-01"), datetime(2026, 9, 1).timestamp())
+        self.assertEqual(recall.moment("2026-09-01T12:30"), datetime(2026, 9, 1, 12, 30).timestamp())
+        self.assertEqual(recall.moment("2026-09-01", end=True),
+                         datetime(2026, 9, 1, 23, 59, 59, 999999).timestamp())
+
 
 if __name__ == "__main__":
     unittest.main()

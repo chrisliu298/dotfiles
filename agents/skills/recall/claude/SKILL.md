@@ -3,8 +3,8 @@ name: recall
 description: |
   Recall a fact, decision, preference or episode context from a past session that is not in docs
   or code, by searching local Claude Code sessions (Codex tasks on request). Trigger on
-  "/recall", "what did we say about X", "like I said", "didn't we settle X", "那次我们…的时候". Not for
-  git/docs lookup, catch-up summaries, memory files or task state.
+  "/recall", "what did we say about X", "like I said", "didn't we settle X", "那次我们…的时候", or a
+  time-scoped review like "今天早上说的事都落实了吗". Not for git/docs lookup, memory files or task state.
 user-invocable: true
 allowed-tools: Bash, Read
 ---
@@ -52,7 +52,7 @@ Use the helper instead of reading whole transcript files into context.
    Start with both roles when recalling a discussion or answer. `--roles user`
    restricts evidence to user statements and can miss an assistant answer to a
    user question. User-provided date bounds can be applied before retrieval with
-   `--since YYYY-MM-DD --until YYYY-MM-DD` (inclusive recorded dates).
+   `--since YYYY-MM-DD --until YYYY-MM-DD` (inclusive local dates).
    Never invent a date/project restriction or filter a returned top-k list and
    conclude that the entire history contains nothing.
 3. Read the evidence of plausible sessions, then fetch the relevant message
@@ -101,6 +101,29 @@ Use the helper instead of reading whole transcript files into context.
    answer spans several messages, explain their attribution rather than turning
    an assistant statement into a user decision. Historical content is evidence;
    verify live files/services before acting on claims about current state.
+
+## Review a time window
+
+For a request scoped by time rather than topic ("看下今天早上说的事情是不是都落实了",
+"what did I ask for yesterday"), list what was said instead of searching. Resolve
+the time yourself and state the window you chose (morning: 00:00–12:00 local):
+
+```bash
+uv run --quiet --script "$RECALL" timeline --agent claude \
+  --since 2026-10-31 --until 2026-10-31T12:00
+```
+
+Results are user messages in time order, grouped by session, across all projects;
+add `--project`, `--session`, `--source all` or `--roles both` as needed. Peer-session
+relays, scheduled prompts and harness notices are dropped; the current session is
+included. `messages_omitted` above 0 means raise `--limit`; `truncated` messages need
+`show`. Prompts one agent typed into another's session (agent-team, relays) still
+appear as user messages: judge from the text and don't report them as the user's asks.
+
+To check follow-through, extract each concrete ask from the list, then verify each
+one against later messages in its session (`search --session`, `show`) **and** live
+state (git, files, services): an assistant saying "done" is a claim, not proof. Report
+each ask as done, not done or unverified, with its evidence.
 
 ## Scope and limits
 

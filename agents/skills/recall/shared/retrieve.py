@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import importlib.util
 import math
+import re
 import sys
 import time
 from collections import Counter, defaultdict
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -107,7 +109,7 @@ def session_fill(selected, normalized, hot, length, exclude, limit):
     return ordered
 
 
-PRIVATE = ("text", "order", "score", "coverage", "token_counts", "title", "render", "fetch", "length")
+PRIVATE = ("text", "order", "score", "coverage", "token_counts", "title", "render", "fetch", "length", "epoch", "system")
 
 
 def evidence_hit(row, terms, query_index, coverage):
@@ -268,12 +270,65 @@ def search(source, queries, cwd, limit, roles, since=None, until=None, project=N
     return result
 
 
+# Harness notices that carry no structural marker in the transcript (see the `system` field).
+NOT_TYPED = ("another claude session sent a message", "[request interrupted by user",
+             "your response above was stop", "(re-invocation of")
+IMAGE_NOTICE = re.compile(r"^(?:\[image: [^\]]*\]\s*)+", re.I)
+
+
+def list_window(rows, since, until=None, roles="user", project=None, session=None, limit=200, max_chars=500):
+    """Messages inside [since, until] (epoch seconds) in time order, grouped by session.
+
+    Takes no query: this answers "what was said then", which ranking cannot.
+    """
+    inside = sorted((r for r in rows if (roles == "both" or r["role"] == roles)
+                     and since <= r["epoch"] and (until is None or r["epoch"] <= until)
+                     and (not project or project.lower() in (r.get("project") or r.get("cwd") or "").lower())
+                     and (not session or r["session"].startswith(session))),
+                    key=lambda r: (r["epoch"], r["order"]))
+    filtered, kept = 0, []
+    for row in inside:
+        text = IMAGE_NOTICE.sub("", " ".join(text_of(row).split()))
+        if row["role"] == "user" and (row.get("system") or not text or text.lower().startswith(NOT_TYPED)):
+            filtered += 1
+            continue
+        message = {"time": datetime.fromtimestamp(row["epoch"]).astimezone().isoformat(timespec="minutes"),
+                   "role": row["role"], "text": text[:max_chars], "chars": len(text), "truncated": len(text) > max_chars}
+        if "locator" in row:
+            message["item_id"] = row["locator"]["item_id"]
+        else:
+            message["line"] = row["line"]
+        kept.append((row, message))
+    sessions = {}
+    for row, message in kept[:limit]:
+        sessions.setdefault(row["session"], {
+            "session": row["session"], "title": row.get("title"), "project": row.get("project") or row.get("cwd"),
+            "messages": []})["messages"].append(message)
+    return {"status": "ok" if kept else "no_messages", "sessions": list(sessions.values()),
+            "coverage": {"messages_available": len(rows), "messages_in_window": len(inside),
+                         "messages_filtered": filtered, "messages_listed": len(kept[:limit]),
+                         "messages_omitted": len(kept[limit:]), "sessions_listed": len(sessions), "roles": roles}}
+
+
+def timeline(source, cwd, since, until=None, roles="user", project=None, session=None, limit=200, max_chars=500):
+    started = time.monotonic()
+    # Unlike search, keep the current session: its earlier requests may have left the context.
+    rows, metadata = Index(source, backend).rows(cwd, set(), None)
+    result = list_window(rows, since, until, roles, project, session, limit, max_chars)
+    result.update(metadata, current_task_exclusion="included", elapsed_ms=round((time.monotonic() - started) * 1000))
+    return result
+
+
 if __name__ == "__main__":
     import argparse
     import json
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", choices=("codex", "claude"), required=True)
-    parser.add_argument("--query", action="append", required=True)
+    parser.add_argument("--query", action="append")
+    parser.add_argument("--timeline", action="store_true")
+    parser.add_argument("--since-epoch", type=float)
+    parser.add_argument("--until-epoch", type=float)
+    parser.add_argument("--max-chars", type=int, default=500)
     parser.add_argument("--cwd", required=True)
     parser.add_argument("--limit", type=int, default=5)
     parser.add_argument("--roles", default="both")
@@ -283,8 +338,10 @@ if __name__ == "__main__":
     parser.add_argument("--session")
     args = parser.parse_args()
     try:
-        output = search(args.source, args.query, args.cwd, args.limit, args.roles, args.since, args.until,
-                        args.project, args.session)
+        output = (timeline(args.source, args.cwd, args.since_epoch, args.until_epoch, args.roles, args.project,
+                           args.session, args.limit, args.max_chars) if args.timeline else
+                  search(args.source, args.query, args.cwd, args.limit, args.roles, args.since, args.until,
+                         args.project, args.session))
     except Exception as exc:
         output = {"status": "error", "reason": f"{type(exc).__name__}: {exc}"}
     print(json.dumps(output, ensure_ascii=False))

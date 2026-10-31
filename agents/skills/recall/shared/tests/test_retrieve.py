@@ -110,5 +110,41 @@ class RetrievalTests(unittest.TestCase):
         self.assertLessEqual(len(r.excerpt(text, ["unique_marker"])), 602)
 
 
+class TimelineTests(unittest.TestCase):
+    def rows(self, *texts):
+        return [dict(session="a", text=text, order=i, role="user", date="2026-09-01", line=i, epoch=1000.0 + i,
+                     project="/work/app", title="T") for i, text in enumerate(texts)]
+
+    def test_drops_system_and_harness_turns(self):
+        rows = self.rows("Another Claude session sent a message: hi", "[Request interrupted by user]",
+                         "Your response above was stopped", "(Re-invocation of /recall — x", "[Image: source: /a.png]",
+                         "ship it")
+        rows.append(dict(rows[0], text="scheduled tick", order=9, line=9, epoch=1009.0, system=True))
+        found = r.list_window(rows, 0, 2000)
+        self.assertEqual([m["text"] for m in found["sessions"][0]["messages"]], ["ship it"])
+        self.assertEqual(found["coverage"]["messages_filtered"], 6)
+
+    def test_keeps_real_requests_and_every_repeat(self):
+        rows = self.rows("Generate a title for this report", "[Image: source: /a.png] 修复按钮", "继续", "只改文档", "继续")
+        messages = r.list_window(rows, 0, 2000)["sessions"][0]["messages"]
+        self.assertEqual([m["text"] for m in messages],
+                         ["Generate a title for this report", "修复按钮", "继续", "只改文档", "继续"])
+        self.assertEqual(messages[4]["line"], 4)
+
+    def test_keeps_answers_to_questions(self):
+        found = r.list_window(self.rows('Your questions have been answered: "x"="y"'), 0, 2000)
+        self.assertEqual(found["coverage"]["messages_listed"], 1)
+
+    def test_limit_and_clip_are_reported(self):
+        found = r.list_window(self.rows("one " * 200, "two", "three"), 0, 2000, limit=2, max_chars=100)
+        first = found["sessions"][0]["messages"][0]
+        self.assertTrue(first["truncated"])
+        self.assertEqual(first["chars"], 799)
+        self.assertEqual(found["coverage"]["messages_omitted"], 1)
+
+    def test_empty_window(self):
+        self.assertEqual(r.list_window(self.rows("x"), 5000, 6000)["status"], "no_messages")
+
+
 if __name__ == "__main__":
     unittest.main()
