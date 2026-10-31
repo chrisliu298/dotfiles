@@ -1,0 +1,6 @@
+#!/bin/sh
+# pbcopy decodes its input by locale and reads UTF-8 as MacRoman when LANG is
+# unset (中文 → ÁõÆÂâç...). Processes already running under a tmux server
+# started without LANG (see .zshenv) can't get it back, but they look pbcopy
+# up on PATH per copy, so this shim supplies a UTF-8 locale for them.
+LANG="${LANG:-en_US.UTF-8}" exec /usr/bin/pbcopy "$@"

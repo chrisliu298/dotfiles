@@ -8,6 +8,11 @@
 # Zsh options
 export DISABLE_MAGIC_FUNCTIONS=true
 
+# Locale: Ghostty exports LANG, but shells under a tmux server started outside
+# it (e.g. a detached `tmux new-session -d` from a script) get none, and then
+# pbcopy reads UTF-8 as MacRoman (中文 → ÁõÆÂâç...).
+export LANG="${LANG:-en_US.UTF-8}"
+
 # Terminal color support
 export COLORTERM=truecolor
 # Claude Code clamps to 256 colors under $TMUX unless this is set; tmux here

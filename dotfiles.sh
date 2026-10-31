@@ -16,6 +16,7 @@ LINKS=(
     "shell/codex-traex:.local/bin/codex-traex"
     "shell/cdswap:.local/bin/cdswap"
     "shell/rc-title:.local/bin/rc-title"
+    "shell/pbcopy:.local/bin/pbcopy"
     ".config/starship:.config/starship"
     # btop has no config include and rewrites its own config, so its live
     # ~/.config/btop/btop.conf is host-local (generated, outside git). Only the
