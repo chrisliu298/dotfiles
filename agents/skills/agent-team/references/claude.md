@@ -1,7 +1,7 @@
 # `claude` backend
 
 Uses Claude Code through the configured `c` function in the user's `.functions`.
-Model is pinned to `opus`, effort to `xhigh`, with the existing login. Do not change
+Model is pinned to `opus`, effort to `high`, with the existing login. Do not change
 the selected model/effort through slash commands or alter credentials during review.
 
 The launcher bypasses permission prompts. Read-only scope is an instruction,

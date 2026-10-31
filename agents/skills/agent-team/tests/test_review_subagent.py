@@ -633,13 +633,13 @@ def test_once_pins_and_json(harness):
     assert json.loads(result.stdout) == {'result': 'review result', 'exit_code': 0, 'is_error': False}
     call = json.loads((tmp / 'call.json').read_text())
     args = call['args']
-    assert args[args.index('--model') + 1] == {'claude': 'opus', 'gpt': 'gpt-6.1-sol', 'cursor': 'gemini-4-argon-high', 'ds': 'deepseek-flash[1m]'}[name]
+    assert args[args.index('--model') + 1] == {'claude': 'opus', 'gpt': 'gpt-6-astra', 'cursor': 'gemini-4-argon-high', 'ds': 'deepseek-flash[1m]'}[name]
     assert call['sentinel'] == '1'
     if name in ('claude', 'ds'):
-        assert args[args.index('--effort') + 1] == {'claude': 'xhigh', 'ds': 'high'}[name]
+        assert args[args.index('--effort') + 1] == 'high'
         assert call['launcher'] == {'claude': 'c', 'ds': 'ds'}[name]
     elif name == 'gpt':
-        assert 'model_reasoning_effort="xhigh"' in args
+        assert 'model_reasoning_effort="high"' in args
         assert '--dangerously-bypass-approvals-and-sandbox' in args
     else:
         assert '--mode' not in args
@@ -685,8 +685,8 @@ def test_gpt_matches_unsandboxed_launcher(harness, mode):
         if session:
             wait_for(run, session, 'capture', 'MOCK_READY')
         args = json.loads((tmp / 'call.json').read_text())['args']
-        assert args[args.index('--model') + 1] == 'gpt-6.1-sol'
-        assert 'model_reasoning_effort="xhigh"' in args
+        assert args[args.index('--model') + 1] == 'gpt-6-astra'
+        assert 'model_reasoning_effort="high"' in args
         # Like the user's `x --yolo`: no approvals and no sandbox, so network is always available.
         assert '--dangerously-bypass-approvals-and-sandbox' in args and '--sandbox' not in args
     finally:

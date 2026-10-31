@@ -225,7 +225,7 @@ def test_each_backend_runs_at_most_once_per_call(unified, action, backends):
 
 
 @pytest.mark.parametrize('options', [[], ['--backend', 'unknown'], ['--backend', 'gpt', '--effort', 'high'],
-                                   ['--backend', 'gpt', '--model', 'gpt-6.1-sol'],
+                                   ['--backend', 'gpt', '--model', 'gpt-6-astra'],
                                    ['--backend', 'cursor', '--mode', 'ask'], ['--backend', 'gemini'], ['--network', '--backend', 'gpt']])
 def test_invalid_selection_dispatches_nothing(unified, options):
     run, root = unified

@@ -6,8 +6,8 @@ description: Delegate read-only analysis, research, planning or review to the gp
 # Agent Team
 
 The user chooses the backend, not a
-model or effort tier. Each backend runs with its pinned model and effort: `xhigh`
-for gpt and claude, `high` for the rest; no model, effort, or mode selection
+model or effort tier. Each backend runs with its pinned model and effort, `high`
+for all of them; no model, effort, or mode selection
 options are exposed. Every backend runs with the
 same full access as the user's own launchers: no approval prompts, no sandbox, and
 network access (including SSH to dev machines). Read-only scope is an assignment

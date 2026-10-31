@@ -6,8 +6,8 @@ setopt pipe_fail
 harness="$1"
 shift
 case "$harness" in
-    claude) model=opus effort=xhigh ;;
-    gpt) model=gpt-6.1-sol effort=xhigh ;;
+    claude) model=opus effort=high ;;
+    gpt) model=gpt-6-astra effort=high ;;
     cursor) model=gemini-4-argon-high effort=high ;;
     muse) model=muse-wonder-full-1.0 effort=high ;;
     # DeepSeek maps xhigh to high, so high is its real top tier below max.
