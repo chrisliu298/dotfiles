@@ -36,9 +36,11 @@ ChatGPT update or the Computer Use service breaks it, check how lcu handled the 
   OpenAI-signed Node, the only caller the Computer Use service accepts. Only the `computer`
   surface and the `chrome` (extension) browser backend are on; Codex's in-app browser is not
   used. Each Claude session runs its own server (~100 MB idle, more once used).
-- **Over SSH.** `mbp16-computer-use` runs this same script through `ssh mbp16`. When
-  `SSH_CONNECTION` is set, the script tells the model that `js` and its Bash are on different
-  Macs, so the menu bar and Dock fallback has to go through `ssh`.
+- **Over SSH.** `mbp16-computer-use` runs this same script as
+  `ssh mbp16 CU_SSH_ALIAS=mbp16 ~/dotfiles/agents/claude/computer-use-mcp.sh`. `CU_SSH_ALIAS` tells
+  the model that `js` and its Bash are on different Macs, so the menu bar and Dock fallback has
+  to go through `ssh`. It is explicit because `SSH_CONNECTION` is also set when Claude itself
+  runs inside an SSH login.
 - **Full permission, no prompts.** The proxy grants every app approval for the session
   itself, except 1Password (`DENIED_APPS`), and the browser follows
   `~/.codex/browser/config.toml`, where every approval mode is `never_ask` with full CDP
@@ -58,8 +60,9 @@ ChatGPT update or the Computer Use service breaks it, check how lcu handled the 
 - **Requirements.** Helium open with the ChatGPT extension connected (its native host
   manifest comes from the Codex app). After a ChatGPT update, restart long-running sessions
   so their servers pick up the new runtime, and run
-  `node agents/claude/computer-use-mcp-smoke.mjs`, which drives the real runtime read-only,
-  checks that 1Password is refused and lists what it could not confirm.
+  `node agents/claude/computer-use-mcp-smoke.mjs`, which drives the real runtime without
+  changing anything (unless the refusal is broken, when it may launch 1Password), checks that
+  1Password is refused and lists what it could not confirm.
 
 ## Status line
 

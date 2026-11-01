@@ -1,6 +1,7 @@
 // Tests for computer-use-mcp-proxy.mjs against a fake MCP server (no ChatGPT app, UI or dialogs).
 // Run: node --test agents/claude/computer-use-mcp-proxy.test.mjs
 import { test } from 'node:test';
+import { classifyDenial } from './computer-use-mcp-smoke.mjs';
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -34,6 +35,7 @@ const fs = require('fs');
 const log = (m) => fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify(m) + '\\n');
 const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
 const big = process.env.FAKE_PNG;
+if (process.env.FAKE_HANG) { process.on('SIGTERM', () => {}); setInterval(() => {}, 1000); }
 const waiting = new Map();
 require('readline').createInterface({ input: process.stdin }).on('line', (line) => {
   const m = JSON.parse(line);
@@ -48,6 +50,7 @@ require('readline').createInterface({ input: process.stdin }).on('line', (line) 
   if (m.method !== 'tools/call') return;
   const code = m.params.arguments?.code;
   if (m.params.name === 'turn_ended') return reply({ content: [{ type: 'text', text: 'ended' }] });
+  if (code === 'pid') return reply({ content: [{ type: 'text', text: String(process.pid) }] });
   if (code === 'bad-image') return reply({ content: [{ type: 'image', data: 'AAAA', mimeType: 'image/png' }] });
   if (code === 'big-image') return reply({ content: [{ type: 'image', data: big, mimeType: 'image/png' }] });
   if (code === 'foreign-elicitation') {
@@ -72,7 +75,7 @@ require('readline').createInterface({ input: process.stdin }).on('line', (line) 
 });
 `;
 
-function start(t) {
+function start(t, extraEnv = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-proxy-test-'));
   const fake = path.join(dir, 'fake.cjs');
   const logFile = path.join(dir, 'server.log');
@@ -81,7 +84,7 @@ function start(t) {
   fs.mkdirSync(tmpdir);
   const child = spawn(process.execPath, [PROXY, process.execPath, fake], {
     stdio: ['pipe', 'pipe', 'inherit'],
-    env: { ...process.env, FAKE_LOG: logFile, FAKE_PNG: png(2000, 1000).toString('base64'), TMPDIR: tmpdir, CU_EXTRA_INSTRUCTIONS: 'extra' },
+    env: { ...process.env, FAKE_LOG: logFile, FAKE_PNG: png(2000, 1000).toString('base64'), TMPDIR: tmpdir, CU_EXTRA_INSTRUCTIONS: 'extra', ...extraEnv },
   });
   const pending = new Map();
   const fromProxy = [];
@@ -146,7 +149,7 @@ test('a large screenshot is downscaled with a coordinate note and leaves no temp
   fs.writeFileSync(file, Buffer.from(img.data, 'base64'));
   const dims = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', file], { encoding: 'utf8' });
   assert.match(dims, /pixelWidth: 1372/);
-  assert.match(note.text, /from 2000x1000 to 1372x686\. Multiply .* by 1\.4577/);
+  assert.match(note.text, /from 2000x1000 to 1372x686.*x\/y times 1\.4577.*clipped or full-page/);
   assert.deepEqual(fs.readdirSync(p.tmpdir), []);
 });
 
@@ -188,4 +191,34 @@ test('SIGTERM also ends the turn, then stops the server and the proxy', async (t
   p.child.kill('SIGTERM');
   await p.exited;
   assert.ok(p.serverLog().some((m) => m.params?.name === 'turn_ended'), 'turn_ended was not sent');
+});
+
+const isAlive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const deadline = (promise, ms, what) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(what)), ms))]);
+
+for (const [name, stop] of [['closing stdin', (p) => p.child.stdin.end()], ['SIGTERM', (p) => p.child.kill('SIGTERM')]]) {
+  test(`${name} still stops a server that ignores it, and the proxy exits`, async (t) => {
+    const p = start(t, { FAKE_HANG: '1' });
+    const pid = Number((await p.call('pid')).result.content[0].text);
+    stop(p);
+    await deadline(p.exited, 6000, 'proxy did not exit');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(isAlive(pid), false);
+  });
+}
+
+test('a host that closes its read end does not crash the proxy past tab cleanup', async (t) => {
+  const p = start(t);
+  await p.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't' } });
+  p.child.stdout.destroy();
+  p.raw(JSON.stringify({ jsonrpc: '2.0', id: 99, method: 'tools/call', params: { name: 'js', arguments: { code: 'hello' } } }));
+  await deadline(p.exited, 6000, 'proxy did not exit');
+  assert.ok(p.serverLog().some((m) => m.params?.name === 'turn_ended'), 'turn_ended was not sent');
+});
+
+test('smoke only counts the real refusal as a refusal', () => {
+  assert.equal(classifyDenial('Computer Use was not approved to use 1Password'), 'refused');
+  assert.equal(classifyDenial('Invalid app: com.1password.1password'), 'not-installed');
+  assert.equal(classifyDenial('Sky Computer Use native pipe startup failed'), 'error');
+  assert.equal(classifyDenial(undefined), 'opened');
 });

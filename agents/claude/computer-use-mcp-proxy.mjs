@@ -5,8 +5,8 @@
 //   DENIED_APPS, and declines any other elicitation, e.g. one the model's own JS raises, since
 //   nobody answers. This guards against accidents; it is no boundary, since `js` can run a shell.
 // - Screenshots: downscaled so the long edge is at most MAX_EDGE (Claude Code's built-in
-//   computer use sends ~1372x887), with the factor the model must multiply coordinates by,
-//   since cua clicks/drags/scrolls take original screenshot pixels. Unreadable images pass
+//   computer use sends ~1372x887), with the factor back to original image pixels, which is what
+//   cua clicks/drags/scrolls take for a window or viewport capture. Unreadable images pass
 //   through unchanged.
 // - Session: the browser service routes tabs by the Codex turn metadata, which Claude hosts
 //   never send, so each proxy process supplies its own session/turn ids as the default
@@ -30,6 +30,7 @@ import readline from 'node:readline';
 const MAX_EDGE = 1372;
 const MAX_RESULT_CHARS = 200000;
 const TURN_ENDED_TIMEOUT_MS = 5000;
+const STOP_TIMEOUT_MS = 3000;
 const TURN_ENDED_ID = 'computer-use-mcp-proxy/turn-ended';
 const HIDDEN_TOOLS = new Set(['turn_ended', 'js_add_node_module_dir']);
 const DENIED_APPS = new Set(['com.1password.1password']);
@@ -59,21 +60,29 @@ function relay(input, handle, forward) {
   });
 }
 
-// Never outlive the host. On a closed stdin or a termination signal, end the turn (closing the
-// agent's browser tabs) and then stop the server; a server that doesn't answer still stops.
-let ended;
+// Never outlive the host. On a closed stdin, a closed stdout or a termination signal, end the turn
+// (closing the agent's browser tabs) and then stop the server; a server that doesn't answer or
+// doesn't stop is killed.
+let shuttingDown = false;
 function shutdown(stop) {
-  ended ??= new Promise((resolve) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  new Promise((resolve) => {
     turnEndedReply = resolve;
     setTimeout(resolve, TURN_ENDED_TIMEOUT_MS);
     toServer({ jsonrpc: '2.0', id: TURN_ENDED_ID, method: 'tools/call', params: {
       name: 'turn_ended', arguments: { hook_event_name: 'Stop', session_id: turn.session_id, turn_id: turn.turn_id },
     } });
+  }).then(() => {
+    stop();
+    setTimeout(() => { server.kill('SIGKILL'); process.exit(1); }, STOP_TIMEOUT_MS);
   });
-  ended.then(stop);
 }
 let turnEndedReply = () => {};
-process.stdin.on('end', () => shutdown(() => server.stdin.end()));
+const closeServerStdin = () => server.stdin.end();
+process.stdin.on('end', () => shutdown(closeServerStdin));
+process.stdout.on('error', () => shutdown(closeServerStdin));
+server.stdin.on('error', (error) => warn(`server stdin: ${error.message}`));
 for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, () => shutdown(() => server.kill(sig)));
 
 let initializeId;
@@ -112,7 +121,7 @@ function downscale(item) {
     const k = (w / sw).toFixed(4);
     return [
       { ...item, data: fs.readFileSync(file).toString('base64') },
-      { type: 'text', text: `[Screenshot downscaled from ${w}x${h} to ${sw}x${sh}. Multiply x/y coordinates read from this image by ${k} before passing them to click, drag or scroll.]` },
+      { type: 'text', text: `[Image downscaled from ${w}x${h} to ${sw}x${sh}. A point here is at its x/y times ${k} in the original image. For a window or viewport screenshot, those are the coordinates for click, drag and scroll; for a clipped or full-page capture, also account for its offset or scroll position.]` },
     ];
   } catch {
     return [item];
