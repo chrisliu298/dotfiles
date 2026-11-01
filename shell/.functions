@@ -82,7 +82,7 @@ _cv_update() {
 }
 
 # Control Amphetamine via its AppleScript dictionary (it has no CLI).
-# Usage: amp on [Nh|Nm]   (no duration = indefinite; display may sleep)
+# Usage: amp on [Nh|Nm]   (no duration = indefinite; display stays on)
 #        amp off | amp status
 amp() {
     local script
@@ -95,7 +95,7 @@ amp() {
                 <1->m) dur=${2%m} unit=minutes ;;
                 *) echo "usage: amp on [Nh|Nm]" >&2; return 2 ;;
             esac
-            script="start new session with options {duration:$dur, interval:$unit, displaySleepAllowed:true}" ;;
+            script="start new session with options {duration:$dur, interval:$unit, displaySleepAllowed:false}" ;;
         off) script='end session' ;;
         status|'')
             script='if session is active then
