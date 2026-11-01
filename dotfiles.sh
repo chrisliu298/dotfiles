@@ -17,6 +17,7 @@ LINKS=(
     "shell/cdswap:.local/bin/cdswap"
     "shell/rc-title:.local/bin/rc-title"
     "shell/pbcopy:.local/bin/pbcopy"
+    "shell/reap_agent_team.sh:.local/bin/reap_agent_team.sh"
     ".config/starship:.config/starship"
     # btop has no config include and rewrites its own config, so its live
     # ~/.config/btop/btop.conf is host-local (generated, outside git). Only the
@@ -374,6 +375,19 @@ EOF
     launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
     launchctl bootstrap "gui/$(id -u)" "$plist" || warn "launchctl bootstrap $label failed"
     log "load ${plist/#$HOME/~}"
+}
+
+# Reap idle agent-team and codex-exec sessions every 15 minutes. Cron, not launchd: a session can
+# outlive the login that started it. Added once; an existing entry is left as the user edited it.
+install_cron() {
+    [[ "$(uname)" == Darwin ]] || return 0
+    local current
+    current=$(crontab -l 2>/dev/null || true)
+    grep -q 'reap_agent_team\.sh' <<<"$current" && return
+    mkdir -p "$HOME/.local/share/agent-team-reap"
+    printf '%s\n' ${current:+"$current"} \
+        "7,22,37,52 * * * * /bin/bash $HOME/.local/bin/reap_agent_team.sh 60 >> $HOME/.local/share/agent-team-reap/cron.log 2>&1" \
+        | crontab - && log "add reap_agent_team.sh to crontab" || warn "could not update crontab"
 }
 
 remove_legacy_delete_hooks() {
@@ -861,7 +875,7 @@ main() {
 
     # Foreground: local-only sections
     section "Theme"; setup_theme_state
-    section "Links";  install_links; install_launch_agents
+    section "Links";  install_links; install_launch_agents; install_cron
 
     # Must start after Links: TPM reads ~/.config/tmux/tmux.conf (the symlink
     # install_links creates), not the repo copy. Launched here rather than with
