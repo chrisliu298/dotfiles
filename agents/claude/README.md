@@ -36,6 +36,9 @@ ChatGPT update or the Computer Use service breaks it, check how lcu handled the 
   OpenAI-signed Node, the only caller the Computer Use service accepts. Only the `computer`
   surface and the `chrome` (extension) browser backend are on; Codex's in-app browser is not
   used. Each Claude session runs its own server (~100 MB idle, more once used).
+- **Over SSH.** `mbp16-computer-use` runs this same script through `ssh mbp16`. When
+  `SSH_CONNECTION` is set, the script tells the model that `js` and its Bash are on different
+  Macs, so the menu bar and Dock fallback has to go through `ssh`.
 - **Full permission, no prompts.** The proxy grants every app approval for the session
   itself, except 1Password (`DENIED_APPS`), and the browser follows
   `~/.codex/browser/config.toml`, where every approval mode is `never_ask` with full CDP
