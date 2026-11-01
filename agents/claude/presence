@@ -208,13 +208,13 @@ def wake_others(names=()):
     own, sessions, relays, lines = os.environ.get("CLAUDE_CODE_SESSION_ID"), live_sessions(), [], []
     wanted, known = wake_filter(names), [r.get("name") or "" for r in sessions.values()]
     # A mistyped name would otherwise wake nobody and say nothing.
-    lines += [f"{n}：没有这个名字的会话" for n in names if not any(n in k for k in known)]
+    lines += [f"{n}：没有这个名字的会话" for n in names if not any(n.lower() in k.lower() for k in known)]
     for f in sorted(glob.glob(os.path.join(QDIR, "*.json"))):
         sid, queue = os.path.basename(f)[:-len(".json")], json.load(open(f))
         if sid == own or not queue["items"]:
             continue
         label = sessions.get(sid, {}).get("name") or queue.get("label") or sid
-        if wanted is not None and not any(n in label for n in wanted):
+        if wanted is not None and not any(n.lower() in label.lower() for n in wanted):
             lines.append(f"{label}：不用报告，没唤醒，{len(queue['items'])} 条留在清单里")
             continue
         socket_path = sessions.get(sid, {}).get("messagingSocketPath")
