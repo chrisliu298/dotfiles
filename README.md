@@ -19,6 +19,7 @@ dotfiles/
 ├── dotfiles.sh              # Single entrypoint: submodules + symlinks + extensions
 ├── shell/                   # Zsh config (Zinit, Starship, fzf)
 ├── .config/                 # App configs (Neovim, tmux, btop)
+├── vscode/openai-theme/     # VS Code OpenAI Light/Dark theme, installed as an extension
 └── agents/                  # AI agent configurations
     ├── AGENTS.md            # Global instructions, linked as ~/.claude/CLAUDE.md and ~/.codex/AGENTS.md
     ├── claude/              # Claude Code config (settings, keybindings, statusline, themes)

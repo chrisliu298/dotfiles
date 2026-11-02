@@ -731,6 +731,28 @@ install_fonts() {
     done
 }
 
+# VS Code has no install-from-directory CLI, so package the repo copy as a VSIX
+# (a zip with the extension under extension/) and reinstall when it changes.
+install_vscode_theme() {
+    command -v code >/dev/null 2>&1 || return 0
+    local src="$ROOT/vscode/openai-theme"
+    local stamp_file="$CACHE_DIR/dotfiles-vscode-theme-stamp"
+    local fingerprint; fingerprint=$(cd "$src" && find . -type f | LC_ALL=C sort | xargs cat | { md5 2>/dev/null || md5sum | cut -d' ' -f1; })
+    stamp_fresh "$stamp_file" "$fingerprint" \
+        && code --list-extensions 2>/dev/null | grep -qx 'chrisliu298.openai-theme' && return
+
+    local tmp; tmp=$(mktemp -d)
+    cp -R "$src" "$tmp/extension"
+    if (cd "$tmp" && zip -qr openai-theme.vsix extension) \
+        && code --install-extension "$tmp/openai-theme.vsix" --force >/dev/null 2>&1; then
+        stamp_write "$stamp_file" "$fingerprint"
+        log "install VS Code OpenAI theme"
+    else
+        warn "failed to install VS Code OpenAI theme"
+    fi
+    rm -rf "$tmp"
+}
+
 install_mcp_servers() {
     local has_claude=false has_codex=false
     command -v claude &>/dev/null && has_claude=true
@@ -875,7 +897,7 @@ main() {
 
     # Foreground: local-only sections
     section "Theme"; setup_theme_state
-    section "Links";  install_links; install_launch_agents; install_cron
+    section "Links";  install_links; install_launch_agents; install_cron; install_vscode_theme
 
     # Must start after Links: TPM reads ~/.config/tmux/tmux.conf (the symlink
     # install_links creates), not the repo copy. Launched here rather than with

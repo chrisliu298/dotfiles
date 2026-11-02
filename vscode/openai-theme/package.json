@@ -1,0 +1,28 @@
+{
+  "name": "openai-theme",
+  "displayName": "OpenAI Theme",
+  "description": "Personal VS Code port of the dotfiles OpenAI Light/Dark palettes. Not an official OpenAI theme.",
+  "version": "1.0.0",
+  "publisher": "chrisliu298",
+  "private": true,
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Themes"
+  ],
+  "contributes": {
+    "themes": [
+      {
+        "label": "OpenAI Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/openai-dark-color-theme.json"
+      },
+      {
+        "label": "OpenAI Light",
+        "uiTheme": "vs",
+        "path": "./themes/openai-light-color-theme.json"
+      }
+    ]
+  }
+}
