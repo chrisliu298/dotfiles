@@ -21,6 +21,8 @@ agent-audit sessions   --project seedance-verifier-clf --since 2026-10-14       
 agent-audit sources    --project seedance-verifier-clf --title '^Lead' --by day  # what started each turn
 agent-audit traffic    --project seedance-verifier-clf --since 2026-10-14       # SendMessage sender -> recipient
 agent-audit delegation --project seedance-verifier-clf --since 2026-08-27 --cx  # subagents, skills, cx lines
+agent-audit attention  --project seedance-verifier-clf --since 2026-10-25 --by day  # what the sessions cost the user
+agent-audit attention  --project seedance-verifier-clf --list correction  # the messages behind a column
 ```
 
 `--project` matches a substring of the `~/.claude/projects` directory name, `--title` is a regex
@@ -31,6 +33,15 @@ dates, inclusive. `--json` for machine-readable output.
 below the table, `wt-*` are cx executor questions relayed by `cx ask`), `scheduled` (cron fires),
 `task-receipt` (the session's own background work reporting back, not an outside interruption),
 `compaction`, `system` (caveats, hook feedback, interrupts).
+
+`attention` columns: `user` (messages the user wrote), `automated` (origin says human, but a tool
+typed it: briefs, restart notices; `user + automated` equals the `sources` count), `interrupt`,
+`asked` / `answered` / `wait_*_min` (AskUserQuestion; refused and unanswered ones are not waits),
+`queued` (`presence ask`), `relayed` (a Lead message to Training that mentions the user).
+`followup` and `correction` are keyword heuristics that miss many messages: read them as a lower
+bound and a trend, and check them with `--list` before quoting a number. Validated 2026-11-01 on
+fresh samples: `followup` 13/20 precise, `correction` 18/20; about 5% of the unmatched messages
+were missed follow-ups and 2.5–5% missed corrections.
 
 ## Loop
 

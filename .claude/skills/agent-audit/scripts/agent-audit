@@ -6,6 +6,8 @@ Subcommands:
   sources     what started each turn: user, peer session, schedule, own task receipt
   traffic     SendMessage counts between sessions (sender title -> recipient)
   delegation  subagents, skills, agent-team / cx use, subagents that edited files
+  attention   what the sessions cost the user: messages, progress chasing, corrections,
+              interrupts, questions and how long answers took
 
 All counts come from ~/.claude/projects/*/*.jsonl (main sessions) and their
 <session>/subagents/*.jsonl. Nothing is written.
@@ -17,6 +19,7 @@ import glob
 import json
 import os
 import re
+import statistics
 import sys
 
 ROOT = os.environ.get("AGENT_AUDIT_PROJECTS", os.path.expanduser("~/.claude/projects"))
@@ -26,6 +29,19 @@ FROM_NAME = re.compile(r'from-name="([^"]*)"')
 COMPACTION = ("This session is being continued", "Context handoff")
 
 SOURCES = ["user", "peer", "scheduled", "task-receipt", "compaction", "system"]
+
+# Heuristics over the user's own words; `attention --list` shows what they caught.
+FOLLOWUP = re.compile(r"进度|进展|排上了吗|排队了吗|跑完了[吗没？?]|做完了[吗没？?]|完成了[吗没？?]|好了[吗没？?]|上线了[吗没？?]|到哪了|怎么样了|现在什么情况"
+                      r"|还在跑|还没(上线|修|跑|做|完|好|出)|什么时候|几点|有结果了[吗没？?]")
+CORRECTION = re.compile(r"不是这个意思|不是这样|你?(可能)?(搞|弄|理解|看|说|想)错|误解|纠正|我指的|我说的是|我是说|我想的是|我的意思是|不是.{0,20}而是"
+                        r"|别这样|不要这样|这个不对|顺序不对|不对吧|不对，|^不对")
+NOT_CORRECTION = re.compile(r"没理解错|没搞错|没看错|没记错|记错了")
+PASTED = re.compile(r"<pasted_content\b.*?</pasted_content\b[^>]*>", re.S)
+# Prompts other tools type into a session; origin says "human", the user did not write them.
+AUTOMATED = re.compile(r"^(#+\s|你是独立|你是新的|这个会话刚被重启|\[cx )")
+PROBE_CHARS = 300
+ATTENTION = ["user", "automated", "followup", "correction", "interrupt", "asked", "answered",
+             "wait_median_min", "wait_total_min", "queued", "relayed"]
 
 
 def parse_day(s):
@@ -129,6 +145,71 @@ def classify(kind, text):
     if text.startswith(COMPACTION):
         return "compaction", None
     return "system", None
+
+
+def own_words(text):
+    """The part of a human message the user wrote; slash commands and pasted text are not."""
+    if "<command-name>" in text[:200]:
+        return ""
+    return PASTED.sub("", text).strip()[:PROBE_CHARS]
+
+
+def scan_attention(path, title):
+    """Attention events of one main session: (timestamp, kind, value), plus classified messages."""
+    events, asks = [], {}
+    for d in records(path):
+        if d.get("isSidechain"):
+            continue
+        ts = d.get("timestamp")
+        att = d.get("attachment")
+        if isinstance(att, dict):
+            if att.get("type") == "queued_command" and (att.get("origin") or {}).get("kind") == "human":
+                events.extend(human_events(att.get("timestamp") or ts, text_of(att.get("prompt", ""))))
+            continue
+        content = (d.get("message") or {}).get("content")
+        if d.get("type") == "assistant" and isinstance(content, list):
+            for b in content:
+                if not isinstance(b, dict) or b.get("type") != "tool_use":
+                    continue
+                inp = b.get("input") or {}
+                if b.get("name") == "AskUserQuestion":
+                    asks[b.get("id")] = ts
+                    events.append((ts, "asked", None))
+                elif b.get("name") == "Bash" and re.search(r"\bpresence ask\b", inp.get("command", "")):
+                    events.append((ts, "queued", None))
+                elif (b.get("name") == "SendMessage" and (title or "").startswith("Lead")
+                      and str(inp.get("to", "")).startswith("Training") and "用户" in str(inp.get("message", ""))):
+                    events.append((ts, "relayed", None))
+        elif d.get("type") == "user":
+            if isinstance(content, list):
+                for b in content:
+                    if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id") in asks:
+                        asked = asks.pop(b["tool_use_id"])
+                        if not b.get("is_error") and asked and ts:
+                            events.append((asked, "answered", minutes_between(asked, ts)))
+            text = text_of(content)
+            if text.startswith("[Request interrupted"):
+                events.append((ts, "interrupt", None))
+            elif isinstance(d.get("origin"), dict) and d["origin"].get("kind") == "human":
+                events.extend(human_events(ts, text))
+    return [e for e in events if e[0]]
+
+
+def human_events(ts, text):
+    words = own_words(text)
+    if AUTOMATED.match(words):
+        return [(ts, "automated", words)]
+    out = [(ts, "user", words)]
+    if FOLLOWUP.search(words):
+        out.append((ts, "followup", words))
+    if CORRECTION.search(words) and not NOT_CORRECTION.search(words):
+        out.append((ts, "correction", words))
+    return out
+
+
+def minutes_between(a, b):
+    parse = lambda s: dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+    return (parse(b) - parse(a)).total_seconds() / 60
 
 
 def in_window(day, args):
@@ -239,6 +320,32 @@ def cmd_delegation(args):
     emit(args, rows, ["metric", "count"])
 
 
+def cmd_attention(args):
+    by = collections.defaultdict(collections.Counter)
+    waits = collections.defaultdict(list)
+    listed = []
+    for sid, f, info in selected(args):
+        name = info["title"] or sid[:8]
+        for ts, kind, value in scan_attention(f, info["title"]):
+            day = local_day(ts)
+            if not in_window(day, args):
+                continue
+            if args.list == kind:
+                listed.append({"at": ts[:16], "session": name, "text": value})
+            key = str(day) if args.by == "day" else name
+            by[key][kind] += 1
+            if kind == "answered":
+                waits[key].append(value)
+    if args.list:
+        return emit(args, sorted(listed, key=lambda r: r["at"]), ["at", "session", "text"])
+    rows = []
+    for k in sorted(by):
+        w = waits[k]
+        rows.append({"key": k, **{c: by[k][c] for c in ATTENTION},
+                     "wait_median_min": round(statistics.median(w), 1) if w else 0, "wait_total_min": round(sum(w), 1)})
+    emit(args, rows, ["key"] + ATTENTION)
+
+
 def emit(args, rows, cols):
     if args.json:
         json.dump(rows, sys.stdout, ensure_ascii=False, indent=1, default=str)
@@ -251,17 +358,18 @@ def emit(args, rows, cols):
 
 def main(argv=None):
     p = argparse.ArgumentParser(prog="agent-audit", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("command", choices=["sessions", "sources", "traffic", "delegation"])
+    p.add_argument("command", choices=["sessions", "sources", "traffic", "delegation", "attention"])
     p.add_argument("--project", help="substring of the ~/.claude/projects directory name")
     p.add_argument("--session", action="append", help="session id prefix (repeatable)")
     p.add_argument("--title", help="regex on the session title (/rename)")
     p.add_argument("--since", type=parse_day, help="YYYY-MM-DD, local time, inclusive")
     p.add_argument("--until", type=parse_day, help="YYYY-MM-DD, local time, inclusive")
-    p.add_argument("--by", choices=["session", "day"], default="session", help="sources: group rows")
+    p.add_argument("--by", choices=["session", "day"], default="session", help="sources, attention: group rows")
     p.add_argument("--cx", action="store_true", help="delegation: add cx executor line stats")
+    p.add_argument("--list", choices=["user", "followup", "correction"], help="attention: print the messages of this kind")
     p.add_argument("--json", action="store_true")
     args = p.parse_args(argv)
-    {"sessions": cmd_sessions, "sources": cmd_sources, "traffic": cmd_traffic, "delegation": cmd_delegation}[args.command](args)
+    {"sessions": cmd_sessions, "sources": cmd_sources, "traffic": cmd_traffic, "delegation": cmd_delegation, "attention": cmd_attention}[args.command](args)
 
 
 if __name__ == "__main__":

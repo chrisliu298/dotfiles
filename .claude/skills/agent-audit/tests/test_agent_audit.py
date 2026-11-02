@@ -98,3 +98,106 @@ def test_delegation(projects):
     assert m["agent:Explore"] == 1 and m["skill:agent-team"] == 1 and m["bash:cx start"] == 1
     assert m["subagents"] == 2 and m["subagents editing non-scratch files"] == 1
     assert m["cx:line1"] == "msgs=2 replies=1 asks=1"
+
+
+def ask(tid, ts):
+    return rec(type="assistant", timestamp=ts, message={"content": [
+        {"type": "tool_use", "id": tid, "name": "AskUserQuestion", "input": {"questions": []}}]})
+
+
+def result(tid, ts, is_error=False):
+    return rec(type="user", timestamp=ts, message={"content": [
+        {"type": "tool_result", "tool_use_id": tid, "content": "x", "is_error": is_error}]})
+
+
+def write_session(root, sid, title, lines):
+    proj = root / "-Users-me-repo"
+    proj.mkdir(exist_ok=True)
+    body = [{"type": "custom-title", "customTitle": title}, *lines]
+    (proj / f"{sid}.jsonl").write_text("\n".join(json.dumps(x) for x in body) + "\n")
+
+
+@pytest.fixture
+def attention(tmp_path):
+    write_session(tmp_path, "aaaaaaaa-0000", "Lead (R2V)", [
+        user("训练任务都排上了吗？", origin="human"),
+        user("我指的是排队，不是排上", origin="human"),
+        user("帮我写周报", origin="human"),
+        user("<command-name>/now</command-name> 现在怎么样", origin="human"),
+        user("<pasted_content id=\"x\">现在进度怎么样</pasted_content>看下这段", origin="human"),
+        user("现在进度怎么样", origin="peer"),
+        user("不对", origin="human", isSidechain=True),
+        user("[Request interrupted by user]"),
+        tool_use("SendMessage", {"to": "Training (R2V)", "message": "用户问：P 池什么时候训完？"}),
+        tool_use("SendMessage", {"to": "Training (R2V)", "message": "优先级不变"}),
+        tool_use("SendMessage", {"to": "Eval (R2V)", "message": "用户问：打分呢"}),
+    ])
+    write_session(tmp_path, "bbbbbbbb-0000", "Training (R2V)", [
+        user("loss 为什么涨", origin="human"),
+        ask("t1", "2026-10-20T03:00:00Z"), result("t1", "2026-10-20T03:10:00Z"),
+        ask("t2", "2026-10-20T04:00:00Z"), result("t2", "2026-10-20T04:30:00Z"),
+        ask("t3", "2026-10-20T05:00:00Z"), result("t3", "2026-10-20T05:00:01Z", is_error=True),
+        ask("t4", "2026-10-20T06:00:00Z"),
+        tool_use("Bash", {"command": "~/.claude/presence/presence ask 'A 还是 B？'"}),
+    ])
+    return tmp_path
+
+
+def test_attention_classifies_only_the_users_own_words(attention):
+    rows = {r["key"]: r for r in run(attention, "attention")}
+    lead = rows["Lead (R2V)"]
+    # The slash command, pasted text, peer and sidechain records never classify as the user's words.
+    assert (lead["user"], lead["followup"], lead["correction"], lead["interrupt"]) == (5, 1, 1, 1)
+    assert lead["relayed"] == 1
+    assert rows["Training (R2V)"]["user"] == 1
+
+
+def test_attention_times_answered_questions_only(attention):
+    row = {r["key"]: r for r in run(attention, "attention")}["Training (R2V)"]
+    # t3 was refused and t4 is unanswered: asked, but neither is a wait the user caused.
+    assert (row["asked"], row["answered"], row["queued"]) == (4, 2, 1)
+    assert (row["wait_median_min"], row["wait_total_min"]) == (20.0, 40.0)
+
+
+def test_attention_by_day_and_list(attention):
+    [row] = run(attention, "attention", "--by", "day")
+    assert row["key"] == "2026-10-20" and row["user"] == 6
+    listed = run(attention, "attention", "--list", "correction")
+    assert [r["text"] for r in listed] == ["我指的是排队，不是排上"]
+
+
+def test_attention_ignores_pasted_text_with_an_id_on_both_tags(tmp_path):
+    write_session(tmp_path, "cccccccc-0000", "Lead (R2V)", [
+        user('<pasted_content id="1">现在进度怎么样，你搞错了</pasted_content id="1">看下这段', origin="human"),
+    ])
+    [row] = run(tmp_path, "attention")
+    assert (row["user"], row["followup"], row["correction"]) == (1, 0, 0)
+
+
+def test_attention_separates_automated_prompts_and_keeps_the_sources_total(tmp_path):
+    write_session(tmp_path, "dddddddd-0000", "Lead (R2V)", [
+        user("# 任务：提出优化策略，你是独立的提案方", origin="human"),
+        user("这个会话刚被重启了（tmux-persist restart）", origin="human"),
+        user("你是新的 Lead (R2V)。请读 brief", origin="human"),
+        queued([{"type": "text", "text": "现在进度怎么样了"}], "human"),
+    ])
+    [row] = run(tmp_path, "attention")
+    assert (row["user"], row["automated"], row["followup"]) == (1, 3, 1)
+    assert run(tmp_path, "sources")[0]["user"] == row["user"] + row["automated"]
+
+
+@pytest.mark.parametrize("text,kind", [
+    ("什么时候可以全部上线？", "followup"), ("取证工具 bug 还没修复？", "followup"), ("几点能上线", "followup"),
+    ("跑完了马上告诉我结果", None), ("你可能误解了，还有什么不清楚的", "correction"), ("我指的是图整体小一点", "correction"),
+    ("这个顺序不对吧", "correction"), ("我怕我记错了", None), ("如果我没理解错的话", None), ("我们走错了方向", None),
+])
+def test_attention_keywords(tmp_path, text, kind):
+    write_session(tmp_path, "eeeeeeee-0000", "Lead (R2V)", [user(text, origin="human")])
+    [row] = run(tmp_path, "attention")
+    assert (row["followup"], row["correction"]) == (int(kind == "followup"), int(kind == "correction"))
+
+
+def test_attention_treats_a_markdown_brief_as_automated(tmp_path):
+    write_session(tmp_path, "ffffffff-0000", "Lead (R2V)", [user("# 审核：新增开关\n\n## 背景", origin="human")])
+    [row] = run(tmp_path, "attention")
+    assert (row["user"], row["automated"]) == (0, 1)
