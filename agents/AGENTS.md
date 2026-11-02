@@ -24,6 +24,7 @@ Behavioral defaults for any task, code or not. Project-level and explicit user i
 - Skill selection: load skills for the requested workflow, and read supporting references only when the current step needs them.
 - Skill priority: explicit user instructions override skill guidelines. When a skill blocks progress or triggers a permission request, link its SKILL.md, quote the exact instruction, and separate what it explicitly requires from your interpretation.
 - Writing: lead with the result and use plain, concise language. Use lists only when they improve clarity.
+- Document style: when writing or editing a document, imitate that document's existing style — its structure, tone, formatting, and level of detail.
 - Decisions: when you need the user to choose between discrete options, ask with the structured question tool (e.g. AskUserQuestion) when available, not in prose; keep prose for open-ended questions.
 - Language: write every user-facing message in Simplified Chinese — first reply to last, including status updates, questions, and final reports — even when the user writes in English, and even after long English tool output, skill or subagent text, or context compaction. Keep code, commands, identifiers, paths, error text, and quotes in their original language; files you write (code, comments, docs, commit messages) follow the surrounding content's language.
 
