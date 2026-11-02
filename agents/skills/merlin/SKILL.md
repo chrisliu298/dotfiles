@@ -56,6 +56,10 @@ $M job-v2 runs list --json '{"filter":{"arnold_group_id_any":[1043],"created_at_
   drops it entirely (there is no `use_robust_training: false` to see).
 - "Is it really running" = trial `start_at` is set. Give the scheduler ~10 min after submit
   before concluding there is no capacity.
+- Every timestamp in these payloads (`created_at`, `schedule_at`, `start_at`, timeline events)
+  is **UTC**, printed with a trailing `Z`; log lines inside the job print +08:00. Reading one
+  as local time shifts it 8 hours — a job submitted 14:43 Beijing reads `06:43Z` and looks
+  like it has been running since morning. Convert before reporting any elapsed time.
 - `runs list` pages via `pagination.next_page_token` → `page_token`; walk all pages.
   Server-side filters verified 2026-10-18: `arnold_group_id_any`, `created_at_from`,
   `created_by_any`, `status_any`, `keyword_contains`. A misnamed filter field is silently
