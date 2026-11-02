@@ -21,7 +21,7 @@ self="${0:A}"
 skill="${0:A:h:h}"
 codex_cli="$HOME/.local/bin/codex"
 codex_home="${CODEX_HOME:-$HOME/.codex}"
-model=gpt-6-astra
+model=gpt-6.1-sol
 levels=(low medium high xhigh)
 
 die() { print -u2 -- "cx: $*"; exit 1; }
