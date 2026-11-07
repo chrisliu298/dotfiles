@@ -114,16 +114,24 @@ pane_is_claude() {
     local re='^(claude|[0-9]+\.[0-9]+\.[0-9]+)$' pid child
     if [[ $1 == block:* ]]; then
         # Match this transcript's registered process, not just any Claude UI.
-        local meta start actual pids
+        local meta start actual pids parent depth
         pids=$(rex block call -s "$REX_SESSION" -b "$1" process 2>/dev/null | jq -r '[.child.pid, .foreground.pid, .ancestors[]?.pid] | .[] // empty') || return 1
         for meta in "$HOME"/.claude/sessions/*.json; do
             [[ -f $meta ]] || continue
             [[ $(jq -r '.sessionId' "$meta") == "$sid" ]] || continue
             pid=$(jq -r '.pid' "$meta")
-            grep -qxF "$pid" <<<"$pids" || continue
             start=$(jq -r '.procStart' "$meta" | xargs)
             actual=$(TZ=UTC LC_ALL=C /bin/ps -p "$pid" -o lstart= 2>/dev/null | xargs)
-            [[ -n $actual && $actual == "$start" ]] && return 0
+            [[ -n $actual && $actual == "$start" ]] || continue
+            # With a foreground process group, Rex reports the native runner,
+            # not its Claude child. Prove this exact live writer descends from
+            # a process in the requested block before authorizing any input.
+            parent=$pid
+            for ((depth=0; depth<32 && parent>1; depth++)); do
+                grep -qxF "$parent" <<<"$pids" && return 0
+                parent=$(/bin/ps -p "$parent" -o ppid= 2>/dev/null | tr -d ' ')
+                [[ $parent =~ ^[0-9]+$ ]] || break
+            done
         done
         return 1
     fi
