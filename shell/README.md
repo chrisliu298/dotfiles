@@ -136,6 +136,47 @@ the next run. To add an account, run `cdswap new`, sign in, then `cdswap save`;
 avoid Desktop's own Sign out, which may revoke the saved session server-side.
 Verify with `shell/test-cdswap.sh`.
 
+### Agent communication
+
+For registered Claude/Codex sessions in tmux, use the global `agent-msg` CLI:
+
+```sh
+agent-msg register training              # run inside that agent; uses its session env
+agent-msg list
+agent-msg send training --file question.md --id question_1
+agent-msg read question_1                # receiver only; confirms actual reading
+agent-msg reply question_1 --file answer.md --id answer_1
+agent-msg status question_1
+agent-msg send --retry question_1        # only an explicitly deferred, untyped message
+```
+
+Human registration can specify `--kind claude|codex --session UUID --pane %N
+--pid PID --socket PATH`; `--replace` explicitly rebinds an existing name.
+Re-register after restarting or switching the registered conversation. Registration
+binds a process instance, not an unforgeable identity; same-user agents remain trusted
+cooperating processes. A peer message never grants user authorization or permission
+to create a model session, change scope, submit jobs, or bypass existing approvals.
+
+Messages and delivery locks live in `~/.local/state/agent-msg/messages.sqlite3`
+(`AGENT_MSG_HOME` overrides this for isolated tests). No broker, model intermediary,
+queue transport, or transcript edits are involved. A short `[peer] agent-msg read ID`
+notification uses tmux Enter to steer. `submitted` means Enter was sent; only the
+receiver's `read`/`reply` confirms processing. Long bodies stay in the database.
+`replied` means a reply is stored; inspect that reply's own delivery status too.
+
+User drafts, copy mode, dialogs, stale processes and unknown screen layouts defer
+delivery. A changed input after typing is `typed_unsubmitted`; an interrupted Enter
+is `submit_unknown`. These states must be inspected, never automatically retried or
+cleared. Sending the same ID/content is idempotent. Different content with the same
+ID is rejected. A stale delivery lock after a crash is retained: inspect its owner
+PID/start time before removing it; never steal a live sender's lock. The caller
+must run inside a registered agent to send/read/reply/status; `list` is read-only
+and human-friendly. Screen checks reduce typing races but cannot lock out a human
+typing concurrently. Both supported TUIs must be validated after UI version changes.
+Session-local timers may explicitly use `agent-msg send --self --file FILE --id UNIQUE_TICK_ID` to wake their own existing session. Ordinary sends and replies still reject self-delivery. The same identity, draft, modal, locking, and delivery checks apply; this option does not create or manage a timer. Only the owner's timer may call this option; the model must not self-send during its own turn to generate another turn.
+
+Verify: `node --test shell/agent-msg.test.cjs`.
+
 ## Plugins (Zinit)
 
 `zsh-syntax-highlighting`, `zsh-completions`, `zsh-autosuggestions`, `fzf` + `fzf-tab`, Oh My Zsh snippets (`git`, `sudo`, `command-not-found`). Modern Unix tools (`fd`, `rg`, `zoxide`, `delta`) installed via Zinit from GitHub releases.

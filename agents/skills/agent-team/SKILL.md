@@ -50,7 +50,7 @@ Use `scripts/agent-team` beside this `SKILL.md`; resolve its actual installed
 location rather than assuming a particular agent's skill directory. It requires
 Node.js and zsh, plus tmux for persistent sessions other than `pro`. `backends` reports configured
 availability, not a verified login or model entitlement. This skill is installed
-for Claude Code only. Report unavailable backends; do not substitute one.
+for Claude Code and Codex. Report unavailable backends; do not substitute one.
 
 ## Persistent task
 
