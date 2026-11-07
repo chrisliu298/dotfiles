@@ -6,7 +6,7 @@ Personal dotfiles and AI agent configurations for macOS with zsh, managed by `do
 
 ## Project Structure & Module Organization
 
-Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`settings.json` — merged into the live file, not symlinked — keybindings, statusline, themes) and `codex/` → `~/.codex/` (themes). Muse Code has no `agents/` home: `~/.config/muse/settings.json` is host-local, with only the theme keys rewritten by `shell/theme-apply`. The rest are not agent homes:
+Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`settings.json` — merged into the live file, not symlinked — keybindings, statusline, themes) and `codex/` → `~/.codex/` (themes and host-local Computer Use routing through Codex's config writer). Muse Code has no `agents/` home: `~/.config/muse/settings.json` is host-local, with only the theme keys rewritten by `shell/theme-apply`. The rest are not agent homes:
 
 - `agents/AGENTS.md` — the single global instruction file, symlinked as both `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`.
 - `agents/eval/` — instruction-following harness for the shared agent doc (prompts, rubric, runner scripts).

@@ -23,7 +23,7 @@ dotfiles/
 └── agents/                  # AI agent configurations
     ├── AGENTS.md            # Global instructions, linked as ~/.claude/CLAUDE.md and ~/.codex/AGENTS.md
     ├── claude/              # Claude Code config (settings, keybindings, statusline, themes)
-    ├── codex/               # Codex config (themes)
+    ├── codex/               # Codex themes and shared Computer Use configuration
     └── skills/              # Repo-owned skill sources + authoring references
 ```
 

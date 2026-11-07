@@ -21,6 +21,7 @@ Behavioral defaults for any task, code or not. Project-level and explicit user i
 
 ## Skills & communication
 
+- UI automation: in Claude and Codex, use the shared `codex-computer-use` MCP (`js` / `js_reset`) for browser and desktop UI actions. If unavailable, report the blocker; do not automatically switch to native Computer Use, a `node_repl` browser runtime, Claude in Chrome, or chrome-devtools. Prefer purpose-built connectors or CLIs for work that does not need UI. Close task-created tabs when finished; `js_reset` preserves tabs, and MCP process exit provides cleanup in both hosts.
 - Skill selection: load skills for the requested workflow, and read supporting references only when the current step needs them.
 - Skill priority: explicit user instructions override skill guidelines. When a skill blocks progress or triggers a permission request, link its SKILL.md, quote the exact instruction, and separate what it explicitly requires from your interpretation.
 - Writing: lead with the result and use plain, concise language. Use lists only when they improve clarity.

@@ -7,7 +7,7 @@ Config for [Claude Code](https://claude.com/claude-code). Everything here target
 | `keybindings.json` | symlink | Custom key and chord bindings. |
 | `settings.json` | **merged** by `dotfiles.sh` | Merged onto the live file so keys Claude Code writes (e.g. `/effort`'s `modelSettings`) survive; repo values win and arrays are replaced whole, so a key deleted here must also be deleted from `~/.claude/settings.json`. `~/` is expanded to an absolute path, which Claude Code requires. `theme` is not set here; `shell/theme-apply` owns it (see below). |
 | `lang-guard.py` | symlink | Stop and PostToolUse hooks that keep interactive replies in Simplified Chinese: an English final reply is blocked once and rewritten, English narration before a tool call adds a reminder to the context. |
-| `computer-use-mcp.sh`, `computer-use-mcp-proxy.mjs`, `computer-use-mcp-smoke.mjs` | not installed; `claude mcp add` points at the repo path | The `codex-computer-use` MCP server — see [Codex Computer Use](#codex-computer-use). Tests: `node --test agents/claude/computer-use-mcp-proxy.test.mjs`. |
+| `computer-use-mcp.sh`, `computer-use-mcp-proxy.mjs`, `computer-use-mcp-smoke.mjs`, `computer-use-mcp-browser-smoke.mjs` | not installed; Claude and Codex MCP registrations point at the same repo path | The shared `codex-computer-use` MCP server — see [Codex Computer Use](#codex-computer-use). Tests: `node --test agents/claude/computer-use-mcp-proxy.test.mjs`. |
 | `statusline-command.sh` | symlink | Status line renderer. ANSI *named* colors only, so it follows the terminal palette — see below. |
 | `themes/anthropic-{dark,light}.json` | symlinks | Claude themes in Anthropic's brand palette, built on the ANSI variants so code syntax follows the terminal. |
 | `themes/openai-{dark,light}.json` | symlinks | Claude themes based on the built-in ANSI variants, with tuned text hierarchy, surfaces, and diff backgrounds. |
@@ -20,13 +20,19 @@ Skills are not here — they are symlinked into `~/.claude/skills/` from `agents
 
 ## Codex Computer Use
 
-`codex-computer-use` is the only browser and computer-use tool for Claude. The built-in
-`computer-use` server and Claude in Chrome are off: `settings.json` denies their tools and sets
-`CLAUDE_CODE_ENABLE_CFC=0`. It gives every Claude agent (CLI, T3 Code, subagents, any Claude account)
+`codex-computer-use` is the shared browser and computer-use tool for Claude and Codex. Claude's
+built-in `computer-use` server and Claude in Chrome are off: `settings.json` denies their tools
+and sets `CLAUDE_CODE_ENABLE_CFC=0`. Codex's native UI plugins and legacy UI MCP servers are
+disabled by [`../codex/computer-use-config.mjs`](../codex/computer-use-config.mjs), using Codex's
+own config reader/writer; generic `node_repl` remains available for non-UI work. The shared
+[`agents/AGENTS.md`](../AGENTS.md) routes both agents to this MCP without automatic UI fallbacks.
+It gives both agents (CLI, desktop and SDK hosts)
 the computer-use runtime of the ChatGPT app: one `js` tool with a `cua` API for desktop apps
 (macOS accessibility) and for the browser through the ChatGPT browser extension, which runs in
-Helium. `dotfiles.sh` registers it at user scope only on machines with the ChatGPT app and
-`~/.codex/computer-use`.
+Helium. `dotfiles.sh` registers the same launcher at user scope in both agents only on machines
+with the ChatGPT app and `~/.codex/computer-use`. It reconciles Codex routing on every run,
+including when the repository fingerprint is unchanged. Restart existing sessions after switching;
+already-connected tools and MCP processes do not reload automatically.
 
 This is our minimal version based on [amontlabs/lcu](https://github.com/amontlabs/lcu). When a
 ChatGPT update or the Computer Use service breaks it, check how lcu handled the problem first.
@@ -34,7 +40,19 @@ ChatGPT update or the Computer Use service breaks it, check how lcu handled the 
 - **How it runs.** `computer-use-mcp.sh` starts the app's own `@oai/cua-repl` under the app's
   OpenAI-signed Node, the only caller the Computer Use service accepts. Only the `computer`
   surface and the `chrome` (extension) browser backend are on; Codex's in-app browser is not
-  used. Each Claude session runs its own server (~100 MB idle, more once used).
+  used. Each MCP process runs its own server (~100 MB idle, more once used).
+- **Same lifecycle in both hosts.** The proxy owns session/turn ids and replaces incoming host
+  ids on every tool call, including `js_reset`; shutdown cleans up that same session. A conversation
+  turn ending does not end the MCP session. Close task-created tabs when finished; `js_reset`
+  preserves them, and process exit provides cleanup. Explicit screenshots are scaled with the same
+  coordinate note in both hosts; implicit browser UI screenshot metadata is omitted.
+  Codex's `js` output budget is 25,000 tokens, matching its native runtime; Claude's
+  `anthropic/maxResultSizeChars` remains 200,000 so first-use/reset documentation stays inline.
+- **Verification.** `node --test agents/codex/computer-use-config.test.mjs` checks migration and
+  idempotence with the installed Codex parser in an isolated `CODEX_HOME`, without model calls.
+  `node agents/claude/computer-use-mcp-browser-smoke.mjs` exercises both host request shapes
+  against a temporary local page and the real browser, including input, iframe, reset and exit
+  cleanup. It opens temporary test tabs; Helium and the ChatGPT extension must be connected.
 - **Over SSH.** `mbp16-computer-use` runs this same script as
   `ssh mbp16 CU_SSH_ALIAS=mbp16 ~/dotfiles/agents/claude/computer-use-mcp.sh`. `CU_SSH_ALIAS` tells
   the model that `js` and its Bash are on different Macs, so the menu bar and Dock fallback has

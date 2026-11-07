@@ -1,5 +1,5 @@
-// Stdio MCP proxy in front of @oai/cua-repl that makes it behave the same in every Claude host
-// (CLI, T3 Code, Agent SDK apps), with the agent at full permission:
+// Stdio MCP proxy in front of @oai/cua-repl with the same contract in Claude and Codex
+// (CLI, desktop and SDK hosts), with the agent at full permission:
 // - Approvals: the server always sees an elicitation-capable client. The proxy grants every
 //   Codex app approval itself for this session (no dialog, never forwarded to the host), except
 //   DENIED_APPS, and declines any other elicitation, e.g. one the model's own JS raises, since
@@ -8,9 +8,9 @@
 //   computer use sends ~1372x887), with the factor back to original image pixels, which is what
 //   cua clicks/drags/scrolls take for a window or viewport capture. Unreadable images pass
 //   through unchanged.
-// - Session: the browser service routes tabs by the Codex turn metadata, which Claude hosts
-//   never send, so each proxy process supplies its own session/turn ids as the default
-//   request metadata; concurrent Claude sessions then keep separate tabs. Codex ends each
+// - Session: the browser service routes tabs by Codex turn metadata. Each proxy process owns
+//   its session/turn ids and replaces host-supplied ids on every tool call, so execution and
+//   shutdown use the same identity in both hosts. Codex normally ends each
 //   turn through the hidden turn_ended tool, which closes the agent's tabs; here the whole
 //   process is one turn, so the proxy hides that tool and calls it once on shutdown.
 // - Tools: only `js` and `js_reset` reach the model.
@@ -18,6 +18,8 @@
 //   50,000-character persist-to-file threshold, so `js` declares a higher
 //   anthropic/maxResultSizeChars and the docs stay inline.
 // - Instructions: CU_EXTRA_INSTRUCTIONS is appended to the server's instructions.
+// - Implicit screenshots: omit the browser UI's metadata-only screenshot; both hosts get
+//   images through explicit screenshot calls, with the same scaling and coordinate note.
 // Usage: node computer-use-mcp-proxy.mjs <server command> [args...]
 // Tests: node --test computer-use-mcp-proxy.test.mjs
 import { spawn, execFileSync } from 'node:child_process';
@@ -93,6 +95,9 @@ relay(process.stdin, (msg) => {
     msg.params.capabilities = { ...msg.params.capabilities, elicitation: { form: {} } };
   }
   if (msg.method === 'tools/list') toolsListIds.add(msg.id);
+  if (msg.method === 'tools/call' && msg.params) {
+    msg.params._meta = { ...msg.params._meta, 'x-codex-turn-metadata': turn };
+  }
   toServer(msg);
 }, toServer);
 
@@ -150,6 +155,9 @@ relay(server.stdout, (msg) => {
     }
   }
   const content = msg.result?.content;
+  if (msg.result?._meta?.['codex/toolSurface']) {
+    delete msg.result._meta['codex/toolSurface'].screenshot;
+  }
   if (Array.isArray(content) && content.some((c) => c.type === 'image')) {
     msg.result.content = content.flatMap((c) => (c.type === 'image' ? downscale(c) : [c]));
   }

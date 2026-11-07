@@ -6,7 +6,7 @@ This directory (`agents/skills/`) is the single source of truth for repo-owned *
 |------|--------------|------------|
 | Skill | Injects domain knowledge via SKILL.md prompts | `SKILLS` table in `dotfiles.sh` |
 | MCP server | Exposes external tools via Model Context Protocol | `MCP_SERVERS` table in `dotfiles.sh` |
-| Plugin | Bundles commands, agents, hooks, and skills | `PLUGINS` table in `dotfiles.sh` (user scope) |
+| Plugin | Bundles commands, agents, hooks, and skills | `PLUGINS` table in `dotfiles.sh` (Claude user scope); Codex native UI plugins are disabled by `agents/codex/computer-use-config.mjs` |
 
 ## Skills
 
@@ -56,13 +56,13 @@ Claude has no `pdf` skill: `agents/claude/settings.json` turns off the claude.ai
 
 | Server | Purpose | Agents |
 |--------|---------|--------|
-| chrome-devtools | Chrome DevTools bridge for browser automation | Codex |
-| codex-computer-use | The ChatGPT app's computer use (desktop apps + Helium through the ChatGPT extension); registered only where the app is installed — see [agents/claude](../claude/README.md#codex-computer-use) | Claude |
+| codex-computer-use | Shared ChatGPT computer use (desktop apps + Helium through the ChatGPT extension); registered only where the app is installed — see [agents/claude](../claude/README.md#codex-computer-use) | Claude, Codex |
 
 ## Plugins
 
 Managed by the `PLUGINS` table in `dotfiles.sh` — each is installed and enabled at **user scope** on every run (`name|marketplace`):
 
-None are currently managed (the table is empty).
+No Claude plugins are currently installed by the table (it is empty). Codex's native UI plugins
+are disabled on hosts using the shared Computer Use MCP; see [Codex Computer Use](../claude/README.md#codex-computer-use).
 
 User scope keeps them available across all projects (vs. per-project pinning, which drifts between machines). Plugin install state lives in `~/.claude/plugins/`, outside the repo — `./dotfiles.sh` reconciles it. Other marketplace plugins can still be added ad hoc with `claude plugin install`.

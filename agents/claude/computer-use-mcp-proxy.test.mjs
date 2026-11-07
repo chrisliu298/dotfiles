@@ -53,6 +53,10 @@ require('readline').createInterface({ input: process.stdin }).on('line', (line) 
   if (code === 'pid') return reply({ content: [{ type: 'text', text: String(process.pid) }] });
   if (code === 'bad-image') return reply({ content: [{ type: 'image', data: 'AAAA', mimeType: 'image/png' }] });
   if (code === 'big-image') return reply({ content: [{ type: 'image', data: big, mimeType: 'image/png' }] });
+  if (code === 'metadata-image') return reply({ content: [{ type: 'text', text: 'page' }], _meta: {
+    'codex/toolSurface': { kind: 'browserUse', openTabIds: ['test-tab'], screenshot: { url: 'data:image/png;base64,' + big } },
+    other: 'preserved',
+  } });
   if (code === 'foreign-elicitation') {
     waiting.set('e1', (r) => reply({ content: [{ type: 'text', text: 'answer:' + r.result.action }] }));
     return send({ jsonrpc: '2.0', id: 'e1', method: 'elicitation/create', params: { message: 'Fake prompt', requestedSchema: { type: 'object', properties: {} } } });
@@ -151,6 +155,36 @@ test('a large screenshot is downscaled with a coordinate note and leaves no temp
   assert.match(dims, /pixelWidth: 1372/);
   assert.match(note.text, /from 2000x1000 to 1372x686.*x\/y times 1\.4577.*clipped or full-page/);
   assert.deepEqual(fs.readdirSync(p.tmpdir), []);
+});
+
+for (const host of ['claude', 'codex']) {
+  test(`${host} calls use the proxy session for execution, reset and shutdown`, async (t) => {
+    const p = start(t);
+    await p.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: host } });
+    const meta = { trace: 'keep-me' };
+    if (host === 'codex') meta['x-codex-turn-metadata'] = { session_id: 'host-session', turn_id: 'host-turn' };
+    for (const name of ['js', 'js_reset', 'js']) {
+      await p.request('tools/call', { name, arguments: { code: 'hello' }, _meta: meta });
+    }
+    p.child.stdin.end();
+    await p.exited;
+    const calls = p.serverLog().filter((m) => m.method === 'tools/call');
+    const ended = calls.find((m) => m.params.name === 'turn_ended').params.arguments;
+    for (const call of calls.filter((m) => m.params.name !== 'turn_ended')) {
+      assert.deepEqual(call.params._meta['x-codex-turn-metadata'], { session_id: ended.session_id, turn_id: ended.turn_id });
+      assert.equal(call.params._meta.trace, 'keep-me');
+    }
+    assert.notEqual(ended.session_id, 'host-session');
+  });
+}
+
+test('implicit browser screenshots are omitted while other metadata is preserved', async (t) => {
+  const p = start(t);
+  const r = await p.call('metadata-image');
+  assert.equal(r.result.content[0].text, 'page');
+  assert.deepEqual(r.result._meta, {
+    'codex/toolSurface': { kind: 'browserUse', openTabIds: ['test-tab'] }, other: 'preserved',
+  });
 });
 
 test('a Codex app approval is granted for the session without a dialog or reaching the host', async (t) => {

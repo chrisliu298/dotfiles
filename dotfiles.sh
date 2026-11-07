@@ -81,12 +81,10 @@ SKILLS=(
 # Harness read natively, so install_skills moves each into ~/.claude/skills.
 CLAUDE_ONLY_AGENT_SKILLS=(weekly-report 'merlin-*')
 
-MCP_SERVERS=(  # name|command|args|agents (user-scoped MCP servers; agents: claude,codex or omit for both)
-    "chrome-devtools|npx|chrome-devtools-mcp@latest --autoConnect --channel stable --no-usage-statistics|codex"
-)
-# Codex Computer Use for Claude runs on the ChatGPT app's runtime: register it only where that is installed.
+MCP_SERVERS=()  # name|command|args|agents (user-scoped MCP servers; agents: claude,codex or omit for both)
+# Shared Computer Use runs on the ChatGPT app's runtime: register it only where installed.
 if [[ -x /Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node && -d "$HOME/.codex/computer-use" ]]; then
-    MCP_SERVERS+=("codex-computer-use|$ROOT/agents/claude/computer-use-mcp.sh||claude")
+    MCP_SERVERS+=("codex-computer-use|$ROOT/agents/claude/computer-use-mcp.sh||claude,codex")
 fi
 
 # name|marketplace — Claude plugins installed + enabled at user scope (claude-only)
@@ -326,6 +324,14 @@ disable_builtin_computer_use() {
         rm -f "$tmp"
         warn "could not disable built-in computer-use in ~/.claude.json"
     fi
+}
+
+# Reconcile host-local routing even when the repository fingerprint is unchanged.
+# Codex's writer preserves unrelated TOML and generic node_repl; it disables only UI providers.
+configure_codex_computer_use() {
+    [[ -x /Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node && -d "$HOME/.codex/computer-use" ]] || return 0
+    command -v codex >/dev/null 2>&1 && command -v node >/dev/null 2>&1 || return 0
+    node "$ROOT/agents/codex/computer-use-config.mjs"
 }
 
 # User-operated state is separate from Claude's configuration and history.
@@ -890,6 +896,7 @@ main() {
 
     # Host-local installs can drift without changing the repository fingerprint.
     setup_codex_cli
+    configure_codex_computer_use
     setup_presence_state
     local fp; fp=$(compute_fingerprint)
     if stamp_fresh "$GLOBAL_STAMP" "$fp"; then
