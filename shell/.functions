@@ -433,6 +433,12 @@ scout-papers-scholar-inbox-all() {
 # Use the shared server; reasoning effort comes from config.toml or /model.
 CODEX_MODEL=gpt-6.1-sol
 x(){ command codex --yolo -m "$CODEX_MODEL" "$@"; }
+xa(){ command codex-ark --yolo "$@"; }
+xac(){ xa resume --last "$@"; }
+xar(){ xa resume "$@"; }
+xas(){ ARK_MODEL=sol command codex-ark --yolo "$@"; }
+xasc(){ xas resume --last "$@"; }
+xasr(){ xas resume "$@"; }
 unalias ct 2>/dev/null || true
 ct(){ command codex-traex --yolo "$@"; }
 ctc(){ ct resume --last "$@"; }

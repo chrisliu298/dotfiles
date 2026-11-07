@@ -25,6 +25,47 @@ the review helper also uses the absolute path and checks its version before
 dispatch. Use `xu` or `codex update` for future upgrades. The desktop app keeps
 its own private runtimes, which are managed by the app rather than dotfiles.
 
+### Ark models in the native Codex CLI
+
+`codex-ark` launches the native CLI on Ark's GPT-6-Astra (default) or
+GPT-6.1-Sol endpoint. Reasoning
+effort comes from `~/.codex/config.toml`, a selected profile, or `/model`.
+It uses `ARC_API_KEY`, `ARK_OPERATOR_ID`, and `ARK_OPERATOR_EMAIL`
+from the shell environment; keep their exports in `~/.zshenv.local`, outside Git.
+It uses launch-only provider overrides and `--no-daemon`, leaving the ordinary
+`codex`/`x` subscription route and both agent skills unchanged. Sessions remain
+in `~/.codex`; native skills, AGENTS, MCP, hooks and compatible configuration
+are reused. The model picker labels the endpoints `GPT-6-Astra (Ark)` and
+`GPT-6.1-Sol (Ark)`; choose the `(Ark)` entries to use the configured endpoints.
+
+```sh
+codex-ark                                      # start in the current directory
+codex-ark resume --last                        # resume the last Ark session
+codex-ark -c 'model_reasoning_effort="high"'     # choose a different effort
+ARK_SESSION_ID=training codex-ark               # fixed tracing label across resumes
+xa                                            # same as codex-ark --yolo, like x
+xac                                           # resume the last Ark session
+xar                                           # choose an Ark session
+ARK_MODEL=sol codex-ark                        # start GPT-6.1-Sol on Ark
+xas                                           # Sol with --yolo, like xa
+xasc                                          # resume the last session on Ark Sol
+xasr                                          # choose a session to resume on Ark Sol
+```
+
+`ARK_MODEL` accepts `astra` / `gpt-6-astra`, or `sol` / `gpt-6.1-sol` /
+`gpt-6-1-sol` / `azure-gpt-6-1-sol`, as well as either endpoint ID.
+Sol uses `ep-20261026202616-6c8l8`; Astra uses `ep-20261020213556-cxb6v`.
+Use `xas` when Astra is rate-limited. This chooses Sol explicitly; it does not
+automatically resend a request that may have already begun.
+
+The command fixes the Ark provider and chosen endpoint; model/provider/remote
+overrides are rejected. Other CLI options are passed through. The default tracing
+label is `codex-ark`; reuse the same `ARK_SESSION_ID` for follow-ups to a named task.
+The endpoint catalog copies each installed CLI model's own metadata; this preserves
+its tool and context settings without changing the provider's model identifier.
+Gateway availability and quotas are separate from ChatGPT subscription access.
+Verify offline with `sh -n shell/codex-ark` and `sh shell/test-codex-ark.sh`.
+
 ### Rex agent communication
 
 Install the official integration with `rex skill setup --agent claude --agent codex`.

@@ -1,0 +1,102 @@
+#!/bin/sh
+# codex-ark: launch the native Codex CLI on an Ark endpoint.
+# The user's own `codex` and ~/.codex/config.toml are untouched: the
+# provider, model and catalog exist only as command-line overrides of this launch.
+#
+#   codex-ark [codex options] [exec|resume ...]   # effort comes from config or /model
+#   ARK_MODEL=sol codex-ark [codex options]     # GPT-6.1-Sol on Ark
+#
+# Requires ARC_API_KEY, ARK_OPERATOR_ID and ARK_OPERATOR_EMAIL (~/.zshenv.local).
+# ARK_SESSION_ID is the caller's fixed `extra` session_id (one value per caller).
+
+set -eu
+umask 077
+
+# Requests name the endpoint; aliases only choose one of these fixed Ark routes.
+astra_ep=ep-20261020213556-cxb6v
+sol_ep=ep-20261026202616-6c8l8
+case "${ARK_MODEL:-astra}" in
+  astra|gpt-6-astra|"$astra_ep") ep=$astra_ep ;;
+  sol|gpt-6.1-sol|gpt-6-1-sol|azure-gpt-6-1-sol|"$sol_ep") ep=$sol_ep ;;
+  *) echo 'codex-ark: ARK_MODEL must select astra or sol' >&2; exit 2 ;;
+esac
+base_url=https://ark-cn-beijing.bytedance.net/api/v3
+session_id=${ARK_SESSION_ID:-codex-ark}
+codex_bin=${CODEX_ARK_CODEX_BIN:-$HOME/.local/bin/codex}
+catalog=${XDG_CACHE_HOME:-$HOME/.cache}/codex-ark/models.json
+
+for var in ARC_API_KEY ARK_OPERATOR_ID ARK_OPERATOR_EMAIL; do
+  eval "value=\${$var:-}"
+  [ -n "$value" ] || { echo "codex-ark: $var is not set" >&2; exit 2; }
+done
+case "$session_id" in
+  *[!A-Za-z0-9._-]*) echo "codex-ark: ARK_SESSION_ID must match [A-Za-z0-9._-]+" >&2; exit 2 ;;
+esac
+[ -x "$codex_bin" ] || { echo "codex-ark: Codex CLI missing at $codex_bin" >&2; exit 1; }
+
+# Keep this command on the Ark endpoint; effort and ordinary CLI options may vary.
+check_config() {
+  key=$(printf '%s' "${1%%=*}" | tr -d '[:space:]"')
+  case "$key" in
+    model|model_provider|model_providers|model_providers.*|model_catalog_json)
+      echo "codex-ark: provider, model and catalog overrides are not supported" >&2
+      exit 2 ;;
+  esac
+}
+expect_config=false
+for argument do
+  if "$expect_config"; then
+    check_config "$argument"
+    expect_config=false
+    continue
+  fi
+  case "$argument" in
+    --) break ;;
+    -c|--config) expect_config=true ;;
+    --config=*) check_config "${argument#--config=}" ;;
+    -c?*) check_config "${argument#-c}" ;;
+    -m|--model|--model=*|-m?*|--remote|--remote=*)
+      echo "codex-ark: model and remote-server overrides are not supported" >&2
+      exit 2 ;;
+  esac
+done
+
+# model_catalog_json replaces the built-in catalog, so export the full one from this CLI
+# and add both endpoints using their own native model metadata (context window,
+# tools and model instructions). Both Ark choices then appear in /model.
+mkdir -p "${catalog%/*}"
+"$codex_bin" debug models --bundled | node -e '
+  const [astraEp, solEp, path] = process.argv.slice(1);
+  let input = "";
+  process.stdin.on("data", chunk => { input += chunk; });
+  process.stdin.on("end", () => {
+    const catalog = JSON.parse(input);
+    for (const [ep, base] of [[astraEp, "gpt-6-astra"], [solEp, "gpt-6.1-sol"]]) {
+      const model = catalog.models.find(m => m.slug === base);
+      if (!model) { console.error(`codex-ark: ${base} is not in this Codex catalog`); process.exit(1); }
+      catalog.models = catalog.models.filter(m => m.slug !== ep);
+      catalog.models.push({ ...structuredClone(model), slug: ep, display_name: `${model.display_name} (Ark)` });
+    }
+    const temporary = `${path}.${process.pid}.tmp`;
+    require("node:fs").writeFileSync(temporary, JSON.stringify(catalog));
+    require("node:fs").renameSync(temporary, path);
+  });
+' "$astra_ep" "$sol_ep" "$catalog"
+
+# Internal Ark traffic must bypass external proxies, preserving other exclusions.
+export NO_PROXY="${NO_PROXY:+$NO_PROXY,}ark-cn-beijing.bytedance.net"
+export no_proxy="${no_proxy:+$no_proxy,}ark-cn-beijing.bytedance.net"
+
+exec "$codex_bin" --no-daemon \
+  -c 'model_provider="ark"' \
+  -c 'model_providers.ark.name="Ark"' \
+  -c "model_providers.ark.base_url=\"$base_url\"" \
+  -c 'model_providers.ark.env_key="ARC_API_KEY"' \
+  -c 'model_providers.ark.wire_api="responses"' \
+  -c 'model_providers.ark.requires_openai_auth=false' \
+  -c 'model_providers.ark.env_http_headers={"x-modelhub-operator-id"="ARK_OPERATOR_ID","x-modelhub-operator-email"="ARK_OPERATOR_EMAIL"}' \
+  -c "model_providers.ark.http_headers={\"extra\"='{\"session_id\":\"$session_id\"}'}" \
+  -c "model_catalog_json=\"$catalog\"" \
+  --model "$ep" \
+  "$@"
+

@@ -15,6 +15,7 @@ LINKS=(
     "shell/tmux-persist:.local/bin/tmux-persist"
     "shell/rex-claude:.local/bin/rex-claude"
     "shell/codex-traex:.local/bin/codex-traex"
+    "shell/codex-ark:.local/bin/codex-ark"
     "shell/cdswap:.local/bin/cdswap"
     "shell/rc-title:.local/bin/rc-title"
     "shell/pbcopy:.local/bin/pbcopy"
