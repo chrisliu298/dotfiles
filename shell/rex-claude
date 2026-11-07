@@ -81,13 +81,20 @@ function target(r) {
   if (![p.child, p.foreground, ...(p.ancestors || [])].some(x => x?.pid === r.runnerPid)) throw Error('block no longer contains the registered runner');
   return live[0];
 }
-function send(r, text) {
+async function send(r, text) {
   if (r.block === process.env.REX_BLOCK) throw Error('refusing to type into own block');
   target(r);
   if (input(screen(r)) !== '') throw Error('input contains an unsent draft; refusing to type');
   run('rex', ['send', '-s', r.rexSession, '-b', r.block, text]);
-  // Never submit if the user changed the draft between capture and typing.
-  if (input(screen(r)) !== text) throw Error('input changed; left text unsubmitted');
+  // Rendering is asynchronous: allow it to catch up, but never submit a
+  // different draft (including a long input the UI has clipped or wrapped).
+  let matched = false;
+  for (let i = 0; i < 20; i++) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    if (input(screen(r)) === text) { matched = true; break; }
+  }
+  if (!matched) throw Error('input changed or not fully visible; left text unsubmitted');
+  target(r);
   run('rex', ['send-key', '-s', r.rexSession, '-b', r.block, 'enter']);
 }
 function register(src) {
