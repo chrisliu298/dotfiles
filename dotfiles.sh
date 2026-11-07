@@ -35,7 +35,7 @@ LINKS=(
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
     "agents/claude/lang-guard.py:.claude/lang-guard.py"
     "agents/claude/opus-repin.sh:.claude/opus-repin.sh"
-    "agents/claude/presence:.claude/presence/presence"
+    "shell/presence:.local/bin/presence"
     "agents/claude/themes/anthropic-dark.json:.claude/themes/anthropic-dark.json"
     "agents/claude/themes/anthropic-light.json:.claude/themes/anthropic-light.json"
     "agents/claude/themes/openai-dark.json:.claude/themes/openai-dark.json"
@@ -325,6 +325,30 @@ disable_builtin_computer_use() {
         rm -f "$tmp"
         warn "could not disable built-in computer-use in ~/.claude.json"
     fi
+}
+
+# User-operated state is separate from Claude's configuration and history.
+setup_presence_state() {
+    local dest="${XDG_STATE_HOME:-$HOME/.local/state}/presence"
+    mkdir -p "$dest/questions" "$dest/seen"
+    node - "$HOME/.local/state/rex-claude/sessions" "$dest/sessions" "$dest/projects" <<'JS'
+const fs = require('node:fs');
+const [registry, target, projects] = process.argv.slice(2);
+const roles = ['training-r2v', 'eval-r2v', 'data-r2v', 'ops-r2v',
+  'autoeval-rating-r2v', 'autoeval-compare-r2v', 'autoeval-critic-r2v', 'autoeval-group-r2v'];
+const records = roles.flatMap(role => {
+  const file = `${registry}/${role}.json`;
+  if (!fs.existsSync(file)) return [];
+  const record = JSON.parse(fs.readFileSync(file));
+  return [record];
+});
+const ids = records.map(r => r.sessionId);
+fs.writeFileSync(projects, [...new Set(records.map(r => r.cwd).filter(Boolean))].join('\n') + (records.length ? '\n' : ''), {mode: 0o600});
+const temporary = `${target}.${process.pid}.tmp`;
+fs.writeFileSync(temporary, ids.join('\n') + (ids.length ? '\n' : ''), {mode: 0o600});
+fs.renameSync(temporary, target);
+JS
+    ensure_symlink "$ROOT/shell/presence" "$HOME/.local/bin/presence"
 }
 
 install_links() {
@@ -865,6 +889,7 @@ main() {
 
     # Host-local installs can drift without changing the repository fingerprint.
     setup_codex_cli
+    setup_presence_state
     local fp; fp=$(compute_fingerprint)
     if stamp_fresh "$GLOBAL_STAMP" "$fp"; then
         printf '\n  %s🔧 dotfiles%s  up to date %s(%s)%s\n\n' "$_CYN" "$_RST" "$_DIM" "$ROOT" "$_RST"

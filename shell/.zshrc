@@ -90,6 +90,12 @@ _tmux-persist() {
 }
 compdef _tmux-persist tmux-persist
 
+# User-operated presence commands (including the prs alias).
+_presence() {
+    (( CURRENT == 2 )) && compadd show away back questions
+}
+compdef _presence presence prs
+
 # =============================================================================
 # Keybindings
 # =============================================================================

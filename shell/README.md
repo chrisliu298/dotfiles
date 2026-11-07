@@ -210,3 +210,19 @@ after updating to discard old function definitions. The headless shortcuts
 for non-interactive work.
 
 Continue/resume suffixes (`*c`/`*r`) are uniform across the Claude/Codex/Muse aliases.
+
+### User availability
+
+`prs` is the user-only alias for `presence`. Use `prs away "back at 18:00"`,
+`prs back`, or `prs` to inspect the current state. The note does not schedule a return.
+Agent environments cannot actively use the CLI. Passive Claude hooks apply only to
+the project and session IDs configured under `~/.local/state/presence/`. The eight
+active R2V sessions are configured on this host; retired and temporary sessions are excluded.
+
+Away questions are queued per session. Typing in one window keeps its 15-minute
+check-in grace without changing the global state. On return, each window asks its
+own still-relevant questions; answered entries are removed by the passive hook.
+Use `prs questions` to inspect queues; queue updates are internal to the passive hooks. The program lives in `shell/presence`, with
+`~/.local/bin/presence` pointing to it; no CLI guidance belongs in agent instructions.
+
+Run the isolated checks with `uv run --no-project --with pytest pytest shell/tests/test_presence.py`.

@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""User-operated availability control.
+
+  prs [show]                       current state and pending counts
+  prs away [NOTE]                  mark away (note is informational)
+  prs back                         mark present
+  prs questions                   all queued questions
+
+Passive hook modes are internal. They never instruct an agent to use this CLI.
+State and the configured project/session allowlists live in XDG_STATE_HOME/presence
+(default ~/.local/state/presence). Only the configured R2V sessions are affected.
+"""
+import fcntl, glob, json, os, sys, time
+
+ROOT = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "presence")
+STATE = os.path.join(ROOT, "state.json")
+QDIR = os.path.join(ROOT, "questions")
+PROJECTS = os.path.join(ROOT, "projects")
+SESSIONS = os.path.join(ROOT, "sessions")
+SEEN = os.path.join(ROOT, "seen")
+SEEN_GRACE = 15 * 60
+
+
+def now():
+    return time.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
+def load():
+    try:
+        return json.load(open(STATE))
+    except (OSError, ValueError):
+        return {"state": "present", "since": None}
+
+
+def save(s):
+    os.makedirs(ROOT, exist_ok=True)
+    tmp = f"{STATE}.{os.getpid()}.tmp"
+    json.dump(s, open(tmp, "w"), ensure_ascii=False, indent=1)
+    os.replace(tmp, STATE)
+
+
+def qpath(sid):
+    return os.path.join(QDIR, f"{sid}.json")
+
+
+def qload(sid):
+    try:
+        return json.load(open(qpath(sid)))
+    except (OSError, ValueError):
+        return {"items": []}
+
+
+def qupdate(sid, change):
+    """Read-modify-write a session's queue under a lock, since parallel tool calls and their hooks hit the same
+    file. An emptied queue is removed. Returns (queue, change's result)."""
+    os.makedirs(QDIR, exist_ok=True)
+    with open(os.path.join(QDIR, ".lock"), "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        q = qload(sid)
+        out = change(q)
+        if q["items"]:
+            tmp = f"{qpath(sid)}.{os.getpid()}.tmp"
+            json.dump(q, open(tmp, "w"), ensure_ascii=False, indent=1)
+            os.replace(tmp, qpath(sid))
+        elif os.path.exists(qpath(sid)):
+            os.remove(qpath(sid))
+    return q, out
+
+
+def qadd(sid, texts, label=None, questions=None):
+    """A question already queued keeps its ID instead of being queued twice."""
+    def change(q):
+        q["label"] = label or q.get("label") or session_name(sid)
+        ids = []
+        for index, text in enumerate(texts):
+            question = questions[index] if questions else text
+            item = next((i for i in q["items"] if i.get("question", i["text"].split("（选项：")[0]) == question), None)
+            if item is None:
+                item = {"id": max((i["id"] for i in q["items"]), default=0) + 1, "at": now()}
+                q["items"].append(item)
+            item.update(text=text, question=question)
+            ids.append(item["id"])
+        return ids
+    return qupdate(sid, change)[1]
+
+
+def qlist(q):
+    return "\n".join(f"#{i['id']}（{i['at'][5:16].replace('T', ' ')}）{i['text']}" for i in q["items"])
+
+
+def session_name(sid):
+    for f in glob.glob(os.path.expanduser("~/.claude/sessions/*.json")):
+        try:
+            record = json.load(open(f))
+        except (OSError, ValueError):
+            continue
+        if record.get("sessionId") == sid and record.get("name"):
+            return record["name"]
+    return f"{os.path.basename(os.getcwd())}（{(sid or '?')[:8]}）"
+
+
+def in_scope(cwd, sid):
+    try:
+        allowed = {line.strip() for line in open(SESSIONS) if line.strip()}
+        if sid not in allowed:
+            return False
+        roots = [os.path.realpath(os.path.expanduser(l.strip())) for l in open(PROJECTS) if l.strip()]
+    except OSError:
+        return False
+    cwd = os.path.realpath(cwd or ".")
+    return any(cwd == r or cwd.startswith(r + os.sep) for r in roots)
+
+
+def mark_seen(sid):
+    os.makedirs(SEEN, exist_ok=True)
+    open(os.path.join(SEEN, sid), "w").write(str(time.time()))
+
+
+def seen_recently(sid):
+    try:
+        return time.time() - float(open(os.path.join(SEEN, sid)).read()) < SEEN_GRACE
+    except (OSError, ValueError):
+        return False
+
+
+def describe(s):
+    word = "用户已标记离开" if s["state"] == "away" else "用户在"
+    since = f"（{s['since']} 起）" if s.get("since") else ""
+    note = f"，备注：{s['note']}" if s.get("note") else ""
+    return f"{word}{since}{note}"
+
+
+def pending_summary():
+    queues = [json.load(open(f)) for f in sorted(glob.glob(os.path.join(QDIR, "*.json")))]
+    rows = [f"{q.get('label')} {len(q['items'])} 条" for q in queues]
+    return f"\n待问：{'；'.join(rows)}（到对应窗口说话时才会问）" if rows else "\n没有待问问题"
+
+
+def hook_prompt():
+    event = json.load(sys.stdin)
+    prompt = str(event.get("prompt", "")).strip()
+    if (not in_scope(event.get("cwd") or os.getcwd(), event.get("session_id")) or os.environ.get("CODEX_REVIEW_SUBAGENT_ACTIVE") == "1"
+            or prompt.startswith(("<cross-session-message", "<task-notification", "<teammate-message",
+                                  "<agent-message"))):
+        return
+    sid = event.get("session_id") or "?"
+    mark_seen(sid)
+    s, q = load(), qload(sid)
+    if s["state"] == "away":
+        print(f"[用户在场状态] 用户仍标记离开；刚在此窗口输入后，本窗口 {SEEN_GRACE // 60} 分钟内可照常提问。其他窗口状态不变，无需主动修改状态。")
+    if q["items"]:
+        print(f"[待问] 本会话有 {len(q['items'])} 条待问：\n{qlist(q)}\n"
+              "先处理用户当前消息，再核对哪些问题仍成立；过期或能自己定的跳过，其余用 AskUserQuestion 问用户。"
+              "队列由程序维护，无需调用命令；收到有效回答后相应条目自动移除。")
+
+
+def hook_ask():
+    event = json.load(sys.stdin)
+    s = load()
+    if not in_scope(event.get("cwd"), event.get("session_id")) or s["state"] != "away" or seen_recently(event.get("session_id") or "?"):
+        return
+    texts = []
+    questions = event.get("tool_input", {}).get("questions", [])
+    for item in questions:
+        options = " / ".join(o.get("label", "") for o in item.get("options", []))
+        texts.append(f"{item.get('question', '')}（选项：{options}）")
+    ids = qadd(event.get("session_id") or "?", texts, event.get("session_title"), [q["question"] for q in questions])
+    reason = (f"{describe(s)}。这些问题已记进本会话的待问清单（{' '.join(f'#{i}' for i in ids)}），"
+              "他回来在本窗口说话时再问，现在不要重复调用提问工具，也不需要调用命令维护队列。"
+              "在已有授权内按可逆默认推进，记好所用默认；没有安全默认就停在对应步骤，继续其他独立工作。")
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                             "permissionDecisionReason": reason}}, ensure_ascii=False))
+
+
+def hook_post():
+    event = json.load(sys.stdin)
+    if not in_scope(event.get("cwd"), event.get("session_id")) or event.get("tool_name") != "AskUserQuestion":
+        return
+    response = event.get("tool_response")
+    answers = response.get("answers", {}) if isinstance(response, dict) else {}
+    if not isinstance(answers, dict):
+        return
+    answered = {q for q, answer in answers.items() if answer}
+    if answered:
+        qupdate(event["session_id"], lambda q: q.update(items=[i for i in q["items"]
+                if i.get("question", i["text"].split("（选项：")[0]) not in answered]))
+
+
+def switch(s, state, note):
+    """Repeating the current state changes nothing, so the first window's time and note stand."""
+    if s["state"] == state:
+        return print(f"已经是这个状态，没有改动。{describe(s)}{pending_summary()}")
+    s = {"state": state, "since": now(), "note": note}
+    save(s)
+    print(describe(s) + pending_summary())
+
+
+def main(argv):
+    cmd = argv[0] if argv else "show"
+    if cmd == "hook-prompt":
+        return hook_prompt()
+    if cmd == "hook-ask":
+        return hook_ask()
+    if cmd == "hook-post":
+        return hook_post()
+    if any(os.environ.get(key) for key in ("CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CODEX_TOOL_CALL_ID", "CURSOR_AGENT")):
+        sys.exit("此入口仅供用户终端主动调用；agent 不能操作。")
+    if cmd == "questions":
+        for f in sorted(glob.glob(os.path.join(QDIR, "*.json"))):
+            q = json.load(open(f))
+            print(f"== {q.get('label')}\n{qlist(q)}")
+        return
+    if cmd == "away":
+        return switch(load(), "away", " ".join(argv[1:]) or None)
+    if cmd == "back":
+        return switch(load(), "present", None)
+    if cmd != "show":
+        sys.exit(__doc__)
+    print(describe(load()) + pending_summary())
+
+
+if __name__ == "__main__":
+    try:
+        main(sys.argv[1:])
+    except Exception as e:  # a broken hook must never block a prompt or a question
+        if sys.argv[1:2] and sys.argv[1].startswith("hook-"):
+            print(f"[用户在场状态] hook error: {type(e).__name__}", file=sys.stderr)
+            sys.exit(0)
+        raise

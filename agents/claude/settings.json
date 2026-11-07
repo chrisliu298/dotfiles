@@ -61,20 +61,21 @@
     "PreToolUse": [
       {
         "matcher": "AskUserQuestion",
-        "hooks": [{ "type": "command", "command": "python3 ~/.claude/presence/presence hook-ask" }]
+        "hooks": [{ "type": "command", "command": "python3 ~/.local/bin/presence hook-ask" }]
       }
     ],
     "UserPromptSubmit": [
       {
-        "hooks": [{ "type": "command", "command": "python3 ~/.claude/presence/presence hook-prompt" }]
+        "hooks": [{ "type": "command", "command": "python3 ~/.local/bin/presence hook-prompt" }]
       }
     ],
     "PostToolUse": [
       {
-        "hooks": [{ "type": "command", "command": "python3 ~/.claude/lang-guard.py post-tool" }]
+        "matcher": "AskUserQuestion",
+        "hooks": [{ "type": "command", "command": "python3 ~/.local/bin/presence hook-post" }]
       },
       {
-        "hooks": [{ "type": "command", "command": "python3 ~/.claude/presence/presence hook-post" }]
+        "hooks": [{ "type": "command", "command": "python3 ~/.claude/lang-guard.py post-tool" }]
       }
     ],
     "Stop": [
