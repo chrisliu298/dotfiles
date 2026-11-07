@@ -14,165 +14,21 @@ network access (including SSH to dev machines). Read-only scope is an assignment
 instruction, not a permission boundary. Default to a persistent session;
 use `--once` only for a request that needs no follow-ups.
 
-## Choose reviewers
+## Boundaries and completion
 
-Read the user's message for backend names and assignments:
+Use this for read-only assignments to the user's chosen backend(s), not implementation,
+Pro alone, or a bare request for a native subagent. Preserve the requested kind of
+work; do not turn every assignment into review. Never substitute an unavailable backend.
+A handle proves dispatch, and a finished turn still needs the requested deliverable.
+Verify consequential claims against primary artifacts and preserve backend attribution.
 
-- “让 Claude 审查” → `claude`.
-- “Claude 和 Cursor 并行独立审查” → `claude` and `cursor`, same assignment.
-- “GPT、Claude、Cursor、Muse、DeepSeek 都看一下” → `gpt`, `claude`, `cursor`, `muse`
-  and `ds`, same assignment.
-- “也问问 Pro” / “ChatGPT Pro” alongside other backends → `pro`.
-- “Claude 看正确性，GPT 看测试” → `claude` and `gpt`, distinct assignments.
+Resolve bundled references and `scripts/agent-team` from this skill root.
+Assignments and task artifacts stay in their authorized cwd/scratch location.
 
-Each backend runs at most once per call; a repeated `--backend` is rejected. When
-the user asks for more reviewers than distinct backends, say so and ask how to
-split the work. Start every reviewer with one `start` call: backends without a
-file share the stdin prompt, and `--backend NAME=FILE` gives a backend its own
-assignment (an absolute path or one relative to the working directory). Write one backend-neutral prompt; the helper adds
-each backend's completion and launch details, so do not tailor prompts per
-backend or add deadlines (`wait --timeout` bounds the wait). `--file PATH`
-(repeatable) shares local files: `pro` cannot open paths, so its prompt inlines
-their contents, while the other backends receive the absolute paths to read.
-If no backend was chosen and the request does not identify one, ask which to use.
-These backends are separate CLI sessions, not the caller's native subagents (the
-Agent tool). A request for a “subagent” or “subagent review” that names no backend
-uses the native subagent workflow, not this skill.
-Always name backends by these ids, in prompts, reports and attribution alike:
-`gpt` is Codex CLI; `claude` is Claude Code; `cursor` is Cursor Agent on Gemini;
-`muse` is Muse Code; `ds` is DeepSeek through Claude Code; `pro` is ChatGPT Pro
-through the gpt-pro relay. Product names describe only the underlying tool.
+## Read the relevant procedure before acting
 
-Before dispatch, read only the references for the chosen backends:
-[`gpt`](references/gpt.md), [`claude`](references/claude.md), [`cursor`](references/cursor.md),
-[`muse`](references/muse.md), [`ds`](references/ds.md), [`pro`](references/pro.md).
-Use `scripts/agent-team` beside this `SKILL.md`; resolve its actual installed
-location rather than assuming a particular agent's skill directory. It requires
-Node.js and zsh, plus tmux for persistent sessions other than `pro`. `backends` reports configured
-availability, not a verified login or model entitlement. This skill is installed
-for Claude Code only. Report unavailable backends; do not substitute one.
-
-## Persistent task
-
-Write a bounded read-only assignment to a scratch file outside the repository:
-goal, relevant paths, constraints, expected deliverable, and conversation context.
-The deliverable can be an analysis, a research synthesis, a proposed plan, or a
-review. Preserve the user's requested task rather than turning every assignment
-into a code review. For a review or an independent proposal, hand over the
-artifacts (code, request, outputs, data paths) and the question, not your own
-conclusion or candidate answer: a reviewer that sees your reasoning tends to
-confirm it. Ask for evidence you can check against the primary artifacts
-(paths, line numbers, commands and their outputs). Backend tool capabilities still limit what can be executed.
-Explicitly prohibit file and external-system changes. Native reviewer subagents
-may handle bounded parts under the same scope unless the user says otherwise.
-The reviewer owns its evidence and synthesis; a child failure matters when it
-leaves an unresolved coverage gap. Nested review-helper calls are blocked.
-
-From the authorized working directory:
-
-```bash
-# helper is scripts/agent-team beside this SKILL.md.
-$helper backends
-session="$($helper start --backend claude < /tmp/review.md)"
-# Same assignment for gpt, cursor and muse, a distinct one for claude:
-$helper start --backend gpt --backend cursor --backend muse \
-  --backend claude=/tmp/claude-review.md < /tmp/review.md
-# pro receives the file contents; claude receives the path:
-$helper start --backend pro --backend claude --file src/main.py < /tmp/review.md
-$helper wait "$session"
-$helper send "$session" < /tmp/supplement.md
-$helper wait "$session"
-$helper stop "$session"
-
-# A multi-backend start returns a JSON manifest of independent sessions.
-$helper start --backend claude --backend gpt --backend muse < /tmp/review.md
-# Read session handles from the manifest; later actions infer each backend.
-$helper wait "$session1" "$session2" "$session3"
-$helper send "$session1" "$session2" "$session3" < /tmp/supplement.md
-$helper wait "$session1" "$session2" "$session3"
-$helper stop "$session1" "$session2" "$session3"
-```
-
-Single-backend start prints its session name. Multi-backend start returns
-`{"sessions":[{"backend":"claude","session":"..."}],"errors":[],"is_error":false}`.
-Inspect the exit code and errors. A partial startup returns nonzero while retaining
-successful handles: collect those reviews and stop their sessions; do not retry the
-whole batch. Startup handles are also printed to stderr as they arrive, for recovery
-if the caller is interrupted. A handle proves dispatch, not a completed review.
-
-After start and every supplement, run `wait` and collect that same waiter to
-completion. If the command tool yields a running process ID, resume it instead
-of launching another waiter. Use background completion notification when the
-caller supports it; otherwise await the process while doing independent work.
-Completion notification applies to the active caller turn, not a finished one.
-
-`wait` returns the full reply, including backend/session attribution for multiple
-sessions. Never use a quiet screen or `capture` as proof of completion. A finished
-turn still needs the requested findings and deliverable; an opener is unfinished
-work. Continue the same session with a focused request to finish missing coverage.
-Verify consequential claims against primary artifacts and produce the requested
-deliverable. For multiple contributors, preserve attribution and identify relevant
-agreements, disagreements, and remaining gaps.
-
-## Control and failure semantics
-
-- `send` returns JSON with `delivery`. `cursor` `confirmed` means steering activation
-  or transcript receipt was confirmed, not that the message has joined the turn yet
-  (steering waits for the next safe boundary, as on the other backends); `pro`
-  `confirmed` means the relay acknowledged delivery into the running answer.
-  `claude`/`gpt`/`muse`/`ds` `submitted` means text was pasted and Enter sent; it
-  does not independently prove consumption or task completion. Use `wait` for the
-  resulting reply. Do not interrupt merely to add context.
-- A `pro` conversation accepts no follow-up once its answer finishes: `send` fails
-  and says to start a new task that includes the answer and the new question.
-- `cursor` and `pro` `unconfirmed` return 124; the message may still be queued. Inspect it or
-  keep waiting, without automatically resending or restarting.
-- A failed `send` leaves that session's latest request failed. `wait` reports the
-  failure instead of returning its previous reply; a subsequent successful send
-  clears it. In a batch, retain failed delivery entries separately from completed
-  replies. Do not treat them as answers to the supplement.
-- `wait SESSION [SESSION ...] --timeout N` defaults to 3600 seconds per session,
-  7200 for `pro`.
-  Timeout returns 124 when all failures are timeouts; mixed failures return 1.
-  Multi-session replies retain individual exit codes and diagnostics.
-- For `muse` and `cursor`, `wait` resumes a turn that ended in a transient network or
-  provider error by sending a continuation itself, at most twice per request, and
-  notes each on stderr. Do not also send "continue"; a failure it reports already
-  used those attempts.
-- `status` and `capture` are diagnostic. `input_ready=1` does not prove the model
-  is idle. `interrupt` requests an urgent stop using the backend's native key;
-  it does not guarantee background work was cancelled. Inspect before new work.
-  Interrupting `pro` stops its run for good.
-- `list` includes sessions started by earlier entrypoints. Session actions do not
-  require the backend to remain available, so cleanup is still possible.
-
-On failure, inspect output/pane and the workspace before a safe retry. Allow at
-most two retries, never duplicate a running request or a message that may already
-be queued. Stop every session you started before the final answer; keep one only
-when follow-ups are needed and explicitly name it as open. Stop only named sessions,
-never the tmux server.
-
-## One-shot task
-
-```bash
-$helper --once --backend gpt < /tmp/review.md
-$helper --once --backend gpt --output-format json < /tmp/review.md
-$helper --once --backend claude --backend gpt < /tmp/review.md
-$helper --once --backend claude --backend gpt --timeout 300 < /tmp/review.md
-$helper --once --backend gpt=/tmp/a.md --backend muse=/tmp/b.md
-```
-
-Single text mode returns the final reply. Single JSON mode uses
-`{"result":"...","exit_code":0,"is_error":false}`. Multi-session and multi-backend
-one-shot actions return `{"results":[{"backend":"...","result":"...","exit_code":0,"is_error":false}],"is_error":false}`.
-Each one-shot backend has a 3600-second deadline (`pro` 7200), configurable with `--timeout`.
-Timeout returns 124 and stops the owned process group, including descendants.
-Each completed one-shot reply is immediately recorded on stderr as a JSON line
-with `event: "completed"`, backend and the same result fields. Save
-these records if the caller stops before the final stdout manifest; do not rerun
-already completed assignments. SIGINT/SIGTERM stops unfinished process groups
-and returns the collected manifest with exit code 130/143.
-
-Nonzero exits and empty replies from either `wait` or `--once` are failures. The helper never changes login,
-installs missing dependencies, chooses a replacement backend, or merges the reviews
-itself; the calling agent performs verification and synthesis.
+- Before dispatch: read [Choose reviewers](references/choose-reviewers.md), then only the selected backend references linked there; preserve its assignment/file-sharing and capability rules.
+- Before any helper action: read [Control and failure semantics](references/control-and-failures.md), including delivery receipts, ambiguous sends, bounded retries, interrupts and owned-session cleanup.
+- Default persistent workflow, preparing an assignment, starting, supplementing, waiting or collecting: [Persistent tasks](references/persistent-tasks.md), together with the control procedure. Collect the same waiter to completion after each supplement.
+- Only when no follow-up is needed: read [One-shot tasks](references/one-shot-tasks.md) before `--once`, together with selection, control and the shared assignment-preparation requirements in Persistent tasks; preserve partial results and do not rerun completed work.
+- At task end: follow the control procedure's cleanup conditions. Stop only sessions you started; keep one open only for needed follow-ups and explicitly name it. Never stop the tmux server.
