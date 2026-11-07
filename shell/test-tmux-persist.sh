@@ -61,6 +61,12 @@ busy adapt-clf id-adapt
 [ "$(snap)" = "$(row adapt-clf id-adapt)" ] || fail "adapt-clf not saved: $(snap)"
 t kill-session -t "=adapt-clf"
 
+# So is thesis.
+busy thesis id-thesis
+"$tp" save
+[ "$(snap)" = "$(row thesis id-thesis)" ] || fail "thesis not saved: $(snap)"
+t kill-session -t "=thesis"
+
 # Only persisted sessions are saved, under their current name after a rename; a
 # closed session drops out and a reused pid is ignored.
 busy keep-r2v id-keep; keep_pid=$busy_pid keep_pane=$busy_pane
@@ -142,6 +148,17 @@ resumed "$busy_pid" "$busy_pane" "id-eq --effort xhigh"
 busy busy id-set --effort high
 "$tp" restart --effort medium busy > /dev/null
 resumed "$busy_pid" "$busy_pane" "id-set --effort medium"
+
+# restart --all restarts every session running a Claude, and only those.
+t kill-server
+busy one id-all1; one_pid=$busy_pid one_pane=$busy_pane
+busy two id-all2
+t new-session -d -s plain "sleep 600"
+[ "$("$tp" restart --effort low --all | sort)" = "$(printf 'restarted one (%s)\nrestarted two (%s)' "$one_pane" "$busy_pane" | sort)" ] \
+    || fail "restart --all did not report exactly the Claude sessions"
+resumed "$one_pid" "$one_pane" "id-all1 --effort low"
+resumed "$busy_pid" "$busy_pane" "id-all2 --effort low"
+! "$tp" restart --all one 2>/dev/null || fail "restart --all accepted session names"
 
 # A session without a running Claude stops the whole restart.
 busy busy id-untouched

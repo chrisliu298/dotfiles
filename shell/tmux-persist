@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Bring the *-r2v and adapt-clf tmux sessions, each running Claude Code, back after a reboot.
+# Bring the *-r2v, adapt-clf and thesis tmux sessions, each running Claude Code, back after a reboot.
 # Claude Code records every live process in ~/.claude/sessions/<pid>.json with
 # its tmux pane ("name:@win.%pane") and conversation id; `save` copies the entries
 # of those sessions into a snapshot, and `restore` recreates each missing
@@ -9,9 +9,10 @@
 # Usage: tmux-persist            show those sessions and their snapshot entries
 #        tmux-persist save       refresh the snapshot from live Claude processes
 #        tmux-persist restore    recreate snapshot sessions that are not running
-#        tmux-persist restart [--effort <level>] <name>...
-#                                restart the Claude in running sessions (e.g.
-#                                after an update), resuming the same conversations
+#        tmux-persist restart [--effort <level>] <name>...|--all
+#                                restart the Claude in running sessions (--all:
+#                                every session running one, e.g. after an
+#                                update), resuming the same conversations
 #                                with a message saying they were restarted, at the
 #                                effort each was launched with (or <level>)
 #        tmux-persist stale      sessions whose Claude predates the installed
@@ -23,11 +24,11 @@ SESSIONS_DIR=${TMUX_PERSIST_CLAUDE_SESSIONS:-$HOME/.claude/sessions}
 # --model: `claude --resume` otherwise takes the model of the transcript's last
 # reply, which is Opus 5 after a refusal fallback even once /model switched back.
 LAUNCH=${TMUX_PERSIST_LAUNCH:-claude --dangerously-skip-permissions --model claude-opus-5-5 --resume}
-PATTERN='(*-r2v|adapt-clf)'
+PATTERN='(*-r2v|adapt-clf|thesis)'
 SNAP=$STATE/snapshot  # name<TAB>cwd<TAB>sessionId<TAB>effort (empty: none given)
-# The first message of a restarted conversation, since state that lived only in
-# the old process is gone; %s is the session id.
-RESTARTED="这个会话刚被重启了（tmux-persist restart）：Claude 进程已被替换，对话已恢复。只存在于旧进程里的东西，比如后台任务、Monitor、cron、scheduled wakeup 和 loop，都已经没了。子代理也停了，但上下文还在：~/.claude/projects/*/%s/subagents/ 里没有 \"finished\":true 的 meta.json 是没做完的，用 SendMessage 按文件名里的 agentId 继续，不要重新起。检查哪些需要恢复并恢复它们，然后继续。"
+# The first message of a restarted conversation: inspect restored state before
+# recreating missing work; %s is the session id.
+RESTARTED="这个会话刚被重启了（tmux-persist restart）：Claude 进程已被替换，对话已恢复。先检查后台任务、Monitor、cron、scheduled wakeup 和 loop 的现状；定时任务先用 CronList 核对，只恢复仍需要且缺失的工作，保留已有频率，不重复创建。子代理上下文在 ~/.claude/projects/*/%s/subagents/，没有 \"finished\":true 的 meta.json 记录未完成工作，用 SendMessage 按文件名里的 agentId 继续，不要重新起。然后继续当前任务。"
 SELF=${0:A}
 
 # launchd starts us with a bare PATH.
@@ -213,7 +214,13 @@ case ${1:-} in
             EFFORT=${2:-}; shift $(( $# < 2 ? $# : 2 ))
             [[ -n $EFFORT ]] || set --  # --effort without a level
         fi
-        (( $# >= 1 )) || { print -u2 "usage: tmux-persist restart [--effort <level>] <session>..."; exit 2; }
+        if [[ $* == --all ]]; then
+            set -- ${(f)"$(claudes | cut -f1 | sort -u)"}
+            (( $# )) || { print -u2 "tmux-persist: no running Claude in any session"; exit 1; }
+        elif (( ${@[(Ie)--all]} )); then
+            set --  # --all with session names
+        fi
+        (( $# >= 1 )) || { print -u2 "usage: tmux-persist restart [--effort <level>] <session>...|--all"; exit 2; }
         restart "$@" ;;
     '') [[ -f $SNAP ]] && cat "$SNAP"
         for name in ${(f)"$(tmux_ list-sessions -F '#S' 2>/dev/null || true)"}; do
@@ -221,5 +228,5 @@ case ${1:-} in
             [[ -f $SNAP ]] && cut -f1 "$SNAP" | grep -qxF -- "$name" && continue
             print -r -- "$name"$'\t(no snapshot)'
         done ;;
-    *) print -u2 "usage: tmux-persist [save|restore|stale|restart [--effort <level>] <session>...]"; exit 2 ;;
+    *) print -u2 "usage: tmux-persist [save|restore|stale|restart [--effort <level>] <session>...|--all]"; exit 2 ;;
 esac
