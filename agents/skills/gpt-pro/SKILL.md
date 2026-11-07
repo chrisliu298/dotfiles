@@ -12,98 +12,41 @@ Send one self-contained prompt through `gpt-pro` and return its verified answer.
 The engine runs on this Mac. The wrapper submits once and waits through network drops. Each new prompt starts a fresh ChatGPT conversation; `--run-id`
 reattaches to the original one.
 
+Use only context authorized for this request. Bundled references and scripts resolve
+from this skill root; question files and attachments stay in their authorized cwd.
+An authorized invocation is the go-ahead; do not add a runtime confirmation.
+
 ## Prepare the prompt
 
-Put the question and relevant session decisions in a file. GPT-Pro cannot see this
-conversation or local files; attach needed files with `-f <path>` rather than
-hand-concatenating them. The wrapper validates, secret-scans, and caps composed input
-at 5 MB before submission. Use only context authorized for this request.
-
-```bash
-gpt-pro -f src/foo.py -f src/bar.py < question.md
-```
-
-- For attachment flags, directory inputs, dry runs, PATH failures, or large-paste
-  handling, read [Invocation and attachments](references/attachments.md).
-- When the answer depends on external facts, use the grounding guidance in
-  [Conditional prompt guidance](references/prompting.md#grounding-external-facts).
-- For judgments, design advice, and second opinions, use that reference's
-  [calibration block](references/prompting.md#calibration-block); skip it for
-  deterministic lookups and mechanical transforms.
+Before composing or attaching files, read [Prepare the prompt](references/prepare-prompt.md).
+Pro cannot see this conversation or local files: supply needed context explicitly.
+Follow its conditional links for attachments, external facts and calibrated judgments.
 
 ## Invoke and wait
 
-An authorized invocation is the go-ahead; do not add a runtime confirmation.
-Runs usually take 5–20 minutes and can take 1–2 hours including waiting.
-Launch once in the background with the Bash tool:
-
-```text
-command:           gpt-pro < question.md
-run_in_background: true
-timeout:           7260000
-```
-
-Claude Code notifies you when it exits. If the tool merges stdout and stderr,
-`run_id=` appears early and may be absent from the final chunk, so record the
-literal run ID as soon as it appears. Continue independent work meanwhile. Do not
-start another waiter or polling loop, or submit again, while the call is live.
-Finish collecting the wrapper's output before ending your turn when possible; if
-interrupted, recover with the run ID as described below.
-
-The answer goes to stdout; `run_id=<id>`, `recover_with=…`, and diagnostics go to
-stderr. Keep these streams separate if saving them. Capture the literal run ID for
-recovery. If `gpt-pro` is not on PATH, use `<this-skill-dir>/scripts/gpt-pro`.
+Before submitting or collecting, read [Invoke and wait](references/submit-and-wait.md).
+Launch once in the background, record the literal run ID and collect the same invocation.
+Do not create another waiter, polling loop or submission while it is live.
 
 ## Verify the result
 
-Use a non-empty successful response. When retrieving artifacts directly, read
-`result.json` first: only `status: "ok"` makes `response.md` usable. Rejected,
-incomplete, partial, and pending bodies are diagnostics, even if they read like
-finished answers. Report model-audit uncertainty when it affects reliance on the result.
-Verify relevant external claims before relying on them; use the conditional prompt
-reference for grounding and judgment checks.
+Before returning an answer or reading saved response artifacts, read
+[Verify the result](references/verify-answer.md). Only a non-empty successful response
+is usable; for artifacts, read result.json first and require status: "ok".
+Other bodies are diagnostics. Verify consequential claims and report model-audit uncertainty.
 
 ## Recovery and other operations
 
-- If the caller dies or exits 124/255, reattach with `gpt-pro --run-id <literal-id>`
-  in the same background envelope. This waits on a live worker, or restores collection
-  from the saved original conversation URL if the worker died. Recovery never resends
-  the initial prompt. Explicitly queued supplements keep their separate send/receipt
-  lifecycle; normal completion checks, model audit, and browser cleanup still apply.
-  Without a usable saved URL, it exits 6; inspect the artifacts and report the failure.
-  A post-send error whose stderr says `recoverable: true` restores the same way:
-  the answer may already be finished in the original conversation.
-  Empty output without a completion event means the call may still be running.
-- To stop generation, use `gpt-pro --stop <literal-id>`. `TaskStop` or `kill` on a
-  background task can kill its detached collector while browser generation continues.
-  To end only the wait, let `--max-wait` expire or detach from the harness; preserve
-  the collector and do not kill the process tree. Reattach with `--run-id` afterward.
-- For any failure, read [Runtime, recovery, and diagnostics](references/operations.md#if-it-fails)
-  before choosing a retry. Ambiguous or post-send failures must not trigger a blind
-  resubmit; a fresh quota-consuming run after a terminal failure requires the user’s decision.
-- For changing timeouts, diagnosing queues, stopping a run, or retrieving artifacts,
-  read the relevant section of [Runtime, recovery, and diagnostics](references/operations.md).
-  Browser teardown is operator maintenance, not routine recovery.
+Before recovery, timeout changes, stopping or artifact retrieval, read
+[Recovery and other operations](references/recovery-entry.md), then the relevant
+[Runtime, recovery, and diagnostics](references/operations.md) section.
+For any failure, read [If it fails](references/operations.md#if-it-fails) before choosing a retry.
+Ambiguous or post-send failures never justify blind resubmission; a fresh quota-consuming
+run after terminal failure requires the user's decision. Use --stop to stop generation;
+TaskStop/kill can leave browser generation running after killing its collector.
 
 ## Supplement a running request
 
-When the user asks to add information while Pro is working, send it to the
-original run instead of starting a fresh conversation:
-
-```bash
-gpt-pro --send <literal-run-id> --message-id <stable-message-id> < supplement.md
-```
-
-The existing `-f` attachment flags also work with `--send`. Send returns a
-delivery receipt on stderr, not an answer on stdout. `sent` proves the new user
-message appeared in the original conversation; `queued` or exit 124 is pending.
-The default receipt wait is 30s (`--max-wait` changes it). Preserve the printed
-message ID: every retry must use the SAME ID and identical composed content.
-Never retry by omitting the ID or generating a fresh one. Resume collecting the
-original invocation; its final answer includes the supplements. If its collector
-has died, restore it with `--run-id` before retrying the same supplement.
-
-New supplements are accepted only while the original worker is active and has
-reached the post-send monitor. Finished/finalizing/stopping runs reject them, as
-do old workers that lack this feature. After a run has finished, include its
-answer and the follow-up question in a new prompt.
+Before sending or retrying a supplement, read [Supplement a running request](references/supplements.md).
+Use the original run ID and preserve the same stable message ID and identical content
+on retries. A delivery receipt is not an answer; resume collection of the original invocation.
