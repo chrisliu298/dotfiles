@@ -240,3 +240,33 @@ def test_invalid_run_has_readable_error_without_traceback(monkeypatch, capsys, c
     assert captured.out == ''
     assert 'missing' in captured.err and 'run' in captured.err.lower()
     assert 'Traceback' not in captured.err
+
+
+REQUEST = {
+    'ResponseBase': {'code': 0}, 'name': 'r2v-arm', 'namespace': 'seed',
+    'attachments': [{'kind': 'arnold_cluster_control',
+                     'arnold_cluster_control_attachment': {'queue_priority': 40}}],
+    'resource_config': {'arnold_resource_config': {'roles': [{'num': 16, 'gpu': 8}]}},
+    'job_config': {'job_template_config': {
+        'git_repo': {'commit_sha': 'abc123'},
+        'entrypoint_full_script': 'launch.sh --data /d/rel/sha/data.json --steps-per-epoch 1174 --world-size=128\n'}},
+}
+
+
+def test_req_has_no_data_layer_and_writes_body_without_envelope(monkeypatch, capsys, tmp_path):
+    client = SimpleNamespace(call=lambda command, body: REQUEST)
+    monkeypatch.setattr(m, 'Client', lambda: client)
+    out = tmp_path / 'req.json'
+    assert m.main(['req', 'sid1', '--out', str(out)]) == 0
+    line = capsys.readouterr().out
+    for piece in ('sid1', 'name=r2v-arm', 'commit=abc123', 'gpus=128', 'queue_priority=40',
+                  'steps=1174', 'data=/d/rel/sha/data.json', f'body={out}'):
+        assert piece in line
+    body = json.loads(out.read_text())
+    assert 'ResponseBase' not in body and body['name'] == 'r2v-arm'
+
+
+def test_req_without_job_config_fails_readably(monkeypatch, capsys):
+    monkeypatch.setattr(m, 'Client', lambda: SimpleNamespace(call=lambda command, body: {'ResponseBase': {'code': 0}}))
+    assert m.main(['req', 'sid1']) == 1
+    assert 'no job_config' in capsys.readouterr().err

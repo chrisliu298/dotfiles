@@ -156,6 +156,30 @@ def show_runs(client, runs):
         print(brief_line(run, starts))
 
 
+def flag_value(script, pattern):
+    match = re.search(pattern, script)
+    return match.group(1) if match else None
+
+
+def show_request(client, args):
+    response = client.call(('job-v2', 'runs', 'get-request-config'), {'sid': args.sid})
+    if not isinstance(response.get('job_config'), dict):
+        raise MjobError(f'{field(args.sid)}: no job_config in the request config')
+    body = {key: value for key, value in response.items() if key != 'ResponseBase'}
+    template = body['job_config'].get('job_template_config') or {}
+    script = template.get('entrypoint_full_script') or ''
+    values = {
+        'name': body.get('name'), 'commit': (template.get('git_repo') or {}).get('commit_sha'),
+        'gpus': gpu_count(body), 'queue_priority': priority(body),
+        'steps': flag_value(script, r'--steps-per-epoch[ =](\d+)'),
+        'data': flag_value(script, r'--data[ =](\S+)'), 'body': args.out,
+    }
+    print('\t'.join([field(args.sid), *(f'{key}={field(value)}' for key, value in values.items())]))
+    if args.out:
+        with open(args.out, 'w', encoding='utf-8') as out:
+            json.dump(body, out, ensure_ascii=False)
+
+
 def run_filter(args):
     query = {'arnold_group_id_any': [args.group]}
     if args.since:
@@ -327,6 +351,9 @@ def main(argv=None):
     logs.add_argument('--grep', metavar='RE')
     logs.add_argument('--tail', type=nonnegative, metavar='N')
     logs.add_argument('--since-min', type=positive, default=60, help='TLS fallback window (default: 60)')
+    req = commands.add_parser('req', help='what the platform received: one summary line, optional body file')
+    req.add_argument('sid')
+    req.add_argument('--out', metavar='FILE', help='write the request body, without the response envelope')
     args = parser.parse_args(argv)
     client = Client()
     try:
@@ -344,6 +371,8 @@ def main(argv=None):
             rows = client.pages(('job-v2', 'runs', 'list'), {'filter': query})
             show_runs(client, queue_runs(run for run in rows
                        if str(arnold(run).get('group_id')) == str(args.group)))
+        elif args.command == 'req':
+            show_request(client, args)
         else:
             show_logs(client, args)
     except MjobError as exc:
