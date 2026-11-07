@@ -74,9 +74,9 @@ pane_key() {
 
 # The bottom input line of the pane, without the prompt marker. Fails when no
 # prompt shows, as while a dialog covers it.
-input_line() {
+input_from_capture() {
     local line
-    line=$(pane_capture "$1" 2>/dev/null | awk '
+    line=$(awk '
         /^❯/ { line=$0; found=1; done=0; next }
         found && /^───/ { done=1; next }
         found && !done { line=line "\n" $0 }
@@ -84,12 +84,18 @@ input_line() {
     [[ -n "$line" ]] || return 1
     sed $'s/\xc2\xa0/ /g' <<<"$line" | sed 's/^❯ *//; s/ *$//'
 }
+input_line() { pane_capture "$1" 2>/dev/null | input_from_capture; }
 
 # The level an open "Change effort level?" dialog offers to switch to, if any.
 effort_dialog() {
+    local capture
+    capture=$(pane_capture "$1" 2>/dev/null) || return 1
+    # A real input frame takes precedence over option-looking text pasted
+    # inside a multiline draft. Inspect one capture for both decisions.
+    input_from_capture <<<"$capture" >/dev/null && return 0
     # Only the last focused prompt may be a confirmation. A previous option
     # above the current draft must not cause Enter to submit that draft.
-    pane_capture "$1" 2>/dev/null | sed $'s/\xc2\xa0/ /g' | grep '^❯' | tail -1 | sed -n 's/^❯ *1\. Yes, switch to \([a-z]*\) *$/\1/p'
+    sed $'s/\xc2\xa0/ /g' <<<"$capture" | grep -E '^[[:space:]]*❯' | tail -1 | sed -n 's/^[[:space:]]*❯ *1\. Yes, switch to \([a-z]*\) *$/\1/p'
 }
 
 # While the cache is warm, /effort asks before re-reading the history. Accept

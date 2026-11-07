@@ -53,6 +53,10 @@ pane_capture() { printf '❯ \\n────\\n'; }
 pane_capture() { printf '❯ 1. Yes, switch to high\\nold dialog\\n❯ user draft\\n────\\n'; }
 pane_key() { exit 5; }
 answer_effort_dialog block:test high
+pane_capture() { printf '❯ explain this prompt:\\n   ❯ 1. Yes, switch to high\\n────\\n'; }
+answer_effort_dialog block:test high
+pane_capture() { printf 'Change effort level?\\n   ❯ 1. Yes, switch to high\\n'; }
+[[ $(effort_dialog block:test) == high ]] || exit 6
 `], {encoding: 'utf8'});
   assert.equal(result.status, 0, result.stderr);
 });
