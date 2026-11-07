@@ -13,6 +13,7 @@ LINKS=(
     "shell/theme-apply:.local/bin/theme-apply"
     "shell/remap-keys:.local/bin/remap-keys"
     "shell/tmux-persist:.local/bin/tmux-persist"
+    "shell/rex-claude:.local/bin/rex-claude"
     "shell/codex-traex:.local/bin/codex-traex"
     "shell/cdswap:.local/bin/cdswap"
     "shell/rc-title:.local/bin/rc-title"

@@ -1,0 +1,175 @@
+#!/usr/bin/env node
+// Host-local registry for independent Claude conversations in native Rex blocks.
+// Deliberately never kills a process or sends an exit command.
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const {execFileSync, spawn} = require('node:child_process');
+const ROOT = process.env.REX_CLAUDE_STATE || path.join(os.homedir(), '.local/state/rex-claude');
+const META = process.env.REX_CLAUDE_SESSIONS || path.join(os.homedir(), '.claude/sessions');
+const SELF = fs.realpathSync(__filename);
+const norm = s => String(s).trim().replace(/\s+/g, ' ');
+function run(cmd, args, options = {}) {
+  return execFileSync(cmd, args, {encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, ...options});
+}
+function procStart(pid) {
+  try { return norm(run('/bin/ps', ['-p', String(pid), '-o', 'lstart='], {env: {...process.env, TZ: 'UTC', LC_ALL: 'C'}})); }
+  catch (e) { if (e.status === 1) return ''; throw e; }
+}
+function alive(m) { return Boolean(m.pid && m.procStart && procStart(m.pid) === norm(m.procStart)); }
+function metas() {
+  return fs.readdirSync(META).filter(f => f.endsWith('.json')).map(f => JSON.parse(fs.readFileSync(path.join(META, f), 'utf8'))).filter(alive);
+}
+function writers(id) {
+  const known = metas().filter(m => m.sessionId === id);
+  // Cover the startup interval before Claude publishes its metadata.
+  const ps = run('/bin/ps', ['-axo', 'pid=,command=']);
+  for (const line of ps.split('\n')) {
+    const m = line.match(/^\s*(\d+)\s+(?:\S*\/)?claude\s+(.+)$/);
+    if (m && new RegExp('(?:--resume|-r)(?:=|\\s+)' + id + '(?:\\s|$)').test(m[2]) && !known.some(k => k.pid === Number(m[1]))) {
+      known.push({pid: Number(m[1]), sessionId: id, procStart: procStart(m[1]), status: 'starting'});
+    }
+  }
+  return known;
+}
+function absent(r) {
+  const live = writers(r.sessionId);
+  if (live.length) throw Error(`${r.role}: Claude still running (PID ${live.map(m => m.pid).join(', ')}); save state and exit it first`);
+}
+function file(role) {
+  if (!/^[a-z0-9][a-z0-9-]+$/.test(role || '')) throw Error('invalid role');
+  return path.join(ROOT, 'sessions', role + '.json');
+}
+function read(role) { return JSON.parse(fs.readFileSync(file(role), 'utf8')); }
+function write(r) {
+  fs.mkdirSync(path.dirname(file(r.role)), {recursive: true, mode: 0o700});
+  const tmp = file(r.role) + `.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(r, null, 2) + '\n', {mode: 0o600});
+  fs.renameSync(tmp, file(r.role));
+}
+function records() {
+  const dir = path.join(ROOT, 'sessions');
+  return fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.json')).map(f => read(f.slice(0, -5))) : [];
+}
+function screen(r) {
+  const modes = JSON.parse(run('rex', ['block', 'call', '-s', r.rexSession, '-b', r.block, 'modes']));
+  if (modes.screen !== 'alternate') throw Error('Claude alternate screen is not active; refusing historical prompts');
+  return run('rex', ['capture', '-s', r.rexSession, '-b', r.block, '--trim', '--unwrap']);
+}
+function input(text) {
+  const lines = text.replace(/\u00a0/g, ' ').split('\n');
+  let i = lines.length - 1;
+  while (i >= 0 && !lines[i].startsWith('❯')) i--;
+  if (i < 0) throw Error('no Claude input prompt');
+  let end = i + 1;
+  while (end < lines.length && !/^─{3}/.test(lines[end])) end++;
+  if (end === lines.length) throw Error('incomplete Claude input frame');
+  return lines.slice(i, end).join('\n').replace(/^❯ */, '').trimEnd();
+}
+function modelEffort(text) {
+  const all = [...text.matchAll(/Opus (5(?:\.5)?) (low|medium|high|max) ·/g)];
+  if (!all.length) throw Error('current model/effort not visible; do not guess');
+  const m = all.at(-1);
+  return {model: m[1] === '5.5' ? 'claude-opus-5-5' : 'claude-opus-5', effort: m[2]};
+}
+function target(r) {
+  if (!r.block || !r.rexSession) throw Error('no native address registered');
+  const live = writers(r.sessionId);
+  if (live.length !== 1 || live[0].pid !== r.pid || !alive({pid: r.pid, procStart: r.procStart})) throw Error('native writer identity changed; inspect before sending');
+  const p = JSON.parse(run('rex', ['block', 'call', '-s', r.rexSession, '-b', r.block, 'process']));
+  if (![p.child, p.foreground, ...(p.ancestors || [])].some(x => x?.pid === r.runnerPid)) throw Error('block no longer contains the registered runner');
+  return live[0];
+}
+function send(r, text) {
+  if (r.block === process.env.REX_BLOCK) throw Error('refusing to type into own block');
+  target(r);
+  if (input(screen(r)) !== '') throw Error('input contains an unsent draft; refusing to type');
+  run('rex', ['send', '-s', r.rexSession, '-b', r.block, text]);
+  // Never submit if the user changed the draft between capture and typing.
+  if (input(screen(r)) !== text) throw Error('input changed; left text unsubmitted');
+  run('rex', ['send-key', '-s', r.rexSession, '-b', r.block, 'enter']);
+}
+function register(src) {
+  const r = JSON.parse(fs.readFileSync(src, 'utf8'));
+  file(r.role);
+  if (!/^[0-9a-f-]{36}$/.test(r.sessionId) || !path.isAbsolute(r.cwd) || !fs.statSync(r.cwd).isDirectory()) throw Error('invalid identity/cwd');
+  if (!['claude-opus-5-5', 'claude-opus-5'].includes(r.model) || !['low', 'medium', 'high', 'max'].includes(r.effort)) throw Error('invalid model/effort');
+  if (![null, 'low', 'medium', 'high', 'max'].includes(r.launchEffort)) throw Error('launchEffort must include explicit null when unspecified');
+  if (!r.rexSession || !r.handoff || !path.isAbsolute(r.handoff)) throw Error('rexSession and absolute handoff required');
+  if (fs.existsSync(file(r.role)) || records().some(x => x.sessionId === r.sessionId)) throw Error('identity already registered');
+  write({...r, transport: 'prepared', registeredAt: new Date().toISOString()});
+}
+function lock(r) {
+  const dir = path.join(ROOT, 'locks', r.sessionId);
+  fs.mkdirSync(path.dirname(dir), {recursive: true, mode: 0o700});
+  if (fs.existsSync(dir)) throw Error(`native lock exists: ${dir}; inspect its owner and all writers before manually clearing a crashed runner's lock`);
+  fs.mkdirSync(dir, {mode: 0o700});
+  fs.writeFileSync(path.join(dir, 'owner.json'), JSON.stringify({pid: process.pid, procStart: procStart(process.pid)}), {mode: 0o600});
+  return () => { fs.unlinkSync(path.join(dir, 'owner.json')); fs.rmdirSync(dir); };
+}
+async function runner(role) {
+  let r = read(role);
+  if (!process.env.REX_SESSION || !process.env.REX_BLOCK || process.env.TMUX_PANE) throw Error('runner requires a native Rex block');
+  const release = lock(r);
+  try {
+    absent(r);
+    r = {...r, transport: 'rex', rexSession: process.env.REX_SESSION, block: process.env.REX_BLOCK, runnerPid: process.pid};
+    write(r);
+    const env = {...process.env, OPUS_REPIN_LAUNCH_EFFORT: r.launchEffort === null ? 'settings' : r.launchEffort};
+    delete env.TMUX; delete env.TMUX_PANE; delete env.CLAUDECODE;
+    const message = `这个 Claude 会话已恢复到独立 Rex block，session ID 没变。先读 ${r.handoff}，核对后台 shell、Monitor、CronList、scheduled wakeup、子代理与未合入工作，只恢复仍需要且缺失的项目，保持频率；不要自行改平台任务。原生地址是 REX_SESSION/REX_BLOCK。完成后按交接里的返回地址回 ACK，再继续原职责。不要发送或改写保留的用户草稿。`;
+    const child = spawn(path.join(os.homedir(), '.local/bin/claude'), ['--dangerously-skip-permissions', '--resume', r.sessionId, '--model', r.model, '--effort', r.effort, message], {cwd: r.cwd, env, stdio: 'inherit'});
+    await new Promise((resolve, reject) => {
+      child.once('error', reject);
+      child.once('spawn', () => { r.pid = child.pid; r.procStart = procStart(child.pid); write(r); });
+      child.once('exit', (code, signal) => { write({...read(role), lastExit: {code, signal, at: new Date().toISOString()}}); process.exitCode = code || (signal ? 1 : 0); resolve(); });
+    });
+  } finally { release(); }
+}
+function start(r, session) {
+  absent(r);
+  if (!fs.existsSync(r.handoff) || !fs.readFileSync(r.handoff, 'utf8').trim()) throw Error('save a handoff before resuming');
+  // Claim before launching so even an old tmux snapshot cannot resurrect it.
+  r.transport = 'rex'; r.rexSession = session || r.rexSession; write(r);
+  const args = ['run', '-s', r.rexSession, '-c', r.cwd, '--label', r.name || r.role, '--focus=false', '--keep-open', '--shell=none', '--json', '--', '/usr/bin/env', `REX_CLAUDE_STATE=${ROOT}`, `REX_CLAUDE_SESSIONS=${META}`, process.execPath, SELF, '_run', r.role];
+  const created = run('rex', args);
+  const result = JSON.parse(created);
+  if (result.window_id) run('rex', ['window', 'rename', '-s', r.rexSession, result.window_id, r.name || r.role]);
+  process.stdout.write(created);
+}
+async function main(args) {
+  const [cmd = 'list', arg, extra] = args;
+  if (cmd === 'register') return register(arg);
+  if (cmd === '_run') return runner(arg);
+  if (cmd === 'list' || cmd === 'stale') {
+    const installed = cmd === 'stale' ? run('claude', ['--version']).split(' ')[0] : '';
+    for (const r of records()) {
+      const live = writers(r.sessionId);
+      if (cmd === 'stale') { if (live.length && live.some(m => m.version !== installed)) console.log(r.role); }
+      else console.log(JSON.stringify({...r, writers: live.map(m => ({pid: m.pid, status: m.status, version: m.version}))}));
+    }
+    return;
+  }
+  if (cmd === 'save') {
+    for (const r of records().filter(r => r.transport === 'rex')) {
+      if (!writers(r.sessionId).length) continue;
+      target(r); Object.assign(r, modelEffort(screen(r)), {savedAt: new Date().toISOString()}); write(r);
+    }
+    return;
+  }
+  if (cmd === 'restore' && !arg) {
+    for (const r of records().filter(r => r.transport === 'rex')) {
+      if (!writers(r.sessionId).length) start(r);
+    }
+    return;
+  }
+  const r = read(arg);
+  if (['start', 'restart', 'restore'].includes(cmd)) return start(r, extra);
+  if (cmd === 'capture') return process.stdout.write(screen(r));
+  if (cmd === 'send') return send(r, fs.readFileSync(extra, 'utf8').trimEnd());
+  if (cmd === 'rollback') { absent(r); r.transport = 'tmux'; write(r); console.log('Native ownership released. Resume the recorded ID/model/effort in the original empty tmux shell.'); return; }
+  throw Error('usage: rex-claude list|stale|save|register FILE|start ROLE [REX_SESSION]|restart ROLE|restore [ROLE]|capture ROLE|send ROLE FILE|rollback ROLE');
+}
+module.exports = {input, modelEffort, norm};
+if (require.main === module) main(process.argv.slice(2)).catch(e => { console.error(`rex-claude: ${e.message}`); process.exitCode = 1; });

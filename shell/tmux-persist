@@ -36,6 +36,22 @@ tmux_() { tmux ${TMUX_PERSIST_SOCKET:+-L} ${TMUX_PERSIST_SOCKET:-} "$@"; }
 
 persisted() { [[ $1 == ${~PATTERN} ]]; }
 
+# A migrated identity stays excluded even if an old snapshot still names it.
+# Prepared entries also block upgrade restarts while the owner saves its work.
+native_owned() {
+    local f code
+    for f in "${REX_CLAUDE_STATE:-$HOME/.local/state/rex-claude}"/sessions/*.json(N); do
+        if jq -e --arg name "$1" --arg id "${2:-}" \
+            '(.role == $name or (.sessionId == $id and $id != "")) and .transport != "tmux"' "$f" >/dev/null; then
+            return 0
+        else
+            code=$?
+            (( code == 1 )) || { print -u2 'tmux-persist: unreadable Rex ownership; refusing operation'; exit 1; }
+        fi
+    done
+    return 1
+}
+
 # True when <pid> is still the process that started at <procStart> (UTC), so a
 # pid reused after a reboot is not mistaken for the old Claude.
 # BSD date/ps by absolute path: a GNU coreutils date may lead PATH.
@@ -61,6 +77,7 @@ claudes() {
             jq -r '[.pid, .procStart, .tmux // "", .cwd, .sessionId, .version // ""] | @tsv' "$f") || continue
         [[ -n $tmux ]] && name=${owner[${tmux##*.}]:-} && [[ -n $name ]] || continue
         alive "$pid" "$start" || continue
+        native_owned "$name" "$id" && continue
         print -r -- "$name"$'\t'"$pid"$'\t'"${tmux##*.}"$'\t'"$cwd"$'\t'"$id"$'\t'"$ver"
     done
 }
@@ -98,6 +115,7 @@ save() {
     # Claude is not running now; a session closed on purpose drops out.
     [[ -f $SNAP ]] && while IFS=$'\t' read -r name cwd id effort; do
         persisted "$name" && (( ${open[(Ie)$name]} )) || continue
+        native_owned "$name" "$id" && continue
         rows[$name]="$cwd"$'\t'"$id"$'\t'"$effort"
     done < "$SNAP"
     while IFS=$'\t' read -r name pid pane cwd id ver; do
@@ -114,6 +132,7 @@ restore() {
     [[ -f $SNAP ]] || return 0
     while IFS=$'\t' read -r name cwd id effort; do
         persisted "$name" || continue
+        native_owned "$name" "$id" && continue
         tmux_ has-session -t "=$name" 2>/dev/null && continue
         [[ -d $cwd ]] || cwd=$HOME
         # Typed into the pane's shell, so exiting Claude leaves a shell behind.

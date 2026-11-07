@@ -136,6 +136,43 @@ the next run. To add an account, run `cdswap new`, sign in, then `cdswap save`;
 avoid Desktop's own Sign out, which may revoke the saved session server-side.
 Verify with `shell/test-cdswap.sh`.
 
+### Native Rex Claude sessions
+
+`rex-claude` keeps host-local identities in `~/.local/state/rex-claude/sessions/`.
+Register an inspected JSON record with `register FILE`: `role`, `name`,
+`sessionId`, `cwd`, current `model` and `effort`, original `launchEffort` (null
+when unspecified), `rexSession`, and an absolute `handoff` path. Prepared and
+native identities are excluded from tmux-persist save, restore, and restart,
+including old snapshots and renamed tmux sessions.
+
+Before an upgrade, ask the Claude to save its handoff and inventory background
+shells, Monitors, CronList, wakeups, unfinished subagents, and unmerged work.
+Preserve unsent drafts separately. Once it is idle, exit it normally with
+`/exit`; never use tpr for a migrated role. `rex-claude save` saves the visible
+current model/effort before exit; `rex-claude restart ROLE` resumes only after
+the old writer is gone. It never kills anything. `stale` lists old versions;
+`list` reports roles, exact addresses and live writers. `start ROLE SESSION`
+chooses a currently existing Rex session if a recorded session no longer exists.
+`restore` resumes missing native writers; run it manually after login. Full
+machine reboot recovery is not tested by the migration and is not automatic.
+If a crashed runner leaves a lock in `~/.local/state/rex-claude/locks/`, inspect
+the recorded owner and all Claude writers before manually removing that lock.
+Recovery never automatically steals an existing lock.
+
+`send ROLE FILE` checks the process identity and empty input, types the message,
+and submits only if it still matches. Include sender, request ID, and return
+address; capture the matching ACK to confirm delivery. It refuses its own block
+and user drafts. Restore saved drafts without pressing Enter after verification.
+`rollback ROLE` requires every writer to be gone, then releases native ownership;
+resume the recorded ID, cwd, model and effort in the original empty tmux shell.
+Keep the registry and handoff so the rollback remains inspectable.
+
+`opus-repin.sh` chooses tmux for nested sessions and Rex for native blocks.
+Native launch records current effort separately from the original launch
+override; compact recovery and later model switches keep the existing policy.
+The installed Rex skill and hooks remain managed by `rex skill setup`.
+Verify: `node --test shell/rex-claude.test.cjs` and `shell/test-rex-tmux-exclusion.sh`.
+
 ## Plugins (Zinit)
 
 `zsh-syntax-highlighting`, `zsh-completions`, `zsh-autosuggestions`, `fzf` + `fzf-tab`, Oh My Zsh snippets (`git`, `sudo`, `command-not-found`). Modern Unix tools (`fd`, `rg`, `zoxide`, `delta`) installed via Zinit from GitHub releases.
