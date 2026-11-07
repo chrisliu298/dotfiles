@@ -6,7 +6,7 @@
 # retries 5.5 once per compaction; it is a recovery attempt, not a sign that
 # the context is safe (the first request after a compaction is often refused
 # again). No hook output can change the model, so the SessionStart(compact)
-# hook types `/model` into the session's tmux pane or native Rex block, and the PreModelSwitch hook
+# hook types `/model` into the session's tmux pane, and the PreModelSwitch hook
 # approves that one switch so no cache-miss confirm blocks an unattended session.
 #
 #
@@ -47,55 +47,18 @@ sid=$(jq -r '.session_id // empty' <<<"$input")
 mkdir -p "$STATE"
 log() { printf '%s %s %s\n' "$(date +%FT%T%z)" "${sid:0:8}" "$*" >> "$STATE/log"; }
 
-# tmux wins when nested inside Rex: REX_BLOCK then names the outer client.
-terminal_pane() { printf '%s' "${TMUX_PANE:-${REX_BLOCK:-}}"; }
-pane_capture() {
-    if [[ $1 == block:* ]]; then
-        # Claude uses the alternate screen. Normal-screen captures include
-        # scrollback and must never authorize typing into a historical prompt.
-        [[ $(rex block call -s "$REX_SESSION" -b "$1" modes | jq -r '.screen') == alternate ]] || return 1
-        rex capture -s "$REX_SESSION" -b "$1" --trim --unwrap
-    else
-        tmux capture-pane -p -t "$1"
-    fi
-}
-pane_text() {
-    if [[ $1 == block:* ]]; then rex send -s "$REX_SESSION" -b "$1" "$2"
-    else tmux send-keys -t "$1" -l "$2"; fi
-}
-pane_key() {
-    if [[ $1 == block:* ]]; then
-        local key=$2
-        [[ $key == Enter ]] && key=enter
-        [[ $key == Escape ]] && key=escape
-        rex send-key -s "$REX_SESSION" -b "$1" "$key"
-    else tmux send-keys -t "$1" "$2"; fi
-}
-
 # The bottom input line of the pane, without the prompt marker. Fails when no
 # prompt shows, as while a dialog covers it.
-input_from_capture() {
+input_line() {
     local line
-    line=$(awk '
-        /^❯/ { line=$0; found=1; done=0; next }
-        found && /^───/ { done=1; next }
-        found && !done { line=line "\n" $0 }
-        END { if (found && done) print line }')
+    line=$(tmux capture-pane -p -t "$1" 2>/dev/null | grep '^❯' | tail -1)
     [[ -n "$line" ]] || return 1
     sed $'s/\xc2\xa0/ /g' <<<"$line" | sed 's/^❯ *//; s/ *$//'
 }
-input_line() { pane_capture "$1" 2>/dev/null | input_from_capture; }
 
 # The level an open "Change effort level?" dialog offers to switch to, if any.
 effort_dialog() {
-    local capture
-    capture=$(pane_capture "$1" 2>/dev/null) || return 1
-    # A real input frame takes precedence over option-looking text pasted
-    # inside a multiline draft. Inspect one capture for both decisions.
-    input_from_capture <<<"$capture" >/dev/null && return 0
-    # Only the last focused prompt may be a confirmation. A previous option
-    # above the current draft must not cause Enter to submit that draft.
-    sed $'s/\xc2\xa0/ /g' <<<"$capture" | grep -E '^[[:space:]]*❯' | tail -1 | sed -n 's/^[[:space:]]*❯ *1\. Yes, switch to \([a-z]*\) *$/\1/p'
+    tmux capture-pane -p -t "$1" 2>/dev/null | sed $'s/\xc2\xa0/ /g' | sed -n 's/.*❯ 1\. Yes, switch to \([a-z]*\) *$/\1/p' | tail -1
 }
 
 # While the cache is warm, /effort asks before re-reading the history. Accept
@@ -105,10 +68,10 @@ answer_effort_dialog() {
     local level
     level=$(effort_dialog "$1")
     if [[ "$level" == "$2" ]]; then
-        pane_key "$1" Enter
+        tmux send-keys -t "$1" Enter
         log "accepted the cache-miss dialog for /effort $level"
     elif [[ -n "$level" ]]; then
-        pane_key "$1" Escape
+        tmux send-keys -t "$1" Escape
         log "declined the stale dialog for /effort $level"
     fi
 }
@@ -118,29 +81,6 @@ answer_effort_dialog() {
 # `zsh -c "claude ...; exec zsh"`, where tmux reports the shell.
 pane_is_claude() {
     local re='^(claude|[0-9]+\.[0-9]+\.[0-9]+)$' pid child
-    if [[ $1 == block:* ]]; then
-        # Match this transcript's registered process, not just any Claude UI.
-        local meta start actual pids parent depth
-        pids=$(rex block call -s "$REX_SESSION" -b "$1" process 2>/dev/null | jq -r '[.child.pid, .foreground.pid, .ancestors[]?.pid] | .[] // empty') || return 1
-        for meta in "$HOME"/.claude/sessions/*.json; do
-            [[ -f $meta ]] || continue
-            [[ $(jq -r '.sessionId' "$meta") == "$sid" ]] || continue
-            pid=$(jq -r '.pid' "$meta")
-            start=$(jq -r '.procStart' "$meta" | xargs)
-            actual=$(TZ=UTC LC_ALL=C /bin/ps -p "$pid" -o lstart= 2>/dev/null | xargs)
-            [[ -n $actual && $actual == "$start" ]] || continue
-            # With a foreground process group, Rex reports the native runner,
-            # not its Claude child. Prove this exact live writer descends from
-            # a process in the requested block before authorizing any input.
-            parent=$pid
-            for ((depth=0; depth<32 && parent>1; depth++)); do
-                grep -qxF "$parent" <<<"$pids" && return 0
-                parent=$(/bin/ps -p "$parent" -o ppid= 2>/dev/null | tr -d ' ')
-                [[ $parent =~ ^[0-9]+$ ]] || break
-            done
-        done
-        return 1
-    fi
     [[ "$(tmux display -p -t "$1" '#{pane_current_command}' 2>/dev/null)" =~ $re ]] && return 0
     pid=$(tmux display -p -t "$1" '#{pane_pid}' 2>/dev/null) || return 1
     for child in $(pgrep -P "$pid"); do
@@ -181,12 +121,12 @@ type_when_idle() {
         pane_is_claude "$pane" || break
         wanted || { log "superseded: $cmd"; return 0; }
         [[ "$cmd" == /effort\ * ]] && answer_effort_dialog "$pane" "${cmd#/effort }"
-        if ! line=$(input_line "$pane") || [[ -n "$line" ]]; then
+        if ! line=$(input_line "$pane") || [[ -n "$line" && "$line" != Try\ \"* ]]; then
             sleep 0.2
             continue
         fi
         since=$(/usr/bin/stat -f %z "$transcript")
-        pane_text "$pane" "$cmd"
+        tmux send-keys -t "$pane" -l "$cmd"
         for _ in $(seq 10); do
             sleep 0.1
             [[ "$(input_line "$pane")" == "$cmd" ]] && break
@@ -195,7 +135,7 @@ type_when_idle() {
             log "input changed while typing; not submitting"
             return 0
         fi
-        pane_key "$pane" Enter
+        tmux send-keys -t "$pane" Enter
         for _ in $(seq 240); do
             sleep 0.5
             [[ $(confirmed "$since") -gt 0 ]] && { log "confirmed: $cmd"; return 0; }
@@ -232,12 +172,6 @@ settings_effort() {
 # `tmux-persist restart --effort high` does) gets that level back, not the
 # settings' one.
 launch_effort() {
-    # Native resume passes the *current* effort to Claude. Keep its original
-    # launch override separate so later fallback/repin behavior is unchanged.
-    case ${OPUS_REPIN_LAUNCH_EFFORT:-} in
-        settings) return 0 ;;
-        low|medium|high|max) echo "$OPUS_REPIN_LAUNCH_EFFORT"; return ;;
-    esac
     case ${CLAUDE_CODE_EFFORT_LEVEL:-} in
         ''|auto|unset) ;;
         *) echo "$CLAUDE_CODE_EFFORT_LEVEL"; return ;;
@@ -285,8 +219,7 @@ restore_default() {
 # /effort; only the latest typer keeps going, so the last level submitted is
 # the latest one asked for.
 type_effort() {
-    local effort=$1 model=$2 pane transcript token default
-    pane=$(terminal_pane)
+    local effort=$1 model=$2 pane=${TMUX_PANE:-} transcript token default
     [[ -n "$pane" ]] || return 0
     transcript=$(jq -r '.transcript_path // empty' <<<"$input")
     [[ -f "$transcript" ]] || return 0
@@ -316,7 +249,7 @@ pre-switch)
     printf '%s' '{"hookSpecificOutput":{"hookEventName":"PreModelSwitch","permissionDecision":"allow"}}'
     ;;
 session-start)
-    pane=$(terminal_pane)
+    pane=${TMUX_PANE:-}
     [[ -n "$pane" ]] || exit 0
     transcript=$(jq -r '.transcript_path // empty' <<<"$input")
     [[ -f "$transcript" ]] || exit 0

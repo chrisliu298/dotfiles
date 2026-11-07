@@ -170,9 +170,6 @@ another start is refused while that launch remains pending. Resume the recorded
 ID, cwd, model and effort in the original empty tmux shell after rollback.
 Keep the registry and handoff so the rollback remains inspectable.
 
-`opus-repin.sh` chooses tmux for nested sessions and Rex for native blocks.
-Native launch records current effort separately from the original launch
-override; compact recovery and later model switches keep the existing policy.
 The installed Rex skill and hooks remain managed by `rex skill setup`.
 Verify: `node --test shell/rex-claude.test.cjs` and `shell/test-rex-tmux-exclusion.sh`.
 

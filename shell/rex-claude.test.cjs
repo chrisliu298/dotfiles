@@ -92,36 +92,3 @@ test('a live writer prevents start and rollback before Rex is invoked', () => {
     assert.equal(saved.transport, 'prepared');
   } finally { fs.rmSync(root, {recursive: true}); }
 });
-test('repin transport prefers inner tmux and preserves multiline drafts', () => {
-  const source = fs.readFileSync(path.join(__dirname, '../agents/claude/opus-repin.sh'), 'utf8');
-  const declarations = source.slice(source.indexOf('terminal_pane()'), source.indexOf('fresh()'));
-  const result = spawnSync('bash', ['-c', declarations + `
-TMUX_PANE=%9 REX_BLOCK=block:test
-[[ $(terminal_pane) == %9 ]] || exit 1
-unset TMUX_PANE
-[[ $(terminal_pane) == block:test ]] || exit 2
-pane_capture() { printf '❯ \\n  user draft\\n────\\n'; }
-[[ -n $(input_line block:test) ]] || exit 3
-pane_capture() { printf '❯ \\n────\\n'; }
-[[ -z $(input_line block:test) ]] || exit 4
-pane_capture() { printf '❯ 1. Yes, switch to high\\nold dialog\\n❯ user draft\\n────\\n'; }
-pane_key() { exit 5; }
-answer_effort_dialog block:test high
-pane_capture() { printf '❯ explain this prompt:\\n   ❯ 1. Yes, switch to high\\n────\\n'; }
-answer_effort_dialog block:test high
-pane_capture() { printf 'Change effort level?\\n   ❯ 1. Yes, switch to high\\n'; }
-[[ $(effort_dialog block:test) == high ]] || exit 6
-`], {encoding: 'utf8'});
-  assert.equal(result.status, 0, result.stderr);
-});
-test('repin gets the original override instead of resume CLI effort', () => {
-  const source = fs.readFileSync(path.join(__dirname, '../agents/claude/opus-repin.sh'), 'utf8');
-  const declaration = source.slice(source.indexOf('launch_effort()'), source.indexOf('# The level for the fallback:'));
-  const result = spawnSync('bash', ['-c', declaration + `
-CLAUDE_CODE_EFFORT_LEVEL=high OPUS_REPIN_LAUNCH_EFFORT=medium
-[[ $(launch_effort) == medium ]] || exit 1
-OPUS_REPIN_LAUNCH_EFFORT=settings
-[[ -z $(launch_effort) ]] || exit 2
-`], {encoding: 'utf8'});
-  assert.equal(result.status, 0, result.stderr);
-});
