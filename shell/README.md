@@ -25,6 +25,31 @@ the review helper also uses the absolute path and checks its version before
 dispatch. Use `xu` or `codex update` for future upgrades. The desktop app keeps
 its own private runtimes, which are managed by the app rather than dotfiles.
 
+### Rex agent communication
+
+Install the official integration with `rex skill setup --agent claude --agent codex`.
+It adds the Claude skill at `~/.claude/skills/rex`, the shared Codex skill at
+`~/.agents/skills/rex`, and a SessionStart hook for each. The Claude hook is also
+kept in `agents/claude/settings.json` so settings sync preserves it. In Codex,
+approve the new hook with `/hooks`; it provides automatic terminal location.
+Existing sessions can use `rex skill show` and `rex whoami --json` immediately.
+
+Rex provides terminal input and capture, rather than an agent inbox. For peers
+running directly in Rex, identify their session and block with `rex ls --json`,
+`rex block ls -s SESSION --json`, and `rex block call -s SESSION -b BLOCK process '{}'`. Confirm the
+target and its current input before sending text with `rex send -s SESSION -b BLOCK
+TEXT`, then submit with `rex send-key -s SESSION -b BLOCK enter`.
+
+Existing research agents run inside tmux. Target their exact pane with
+`tmux list-panes -a`, `tmux send-keys -t PANE -l TEXT`, and a separate Enter;
+sending to the outer Rex block only reaches whichever tmux pane is selected.
+Include a request ID, sender name, and explicit return Rex session/block in the
+message. The peer replies through the same `rex send` / `send-key` pair to that
+return address. Mark replies as peer messages, not user instructions. Keep
+messages separate from any existing draft input; don't interrupt a busy peer or
+retry without checking whether the original arrived. A successful send confirms
+queued terminal input; verify processing by a matching reply or terminal capture.
+
 ### TraeX models in the native Codex CLI
 
 `codex-traex` uses that same native CLI with a standalone Responses bridge and
