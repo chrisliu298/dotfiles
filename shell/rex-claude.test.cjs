@@ -4,8 +4,62 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
+const vm = require('node:vm');
+const {EventEmitter} = require('node:events');
 const {input, modelEffort} = require('./rex-claude');
 const script = path.join(__dirname, 'rex-claude');
+test('queued launches cannot survive rollback or supersede a newer launch', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rex-launch-test-'));
+  const metadata = path.join(root, 'metadata'); fs.mkdirSync(metadata);
+  const state = path.join(root, 'state');
+  const record = {role: 'test-r2v', sessionId: '11111111-2222-3333-4444-555555555555', cwd: root,
+    model: 'claude-opus-5-5', effort: 'high', launchEffort: 'high', rexSession: 'session:test', handoff: path.join(root, 'handoff.md')};
+  const src = path.join(root, 'register.json'); fs.writeFileSync(src, JSON.stringify(record));
+  fs.writeFileSync(record.handoff, 'saved tasks');
+  let spawnCount = 0, queued = 0, child;
+  const env = {...process.env, REX_CLAUDE_STATE: state, REX_CLAUDE_SESSIONS: metadata, REX_SESSION: 'session:test', REX_BLOCK: 'block:test'};
+  delete env.TMUX_PANE;
+  const context = {module: {exports: {}}, __filename: script, console: {log() {}},
+    process: {...process, env, stdout: {write() {}}}, setTimeout,
+    require(name) {
+      if (name !== 'node:child_process') return require(name);
+      return {
+        execFileSync(cmd, args) {
+          if (cmd === 'rex') { queued++; return '{}'; }
+          // No real process scan or Claude process can escape this fixture.
+          if (cmd === '/bin/ps') return args[0] === '-p' ? 'test-start' : '';
+          throw Error('unexpected command ' + cmd);
+        },
+        spawn() { spawnCount++; child = new EventEmitter(); child.pid = 12345; return child; }
+      };
+    }
+  };
+  vm.runInNewContext(fs.readFileSync(script, 'utf8') + '\nmodule.exports = {main};', context);
+  const cli = (...args) => context.module.exports.main(args);
+  const current = () => JSON.parse(fs.readFileSync(path.join(state, 'sessions/test-r2v.json')));
+  try {
+    await cli('register', src);
+    await cli('start', record.role);
+    const revoked = current().pendingLaunch;
+    await assert.rejects(cli('start', record.role), /launch is pending/);
+    assert.equal(queued, 1);
+    await cli('rollback', record.role);
+    await assert.rejects(cli('_run', record.role, revoked), /revoked or superseded/);
+    assert.equal(spawnCount, 0); assert.equal(current().transport, 'tmux');
+    await cli('start', record.role);
+    const valid = current().pendingLaunch;
+    assert.notEqual(valid, revoked);
+    await assert.rejects(cli('_run', record.role, revoked), /revoked or superseded/);
+    const running = cli('_run', record.role, valid);
+    assert.equal(spawnCount, 1);
+    await assert.rejects(cli('rollback', record.role), /native lock exists/);
+    child.emit('spawn');
+    child.emit('exit', 0, null);
+    await running;
+    await cli('rollback', record.role);
+    assert.equal(current().transport, 'tmux');
+  } finally { fs.rmSync(root, {recursive: true}); }
+});
 test('an empty first draft line does not hide a multiline user draft', () => {
   assert.equal(input('❯ old\n────\n❯ \n  用户未发送的第二行\n────\nstatus'), '\n  用户未发送的第二行');
   assert.equal(input('❯ \n────\nOpus 5.5 high ·'), '');

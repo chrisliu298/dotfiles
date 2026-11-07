@@ -163,8 +163,11 @@ Recovery never automatically steals an existing lock.
 and submits only if it still matches. Include sender, request ID, and return
 address; capture the matching ACK to confirm delivery. It refuses its own block
 and user drafts. Restore saved drafts without pressing Enter after verification.
-`rollback ROLE` requires every writer to be gone, then releases native ownership;
-resume the recorded ID, cwd, model and effort in the original empty tmux shell.
+`rollback ROLE` requires every writer and runner to be gone, revokes a pending
+launch, then releases native ownership. A delayed launch cannot resume after
+rollback. If a launch result is uncertain, inspect Rex before rollback or retry;
+another start is refused while that launch remains pending. Resume the recorded
+ID, cwd, model and effort in the original empty tmux shell after rollback.
 Keep the registry and handoff so the rollback remains inspectable.
 
 `opus-repin.sh` chooses tmux for nested sessions and Rex for native blocks.

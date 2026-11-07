@@ -5,6 +5,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const {randomUUID} = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 const ROOT = process.env.REX_CLAUDE_STATE || path.join(os.homedir(), '.local/state/rex-claude');
 const META = process.env.REX_CLAUDE_SESSIONS || path.join(os.homedir(), '.claude/sessions');
@@ -115,13 +116,16 @@ function lock(r) {
   fs.writeFileSync(path.join(dir, 'owner.json'), JSON.stringify({pid: process.pid, procStart: procStart(process.pid)}), {mode: 0o600});
   return () => { fs.unlinkSync(path.join(dir, 'owner.json')); fs.rmdirSync(dir); };
 }
-async function runner(role) {
+async function runner(role, token) {
   let r = read(role);
   if (!process.env.REX_SESSION || !process.env.REX_BLOCK || process.env.TMUX_PANE) throw Error('runner requires a native Rex block');
   const release = lock(r);
   try {
+    r = read(role);
+    if (r.transport !== 'rex' || !token || r.pendingLaunch !== token) throw Error('native launch was revoked or superseded; refusing to resume');
     absent(r);
     r = {...r, transport: 'rex', rexSession: process.env.REX_SESSION, block: process.env.REX_BLOCK, runnerPid: process.pid};
+    delete r.pendingLaunch;
     write(r);
     const env = {...process.env, OPUS_REPIN_LAUNCH_EFFORT: r.launchEffort === null ? 'settings' : r.launchEffort};
     delete env.TMUX; delete env.TMUX_PANE; delete env.CLAUDECODE;
@@ -136,10 +140,17 @@ async function runner(role) {
 }
 function start(r, session) {
   absent(r);
-  if (!fs.existsSync(r.handoff) || !fs.readFileSync(r.handoff, 'utf8').trim()) throw Error('save a handoff before resuming');
-  // Claim before launching so even an old tmux snapshot cannot resurrect it.
-  r.transport = 'rex'; r.rexSession = session || r.rexSession; write(r);
-  const args = ['run', '-s', r.rexSession, '-c', r.cwd, '--label', r.name || r.role, '--focus=false', '--keep-open', '--shell=none', '--json', '--', '/usr/bin/env', `REX_CLAUDE_STATE=${ROOT}`, `REX_CLAUDE_SESSIONS=${META}`, process.execPath, SELF, '_run', r.role];
+  const release = lock(r);
+  try {
+    r = read(r.role);
+    absent(r);
+    if (r.pendingLaunch) throw Error('native launch is pending; inspect Rex and roll back before retrying');
+    if (!fs.existsSync(r.handoff) || !fs.readFileSync(r.handoff, 'utf8').trim()) throw Error('save a handoff before resuming');
+    // A delayed Rex launch must not regain ownership after rollback.
+    r.transport = 'rex'; r.rexSession = session || r.rexSession;
+    r.pendingLaunch = randomUUID(); write(r);
+  } finally { release(); }
+  const args = ['run', '-s', r.rexSession, '-c', r.cwd, '--label', r.name || r.role, '--focus=false', '--keep-open', '--shell=none', '--json', '--', '/usr/bin/env', `REX_CLAUDE_STATE=${ROOT}`, `REX_CLAUDE_SESSIONS=${META}`, process.execPath, SELF, '_run', r.role, r.pendingLaunch];
   const created = run('rex', args);
   const result = JSON.parse(created);
   if (result.window_id) run('rex', ['window', 'rename', '-s', r.rexSession, result.window_id, r.name || r.role]);
@@ -148,7 +159,7 @@ function start(r, session) {
 async function main(args) {
   const [cmd = 'list', arg, extra] = args;
   if (cmd === 'register') return register(arg);
-  if (cmd === '_run') return runner(arg);
+  if (cmd === '_run') return runner(arg, extra);
   if (cmd === 'list' || cmd === 'stale') {
     const installed = cmd === 'stale' ? run('claude', ['--version']).split(' ')[0] : '';
     for (const r of records()) {
@@ -175,7 +186,15 @@ async function main(args) {
   if (['start', 'restart', 'restore'].includes(cmd)) return start(r, extra);
   if (cmd === 'capture') return process.stdout.write(screen(r));
   if (cmd === 'send') return send(r, fs.readFileSync(extra, 'utf8').trimEnd());
-  if (cmd === 'rollback') { absent(r); r.transport = 'tmux'; write(r); console.log('Native ownership released. Resume the recorded ID/model/effort in the original empty tmux shell.'); return; }
+  if (cmd === 'rollback') {
+    absent(r);
+    const release = lock(r);
+    try {
+      const current = read(arg); absent(current);
+      current.transport = 'tmux'; delete current.pendingLaunch; write(current);
+    } finally { release(); }
+    console.log('Native ownership released. Resume the recorded ID/model/effort in the original empty tmux shell.'); return;
+  }
   throw Error('usage: rex-claude list|stale|save|register FILE|start ROLE [REX_SESSION]|restart ROLE|restore [ROLE]|capture ROLE|send ROLE FILE|rollback ROLE');
 }
 module.exports = {input, modelEffort, norm};
