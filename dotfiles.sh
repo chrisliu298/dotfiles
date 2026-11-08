@@ -51,7 +51,7 @@ LINKS=(
 # source: ./path (local), ~/path (host-local, skipped when absent), or owner/repo[/subpath] (GitHub)
 SKILLS=(
     # The wildcard installs every skill to Claude, Codex, Muse and DeepSeek Harness; the explicit
-    # entries below narrow that (claude-only: codex-exec, agent-team, gpt-pro; recall has a separate
+    # entries below narrow that (claude-only: codex-exec, gpt-pro; recall has a separate
     # build per agent).
     # Claude/Codex/DeepSeek get live symlinks; Muse's store owns its managed personal root,
     # so muse entries are copy-installed via `muse skills install` (see _muse_skill_install).
@@ -59,8 +59,8 @@ SKILLS=(
     "*|./agents/skills|claude,codex,muse,deepseek"
     # codex-exec: claude-only caller; Codex is its executor, so it must not get the skill.
     "codex-exec|./agents/skills/codex-exec|claude"
-    # agent-team: claude-only caller; the other agents reach it only as dispatched backends.
-    "agent-team|./agents/skills/agent-team|claude"
+    # agent-team: shared Claude/Codex caller; other hosts remain dispatched backends.
+    "agent-team|./agents/skills/agent-team|claude,codex"
     # gpt-pro: claude-only caller; its scripts dir is on PATH from the Claude copy (shell/.zshenv).
     "gpt-pro|./agents/skills/gpt-pro|claude"
     # recall: one skill name, two harness-specific implementations (like pdf). Both default to

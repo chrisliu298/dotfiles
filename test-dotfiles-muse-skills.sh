@@ -39,7 +39,7 @@ chmod +x "$test_root/bin/muse"
 export PATH="$test_root/bin:$PATH"
 
 # Pre-seed the store lockfile: one selected skill (must be kept), two stale
-# repo-sourced skills (must be pruned; agent-team became claude-only), one
+# repo-sourced skills (must be pruned; agent-team is not selected for Muse), one
 # foreign install (must be left).
 muse_skills="$XDG_CONFIG_HOME/muse/skills"
 mkdir -p "$muse_skills/.muse"
@@ -108,7 +108,9 @@ grep -F "skills install $pdf_src" "$calls" >/dev/null \
 # Claude/Codex still get live symlinks; the Muse root gets none (copies only).
 [ -L "$HOME/.claude/skills/agent-team" ] || fail "Claude symlink for agent-team missing"
 [ -L "$HOME/.codex/skills/arxiv-reader" ] || fail "Codex symlink for arxiv-reader missing"
-[ -e "$HOME/.codex/skills/agent-team" ] && fail "agent-team must not be installed into Codex"
+[ -L "$HOME/.codex/skills/agent-team" ] || fail "Codex symlink for agent-team missing"
+[ "$(readlink "$HOME/.claude/skills/agent-team")" = "$(readlink "$HOME/.codex/skills/agent-team")" ] \
+    || fail "Claude and Codex must share the agent-team source"
 [ -z "$(find "$muse_skills" -type l -print -quit)" ] \
     || fail "no symlinks may land in Muse's managed skills root"
 
