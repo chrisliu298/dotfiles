@@ -66,6 +66,9 @@ its tool and context settings without changing the provider's model identifier.
 Gateway availability and quotas are separate from ChatGPT subscription access.
 Verify offline with `sh -n shell/codex-ark` and `sh shell/test-codex-ark.sh`.
 
+agent-team's `ark` backend and `cx start --ark` launch Codex through this same command, only when
+the user asks for Ark; `gpt` and ordinary cx lines stay on the subscription.
+
 ### Rex agent communication
 
 Install the official integration with `rex skill setup --agent claude --agent codex`.

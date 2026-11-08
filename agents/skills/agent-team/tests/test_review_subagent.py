@@ -211,7 +211,7 @@ while True:
 '''
 
 
-@pytest.fixture(params=['claude', 'gpt', 'cursor', 'ds'])
+@pytest.fixture(params=['claude', 'gpt', 'ark', 'cursor', 'ds'])
 def harness(request, tmp_path):
     name = request.param
     env = {key: os.environ[key] for key in ('PATH', 'LANG') if key in os.environ}
@@ -230,7 +230,7 @@ if '--version' in sys.argv:
 config_path = Path(os.environ.get('CURSOR_CONFIG_DIR', '/nonexistent'), 'cli-config.json')
 config = json.loads(config_path.read_text()) if config_path.exists() else None
 prompt_file = sys.argv[sys.argv.index('--prompt-file') + 1] if '--prompt-file' in sys.argv else None
-Path(os.environ['CAPTURE']).write_text(json.dumps({{'args': sys.argv[1:], 'sentinel': os.environ.get('CODEX_REVIEW_SUBAGENT_ACTIVE'), 'config': config, 'launcher': os.environ.get('LAUNCHER'),
+Path(os.environ['CAPTURE']).write_text(json.dumps({{'args': sys.argv[1:], 'sentinel': os.environ.get('CODEX_REVIEW_SUBAGENT_ACTIVE'), 'config': config, 'launcher': os.environ.get('LAUNCHER'), 'ark_model': os.environ.get('ARK_MODEL'), 'ark_session': os.environ.get('ARK_SESSION_ID'),
                                                    'prompt_file': prompt_file, 'prompt': Path(prompt_file).read_text() if prompt_file else None}}))
 if 'create-chat' in sys.argv:
     print('cursor-main')
@@ -332,6 +332,8 @@ for line in sys.stdin:
     canonical = tmp_path / '.local' / 'bin' / 'codex'
     canonical.parent.mkdir(parents=True)
     canonical.symlink_to(backend)
+    # codex-ark passes Codex options through, so the same mock stands in for it.
+    (canonical.parent / 'codex-ark').symlink_to(backend)
     tmux = shutil.which('tmux')
     socket = 'review-test-' + uuid.uuid4().hex
     if tmux:
@@ -633,12 +635,18 @@ def test_once_pins_and_json(harness):
     assert json.loads(result.stdout) == {'result': 'review result', 'exit_code': 0, 'is_error': False}
     call = json.loads((tmp / 'call.json').read_text())
     args = call['args']
-    assert args[args.index('--model') + 1] == {'claude': 'opus', 'gpt': 'gpt-6.1-sol', 'cursor': 'gemini-4-argon-high', 'ds': 'deepseek-flash[1m]'}[name]
+    if name == 'ark':
+        # codex-ark pins the endpoint itself; Astra unless ARK_MODEL asks for Sol.
+        assert '--model' not in args
+        assert (call['ark_model'], call['ark_session']) == ('astra', 'agent-team-ark')
+    else:
+        assert args[args.index('--model') + 1] == {'claude': 'opus', 'gpt': 'gpt-6.1-sol', 'cursor': 'gemini-4-argon-high', 'ds': 'deepseek-flash[1m]'}[name]
+        assert call['ark_model'] is None
     assert call['sentinel'] == '1'
     if name in ('claude', 'ds'):
         assert args[args.index('--effort') + 1] == 'high'
         assert call['launcher'] == {'claude': 'c', 'ds': 'ds'}[name]
-    elif name == 'gpt':
+    elif name in ('gpt', 'ark'):
         assert 'model_reasoning_effort="high"' in args
         assert '--dangerously-bypass-approvals-and-sandbox' in args
     else:
@@ -692,6 +700,22 @@ def test_gpt_matches_unsandboxed_launcher(harness, mode):
     finally:
         if session:
             assert run('stop', session).returncode == 0
+
+
+def test_ark_model_selection(harness):
+    name, run, tmp = harness
+    if name != 'ark':
+        pytest.skip('Ark-only model selection')
+    result = run('--once', extra_env={'ARK_MODEL': 'sol'})
+    assert result.returncode == 0, result.stderr
+    assert json.loads((tmp / 'call.json').read_text())['ark_model'] == 'sol'
+    (tmp / 'call.json').unlink()
+    result = run('--once', extra_env={'ARK_MODEL': 'other'})
+    assert result.returncode == 2 and 'astra or sol' in result.stderr
+    (tmp / '.local' / 'bin' / 'codex-ark').unlink()
+    result = run('--once')
+    assert result.returncode == 127 and 'codex-ark missing' in result.stderr
+    assert not (tmp / 'call.json').exists()
 
 
 def test_gpt_ignores_other_codex_on_path(harness):
@@ -801,7 +825,7 @@ def test_default_tmux_lifecycle(harness):
     assert session.startswith(name + '-review-')
     wait_for(run, session, 'capture', 'MOCK_READY')
     r = run('wait', session)
-    expected = 'DRAFT:assignment\n\nANSWER:assignment' if name == 'gpt' else 'ANSWER:assignment'
+    expected = 'DRAFT:assignment\n\nANSWER:assignment' if name in ('gpt', 'ark') else 'ANSWER:assignment'
     assert (r.returncode, r.stdout.strip()) == (0, expected), r.stderr
     r = run('capture', session)  # Point callers polling the screen at `wait`.
     assert 'turn finished' in r.stderr and 'wait' in r.stderr, r.stderr
@@ -810,6 +834,10 @@ def test_default_tmux_lifecycle(harness):
     assert run('send', session, prompt='FOLLOWUP_123').returncode == 0
     r = run('wait', session)  # Blocks for the turn hook, even if it fired before wait started.
     assert (r.returncode, r.stdout.strip()) == (0, 'ANSWER:FOLLOWUP_123'), r.stderr
+    if name == 'ark':
+        # The Ark tracing label follows the review session.
+        call = json.loads((tmp / 'call.json').read_text())
+        assert (call['ark_model'], call['ark_session']) == ('astra', session)
     if name == 'cursor':
         call = json.loads((tmp / 'call.json').read_text())
         args = call['args']

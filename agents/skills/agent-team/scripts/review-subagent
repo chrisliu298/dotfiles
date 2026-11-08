@@ -8,6 +8,14 @@ shift
 case "$harness" in
     claude) model=opus effort=high ;;
     gpt) model=gpt-6.1-sol effort=high ;;
+    # Ark's endpoints through codex-ark, only when asked for; ARK_MODEL=sol picks Sol.
+    ark)
+        ark_model=${ARK_MODEL:-astra} effort=high
+        case "$ark_model" in
+            astra) model=gpt-6-astra ;;
+            sol) model=gpt-6.1-sol ;;
+            *) print -u2 'agent-team: ARK_MODEL must be astra or sol'; exit 2 ;;
+        esac ;;
     cursor) model=gemini-4-argon-high effort=high ;;
     muse) model=muse-wonder-full-1.0 effort=high ;;
     # DeepSeek maps xhigh to high, so high is its real top tier below max.
@@ -23,6 +31,7 @@ legacy=
 [[ "$harness" == cursor ]] && legacy=gemini
 runner="${0:A}"
 codex_cli="$HOME/.local/bin/codex"
+ark_cli="$HOME/.local/bin/codex-ark"
 notifier="${runner:h}/turn-notifier"
 cursor_cli="${CURSOR_AGENT_BIN:-cursor-agent}"
 muse_cli="${MUSE_BIN:-muse}"
@@ -54,7 +63,11 @@ check_harness_cli() {
         fi
         return 0
     fi
-    [[ "$harness" == gpt ]] || return 0
+    [[ "$harness" == (gpt|ark) ]] || return 0
+    if [[ "$harness" == ark && ! -x "$ark_cli" ]]; then
+        print -u2 "$helper: codex-ark missing; run ./dotfiles.sh"
+        return 127
+    fi
     if [[ ! -x "$codex_cli" ]]; then
         print -u2 "$helper: managed Codex CLI missing; run ./dotfiles.sh"
         return 127
@@ -177,13 +190,16 @@ launch() {
     else
         # Match the user's `x` launcher (--yolo): no approvals, no sandbox, full network.
         # Read-only scope is an assignment instruction, as for Claude and Cursor.
-        local -a options=(--dangerously-bypass-approvals-and-sandbox --model "$model"
+        local -a cli=("$codex_cli" --model "$model")
+        # codex-ark fixes the provider and endpoint itself and rejects --model.
+        [[ "$harness" == ark ]] && cli=(env ARK_MODEL="$ark_model" ARK_SESSION_ID="${ARK_SESSION_ID:-agent-team-ark}" "$ark_cli")
+        local -a options=(--dangerously-bypass-approvals-and-sandbox
             -c "model_reasoning_effort=\"$effort\"" -c 'shell_environment_policy.inherit="all"')
         if [[ "$mode" == once ]]; then
-            print -rn -- "$prompt" | command "$codex_cli" "${options[@]}" exec --ephemeral --skip-git-repo-check --color never -
+            print -rn -- "$prompt" | command "${cli[@]}" "${options[@]}" exec --ephemeral --skip-git-repo-check --color never -
         else
             # notify records each finished turn for `wait`, replacing any configured notifier.
-            command "$codex_cli" "${options[@]}" -c "notify=[\"$notifier\"]" --no-alt-screen -- "$prompt"
+            command "${cli[@]}" "${options[@]}" -c "notify=[\"$notifier\"]" --no-alt-screen -- "$prompt"
         fi
     fi
 }
@@ -408,6 +424,9 @@ case "$action" in
             harness_env=(-e "CURSOR_AGENT_BIN=$cursor_cli")
         elif [[ "$harness" == muse ]]; then
             harness_env=(-e "MUSE_BIN=$muse_cli")
+        elif [[ "$harness" == ark ]]; then
+            # The Ark session label follows the review session across turns.
+            harness_env=(-e "ARK_MODEL=$ark_model" -e "ARK_SESSION_ID=$session")
         fi
         if ! pane="$(tmux new-session -d -x 160 -y 48 -P -F '#{pane_id}' -s "$session" -c "$PWD" \
             -e CODEX_REVIEW_SUBAGENT_ACTIVE=1 -e REVIEW_SUBAGENT_TMUX_RUNNER=1 \

@@ -6,7 +6,9 @@
 # is saved as msg-NNN.md and sent as a one-line pointer to it; `wait` reads the thread's
 # rollout and returns once a turn that received that message has ended.
 #
-#   cx start NAME --effort LEVEL [--repo DIR] [--base REF] [--branch BRANCH] < task.md
+#   cx start NAME --effort LEVEL [--ark] [--repo DIR] [--base REF] [--branch BRANCH] < task.md
+#                                  # --ark: Ark via codex-ark for the line's lifetime
+#                                  # (Astra; ARK_MODEL=sol for Sol), else the subscription
 #   cx send NAME < message.md      # resumes a closed line first
 #   cx wait NAME [--timeout SECONDS]
 #   cx diff NAME                   # what the line changed since its base
@@ -20,6 +22,7 @@ root="${CX_HOME:-$HOME/.local/share/cx}"
 self="${0:A}"
 skill="${0:A:h:h}"
 codex_cli="$HOME/.local/bin/codex"
+ark_cli="$HOME/.local/bin/codex-ark"
 codex_home="${CODEX_HOME:-$HOME/.codex}"
 model=gpt-6.1-sol
 levels=(low medium high xhigh)
@@ -103,8 +106,11 @@ launch() {
     # Launch as the user's `x` does (--yolo), from an interactive shell so the session gets
     # the same environment, credentials, PATH and Codex config as a terminal.
     local -a cmd=("$codex_cli")
+    # An Ark line stays on Ark: codex-ark fixes the provider and endpoint, so no --model.
+    [[ -s "$d/ark" ]] && cmd=(env ARK_MODEL="$(<"$d/ark")" ARK_SESSION_ID="cx-$name" "$ark_cli")
     [[ -n "$thread" ]] && cmd+=(resume)
-    cmd+=(--yolo --model "$model" -c "model_reasoning_effort=\"$(<"$d/effort")\"" --no-alt-screen)
+    [[ -s "$d/ark" ]] || cmd+=(--model "$model")
+    cmd+=(--yolo -c "model_reasoning_effort=\"$(<"$d/effort")\"" --no-alt-screen)
     [[ -n "$thread" ]] && cmd+=("$thread")
     [[ -n "$prompt" ]] && { [[ -n "$thread" ]] && cmd+=("$prompt") || cmd+=(-- "$prompt"); }
     pane="$(tmux new-session -d -P -F '#{pane_id}' -x 200 -y 50 -s "cx-$name" -c "$(<"$d/worktree")" \
@@ -168,11 +174,12 @@ type_line() {
 }
 
 cmd_start() {
-    local name=${1:?usage: cx start NAME --effort LEVEL [--repo DIR] [--base REF] [--branch BRANCH] < task.md}; shift
-    local effort= repo=$PWD base=origin/main branch="codex/$name" d msg
+    local name=${1:?usage: cx start NAME --effort LEVEL [--ark] [--repo DIR] [--base REF] [--branch BRANCH] < task.md}; shift
+    local effort= ark= repo=$PWD base=origin/main branch="codex/$name" d msg
     while (( $# )); do
         case $1 in
             --effort) effort=$2; shift 2 ;;
+            --ark) ark=${ARK_MODEL:-astra}; shift ;;
             --repo) repo=$2; shift 2 ;;
             --base) base=$2; shift 2 ;;
             --branch) branch=$2; shift 2 ;;
@@ -181,6 +188,10 @@ cmd_start() {
     done
     [[ -n "$effort" ]] || die "choose --effort for this task (see \"Effort\" in SKILL.md)"
     check_level "$effort"
+    if [[ -n "$ark" ]]; then
+        [[ "$ark" == (astra|sol) ]] || die "ARK_MODEL must be astra or sol"
+        [[ -x "$ark_cli" ]] || die "codex-ark missing at $ark_cli; run ./dotfiles.sh"
+    fi
     d="$(line_dir "$name")"
     [[ -e "$d" ]] && die "line $name exists; use cx send or cx open"
     repo="$(git -C "$repo" rev-parse --show-toplevel)"
@@ -193,6 +204,7 @@ cmd_start() {
     print -r -- "$repo" > "$d/repo"
     git -C "$d/wt" rev-parse HEAD > "$d/base"
     print -r -- "$effort" > "$d/effort"
+    [[ -n "$ark" ]] && print -r -- "$ark" > "$d/ark"
     claim "$d"
     print -r -- "$d/wt" > "$d/worktree"
     msg="$(save_message "$d")"

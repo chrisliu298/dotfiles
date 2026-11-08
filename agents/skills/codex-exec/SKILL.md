@@ -18,7 +18,11 @@ make the design decisions yourself; after it returns, verify as if you had not s
 
 Start or assign work to a Codex line only when the user explicitly requests Codex
 for that work. A settled plan, a multi-file change, or a request for parallel work
-is not authorization. When delegation helps, use the host's native subagent by default,
+is not authorization. A request for 方舟/Ark/Astra GPT to do the work is a Codex
+request for an Ark line (`cx start --ark`, see Lines and effort); plain GPT or Codex is
+the subscription. The user's fixed form `/codex-exec [gpt|ark|ark-sol]` followed by the task
+authorizes Codex for that task and picks the line's model: `gpt` or no id is the subscription,
+`ark` is `--ark` (Astra), `ark-sol` is `ARK_MODEL=sol` with `--ark`. When delegation helps, use the host's native subagent by default,
 including for implementation. Existing authorized work may finish with necessary
 clarifications and rework; a peer reply or a resumed line does not authorize new scope.
 

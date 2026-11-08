@@ -3,7 +3,8 @@
 `scripts/cx` in the skill root (resolve SKILL.md's installed location):
 
 ```bash
-cx start NAME --effort LEVEL [--repo DIR] [--base REF] [--branch BRANCH] < task.md
+cx start NAME --effort LEVEL [--ark] [--repo DIR] [--base REF] [--branch BRANCH] < task.md
+                               # --ark only when the user asks for Ark; see Lines and effort
 cx send NAME < message.md      # follow-up or rework; resumes a closed line first
 cx wait NAME [--timeout S]     # until the turn that got the latest message ends; prints the reply
 cx diff NAME                   # uncommitted files, commits and diff since the line's base

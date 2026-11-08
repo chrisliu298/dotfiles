@@ -105,9 +105,13 @@ print('PRO ONCE')
     codex.parent.mkdir(parents=True)
     codex.write_text('#!/bin/sh\nprintf "codex-cli 0.160.1\\n"\n')
     codex.chmod(0o755)
+    ark = codex.parent / 'codex-ark'
+    ark.write_text('#!/bin/sh\n')
+    ark.chmod(0o755)
     env = {key: os.environ[key] for key in ('PATH', 'LANG') if key in os.environ}
     env.update(HOME=str(tmp_path), PATH=str(bin_dir) + os.pathsep + env['PATH'],
-               CURSOR_AGENT_BIN=str(bin_dir / 'cursor-agent'), DEEPSEEK_API_KEY='test-key')
+               CURSOR_AGENT_BIN=str(bin_dir / 'cursor-agent'), DEEPSEEK_API_KEY='test-key',
+               ARC_API_KEY='test-key', ARK_OPERATOR_ID='0', ARK_OPERATOR_EMAIL='test@example.com')
     # No legacy manual-enabled file or per-caller version: both use this one skill.
     entry = tmp_path / 'installed-review'
     entry.symlink_to(target, target_is_directory=True)
@@ -165,12 +169,21 @@ def test_all_backends_use_one_skill(unified):
     run, _ = unified
     backends = run('backends')
     assert all(item['available'] for item in json.loads(backends.stdout)['backends'])
-    outcome = run('--once', '--backend', 'claude', '--backend', 'gpt', '--backend', 'cursor', '--backend', 'muse',
-                  '--backend', 'ds', '--backend', 'pro')
+    outcome = run('--once', '--backend', 'claude', '--backend', 'gpt', '--backend', 'ark', '--backend', 'cursor',
+                  '--backend', 'muse', '--backend', 'ds', '--backend', 'pro')
     assert outcome.returncode == 0, outcome.stderr
     replies = json.loads(outcome.stdout)['results']
-    assert [item['backend'] for item in replies] == ['claude', 'gpt', 'cursor', 'muse', 'ds', 'pro']
-    assert all(item['result'] == '结论🙂' for item in replies[:5]) and replies[5]['result'] == 'PRO ONCE'
+    assert [item['backend'] for item in replies] == ['claude', 'gpt', 'ark', 'cursor', 'muse', 'ds', 'pro']
+    assert all(item['result'] == '结论🙂' for item in replies[:6]) and replies[6]['result'] == 'PRO ONCE'
+
+
+def test_ark_requires_credentials(unified):
+    run, _ = unified
+    backends = run('backends', extra_env={'ARC_API_KEY': ''})
+    ark = next(item for item in json.loads(backends.stdout)['backends'] if item['backend'] == 'ark')
+    assert not ark['available'] and 'ARC_API_KEY' in ark['reason']
+    gpt = next(item for item in json.loads(backends.stdout)['backends'] if item['backend'] == 'gpt')
+    assert gpt['available']
 
 
 def test_batch_retains_each_failure_and_cursor_delivery_uncertainty(unified):

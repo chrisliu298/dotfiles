@@ -1,6 +1,6 @@
 ---
 name: agent-team
-description: Delegate read-only analysis, research, planning or review to the gpt (Codex), claude, cursor (Gemini), muse, ds (DeepSeek) or pro (ChatGPT Pro) backends, alone or in parallel, when the user names one. Not for implementation (codex-exec), pro alone (gpt-pro), or a bare "subagent"/"子代理" (native Agent tool).
+description: Delegate read-only analysis, research, planning or review to the gpt (Codex), ark (Codex on Ark/方舟), claude, cursor (Gemini), muse, ds (DeepSeek) or pro (ChatGPT Pro) backends, alone or in parallel, when the user names one. Not for implementation (codex-exec), pro alone (gpt-pro), or a bare "subagent"/"子代理" (native Agent tool).
 ---
 
 # Agent Team
@@ -21,6 +21,12 @@ Pro alone, or a bare request for a native subagent. Preserve the requested kind 
 work; do not turn every assignment into review. Never substitute an unavailable backend.
 A handle proves dispatch, and a finished turn still needs the requested deliverable.
 Verify consequential claims against primary artifacts and preserve backend attribution.
+
+The user's fixed form is `/agent-team ID ID ...` followed by the assignment, with ids
+`gpt` (subscription GPT-6.1-Sol), `ark` (方舟 GPT-6-Astra), `ark-sol` (方舟 GPT-6.1-Sol,
+i.e. `ark` with `ARK_MODEL=sol`), `claude`, `cursor`, `muse`, `ds` and `pro`. Take those ids
+literally: run exactly those backends, nothing added. Free-form wording still works through
+Choose reviewers; there, GPT qualified by 方舟, Ark or Astra is `ark` alone, never `gpt` plus `ark`.
 
 Resolve bundled references and `scripts/agent-team` from this skill root.
 Assignments and task artifacts stay in their authorized cwd/scratch location.

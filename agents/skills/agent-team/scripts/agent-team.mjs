@@ -8,7 +8,7 @@ const skill = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const runner = resolve(skill, 'scripts/review-subagent');
 // Pro runs live in the gpt-pro relay rather than tmux, so a separate adapter drives them.
 const proSession = resolve(skill, 'scripts/pro-session.mjs');
-const names = ['claude', 'gpt', 'cursor', 'muse', 'ds', 'pro'];
+const names = ['claude', 'gpt', 'ark', 'cursor', 'muse', 'ds', 'pro'];
 const args = process.argv.slice(2);
 
 function usage(message) {
@@ -19,7 +19,7 @@ function usage(message) {
     '       agent-team wait SESSION [SESSION ...] [--timeout SECONDS]\n' +
     '       agent-team capture|status|interrupt|stop SESSION [SESSION ...]\n' +
     '       agent-team list | backends\n' +
-    '       NAME is claude, gpt, cursor, muse, ds, or pro; each at most once per call. NAME=PROMPT gives that\n' +
+    '       NAME is claude, gpt, ark, cursor, muse, ds, or pro; each at most once per call. NAME=PROMPT gives that\n' +
     '       backend its own prompt file instead of stdin. --file attaches a file to pro and lists its\n' +
     '       path for the others. Models and effort are fixed.\n');
   process.exit(2);
@@ -37,7 +37,7 @@ while (args.length) {
   if (option === '--backend' && ['start', '--once'].includes(action)) {
     const [backend, ...file] = (args.shift() || '').split('=');
     if (backend === 'gemini') usage('backend gemini was renamed to cursor (Cursor Agent on Gemini); use --backend cursor');
-    if (!names.includes(backend)) usage('backend must be claude, gpt, cursor, muse, ds, or pro');
+    if (!names.includes(backend)) usage('backend must be claude, gpt, ark, cursor, muse, ds, or pro');
     if (selections.some(item => item.backend === backend)) usage(`each backend runs at most once per call: ${backend}`);
     const selection = { backend };
     if (file.length) {
@@ -62,7 +62,7 @@ while (args.length) {
     timeout = args.shift();
     if (!/^[1-9][0-9]*$/.test(timeout || '') || !Number.isSafeInteger(Number(timeout))) usage('timeout must be a positive integer');
   } else if (!option.startsWith('-') && ['send', 'wait', 'capture', 'status', 'interrupt', 'stop'].includes(action)) {
-    const match = /^(claude|gpt|cursor|gemini|muse|ds|pro)-review-[a-zA-Z0-9-]+$/.exec(option);
+    const match = /^(claude|gpt|ark|cursor|gemini|muse|ds|pro)-review-[a-zA-Z0-9-]+$/.exec(option);
     if (!match) usage(`invalid review session: ${option}`);
     if (sessions.some(item => item.session === option)) usage('the same session must not be targeted twice');
     // Sessions started before the gemini backend was renamed to cursor keep their old prefix.
@@ -92,7 +92,7 @@ function availability(backend) {
   } else if (backend === 'cursor') {
     if (!command(process.env.CURSOR_AGENT_BIN || 'cursor-agent')) return 'cursor-agent is missing or not executable';
     if (!command('jq')) return 'jq is required for cursor';
-  } else if (backend === 'gpt') {
+  } else if (backend === 'gpt' || backend === 'ark') {
     const cli = join(homedir(), '.local/bin/codex');
     if (!executable(cli)) return 'managed Codex CLI is missing; run ./dotfiles.sh';
     const version = spawnSync(cli, ['--version'], { encoding: 'utf8', timeout: 5000 });
@@ -100,6 +100,15 @@ function availability(backend) {
     if (version.status !== 0 || !match) return 'could not verify the managed Codex CLI version';
     const [major, minor, patch] = match.slice(1).map(Number);
     if (major === 0 && (minor < 159 || minor === 159 && patch < 2)) return 'Codex CLI 0.159.2+ is required';
+    if (backend === 'ark') {
+      if (!executable(join(homedir(), '.local/bin/codex-ark'))) return 'codex-ark is missing; run ./dotfiles.sh';
+      if (!['astra', 'sol'].includes(process.env.ARK_MODEL || 'astra')) return 'ARK_MODEL must be astra or sol';
+      // The runner's zsh reads the credentials from ~/.zshenv.local, which the caller may not have loaded.
+      const shell = command('zsh');
+      if (!shell || spawnSync(shell, ['-c', '[[ -n "${ARC_API_KEY:-}" && -n "${ARK_OPERATOR_ID:-}" && -n "${ARK_OPERATOR_EMAIL:-}" ]]'], { timeout: 5000 }).status !== 0) {
+        return 'ARC_API_KEY, ARK_OPERATOR_ID and ARK_OPERATOR_EMAIL must be set (see ~/.zshenv.local)';
+      }
+    }
   } else {
     // claude and ds both run Claude Code through the user's shell launchers.
     const launcher = backend === 'ds' ? 'ds' : 'c';
