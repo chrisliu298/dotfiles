@@ -1,0 +1,210 @@
+#!/usr/bin/env node
+// Local peer messages. The transport steers existing tmux agents; it never launches one.
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const crypto = require('node:crypto');
+const {execFileSync} = require('node:child_process');
+const {DatabaseSync} = require('node:sqlite');
+const ROOT = process.env.AGENT_MSG_HOME || path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local/state'), 'agent-msg');
+const clean = s => s.replace(/\x1b\][\s\S]*?(?:\x07|\x1b\\)/g, '').replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\u00a0/g, ' ');
+const run = (cmd, args) => execFileSync(cmd, args, {encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe']}).trimEnd();
+const tmux = (socket, ...args) => run('tmux', ['-S', socket, ...args]);
+const hash = s => crypto.createHash('sha256').update(s).digest('hex');
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+function start(pid) {
+  return execFileSync('/bin/ps', ['-p', String(pid), '-o', 'lstart='],
+    {encoding: 'utf8', env: {...process.env, TZ: 'UTC', LC_ALL: 'C'}}).trim().replace(/\s+/g, ' ');
+}
+function parent(pid) { return Number(run('/bin/ps', ['-p', String(pid), '-o', 'ppid=']).trim()); }
+function callerAgent() {
+  for (let p = parent(process.pid), i = 0; p > 1 && i < 40; p = parent(p), i++) {
+    const cmd = run('/bin/ps', ['-p', String(p), '-o', 'comm=']).trim();
+    if (path.basename(cmd) === 'codex') return {kind: 'codex', pid: p};
+    if (path.basename(cmd) === 'claude' || cmd.includes('/claude/versions/')) return {kind: 'claude', pid: p};
+  }
+  throw Error('no parent Claude/Codex agent');
+}
+function descendant(pid, root) {
+  for (let i = 0; pid > 1 && i < 40; i++, pid = parent(pid)) if (pid === root) return true;
+  return false;
+}
+function composer(raw, kind) {
+  const lines = raw.split('\n'), plain = lines.map(clean);
+  const mark = kind === 'claude' ? '❯' : '›';
+  let i = plain.length - 1;
+  while (i >= 0 && !plain[i].startsWith(mark)) i--;
+  if (i < 0) throw Error('no recognized composer');
+  const near = plain.slice(Math.max(0, i - 10)).join('\n');
+  if (/Enter to select|Esc to cancel|Type something\.|Change effort level|Do you want to proceed/.test(near)) throw Error('modal dialog');
+  let end;
+  if (kind === 'claude') {
+    end = plain.findIndex((s, n) => n > i && /^─{3}/.test(s));
+  } else {
+    // Codex ends the composer background before the model/status footer.
+    end = lines.findIndex((s, n) => n > i && /\x1b\[49m/.test(s));
+  }
+  if (end < 0) throw Error('incomplete composer');
+  let text = plain.slice(i, end).join('\n').slice(mark.length).trim();
+  const rawFirst = lines[i];
+  if (kind === 'codex' && /\x1b\[2m/.test(rawFirst) &&
+      /^(Ask Codex to do anything|Summarize recent commits|Find and fix a bug in .+|Explain this codebase|Implement .+|Write tests for .+)$/.test(text)) text = '';
+  if (/\[Pasted text/.test(text)) throw Error('collapsed paste');
+  return text;
+}
+function db() {
+  fs.mkdirSync(ROOT, {recursive: true, mode: 0o700});
+  const d = new DatabaseSync(path.join(ROOT, 'messages.sqlite3'));
+  d.exec(`PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;
+    CREATE TABLE IF NOT EXISTS agents(name TEXT PRIMARY KEY, identity TEXT UNIQUE NOT NULL, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY, sender TEXT NOT NULL, recipient TEXT NOT NULL,
+      body TEXT NOT NULL, fingerprint TEXT NOT NULL, reply_to TEXT, state TEXT NOT NULL, detail TEXT,
+      created TEXT NOT NULL, read_at TEXT);
+    CREATE TABLE IF NOT EXISTS delivery_locks(target TEXT PRIMARY KEY, owner INTEGER NOT NULL, started TEXT NOT NULL);`);
+  return d;
+}
+function agent(d, name) {
+  const r = d.prepare('SELECT data FROM agents WHERE name=? OR identity=?').get(name, name);
+  if (!r) throw Error('unregistered agent: ' + name);
+  return JSON.parse(r.data);
+}
+function self(d) {
+  const {kind, pid} = callerAgent();
+  const sid = kind === 'codex' ? process.env.CODEX_THREAD_ID || process.env.CODEX_SESSION_ID : process.env.CLAUDE_CODE_SESSION_ID;
+  if (!sid) throw Error('run inside a registered agent session');
+  const r = agent(d, kind + ':' + sid);
+  if (process.env.TMUX_PANE !== r.pane) throw Error('caller pane differs; register again');
+  if (pid !== r.pid || start(r.pid) !== r.procStart) throw Error('caller process differs; register again');
+  return r;
+}
+function inspect(r) {
+  const info = tmux(r.socket, 'display-message', '-p', '-t', r.pane,
+    '#{pane_pid}\t#{pane_in_mode}\t#{pane_width}\t#{pane_dead}').split('\t');
+  if (r.host !== os.hostname() || Number(info[0]) !== r.panePid || start(r.panePid) !== r.paneStart ||
+      start(r.pid) !== r.procStart || !descendant(r.pid, r.panePid)) throw Error('target identity stale; register again');
+  if (info[1] !== '0' || info[3] !== '0') throw Error('target copy mode or ended pane');
+  return {width: Number(info[2]), raw: tmux(r.socket, 'capture-pane', '-p', '-e', '-J', '-t', r.pane)};
+}
+function register(d, name, o) {
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$/.test(name || '')) throw Error('invalid agent name');
+  const caller = o.kind && o.pid ? null : callerAgent();
+  const kind = o.kind || caller.kind;
+  const sid = o.session || (kind === 'codex' ? process.env.CODEX_THREAD_ID || process.env.CODEX_SESSION_ID : process.env.CLAUDE_CODE_SESSION_ID);
+  if (!['claude', 'codex'].includes(kind) || !/^[a-f0-9-]{36}$/.test(sid || '')) throw Error('kind/session required');
+  const pane = o.pane || process.env.TMUX_PANE;
+  if (!/^%\d+$/.test(pane || '')) throw Error('tmux pane required');
+  const socket = o.socket || run('tmux', ['display-message', '-p', '-t', pane, '#{socket_path}']);
+  const panePid = Number(tmux(socket, 'display-message', '-p', '-t', pane, '#{pane_pid}'));
+  const pid = Number(o.pid || caller.pid);
+  if (!pid || !descendant(pid, panePid)) throw Error('agent PID is not in the selected pane');
+  const r = {name, identity: kind + ':' + sid, kind, sessionId: sid, host: os.hostname(), socket, pane,
+    panePid, paneStart: start(panePid), pid, procStart: start(pid)};
+  inspect(r);
+  const old = d.prepare('SELECT * FROM agents WHERE name=? OR identity=?').all(name, r.identity);
+  if (old.some(x => x.identity !== r.identity || x.name !== name) && !o.replace) throw Error('name/identity already bound; explicit --replace required');
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    d.prepare('DELETE FROM agents WHERE name=? OR identity=?').run(name, r.identity);
+    d.prepare('INSERT INTO agents VALUES(?,?,?)').run(name, r.identity, JSON.stringify(r));
+    d.exec('COMMIT');
+  } catch (e) { d.exec('ROLLBACK'); throw e; }
+  return r;
+}
+async function deliver(d, m) {
+  const state = (s, detail) => d.prepare('UPDATE messages SET state=?,detail=? WHERE id=?').run(s, detail, m.id);
+  let r, started;
+  const owner = process.pid;
+  try { r = agent(d, m.recipient); started = start(owner); }
+  catch (e) { return state('deferred', e.message); }
+  try { d.prepare('INSERT INTO delivery_locks VALUES(?,?,?)').run(r.identity, owner, started); }
+  catch (e) {
+    if (d.prepare('SELECT target FROM delivery_locks WHERE target=?').get(r.identity)) return state('deferred', 'another sender owns the target lock; retry explicitly later');
+    throw e;
+  }
+  try {
+    const before = inspect(r), text = '[peer] agent-msg read ' + m.id;
+    if (text.length + 4 > before.width) throw Error('pane too narrow');
+    if (composer(before.raw, r.kind) !== '') throw Error('unsent draft');
+    // Persist uncertainty before typing. A crash must never cause an automatic resend.
+    state('typed_unsubmitted', 'typing; inspect before any retry');
+    tmux(r.socket, 'send-keys', '-t', r.pane, '-l', text);
+    await pause(250);
+    if (composer(inspect(r).raw, r.kind) !== text) return state('typed_unsubmitted', 'input changed or folded; Enter withheld');
+    state('submit_unknown', 'submitting Enter; do not resend');
+    tmux(r.socket, 'send-keys', '-t', r.pane, 'Enter');
+    d.prepare("UPDATE messages SET state='submitted',detail=NULL WHERE id=? AND state='submit_unknown'").run(m.id);
+  } catch (e) {
+    const current = d.prepare('SELECT state FROM messages WHERE id=?').get(m.id);
+    if (current.state === 'stored') state('deferred', e.message);
+    else d.prepare('UPDATE messages SET detail=? WHERE id=?').run(e.message, m.id);
+  } finally {
+    d.prepare('DELETE FROM delivery_locks WHERE target=? AND owner=? AND started=?').run(r.identity, owner, started);
+  }
+}
+async function main(args) {
+  const [cmd, ...rest] = args, o = {}, pos = [];
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] === '--replace' || rest[i] === '--retry' || rest[i] === '--self') o[rest[i].slice(2)] = true;
+    else if (['--kind','--session','--pane','--socket','--pid','--file','--id'].includes(rest[i])) {
+      if (!rest[i + 1] || rest[i + 1].startsWith('--')) throw Error('missing option value');
+      o[rest[i].slice(2)] = rest[++i];
+    } else if (rest[i].startsWith('--')) throw Error('unknown option: ' + rest[i]);
+    else pos.push(rest[i]);
+  }
+  if (!cmd || cmd === '--help' || cmd === 'help') return console.log('agent-msg register NAME [--kind claude|codex --session ID --pane %N --pid PID]\nagent-msg list\nagent-msg send NAME --file FILE [--id ID]\nagent-msg send --self --file FILE --id ID   # explicit session timer wake\nagent-msg read ID\nagent-msg reply ID --file FILE [--id ID]\nagent-msg status [ID]\nagent-msg send --retry ID   # only deferred messages; never resends uncertain submissions');
+  if (o.self && (cmd !== 'send' || pos.length || o.retry)) throw Error('--self requires send without a named target or retry');
+  if (o.self && !o.id) throw Error('--self requires an explicit stable --id');
+  const d = db();
+  try {
+    if (cmd === 'register') return console.log(JSON.stringify(register(d, pos[0], o)));
+    if (cmd === 'list') return console.log(JSON.stringify(d.prepare('SELECT name,identity,data FROM agents').all().map(x=>JSON.parse(x.data)), null, 2));
+    const me = self(d);
+    if (cmd === 'read') {
+      const m = d.prepare('SELECT * FROM messages WHERE id=?').get(pos[0]);
+      if (!m || m.recipient !== me.identity) throw Error('message is not addressed to this session');
+      d.prepare("UPDATE messages SET read_at=COALESCE(read_at,?),state='read' WHERE id=? AND state!='replied'").run(new Date().toISOString(), m.id);
+      console.log(JSON.stringify({peer_message: true, not_user_authorization: true,
+        ...d.prepare('SELECT * FROM messages WHERE id=?').get(m.id)}, null, 2)); return;
+    }
+    if (cmd === 'status') return console.log(JSON.stringify(pos[0] ? d.prepare('SELECT id,sender,recipient,state,detail,reply_to,read_at FROM messages WHERE id=? AND (sender=? OR recipient=?)').get(pos[0], me.identity, me.identity) :
+      d.prepare('SELECT id,sender,recipient,state,detail,reply_to FROM messages WHERE sender=? OR recipient=? ORDER BY created DESC LIMIT 30').all(me.identity, me.identity), null, 2));
+    if (cmd !== 'send' && cmd !== 'reply') throw Error('unknown command');
+    if (o.retry) {
+      const m = d.prepare('SELECT * FROM messages WHERE id=?').get(pos[0]);
+      if (!m || m.sender !== me.identity || m.state !== 'deferred') throw Error('only own deferred messages can be retried');
+      d.prepare("UPDATE messages SET state='stored' WHERE id=?").run(m.id); await deliver(d, m);
+      return console.log(JSON.stringify(d.prepare('SELECT id,state,detail FROM messages WHERE id=?').get(m.id)));
+    }
+    if (!o.file) throw Error('--file required');
+    const body = fs.readFileSync(o.file, 'utf8'); if (!body.trim()) throw Error('empty message');
+    let to, replyTo = null;
+    if (cmd === 'reply') {
+      const original = d.prepare('SELECT * FROM messages WHERE id=?').get(pos[0]);
+      if (!original || original.recipient !== me.identity) throw Error('cannot reply to this message');
+      to = agent(d, original.sender); replyTo = original.id;
+    } else to = o.self ? me : agent(d, pos[0]);
+    if (to.identity === me.identity && !o.self) throw Error('cannot steer own session');
+    const id = o.id || crypto.randomBytes(6).toString('hex');
+    if (!/^[a-zA-Z0-9_-]{1,32}$/.test(id)) throw Error('invalid message id');
+    const fingerprint = hash(JSON.stringify([me.identity, to.identity, body, replyTo]));
+    const m = {id, sender: me.identity, recipient: to.identity, body, fingerprint, reply_to: replyTo, state: 'stored'};
+    let exists;
+    d.exec('BEGIN IMMEDIATE');
+    try {
+      exists = d.prepare('SELECT * FROM messages WHERE id=?').get(id);
+      if (exists && exists.fingerprint !== fingerprint) throw Error('message id conflicts with different content');
+      if (!exists) {
+        d.prepare('INSERT INTO messages(id,sender,recipient,body,fingerprint,reply_to,state,created) VALUES(?,?,?,?,?,?,?,?)')
+          .run(id, m.sender, m.recipient, body, fingerprint, replyTo, 'stored', new Date().toISOString());
+        if (replyTo) d.prepare("UPDATE messages SET state='replied' WHERE id=?").run(replyTo);
+      }
+      d.exec('COMMIT');
+    } catch (e) { d.exec('ROLLBACK'); throw e; }
+    if (exists) return console.log(JSON.stringify({id, state: exists.state, duplicate: true}));
+    await deliver(d, m);
+    console.log(JSON.stringify(d.prepare('SELECT id,state,detail FROM messages WHERE id=?').get(id)));
+  } finally { d.close(); }
+}
+module.exports = {composer, clean, main};
+if (require.main === module) main(process.argv.slice(2)).catch(e => { console.error('agent-msg: ' + e.message); process.exitCode = 1; });

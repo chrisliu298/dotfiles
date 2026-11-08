@@ -14,6 +14,7 @@ LINKS=(
     "shell/remap-keys:.local/bin/remap-keys"
     "shell/tmux-persist:.local/bin/tmux-persist"
     "shell/rex-claude:.local/bin/rex-claude"
+    "shell/agent-msg:.local/bin/agent-msg"
     "shell/codex-traex:.local/bin/codex-traex"
     "shell/codex-ark:.local/bin/codex-ark"
     "shell/cdswap:.local/bin/cdswap"
