@@ -1,0 +1,78 @@
+#!/usr/bin/env node
+// codex-ark-relay: local HTTP relay from Codex to Ark that resends rate-limited requests.
+// Ark rejects a request with 429 before any output, and Codex ends the turn on that status
+// without retrying, so the relay waits and sends the same request again, with no retry limit,
+// until Ark accepts it or Codex drops the request. Every other status reaches Codex unchanged.
+//
+//   codex-ark-relay PARENT_PID UPSTREAM_ORIGIN   # prints its port; exits after PARENT_PID
+'use strict';
+const fs = require('node:fs');
+const http = require('node:http');
+const https = require('node:https');
+
+const [parent, origin] = process.argv.slice(2);
+const upstream = new URL(origin);
+const transport = upstream.protocol === 'https:' ? https : http;
+const agent = new transport.Agent({ keepAlive: true });
+// Ark sends no Retry-After: wait 5 s doubling to 60 s, then every 60 s, with jitter so
+// parallel sessions on one endpoint do not retry in step.
+const backoff = attempt => Math.min(60_000, 5_000 * 2 ** attempt) * (0.8 + 0.4 * Math.random());
+const hopByHop = ['connection', 'keep-alive', 'proxy-connection', 'transfer-encoding', 'upgrade'];
+
+const log = message => process.stderr.write(`${new Date().toISOString()} ${message}\n`);
+const without = (headers, names) =>
+  Object.fromEntries(Object.entries(headers).filter(([name]) => !names.includes(name)));
+
+function forward(req, body) {
+  return new Promise((resolve, reject) => {
+    const headers = without(req.headers, [...hopByHop, 'host', 'content-length']);
+    headers['content-length'] = body.length;
+    transport.request(new URL(req.url, upstream), { method: req.method, headers, agent }, resolve)
+      .on('error', reject)
+      .end(body);
+  });
+}
+
+function delayFor(answer, attempt) {
+  const after = Number(answer.headers['retry-after']);
+  return answer.headers['retry-after'] !== undefined && after >= 0 ? after * 1000 : backoff(attempt);
+}
+
+const server = http.createServer(async (req, res) => {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const body = Buffer.concat(chunks);
+  // Before the reply starts, `close` means Codex dropped the request (an interrupt, say).
+  let gone = false;
+  let wake = () => {};
+  res.on('close', () => { gone = true; wake(); });
+  for (let attempt = 0; ; attempt++) {
+    let answer;
+    try {
+      answer = await forward(req, body);
+    } catch (error) {
+      log(`${req.method} ${req.url}: ${error.message}`);
+      if (!gone) res.writeHead(502).end(`codex-ark-relay: ${error.message}`);
+      return;
+    }
+    if (gone) return answer.destroy();
+    if (answer.statusCode !== 429) {
+      if (attempt) log(`${answer.statusCode} on ${req.method} ${req.url} after ${attempt} retries`);
+      res.writeHead(answer.statusCode, answer.statusMessage, without(answer.headers, hopByHop));
+      res.on('close', () => answer.destroy());
+      answer.pipe(res);
+      return;
+    }
+    answer.resume();
+    const delay = delayFor(answer, attempt);
+    log(`429 on ${req.method} ${req.url}; retry ${attempt + 1} in ${(delay / 1000).toFixed(1)}s`);
+    await new Promise(resolve => { wake = resolve; setTimeout(resolve, delay); });
+    if (gone) return log(`${req.method} ${req.url} dropped by Codex while waiting`);
+  }
+});
+
+server.listen(0, '127.0.0.1', () => fs.writeSync(1, `${server.address().port}\n`));
+// codex-ark execs Codex in its own process, so that process ending is the session ending.
+setInterval(() => {
+  try { process.kill(Number(parent), 0); } catch { process.exit(0); }
+}, 1000);

@@ -55,8 +55,13 @@ xasr                                          # choose a session to resume on Ar
 `ARK_MODEL` accepts `astra` / `gpt-6-astra`, or `sol` / `gpt-6.1-sol` /
 `gpt-6-1-sol` / `azure-gpt-6-1-sol`, as well as either endpoint ID.
 Sol uses `ep-20261026202616-6c8l8`; Astra uses `ep-20261020213556-cxb6v`.
-Use `xas` when Astra is rate-limited. This chooses Sol explicitly; it does not
-automatically resend a request that may have already begun.
+Codex ends a turn on Ark's `429` without retrying, so `codex-ark` routes requests
+through `codex-ark-relay`, a local relay that lives as long as that Codex process.
+A `429` arrives before any output, so the relay resends the same request after a
+backoff (5 s doubling to 60 s, then every 60 s) with no retry limit, until Ark accepts
+it or Codex drops the request. Other statuses pass through unchanged; retries are
+logged to `~/.cache/codex-ark/relay.log`. Use `xas` to switch to Sol explicitly
+when Astra stays rate-limited.
 
 The command fixes the Ark provider and chosen endpoint; model/provider/remote
 overrides are rejected. Other CLI options are passed through. The default tracing
@@ -64,7 +69,7 @@ label is `codex-ark`; reuse the same `ARK_SESSION_ID` for follow-ups to a named 
 The endpoint catalog copies each installed CLI model's own metadata; this preserves
 its tool and context settings without changing the provider's model identifier.
 Gateway availability and quotas are separate from ChatGPT subscription access.
-Verify offline with `sh -n shell/codex-ark` and `sh shell/test-codex-ark.sh`.
+Verify offline with `sh -n shell/codex-ark`, `node --check shell/codex-ark-relay` and `sh shell/test-codex-ark.sh`.
 
 agent-team's `ark` backend and `cx start --ark` launch Codex through this same command, only when
 the user asks for Ark; `gpt` and ordinary cx lines stay on the subscription.

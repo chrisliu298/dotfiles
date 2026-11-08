@@ -83,14 +83,24 @@ mkdir -p "${catalog%/*}"
   });
 ' "$astra_ep" "$sol_ep" "$catalog"
 
-# Internal Ark traffic must bypass external proxies, preserving other exclusions.
-export NO_PROXY="${NO_PROXY:+$NO_PROXY,}ark-cn-beijing.bytedance.net"
-export no_proxy="${no_proxy:+$no_proxy,}ark-cn-beijing.bytedance.net"
+# Internal Ark traffic and the local relay must bypass external proxies, preserving other exclusions.
+export NO_PROXY="${NO_PROXY:+$NO_PROXY,}127.0.0.1,ark-cn-beijing.bytedance.net"
+export no_proxy="${no_proxy:+$no_proxy,}127.0.0.1,ark-cn-beijing.bytedance.net"
+
+# Codex ends a turn on Ark's 429 without retrying; codex-ark-relay resends those requests
+# after a backoff. It runs beside Codex, which takes over this process ($$) through exec.
+relay=$(dirname -- "$(readlink -f -- "$0")")/codex-ark-relay
+run_dir=$(mktemp -d "${TMPDIR:-/tmp}/codex-ark.XXXXXX")
+mkfifo "$run_dir/port"
+node "$relay" "$$" "${base_url%/api/v3}" > "$run_dir/port" 2>> "${catalog%/*}/relay.log" &
+read -r port < "$run_dir/port" || port=
+rm -rf "$run_dir"
+[ -n "$port" ] || { echo "codex-ark: relay failed to start; see ${catalog%/*}/relay.log" >&2; exit 1; }
 
 exec "$codex_bin" --no-daemon \
   -c 'model_provider="ark"' \
   -c 'model_providers.ark.name="Ark"' \
-  -c "model_providers.ark.base_url=\"$base_url\"" \
+  -c "model_providers.ark.base_url=\"http://127.0.0.1:$port/api/v3\"" \
   -c 'model_providers.ark.env_key="ARC_API_KEY"' \
   -c 'model_providers.ark.wire_api="responses"' \
   -c 'model_providers.ark.requires_openai_auth=false' \
