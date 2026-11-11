@@ -1,6 +1,6 @@
 ---
 name: agent-team
-description: Delegate read-only analysis, research, planning or review to the gpt (Codex), ark (Codex on Ark/方舟), claude, cursor (Gemini), muse, ds (DeepSeek) or pro (ChatGPT Pro) backends, alone or in parallel, when the user names one. Not for implementation (codex-exec), pro alone (gpt-pro), or a bare "subagent"/"子代理" (native Agent tool).
+description: Delegate read-only analysis, research, planning or review to the gpt (Codex), ark (Codex on Ark/方舟), claude, cursor (Gemini), ds (DeepSeek) or pro (ChatGPT Pro) backends, alone or in parallel, when the user names one. Not for implementation (codex-exec), pro alone (gpt-pro), or a bare "subagent"/"子代理" (native Agent tool).
 ---
 
 # Agent Team
@@ -24,9 +24,12 @@ Verify consequential claims against primary artifacts and preserve backend attri
 
 The user's fixed form is `/agent-team ID ID ...` followed by the assignment, with ids
 `gpt` (subscription GPT-6.1-Sol), `ark` (方舟 GPT-6-Astra), `ark-sol` (方舟 GPT-6.1-Sol,
-i.e. `ark` with `ARK_MODEL=sol`), `claude`, `cursor`, `muse`, `ds` and `pro`. Take those ids
-literally: run exactly those backends, nothing added. Free-form wording still works through
-Choose reviewers; there, GPT qualified by 方舟, Ark or Astra is `ark` alone, never `gpt` plus `ark`.
+i.e. `ark` with `ARK_MODEL=sol`), `claude`, `cursor`, `ds` and `pro`. Take those ids
+literally: run exactly those backends, nothing added. Lines after it that start with `ID:` give
+that backend its own assignment; every other line is shared, and backends without an `ID:` line
+take the shared text as their assignment. An `ID:` line for a backend not on the first line is a
+mistake to ask about, not a backend to add. Free-form wording still works through Choose
+reviewers; there, GPT qualified by 方舟, Ark or Astra is `ark` alone, never `gpt` plus `ark`.
 
 Resolve bundled references and `scripts/agent-team` from this skill root.
 Assignments and task artifacts stay in their authorized cwd/scratch location.
@@ -36,5 +39,6 @@ Assignments and task artifacts stay in their authorized cwd/scratch location.
 - Before dispatch: read [Choose reviewers](references/choose-reviewers.md), then only the selected backend references linked there; preserve its assignment/file-sharing and capability rules.
 - Before any helper action: read [Control and failure semantics](references/control-and-failures.md), including delivery receipts, ambiguous sends, bounded retries, interrupts and owned-session cleanup.
 - Default persistent workflow, preparing an assignment, starting, supplementing, waiting or collecting: [Persistent tasks](references/persistent-tasks.md), together with the control procedure. Collect the same waiter to completion after each supplement.
+- A backend's question (`[peer] agent-msg read ID` from a `*-review-*` session): [Persistent tasks](references/persistent-tasks.md#questions-from-backends).
 - Only when no follow-up is needed: read [One-shot tasks](references/one-shot-tasks.md) before `--once`, together with selection, control and the shared assignment-preparation requirements in Persistent tasks; preserve partial results and do not rerun completed work.
 - At task end: follow the control procedure's cleanup conditions. Stop only sessions you started; keep one open only for needed follow-ups and explicitly name it. Never stop the tmux server.

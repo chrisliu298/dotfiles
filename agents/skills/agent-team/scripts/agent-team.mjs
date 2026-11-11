@@ -8,7 +8,7 @@ const skill = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const runner = resolve(skill, 'scripts/review-subagent');
 // Pro runs live in the gpt-pro relay rather than tmux, so a separate adapter drives them.
 const proSession = resolve(skill, 'scripts/pro-session.mjs');
-const names = ['claude', 'gpt', 'ark', 'cursor', 'muse', 'ds', 'pro'];
+const names = ['claude', 'gpt', 'ark', 'cursor', 'ds', 'pro'];
 const args = process.argv.slice(2);
 
 function usage(message) {
@@ -19,7 +19,7 @@ function usage(message) {
     '       agent-team wait SESSION [SESSION ...] [--timeout SECONDS]\n' +
     '       agent-team capture|status|interrupt|stop SESSION [SESSION ...]\n' +
     '       agent-team list | backends\n' +
-    '       NAME is claude, gpt, ark, cursor, muse, ds, or pro; each at most once per call. NAME=PROMPT gives that\n' +
+    '       NAME is claude, gpt, ark, cursor, ds, or pro; each at most once per call. NAME=PROMPT gives that\n' +
     '       backend its own prompt file instead of stdin. --file attaches a file to pro and lists its\n' +
     '       path for the others. Models and effort are fixed.\n');
   process.exit(2);
@@ -37,7 +37,7 @@ while (args.length) {
   if (option === '--backend' && ['start', '--once'].includes(action)) {
     const [backend, ...file] = (args.shift() || '').split('=');
     if (backend === 'gemini') usage('backend gemini was renamed to cursor (Cursor Agent on Gemini); use --backend cursor');
-    if (!names.includes(backend)) usage('backend must be claude, gpt, ark, cursor, muse, ds, or pro');
+    if (!names.includes(backend)) usage('backend must be claude, gpt, ark, cursor, ds, or pro');
     if (selections.some(item => item.backend === backend)) usage(`each backend runs at most once per call: ${backend}`);
     const selection = { backend };
     if (file.length) {
@@ -62,7 +62,7 @@ while (args.length) {
     timeout = args.shift();
     if (!/^[1-9][0-9]*$/.test(timeout || '') || !Number.isSafeInteger(Number(timeout))) usage('timeout must be a positive integer');
   } else if (!option.startsWith('-') && ['send', 'wait', 'capture', 'status', 'interrupt', 'stop'].includes(action)) {
-    const match = /^(claude|gpt|ark|cursor|gemini|muse|ds|pro)-review-[a-zA-Z0-9-]+$/.exec(option);
+    const match = /^(claude|gpt|ark|cursor|gemini|ds|pro)-review-[a-zA-Z0-9-]+$/.exec(option);
     if (!match) usage(`invalid review session: ${option}`);
     if (sessions.some(item => item.session === option)) usage('the same session must not be targeted twice');
     // Sessions started before the gemini backend was renamed to cursor keep their old prefix.
@@ -87,8 +87,6 @@ function availability(backend) {
     if (named ? !(named.includes('/') && executable(named)) : !command('gpt-pro') && !executable(resolve(skill, '../gpt-pro/scripts/gpt-pro'))) {
       return 'gpt-pro is missing or not executable; install the gpt-pro skill';
     }
-  } else if (backend === 'muse') {
-    if (!command(process.env.MUSE_BIN || 'muse')) return 'muse is missing or not executable';
   } else if (backend === 'cursor') {
     if (!command(process.env.CURSOR_AGENT_BIN || 'cursor-agent')) return 'cursor-agent is missing or not executable';
     if (!command('jq')) return 'jq is required for cursor';
@@ -105,8 +103,8 @@ function availability(backend) {
       if (!['astra', 'sol'].includes(process.env.ARK_MODEL || 'astra')) return 'ARK_MODEL must be astra or sol';
       // The runner's zsh reads the credentials from ~/.zshenv.local, which the caller may not have loaded.
       const shell = command('zsh');
-      if (!shell || spawnSync(shell, ['-c', '[[ -n "${ARC_API_KEY:-}" && -n "${ARK_OPERATOR_ID:-}" && -n "${ARK_OPERATOR_EMAIL:-}" ]]'], { timeout: 5000 }).status !== 0) {
-        return 'ARC_API_KEY, ARK_OPERATOR_ID and ARK_OPERATOR_EMAIL must be set (see ~/.zshenv.local)';
+      if (!shell || spawnSync(shell, ['-c', '[[ -n "${ARK_API_KEY:-}" && -n "${ARK_OPERATOR_ID:-}" && -n "${ARK_OPERATOR_EMAIL:-}" ]]'], { timeout: 5000 }).status !== 0) {
+        return 'ARK_API_KEY, ARK_OPERATOR_ID and ARK_OPERATOR_EMAIL must be set (see ~/.zshenv.local)';
       }
     }
   } else {
@@ -127,6 +125,20 @@ function availability(backend) {
 function probe(backend) {
   try { return availability(backend); }
   catch (error) { return `backend configuration could not be read: ${error.message}`; }
+}
+function callerName() {
+  const found = spawnSync('agent-msg', ['whoami'], { encoding: 'utf8', timeout: 10000 });
+  try { return found.status === 0 ? JSON.parse(found.stdout).name || null : null; }
+  catch { return null; }
+}
+function askCaller(caller) {
+  return '## Questions for the caller\n\n' +
+    'When a decision belongs to the session that assigned this task (a premise is wrong, the assignment has two ' +
+    'readings, or you need something only it knows), ask it instead of guessing. Write the question so it can be ' +
+    'answered without your context (what you found, the options, your recommendation) to a file outside the ' +
+    `repository, then run \`agent-msg send ${caller} --file FILE\`. The answer arrives as a new message in this ` +
+    'session. Keep working on parts that do not depend on it; when everything left depends on it, end the turn with ' +
+    'the question in your reply. If the command fails, put the question in your final reply.\n';
 }
 const activeOnce = new Set();
 let interrupted = 0, readingInput = false;
@@ -235,6 +247,9 @@ if (action === 'backends') {
     // Pro inlines attached files itself; the other backends read them from disk.
     if (files.length && item.backend !== 'pro') item.prompt = item.prompt.replace(/\s*$/, '\n\nRead these files:\n') + files.map(path => `- ${path}\n`).join('');
   }
+  // Persistent backends other than pro may ask the caller, when it is reachable through agent-msg.
+  const caller = action === 'start' && selections.some(item => item.backend !== 'pro') ? callerName() : null;
+  if (caller) for (const item of selections) if (item.backend !== 'pro') item.prompt = item.prompt.replace(/\s*$/, '\n\n') + askCaller(caller);
   if (action === 'start' && selections.some(item => Buffer.byteLength(item.prompt) > 131072)) usage('initial prompt exceeds 128 KiB; send further context later');
   if (['start', '--once'].includes(action)) {
     if (action === 'start' && selections.some(item => item.backend !== 'pro') && !command('tmux')) {

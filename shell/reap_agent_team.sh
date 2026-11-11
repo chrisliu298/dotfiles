@@ -15,7 +15,7 @@ NOW=$(date +%s)
 # - 轮次已完成（turn_dir/done 的计数 > @review_sent）：从最后完成的时刻算空闲；
 # - 轮次在跑：只有窗口也超过阈值没有任何输出（TUI 跑轮次时转圈会持续刷屏）才算卡死。
 tmux list-sessions -F '#{session_name}|#{session_activity}|#{session_attached}|#{window_activity}' 2>/dev/null \
-| grep -E '^(claude|gpt|cursor|gemini|muse|ds)-review-' \
+| grep -E '^(claude|gpt|cursor|gemini|ds)-review-' \
 | while IFS='|' read -r name act attached winact; do
     [ "$attached" != "0" ] && continue
     turn_dir=$(tmux show-options -v -t "$name" @review_turn_dir 2>/dev/null)
@@ -37,7 +37,7 @@ tmux list-sessions -F '#{session_name}|#{session_activity}|#{session_attached}|#
     $H stop "$name" >/dev/null 2>&1
     echo "$(date '+%FT%T%z') REAPED $name idle=${idle}min archived=$f" >> "$LOG"
   done
-left=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -cE '^(claude|gpt|cursor|gemini|muse|ds)-review-')
+left=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -cE '^(claude|gpt|cursor|gemini|ds)-review-')
 echo "$(date '+%FT%T%z') checked idle>=${IDLE_MIN}min, remaining review sessions: $left" >> "$LOG"
 
 # Codex 执行线（cx-*）：最新一条消息已有回复、回复距今超过阈值、无人 attach 的，用 cx close 关掉。

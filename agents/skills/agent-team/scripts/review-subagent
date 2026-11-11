@@ -16,8 +16,7 @@ case "$harness" in
             sol) model=gpt-6.1-sol ;;
             *) print -u2 'agent-team: ARK_MODEL must be astra or sol'; exit 2 ;;
         esac ;;
-    cursor) model=gemini-4-argon-high effort=high ;;
-    muse) model=muse-wonder-full-1.0 effort=high ;;
+    cursor) model=gemini-4-carbon-high effort=high ;;
     # DeepSeek maps xhigh to high, so high is its real top tier below max.
     ds) model='deepseek-flash[1m]' effort=high ;;
     *) print -u2 'unknown review harness'; exit 2 ;;
@@ -34,7 +33,6 @@ codex_cli="$HOME/.local/bin/codex"
 ark_cli="$HOME/.local/bin/codex-ark"
 notifier="${runner:h}/turn-notifier"
 cursor_cli="${CURSOR_AGENT_BIN:-cursor-agent}"
-muse_cli="${MUSE_BIN:-muse}"
 
 check_harness_cli() {
     if [[ "$harness" == cursor ]]; then
@@ -48,17 +46,6 @@ check_harness_cli() {
             cursor_cli="${commands[$cursor_cli]}"
         else
             print -u2 "$helper: cursor-agent is not installed or not on PATH"
-            return 127
-        fi
-        return 0
-    fi
-    if [[ "$harness" == muse ]]; then
-        if [[ "$muse_cli" == */* && -f "$muse_cli" && -x "$muse_cli" ]]; then
-            muse_cli="${muse_cli:A}"
-        elif (( $+commands[$muse_cli] )); then
-            muse_cli="${commands[$muse_cli]}"
-        else
-            print -u2 "$helper: muse is not installed or not on PATH"
             return 127
         fi
         return 0
@@ -93,7 +80,7 @@ parse_options() {
             --effort|--model|--output-format)
                 local option="$1" value="${2:-}"
                 if (( $# < 2 )); then usage; return 2; fi
-                if [[ "$harness" == (cursor|muse) && "$option" != --output-format ]]; then
+                if [[ "$harness" == cursor && "$option" != --output-format ]]; then
                     print -u2 "$helper: model and effort are fixed; selection options are not supported"
                     return 2
                 fi
@@ -110,7 +97,7 @@ parse_options() {
 }
 
 # Claude Code asks whether to trust an unfamiliar launch directory before the first turn, and
-# nobody is at the pane to answer. Trust it for the run, as cursor (--trust) and muse already do:
+# nobody is at the pane to answer. Trust it for the run, as cursor (--trust) already does:
 # move the selection to Yes, confirm once it is selected, and stop once the main screen is up.
 accept_trust() {
     local screen
@@ -151,22 +138,6 @@ launch() {
             kill "$watcher" 2>/dev/null || true
             wait "$watcher" 2>/dev/null || true
             return "$rc"
-        fi
-    elif [[ "$harness" == muse ]]; then
-        # Match the user's `m` launcher: no approvals (which would hang an unattended turn), no
-        # sandbox, full network. Read-only scope is an assignment instruction, as for Claude.
-        local -a options=(--model "$model" --reasoning-effort "$effort" --yolo)
-        if [[ "$mode" == once ]]; then
-            # exec takes the prompt as an argument (stdin is not read), so no prompt file can leak.
-            command "$muse_cli" exec "${options[@]}" --no-session-log -- "$prompt"
-        else
-            # Stop records each finished turn for `wait`, as for Claude Code; StopFailure records a
-            # turn that ended in an error. Muse scrubs the hook environment, so the command carries
-            # the turn directory itself, JSON-escaped for any temp path.
-            local hook="REVIEW_SUBAGENT_TURN_DIR=${(qq)REVIEW_SUBAGENT_TURN_DIR} ${(qq)notifier}"
-            hook="${${hook//\\/\\\\}//\"/\\\"}"
-            local entry="[{\"hooks\":[{\"type\":\"command\",\"command\":\"$hook\"}]}]"
-            command "$muse_cli" "${options[@]}" -c "hooks={\"Stop\":$entry,\"StopFailure\":$entry}" -- "$prompt"
         fi
     elif [[ "$harness" == cursor ]]; then
         if [[ "$mode" == once ]]; then
@@ -232,21 +203,6 @@ cursor_draft() {
     tmux capture-pane -p -t "$pane" | command awk '/^[[:space:]]*→ /{on=1} on&&/▀/{exit} on'
 }
 
-# Muse shows these while a turn runs or input waits for one; a finished turn alone does not
-# answer queued input, which Muse runs as its own turn unless it steers it into the current one.
-muse_busy() {
-    tmux capture-pane -p -t "$pane" | command grep -Eq 'esc to interrupt|Queued input'
-}
-
-# Text in Muse's input box: from its last `❯` line to the bottom border, without the prompt mark.
-muse_draft() {
-    tmux capture-pane -p -t "$pane" | command awk '
-        { line[NR] = $0 } /^❯/ { box = NR }
-        END { for (i = box; box && i <= NR; i++) { if (i > box && line[i] ~ /^─/) break
-              text = line[i]; if (i == box) sub(/^❯ ?/, "", text); out = out text }
-              gsub(/[[:space:]]/, "", out); printf "%s", out }'
-}
-
 # Count of finished turns recorded by turn-notifier for the current session.
 turns_done() {
     local turn_dir value=0
@@ -271,7 +227,7 @@ turn_hint() {
     fi
 }
 
-# Network and provider failures that end a Muse or Cursor turn but leave the session idle with
+# Network and provider failures that end a Cursor turn but leave the session idle with
 # its context intact. Rate limits, usage limits, blocked models and aborts are not transient.
 transient_failure='transport error|net-timeout|WritableIterable is closed|Connection stalled|Provider Error'
 auto_continue_limit=2
@@ -422,8 +378,6 @@ case "$action" in
                 exit 1
             fi
             harness_env=(-e "CURSOR_AGENT_BIN=$cursor_cli")
-        elif [[ "$harness" == muse ]]; then
-            harness_env=(-e "MUSE_BIN=$muse_cli")
         elif [[ "$harness" == ark ]]; then
             # The Ark session label follows the review session across turns.
             harness_env=(-e "ARK_MODEL=$ark_model" -e "ARK_SESSION_ID=$session")
@@ -457,6 +411,9 @@ case "$action" in
             command rmdir -- "$scratch_dir" 2>/dev/null || true
             exit 1
         fi
+        # The backend asks its caller through agent-msg; its questions are sent as this session.
+        command agent-msg register "$session" --send-only --pane "$pane" >/dev/null 2>&1 ||
+            print -u2 "$helper: agent-msg could not register $session; its questions stay in its replies"
         if ! : > "$scratch_dir/ready"; then
             tmux kill-session -t "=$session" 2>/dev/null || true
             command rm -f -- "$scratch_dir/prompt.md"
@@ -527,10 +484,6 @@ case "$action" in
                         command rm -f -- "$message_file"
                         exit 1
                     fi
-                fi
-                if [[ "$harness" == muse ]]; then
-                    turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir)" || exit 1
-                    command rm -f -- "$turn_dir/error"
                 fi
                 if ! tmux set-option -t "$session" @review_sent "$(turns_done)"; then
                     command rm -f -- "$message_file"
@@ -603,18 +556,6 @@ case "$action" in
                     turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir)" || exit 1
                     command rm -f -- "$turn_dir/latest-message.json"
                     tmux send-keys -t "$pane" C-c
-                elif [[ "$harness" == muse ]]; then
-                    # Escape cancels the turn and restores it plus any queued input as one draft;
-                    # the next paste would append to it, so clear it. Ctrl-C on an empty box would
-                    # arm quitting instead, so press it only once the draft has appeared.
-                    busy=0
-                    muse_busy && busy=1
-                    tmux send-keys -t "$pane" Escape
-                    deadline=$(( SECONDS + 3 ))
-                    while (( busy )) && [[ -z "$(muse_draft)" ]] && (( SECONDS < deadline )); do sleep 0.1; done
-                    [[ -n "$(muse_draft)" ]] && tmux send-keys -t "$pane" C-c
-                    # The cancelled turn fires no Stop, so only turns after the next send count.
-                    tmux set-option -t "$session" @review_sent "$(turns_done)"
                 else tmux send-keys -t "$pane" Escape; fi
                 ;;
             wait)
@@ -629,11 +570,7 @@ case "$action" in
                     fi
                     sent="$(tmux show-options -v -t "$session" @review_sent)" || exit 1
                     if [[ "$delivery" != pending ]] && (( $(turns_done) > sent )) && \
-                        [[ "$harness" != cursor || ! -e "$turn_dir/latest-message.json" ]] && \
-                        { [[ "$harness" != muse ]] || ! muse_busy; }; then
-                        if [[ "$harness" == muse && -s "$turn_dir/error" ]] && auto_continue "$(<"$turn_dir/error")"; then
-                            continue
-                        fi
+                        [[ "$harness" != cursor || ! -e "$turn_dir/latest-message.json" ]]; then
                         break
                     fi
                     if [[ "$harness" == cursor && -s "$turn_dir/error" ]]; then
@@ -675,10 +612,6 @@ case "$action" in
                     sleep 1
                 done
                 turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir)" || exit 1
-                if [[ "$harness" == muse && -s "$turn_dir/error" ]]; then
-                    print -u2 -r -- "$helper: $(<"$turn_dir/error")"
-                    exit 1
-                fi
                 reply=''
                 if [[ -r "$turn_dir/last" ]]; then
                     reply="$(<"$turn_dir/last")"
@@ -691,7 +624,11 @@ case "$action" in
                 ;;
             stop)
                 turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir 2>/dev/null)"
+                pane_pid="$(tmux display-message -p -t "$pane" '#{pane_pid}' 2>/dev/null)" || pane_pid=
+                unregister=(--pane "$pane")
+                [[ -n "$pane_pid" ]] && unregister+=(--pid "$pane_pid")
                 tmux kill-session -t "=$session" || exit
+                command agent-msg unregister "$session" "${unregister[@]}" >/dev/null 2>&1 || true
                 # Sessions started before the legacy entrypoints were removed use the old prefix.
                 if [[ "$turn_dir" == */(${tmp}|${harness}-subagent|agent-team-${legacy:-$harness})-turns.* ]]; then
                     command rm -rf -- "$turn_dir"

@@ -2,12 +2,14 @@
 
 The fixed form `/agent-team ID ID ...` names the backends directly; `ark-sol` is `ark` with
 `ARK_MODEL=sol`, and `ark` with `ark-sol` in one call is the same backend twice, so ask which.
+Its `ID:` lines become per-backend files (`--backend ID=FILE`), each holding that line's text
+plus the shared text; the shared text alone goes on stdin for the rest.
 Otherwise read the user's message for backend names and assignments:
 
 - “让 Claude 审查” → `claude`.
 - “Claude 和 Cursor 并行独立审查” → `claude` and `cursor`, same assignment.
-- “GPT、Claude、Cursor、Muse、DeepSeek 都看一下” → `gpt`, `claude`, `cursor`, `muse`
-  and `ds`, same assignment.
+- “GPT、Claude、Cursor、DeepSeek 都看一下” → `gpt`, `claude`, `cursor` and `ds`,
+  same assignment.
 - “也问问 Pro” / “ChatGPT Pro” alongside other backends → `pro`.
 - “Claude 看正确性，GPT 看测试” → `claude` and `gpt`, distinct assignments.
 - “用方舟的 GPT 看一下” / “gpt astra 方舟” / “Astra” / “ark” → `ark` alone; “方舟 Sol” →
@@ -37,12 +39,12 @@ Agent tool). A request for a “subagent” or “subagent review” that names 
 uses the native subagent workflow, not this skill.
 Always name backends by these ids, in prompts, reports and attribution alike:
 `gpt` is Codex CLI on the subscription; `ark` is Codex CLI on Ark through `codex-ark`; `claude` is Claude Code; `cursor` is Cursor Agent on Gemini;
-`muse` is Muse Code; `ds` is DeepSeek through Claude Code; `pro` is ChatGPT Pro
+`ds` is DeepSeek through Claude Code; `pro` is ChatGPT Pro
 through the gpt-pro relay. Product names describe only the underlying tool.
 
 Before dispatch, read only the references for the chosen backends:
 [`gpt`](gpt.md), [`ark`](ark.md), [`claude`](claude.md), [`cursor`](cursor.md),
-[`muse`](muse.md), [`ds`](ds.md), [`pro`](pro.md).
+[`ds`](ds.md), [`pro`](pro.md).
 Use `scripts/agent-team` beside this `SKILL.md`; resolve its actual installed
 location rather than assuming a particular agent's skill directory. It requires
 Node.js and zsh, plus tmux for persistent sessions other than `pro`. `backends` reports configured

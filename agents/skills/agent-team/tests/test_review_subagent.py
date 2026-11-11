@@ -123,94 +123,6 @@ while True:
         else: input_text += char
 '''
 
-MUSE_NATIVE_MOCK = r'''
-import codecs, json, os, select, subprocess, sys, tty
-from pathlib import Path
-root = Path(os.environ['HOME'])
-args = sys.argv[1:]
-Path(os.environ['CAPTURE']).write_text(json.dumps({'args': args, 'sentinel': os.environ.get('CODEX_REVIEW_SUBAGENT_ACTIVE'),
-                                                   'tmp_files': sorted(os.listdir(os.environ.get('TMPDIR', '/tmp')))}))
-if args and args[0] == 'exec':
-    print(os.environ.get('MOCK_RESULT', 'review result'))
-    sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
-hooks = json.loads(next(value for value in args if value.startswith('hooks='))[len('hooks='):])
-def fire(event, **payload):
-    # Muse scrubs the hook environment down to basics such as PATH and HOME.
-    for entry in hooks.get(event, []):
-        for hook in entry['hooks']:
-            subprocess.run(hook['command'], shell=True, input=json.dumps({'hook_event_name': event, **payload}), text=True,
-                           env={key: os.environ[key] for key in ('PATH', 'HOME')})
-running, queue, draft, armed = None, [], '', False
-net_failures = int(os.environ.get('MOCK_MUSE_NET_FAILURES', '0'))
-def frame():
-    body = '◈ Thinking (1s · esc to interrupt)\r\n' if running is not None else ''
-    if queue: body += '◆ Queued input · ↑ to edit\r\n' + ''.join('├ ' + item + '\r\n' for item in queue)
-    lines = draft.split('\n')
-    box = '❯ ' + lines[0] + ''.join('\n  ' + line for line in lines[1:])
-    sys.stdout.write('\x1b[2J\x1b[H' + body + '── Voice input ──\r\n' + box.replace('\n', '\r\n') + '\r\n────\r\n')
-    sys.stdout.flush()
-def start(text):
-    global running, net_failures
-    running = text
-    if text == 'FAIL':
-        running = None
-        fire('StopFailure', error_details={'message': 'overloaded'}, last_assistant_message='partial')
-        frame()
-    elif net_failures > 0:
-        net_failures -= 1
-        running = None
-        fire('StopFailure', error_details={'message': 'model failed after 2 attempts: transport error [net-timeout]'},
-             last_assistant_message='partial')
-        frame()
-    elif not text.startswith('SLOW'): finish()
-    else: frame()
-def finish():
-    global running
-    text, running = running, None
-    fire('Stop', last_assistant_message='ANSWER:' + text)
-    if queue: start(queue.pop(0))
-    else: frame()
-def cancel():
-    # Escape cancels the turn without a Stop and restores it and every queued input as the draft.
-    global running, draft
-    if running is not None:
-        draft = '\n'.join([running] + queue) + draft
-        running = None
-        queue.clear()
-    frame()
-tty.setraw(sys.stdin.fileno())
-print('\x1b[?2004h', end='', flush=True)
-start(args[-1])
-decoder = codecs.getincrementaldecoder('utf8')()
-pending, pasted = '', False
-while True:
-    if running and running.startswith('SLOW') and (root / (running + '.release')).exists(): finish()
-    if not select.select([sys.stdin], [], [], .05)[0]:
-        if pending == '\x1b': cancel(); pending = ''  # A lone ESC byte, not the start of a paste marker.
-        continue
-    chunk = os.read(sys.stdin.fileno(), 65536)
-    if not chunk: break
-    pending += decoder.decode(chunk)
-    while pending:
-        token = '\x1b[201~' if pasted else '\x1b[200~'
-        if pending.startswith(token): pasted = not pasted; pending = pending[len(token):]; frame(); continue
-        if token.startswith(pending): break
-        char, pending = pending[0], pending[1:]
-        if pasted: draft += char.replace('\r', '\n'); continue
-        if char == '\x03':
-            if draft: draft, armed = '', False
-            elif armed: sys.exit(0)
-            else: armed = True
-            frame()
-        elif char in '\r\n':
-            if draft:
-                text, draft = draft, ''
-                if running is not None: queue.append(text); frame()
-                else: start(text)
-        else: draft += char
-'''
-
-
 @pytest.fixture(params=['claude', 'gpt', 'ark', 'cursor', 'ds'])
 def harness(request, tmp_path):
     name = request.param
@@ -292,18 +204,12 @@ def turn_done(text, thread='main'):
         command = json.loads(args[args.index('--settings') + 1])['hooks']['Stop'][0]['hooks'][0]['command']
         subprocess.run(command, shell=True, input=json.dumps({{'last_assistant_message': text}}), text=True)
     for value in args:
-        if value.startswith('hooks='):  # Muse takes Claude-style hooks through `-c`.
-            command = json.loads(value[len('hooks='):])['Stop'][0]['hooks'][0]['command']
-            # Muse scrubs the hook environment down to basics such as PATH and HOME.
-            subprocess.run(command, shell=True, input=json.dumps({{'hook_event_name': 'Stop', 'last_assistant_message': text}}), text=True,
-                           env={{key: os.environ[key] for key in ('PATH', 'HOME')}})
-    for value in args:
         if value.startswith('notify='):
             event = {{'type': 'agent-turn-complete', 'thread-id': thread, 'last-assistant-message': text,
                      'input-messages': inputs if thread != 'title' else ['Generate a title. User prompt:\\n' + inputs[0]]}}
             subprocess.run(json.loads(value[len('notify='):]) + [json.dumps(event)])
 print('\\x1b[?2004hMOCK_READY', flush=True)
-if '--settings' in sys.argv or any(value.startswith('hooks=') for value in sys.argv):
+if '--settings' in sys.argv:
     turn_done('ANSWER:' + inputs[0].split('\\n\\nComplete the entire')[0])
 elif any(value.startswith('notify=') for value in sys.argv):
     turn_done('TITLE', thread='title')  # Codex side threads must not count as review turns.
@@ -326,9 +232,6 @@ for line in sys.stdin:
     # Each launcher tags its calls so tests can tell which one ran.
     (tmp_path / '.functions').write_text(f'c() {{ LAUNCHER=c "{backend}" "$@"; }}\nds() {{ LAUNCHER=ds "{backend}" "$@"; }}\n')
     (tmp_path / 'codex').symlink_to(backend)
-    muse = tmp_path / 'muse'
-    muse.write_text(f'#!{sys.executable}\n' + MUSE_NATIVE_MOCK)
-    muse.chmod(0o755)
     canonical = tmp_path / '.local' / 'bin' / 'codex'
     canonical.parent.mkdir(parents=True)
     canonical.symlink_to(backend)
@@ -340,6 +243,8 @@ for line in sys.stdin:
         shim = tmp_path / 'tmux'
         shim.write_text(f'#!/bin/sh\nexec "{tmux}" -L {socket} -f /dev/null "$@"\n')
         shim.chmod(0o755)
+    # The real agent-msg, on the isolated tmux and the temporary HOME's message store.
+    (tmp_path / 'agent-msg').symlink_to(SKILLS.parent.parent / 'shell' / 'agent-msg')
     env['PATH'] = str(tmp_path) + os.pathsep + env['PATH']
     env['CURSOR_AGENT_BIN'] = str(backend)
     # Run through a symlink, just like the installed skill path.
@@ -399,137 +304,7 @@ def test_unified_once_uses_real_cursor_adapter(harness):
     assert json.loads(outcome.stdout) == {'result': 'review result', 'exit_code': 0, 'is_error': False}
     call = json.loads((tmp / 'call.json').read_text())
     assert call['sentinel'] == '1'
-    assert call['args'][call['args'].index('--model') + 1] == 'gemini-4-argon-high'
-
-
-def muse_session(run, prompt='assignment', extra_env=None):
-    result = run('start', '--backend', 'muse', prompt=prompt, extra_env=extra_env, unified=True)
-    assert result.returncode == 0, result.stderr
-    return result.stdout.strip()
-
-
-def muse_only(name):
-    if name != 'gpt' or not shutil.which('tmux'):
-        pytest.skip('Muse runs once per fixture through the unified helper')
-
-
-def test_unified_muse_session_uses_stop_hook_and_fixed_model(harness):
-    name, run, tmp = harness
-    muse_only(name)
-    session = muse_session(run)
-    assert session.startswith('muse-review-')
-    try:
-        assert run('wait', session, unified=True).stdout.strip() == 'ANSWER:assignment'
-        call = json.loads((tmp / 'call.json').read_text())
-        args = call['args']
-        assert call['sentinel'] == '1'
-        assert args[args.index('--model') + 1] == 'muse-wonder-full-1.0'
-        assert args[args.index('--reasoning-effort') + 1] == 'high'
-        # Like the user's `m --yolo`: no approval can hang the turn, and network is available.
-        assert '--yolo' in args and '--permission-profile' not in args
-        assert args[-2:] == ['--', 'assignment']
-        wait_for(lambda *a: run(*a, unified=True), session, 'status', 'input_ready=1')
-        sent = run('send', session, prompt='SUPPLEMENT', unified=True)
-        assert json.loads(sent.stdout)['delivery'] == 'submitted', sent.stderr
-        assert run('wait', session, unified=True).stdout.strip() == 'ANSWER:SUPPLEMENT'
-    finally:
-        assert run('stop', session, unified=True).returncode == 0
-
-
-def test_unified_muse_wait_skips_turns_that_finish_before_queued_input(harness):
-    name, run, tmp = harness
-    muse_only(name)
-    session = muse_session(run, prompt='SLOW_A')
-    try:
-        wait_for(lambda *a: run(*a, unified=True), session, 'capture', 'esc to interrupt')
-        assert run('send', session, prompt='SLOW_B', unified=True).returncode == 0
-        wait_for(lambda *a: run(*a, unified=True), session, 'capture', 'Queued input')
-        (tmp / 'SLOW_A.release').touch()
-        # The queued input runs as its own turn; the reply to SLOW_A must not answer it.
-        early = run('wait', session, '--timeout', '3', unified=True)
-        assert early.returncode == 124, (early.stdout, early.stderr)
-        (tmp / 'SLOW_B.release').touch()
-        assert run('wait', session, unified=True).stdout.strip() == 'ANSWER:SLOW_B'
-    finally:
-        assert run('stop', session, unified=True).returncode == 0
-
-
-def test_unified_muse_interrupt_clears_the_restored_draft(harness):
-    name, run, _ = harness
-    muse_only(name)
-    session = muse_session(run, prompt='SLOW_A')
-    try:
-        wait_for(lambda *a: run(*a, unified=True), session, 'capture', 'esc to interrupt')
-        assert run('send', session, prompt='BBB', unified=True).returncode == 0
-        wait_for(lambda *a: run(*a, unified=True), session, 'capture', 'Queued input')
-        assert run('interrupt', session, unified=True).returncode == 0
-        assert run('send', session, prompt='CCC', unified=True).returncode == 0
-        # Without clearing, Muse would submit `SLOW_A\nBBBCCC` and rerun the cancelled task.
-        assert run('wait', session, unified=True).stdout.strip() == 'ANSWER:CCC'
-        assert 'dead=0' in run('status', session, unified=True).stdout
-    finally:
-        assert run('stop', session, unified=True).returncode == 0
-
-
-def test_unified_muse_stop_failure_fails_wait(harness):
-    name, run, _ = harness
-    muse_only(name)
-    session = muse_session(run, prompt='FAIL')
-    try:
-        reply = run('wait', session, '--timeout', '10', unified=True)
-        assert reply.returncode == 1 and 'turn failed' in reply.stderr and 'overloaded' in reply.stderr
-        # A later successful turn clears the failure.
-        assert run('send', session, prompt='AFTER', unified=True).returncode == 0
-        assert run('wait', session, unified=True).stdout.strip() == 'ANSWER:AFTER'
-    finally:
-        assert run('stop', session, unified=True).returncode == 0
-
-
-@pytest.mark.parametrize('failures,returncode', [(2, 0), (3, 1)])
-def test_unified_muse_transient_failure_auto_continues(harness, failures, returncode):
-    name, run, _ = harness
-    muse_only(name)
-    session = muse_session(run, extra_env={'MOCK_MUSE_NET_FAILURES': str(failures)})
-    try:
-        reply = run('wait', session, '--timeout', '20', unified=True)
-        assert reply.returncode == returncode, reply.stderr
-        assert 'auto-continued 1/2' in reply.stderr and 'auto-continued 2/2' in reply.stderr
-        if returncode == 0:
-            assert reply.stdout.strip().startswith('ANSWER:The previous turn ended early')
-        else:
-            assert 'net-timeout' in reply.stderr.splitlines()[-1]
-        # A caller's send starts a new request with a fresh continuation budget.
-        assert run('send', session, prompt='AFTER', unified=True).returncode == 0
-        assert run('wait', session, unified=True).stdout.strip() == 'ANSWER:AFTER'
-    finally:
-        assert run('stop', session, unified=True).returncode == 0
-
-
-def test_unified_muse_hook_survives_quotes_in_temp_paths(harness):
-    name, run, tmp = harness
-    muse_only(name)
-    odd = tmp / 'it\'s "odd" \\dir'
-    odd.mkdir()
-    session = muse_session(run, extra_env={'TMPDIR': str(odd)})
-    try:
-        assert run('wait', session, '--timeout', '10', unified=True).stdout.strip() == 'ANSWER:assignment'
-    finally:
-        assert run('stop', session, unified=True).returncode == 0
-
-
-def test_unified_muse_once_passes_prompt_as_an_argument(harness):
-    name, run, tmp = harness
-    if name != 'gpt':
-        pytest.skip('Muse one-shot integration')
-    (tmp / 'work' / 'muse').mkdir(parents=True)  # A same-named directory must not shadow the CLI.
-    outcome = run('--once', '--backend', 'muse', '--output-format', 'json', prompt='-leading dash',
-                  unified=True, cwd=tmp / 'work')
-    assert outcome.returncode == 0, outcome.stderr
-    assert json.loads(outcome.stdout)['result'] == 'review result'
-    call = json.loads((tmp / 'call.json').read_text())
-    assert call['args'][0] == 'exec' and '--no-session-log' in call['args'] and '--yolo' in call['args']
-    assert call['args'][-2:] == ['--', '-leading dash']
-    assert not [name for name in call['tmp_files'] if 'once' in name]  # No prompt file to leak.
+    assert call['args'][call['args'].index('--model') + 1] == 'gemini-4-carbon-high'
 
 
 def test_unified_can_follow_up_and_stop_a_legacy_session(harness):
@@ -640,7 +415,7 @@ def test_once_pins_and_json(harness):
         assert '--model' not in args
         assert (call['ark_model'], call['ark_session']) == ('astra', 'agent-team-ark')
     else:
-        assert args[args.index('--model') + 1] == {'claude': 'opus', 'gpt': 'gpt-6.1-sol', 'cursor': 'gemini-4-argon-high', 'ds': 'deepseek-flash[1m]'}[name]
+        assert args[args.index('--model') + 1] == {'claude': 'opus', 'gpt': 'gpt-6.1-sol', 'cursor': 'gemini-4-carbon-high', 'ds': 'deepseek-flash[1m]'}[name]
         assert call['ark_model'] is None
     assert call['sentinel'] == '1'
     if name in ('claude', 'ds'):
@@ -823,6 +598,10 @@ def test_default_tmux_lifecycle(harness):
     assert r.returncode == 0, r.stderr
     session = r.stdout.strip()
     assert session.startswith(name + '-review-')
+    # The pane is registered so the backend's questions reach the caller as this session.
+    peers = lambda: [peer['name'] for peer in json.loads(subprocess.run(
+        [str(tmp / 'agent-msg'), 'list'], env=run.env, capture_output=True, text=True, check=True).stdout)]
+    assert peers() == [session]
     wait_for(run, session, 'capture', 'MOCK_READY')
     r = run('wait', session)
     expected = 'DRAFT:assignment\n\nANSWER:assignment' if name in ('gpt', 'ark') else 'ANSWER:assignment'
@@ -843,7 +622,7 @@ def test_default_tmux_lifecycle(harness):
         args = call['args']
         assert args[args.index('--resume') + 1] == 'cursor-main'
         assert '--mode' not in args
-        assert args[args.index('--model') + 1] == 'gemini-4-argon-high'
+        assert args[args.index('--model') + 1] == 'gemini-4-carbon-high'
         assert '--trust' in args
     assert run('send', session, prompt='SILENT').returncode == 0
     r = run('wait', session, '--timeout', '1')  # No new turn yet: times out instead of replaying the old one.
@@ -859,6 +638,7 @@ def test_default_tmux_lifecycle(harness):
         assert run('send', session).returncode == 1
     assert run('stop', session).returncode == 0
     assert session not in run('list').stdout
+    assert peers() == []
     assert run('status', session).returncode == 1
     assert run('stop', 'unrelated-session').returncode == 2
 

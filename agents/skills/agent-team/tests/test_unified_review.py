@@ -67,7 +67,7 @@ if os.environ.get('FAIL_BACKEND') == backend: sys.exit(7)
     (tmp_path / '.functions').write_text('c() { :; }\nds() { :; }\n')
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir()
-    for name in ('tmux', 'jq', 'cursor-agent', 'muse'):
+    for name in ('tmux', 'jq', 'cursor-agent'):
         path = bin_dir / name
         path.write_text('#!/bin/sh\nexit 0\n')
         path.chmod(0o755)
@@ -111,7 +111,7 @@ print('PRO ONCE')
     env = {key: os.environ[key] for key in ('PATH', 'LANG') if key in os.environ}
     env.update(HOME=str(tmp_path), PATH=str(bin_dir) + os.pathsep + env['PATH'],
                CURSOR_AGENT_BIN=str(bin_dir / 'cursor-agent'), DEEPSEEK_API_KEY='test-key',
-               ARC_API_KEY='test-key', ARK_OPERATOR_ID='0', ARK_OPERATOR_EMAIL='test@example.com')
+               ARK_API_KEY='test-key', ARK_OPERATOR_ID='0', ARK_OPERATOR_EMAIL='test@example.com')
     # No legacy manual-enabled file or per-caller version: both use this one skill.
     entry = tmp_path / 'installed-review'
     entry.symlink_to(target, target_is_directory=True)
@@ -125,12 +125,12 @@ print('PRO ONCE')
 
 def test_backends_start_concurrently_with_same_assignment(unified):
     run, root = unified
-    outcome = run('start', '--backend', 'claude', '--backend', 'gpt', '--backend', 'muse',
+    outcome = run('start', '--backend', 'claude', '--backend', 'gpt', '--backend', 'ds',
                   extra_env={'EXPECTED_STARTS': '3'})
     assert outcome.returncode == 0, outcome.stderr
     manifest = json.loads(outcome.stdout)
     assert manifest['errors'] == []
-    assert [item['backend'] for item in manifest['sessions']] == ['claude', 'gpt', 'muse']
+    assert [item['backend'] for item in manifest['sessions']] == ['claude', 'gpt', 'ds']
     assert all('instance' not in item for item in manifest['sessions'])
     handles = [item['session'] for item in manifest['sessions']]
     assert len(set(handles)) == 3
@@ -170,18 +170,18 @@ def test_all_backends_use_one_skill(unified):
     backends = run('backends')
     assert all(item['available'] for item in json.loads(backends.stdout)['backends'])
     outcome = run('--once', '--backend', 'claude', '--backend', 'gpt', '--backend', 'ark', '--backend', 'cursor',
-                  '--backend', 'muse', '--backend', 'ds', '--backend', 'pro')
+                  '--backend', 'ds', '--backend', 'pro')
     assert outcome.returncode == 0, outcome.stderr
     replies = json.loads(outcome.stdout)['results']
-    assert [item['backend'] for item in replies] == ['claude', 'gpt', 'ark', 'cursor', 'muse', 'ds', 'pro']
-    assert all(item['result'] == '结论🙂' for item in replies[:6]) and replies[6]['result'] == 'PRO ONCE'
+    assert [item['backend'] for item in replies] == ['claude', 'gpt', 'ark', 'cursor', 'ds', 'pro']
+    assert all(item['result'] == '结论🙂' for item in replies[:5]) and replies[5]['result'] == 'PRO ONCE'
 
 
 def test_ark_requires_credentials(unified):
     run, _ = unified
-    backends = run('backends', extra_env={'ARC_API_KEY': ''})
+    backends = run('backends', extra_env={'ARK_API_KEY': ''})
     ark = next(item for item in json.loads(backends.stdout)['backends'] if item['backend'] == 'ark')
-    assert not ark['available'] and 'ARC_API_KEY' in ark['reason']
+    assert not ark['available'] and 'ARK_API_KEY' in ark['reason']
     gpt = next(item for item in json.loads(backends.stdout)['backends'] if item['backend'] == 'gpt')
     assert gpt['available']
 
@@ -227,7 +227,7 @@ def test_unreadable_prompt_file_dispatches_nothing(unified, spec):
 
 
 @pytest.mark.parametrize('action', ['start', '--once'])
-@pytest.mark.parametrize('backends', [('claude', 'claude'), ('gpt', 'muse', 'gpt=prompt.md')])
+@pytest.mark.parametrize('backends', [('claude', 'claude'), ('gpt', 'ds', 'gpt=prompt.md')])
 def test_each_backend_runs_at_most_once_per_call(unified, action, backends):
     run, root = unified
     (root / 'prompt.md').write_text('x')
@@ -237,7 +237,7 @@ def test_each_backend_runs_at_most_once_per_call(unified, action, backends):
     assert not (root / 'calls.jsonl').exists()
 
 
-@pytest.mark.parametrize('options', [[], ['--backend', 'unknown'], ['--backend', 'gpt', '--effort', 'high'],
+@pytest.mark.parametrize('options', [[], ['--backend', 'unknown'], ['--backend', 'muse'], ['--backend', 'gpt', '--effort', 'high'],
                                    ['--backend', 'gpt', '--model', 'gpt-6.1-sol'],
                                    ['--backend', 'cursor', '--mode', 'ask'], ['--backend', 'gemini'], ['--network', '--backend', 'gpt']])
 def test_invalid_selection_dispatches_nothing(unified, options):
@@ -462,3 +462,25 @@ def test_ds_requires_its_api_key(unified):
     assert not ds['available'] and 'DEEPSEEK_API_KEY' in ds['reason']
     assert run('--once', '--backend', 'ds', extra_env={'DEEPSEEK_API_KEY': ''}).returncode == 1
     assert not (root / 'calls.jsonl').exists()
+
+
+def test_persistent_backends_learn_how_to_ask_a_registered_caller(unified):
+    run, root = unified
+    fake = root / 'bin' / 'agent-msg'
+    fake.write_text('#!/bin/sh\n[ "$1" = whoami ] && printf \'{"name":"lead","identity":"claude:x","kind":"claude"}\\n\'\n')
+    fake.chmod(0o755)
+    outcome = run('start', '--backend', 'cursor', '--backend', 'pro', extra_env={'EXPECTED_STARTS': '1'})
+    assert outcome.returncode == 0, outcome.stderr
+    calls = [json.loads(line) for line in (root / 'calls.jsonl').read_text().splitlines()]
+    assert calls[0]['prompt'].startswith('审查同一任务 $() `literal`\n\n## Questions for the caller')
+    assert '`agent-msg send lead --file FILE`' in calls[0]['prompt']
+    # Pro cannot ask, and a one-shot has no session to answer into.
+    assert 'agent-msg' not in (root / 'pro.jsonl').read_text()
+    (root / 'calls.jsonl').unlink()
+    assert run('--once', '--backend', 'gpt').returncode == 0
+    assert 'agent-msg' not in (root / 'calls.jsonl').read_text()
+    # An unregistered caller gets replies only.
+    fake.write_text('#!/bin/sh\nexit 1\n')
+    (root / 'calls.jsonl').unlink()
+    assert run('start', '--backend', 'gpt').returncode == 0
+    assert 'agent-msg' not in (root / 'calls.jsonl').read_text()

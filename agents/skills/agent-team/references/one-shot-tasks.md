@@ -5,7 +5,7 @@ $helper --once --backend gpt < /tmp/review.md
 $helper --once --backend gpt --output-format json < /tmp/review.md
 $helper --once --backend claude --backend gpt < /tmp/review.md
 $helper --once --backend claude --backend gpt --timeout 300 < /tmp/review.md
-$helper --once --backend gpt=/tmp/a.md --backend muse=/tmp/b.md
+$helper --once --backend gpt=/tmp/a.md --backend ds=/tmp/b.md
 ```
 
 Single text mode returns the final reply. Single JSON mode uses

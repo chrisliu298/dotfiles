@@ -20,8 +20,8 @@ From the authorized working directory:
 # helper is scripts/agent-team beside this SKILL.md.
 $helper backends
 session="$($helper start --backend claude < /tmp/review.md)"
-# Same assignment for gpt, cursor and muse, a distinct one for claude:
-$helper start --backend gpt --backend cursor --backend muse \
+# Same assignment for gpt, cursor and ds, a distinct one for claude:
+$helper start --backend gpt --backend cursor --backend ds \
   --backend claude=/tmp/claude-review.md < /tmp/review.md
 # pro receives the file contents; claude receives the path:
 $helper start --backend pro --backend claude --file src/main.py < /tmp/review.md
@@ -31,7 +31,7 @@ $helper wait "$session"
 $helper stop "$session"
 
 # A multi-backend start returns a JSON manifest of independent sessions.
-$helper start --backend claude --backend gpt --backend muse < /tmp/review.md
+$helper start --backend claude --backend gpt --backend ds < /tmp/review.md
 # Read session handles from the manifest; later actions infer each backend.
 $helper wait "$session1" "$session2" "$session3"
 $helper send "$session1" "$session2" "$session3" < /tmp/supplement.md
@@ -59,4 +59,14 @@ work. Continue the same session with a focused request to finish missing coverag
 Verify consequential claims against primary artifacts and produce the requested
 deliverable. For multiple contributors, preserve attribution and identify relevant
 agreements, disagreements, and remaining gaps.
+
+## Questions from backends
+
+When this session is registered with agent-msg (`agent-msg whoami` succeeds), `start` tells
+every persistent backend except `pro` how to ask it; otherwise questions come in replies. A
+question arrives as `[peer] agent-msg read ID`: run that command, and take the session from its
+`sender_name`. Decide what is yours to decide; relay to the user what is theirs. Answer with
+`$helper send SESSION < answer.md`, never `agent-msg reply` (backends are send-only peers), then
+collect a new `wait` for that session. A backend may also end its turn with the question in its
+reply; answer it the same way.
 

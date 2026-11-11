@@ -4,7 +4,7 @@
   or transcript receipt was confirmed, not that the message has joined the turn yet
   (steering waits for the next safe boundary, as on the other backends); `pro`
   `confirmed` means the relay acknowledged delivery into the running answer.
-  `claude`/`gpt`/`muse`/`ds` `submitted` means text was pasted and Enter sent; it
+  `claude`/`gpt`/`ds` `submitted` means text was pasted and Enter sent; it
   does not independently prove consumption or task completion. Use `wait` for the
   resulting reply. Do not interrupt merely to add context.
 - A `pro` conversation accepts no follow-up once its answer finishes: `send` fails
@@ -19,7 +19,7 @@
   7200 for `pro`.
   Timeout returns 124 when all failures are timeouts; mixed failures return 1.
   Multi-session replies retain individual exit codes and diagnostics.
-- For `muse` and `cursor`, `wait` resumes a turn that ended in a transient network or
+- For `cursor`, `wait` resumes a turn that ended in a transient network or
   provider error by sending a continuation itself, at most twice per request, and
   notes each on stderr. Do not also send "continue"; a failure it reports already
   used those attempts.
