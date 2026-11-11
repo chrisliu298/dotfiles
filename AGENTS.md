@@ -6,11 +6,11 @@ Personal dotfiles and AI agent configurations for macOS with zsh, managed by `do
 
 ## Project Structure & Module Organization
 
-Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`settings.json` — merged into the live file, not symlinked — keybindings, statusline, themes) and `codex/` → `~/.codex/` (themes and host-local Computer Use routing through Codex's config writer). Muse Code has no `agents/` home: `~/.config/muse/settings.json` is host-local, with only the theme keys rewritten by `shell/theme-apply`. The rest are not agent homes:
+Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`settings.json` — merged into the live file, not symlinked — keybindings, statusline, themes) and `codex/` → `~/.codex/` (themes and host-local Computer Use routing through Codex's config writer). The rest are not agent homes:
 
 - `agents/AGENTS.md` — the single global instruction file, symlinked as both `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`.
 - `agents/eval/` — instruction-following harness for the shared agent doc (prompts, rubric, runner scripts).
-- `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` installs each into the agents the `SKILLS` table selects (most to Claude, Codex, Muse, and DeepSeek Harness; some are Claude- or Codex-only): live symlinks for Claude/Codex/DeepSeek Harness, and copy-installs into Muse's store-owned personal root via `muse skills install`. The one exception is `agent-audit`, a project skill in `.claude/skills/` that loads only in this repo.
+- `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` installs each into the agents the `SKILLS` table selects (most to Claude, Codex, and DeepSeek Harness; some are Claude- or Codex-only) as live symlinks. The one exception is `agent-audit`, a project skill in `.claude/skills/` that loads only in this repo.
 
 Elsewhere:
 

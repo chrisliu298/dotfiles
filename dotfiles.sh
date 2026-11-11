@@ -21,6 +21,7 @@ LINKS=(
     "shell/rc-title:.local/bin/rc-title"
     "shell/pbcopy:.local/bin/pbcopy"
     "shell/reap_agent_team.sh:.local/bin/reap_agent_team.sh"
+    "agents/skills/recall/shared/recall:.local/bin/recall"
     ".config/starship:.config/starship"
     # btop has no config include and rewrites its own config, so its live
     # ~/.config/btop/btop.conf is host-local (generated, outside git). Only the
@@ -50,13 +51,11 @@ LINKS=(
 # name|source|agents — name * = auto-discover subdirs with SKILL.md
 # source: ./path (local), ~/path (host-local, skipped when absent), or owner/repo[/subpath] (GitHub)
 SKILLS=(
-    # The wildcard installs every skill to Claude, Codex, Muse and DeepSeek Harness; the explicit
-    # entries below narrow that (claude-only: codex-exec, gpt-pro; recall has a separate
-    # build per agent).
-    # Claude/Codex/DeepSeek get live symlinks; Muse's store owns its managed personal root,
-    # so muse entries are copy-installed via `muse skills install` (see _muse_skill_install).
+    # The wildcard installs every skill to Claude, Codex and DeepSeek Harness as live symlinks;
+    # the explicit entries below narrow that (claude-only: codex-exec, gpt-pro; recall has a
+    # separate build per agent).
     # DeepSeek is installed only on hosts where the harness has run (its ~/.dsh exists).
-    "*|./agents/skills|claude,codex,muse,deepseek"
+    "*|./agents/skills|claude,codex,deepseek"
     # codex-exec: claude-only caller; Codex is its executor, so it must not get the skill.
     "codex-exec|./agents/skills/codex-exec|claude"
     # agent-team: shared Claude/Codex caller; other hosts remain dispatched backends.
@@ -69,16 +68,12 @@ SKILLS=(
     # each subdir as `recall`.
     "recall|./agents/skills/recall/claude|claude"
     "recall|./agents/skills/recall/codex|codex"
-    # Muse also discovers the Claude/Codex copies natively; install_skills turns off there every
-    # skill not selected for Muse.
-    # pdf is OpenAI's native skill for Codex (Claude's synced one is off), not repo-owned, so
-    # Muse gets no managed copy of it. Muse still discovers the Codex copy natively; keep it
-    # off there per host with `muse skills disable pdf --scope user`.
+    # pdf is OpenAI's native skill for Codex (Claude's synced one is off), not repo-owned.
     "pdf|openai/skills/skills/.curated/pdf|codex"
 )
 
 # Host-local third-party skills that only Claude may use. Their installers (the legacy Merlin
-# bundle script, hand copies) drop them into ~/.agents/skills, which Codex, Muse and DeepSeek
+# bundle script, hand copies) drop them into ~/.agents/skills, which Codex and DeepSeek
 # Harness read natively, so install_skills moves each into ~/.claude/skills.
 CLAUDE_ONLY_AGENT_SKILLS=(weekly-report 'merlin-*')
 
@@ -92,8 +87,6 @@ fi
 PLUGINS=()
 
 SKILL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/skills-src"
-# Muse's managed personal skill root, owned by its skills store.
-MUSE_SKILLS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/muse/skills"
 # DeepSeek Harness's user skill root; scanned natively alongside ~/.agents/skills.
 DSH_HOME_DIR="${DSH_HOME:-$HOME/.dsh}"
 DSH_SKILLS_DIR="$DSH_HOME_DIR/skills"
@@ -119,23 +112,6 @@ ensure_symlink() {
     rm -rf "$dest"
     ln -s "$src" "$dest"
     log "link ${dest/#$HOME/~}"
-}
-
-# Muse's personal root ($MUSE_SKILLS_DIR) is owned by its skills store,
-# which keeps a copy plus provenance for update/uninstall — direct symlinks
-# there load in practice but are outside that contract ("provenance missing"
-# from store commands). So Muse entries are reconciled through the official
-# install command instead of ensure_symlink; every run re-records the source
-# and refreshes the copy (--force is what a repeat install requires). Edits
-# to a skill therefore reach Muse on the next ./dotfiles.sh run, whose
-# fingerprint covers the full tracked diff, not live like the Claude/Codex links.
-_muse_skill_install() {
-    local spath="$1" sname="$2"
-    if muse skills install "$spath" --name "$sname" --force >/dev/null 2>&1; then
-        log "muse install $sname"
-    else
-        warn "muse skills install failed: $sname (from $spath)"
-    fi
 }
 
 # Check stamp file against fingerprint; return 0 (fresh) or 1 (stale/missing)
@@ -343,7 +319,7 @@ setup_presence_state() {
 const fs = require('node:fs');
 const [registry, target, projects] = process.argv.slice(2);
 const roles = ['training-r2v', 'eval-r2v', 'data-r2v', 'ops-r2v',
-  'autoeval-rating-r2v', 'autoeval-compare-r2v', 'autoeval-critic-r2v', 'autoeval-group-r2v'];
+  'autoeval-rating-r2v', 'autoeval-compare-r2v', 'autoeval-critic-r2v', 'autoeval-bot-r2v'];
 const records = roles.flatMap(role => {
   const file = `${registry}/${role}.json`;
   if (!fs.existsSync(file)) return [];
@@ -527,11 +503,7 @@ _claim_claude_only_skills() {
 install_skills() {
     mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills"
     _claim_claude_only_skills
-    # Muse is installed per host (not every machine has it yet); skip its column when absent.
-    local muse_available=false
-    command -v muse >/dev/null 2>&1 && muse_available=true
-    $muse_available || log "muse CLI not found; skipping Muse skills"
-    # DeepSeek Harness is likewise per host; its home exists once the app has run.
+    # DeepSeek Harness is installed per host; its home exists once the app has run.
     local dsh_available=false
     _dsh_available && { dsh_available=true; mkdir -p "$DSH_SKILLS_DIR"; }
     $dsh_available || log "DeepSeek Harness home not found; skipping DeepSeek skills"
@@ -541,7 +513,7 @@ install_skills() {
         [[ "$name" != "*" ]] && explicit_names+="$name"$'\n'
     done
 
-    local claude_expected="" codex_expected="" muse_expected="" dsh_expected=""
+    local claude_expected="" codex_expected="" dsh_expected=""
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name source agents <<< "$entry"
         local base_dir; base_dir=$(_resolve_source "$source")
@@ -572,13 +544,11 @@ install_skills() {
         for se in ${skill_entries[@]+"${skill_entries[@]}"}; do
             local sname="${se%%:*}" spath="${se#*:}"
             if [[ "$agents" == *claude* && $'\n'"$claude_expected" == *$'\n'"$sname"$'\n'* ]] \
-                || [[ "$agents" == *codex* && $'\n'"$codex_expected" == *$'\n'"$sname"$'\n'* ]] \
-                || [[ "$agents" == *muse* && $'\n'"$muse_expected" == *$'\n'"$sname"$'\n'* ]]; then
+                || [[ "$agents" == *codex* && $'\n'"$codex_expected" == *$'\n'"$sname"$'\n'* ]]; then
                 warn "skip $sname from $source (already provided by an earlier entry)"; continue
             fi
             [[ "$agents" == *claude* ]] && { ensure_symlink "$spath" "$HOME/.claude/skills/$sname"; claude_expected+="$sname"$'\n'; }
             [[ "$agents" == *codex* ]]  && { ensure_symlink "$spath" "$HOME/.codex/skills/$sname";  codex_expected+="$sname"$'\n'; }
-            [[ "$agents" == *muse* ]] && $muse_available && { _muse_skill_install "$spath" "$sname"; muse_expected+="$sname"$'\n'; }
             [[ "$agents" == *deepseek* ]] && $dsh_available && { ensure_symlink "$spath" "$DSH_SKILLS_DIR/$sname"; dsh_expected+="$sname"$'\n'; }
         done
     done
@@ -604,33 +574,6 @@ install_skills() {
             rm "$entry"; log "clean ${entry/#$HOME/~}"
         done
     done
-
-    # Prune Muse skills this repo installed but no longer selects. The store
-    # lockfile records each install's local source, so only entries sourced
-    # from this repo or the skill cache are ours to remove — a skill the user
-    # installed into Muse by hand is never touched.
-    local muse_lock="$MUSE_SKILLS_DIR/.muse/lock.json"
-    if $muse_available && [[ -f "$muse_lock" ]] && command -v jq >/dev/null 2>&1; then
-        local mid msrc
-        while IFS=$'\t' read -r mid msrc; do
-            [[ -n "$mid" ]] || continue
-            [[ $'\n'"$muse_expected" == *$'\n'"$mid"$'\n'* ]] && continue
-            case "$msrc" in "$ROOT"/*|"$SKILL_CACHE"/*) ;; *) continue ;; esac
-            muse skills uninstall "$mid" >/dev/null 2>&1 \
-                && log "muse uninstall $mid (no longer selected)" || true
-        done < <(jq -r '.skills // {} | to_entries[] | select(.value.source.type == "local") | [.key, .value.source.path] | @tsv' "$muse_lock" 2>/dev/null)
-    fi
-    # Muse also discovers ~/.claude/skills and ~/.codex/skills natively; turn off there every
-    # skill the table does not select for Muse, so agent-scoped skills stay scoped.
-    if $muse_available; then
-        local mskill
-        for mskill in "$HOME"/.claude/skills/*/SKILL.md "$HOME"/.codex/skills/*/SKILL.md; do
-            [[ -f "$mskill" ]] || continue
-            mskill="${mskill%/SKILL.md}" mskill="${mskill##*/}"
-            [[ $'\n'"$muse_expected" == *$'\n'"$mskill"$'\n'* ]] && continue
-            muse skills disable "$mskill" --scope user >/dev/null 2>&1 || true
-        done
-    fi
 
     # Prune stale cache repos
     [[ -d "$SKILL_CACHE" ]] || return

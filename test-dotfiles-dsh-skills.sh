@@ -18,8 +18,7 @@ fail() { printf 'FAIL: %s\n' "$1" >&2; exit 1; }
 export HOME="$test_root/home"
 export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_CACHE_HOME="$HOME/.cache"
-# Derive the harness home from $HOME; keep muse (a real CLI on some hosts) out
-# of this test so only the DeepSeek column runs.
+# Derive the harness home from $HOME.
 unset DSH_HOME
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 mkdir -p "$HOME/.dsh/skills" "$XDG_CACHE_HOME/skills-src"

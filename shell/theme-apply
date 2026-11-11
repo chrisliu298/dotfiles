@@ -5,7 +5,7 @@
 # shared by the `theme` shell function and dotfiles.sh so the two never drift.
 # Writes ONLY host-local files (XDG state dir + the real ~/.config/btop/btop.conf
 # plus ~/.codex/config.toml, ~/.claude/settings.json, ~/.claude/themes/{anthropic,openai}.json,
-# ~/.config/muse/settings.json, and cswap's settings.json)
+# and cswap's settings.json)
 # — never a git-tracked file, so switching themes
 # can never dirty the tree.
 #
@@ -19,7 +19,6 @@
 #   ~/.codex/config.toml           existing config, TUI theme only
 #   ~/.claude/themes/{anthropic,openai}.json  active themes, replaced atomically for live reload
 #   ~/.claude/settings.json        existing config, custom:openai unless anthropic is chosen
-#   ~/.config/muse/settings.json   existing config, terminal background + theme only
 #   cswap settings.json            ui.theme only, via `cswap config set`
 #
 # Theme *definitions* stay tracked: ghostty/tmux theme files, btop themes/,
@@ -37,10 +36,7 @@ btop_live="${BTOP_LIVE:-$HOME/.config/btop/btop.conf}"
 codex_config="${CODEX_CONFIG:-$HOME/.codex/config.toml}"
 claude_config="${CLAUDE_CONFIG:-$HOME/.claude/settings.json}"
 claude_theme_dir="${CLAUDE_THEME_DIR:-$HOME/.claude/themes}"
-muse_config="${MUSE_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/muse/settings.json}"
 cswap_bin="${CSWAP_BIN:-cswap}"
-# Muse Code keeps its own built-in theme in both modes (see the muse block below).
-muse_theme="default"
 
 case "$mode" in
     light) ghostty_theme="OpenAI Light"; btop_theme="openai_light"; tmux_theme="openai_light"; starship_palette="openai_light"; codex_tui_theme="openai-light" ;;
@@ -156,24 +152,6 @@ if [ -f "$codex_config" ]; then
     }
     chmod 600 "$codex_tmp"
     mv "$codex_tmp" "$codex_config"
-fi
-
-# Muse reads its theme and terminal background from settings.json at startup
-# (running sessions keep theirs). Pin the background over the startup probe,
-# which can miss under tmux/SSH, and keep its own built-in `default` theme —
-# not the OpenAI palette. The pinned background is what makes that default
-# theme resolve to its light/dark variant in step with `theme`.
-if [ -f "$muse_config" ]; then
-    muse_tmp="${muse_config}.theme.$$"
-    jq --arg bg "$mode" --arg theme "$muse_theme" \
-        'if type == "object" then .tui = ((.tui // {}) + {terminal_background: $bg, theme: $theme}) else error("Muse settings must be a JSON object") end' \
-        "$muse_config" > "$muse_tmp" || {
-        rm -f "$muse_tmp"
-        printf 'theme-apply: failed to stage Muse settings from %s\n' "$muse_config" >&2
-        exit 1
-    }
-    chmod 600 "$muse_tmp"
-    mv "$muse_tmp" "$muse_config"
 fi
 
 # cswap's `auto` theme probes the terminal background, which never reaches the

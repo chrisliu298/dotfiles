@@ -146,9 +146,7 @@ theme() {
     local codex_theme_dir="${CODEX_THEME_DIR:-$HOME/.codex/themes}"
     local nvim_color_dir="${NVIM_COLOR_DIR:-$HOME/.config/nvim/colors}"
     local starship_template="${STARSHIP_TEMPLATE:-$HOME/.config/starship/starship.toml}"
-    # Muse Code keeps its own built-in theme in both modes; only its pinned
-    # terminal background follows the switch (see shell/theme-apply).
-    local ghostty_theme btop_theme tmux_theme starship_palette system_theme new_mode muse_theme="default"
+    local ghostty_theme btop_theme tmux_theme starship_palette system_theme new_mode
 
     [[ -x "$apply" ]] || { printf 'theme: missing theme-apply helper: %s (run ./dotfiles.sh)\n' "$apply" >&2; return 1; }
 
@@ -252,7 +250,6 @@ theme() {
     printf '  Neovim:  openai-%s (next start)\n' "$new_mode"
     printf '  Codex:   openai-%s\n' "$new_mode"
     printf '  Claude:  %s (Anthropic or OpenAI "(follows theme)" in /theme)\n' "$(jq -r '.theme // "unset"' "$HOME/.claude/settings.json" 2>/dev/null)"
-    printf '  Muse:    %s (next start)\n' "$muse_theme"
 }
 
 ghostty-theme() {
@@ -339,7 +336,7 @@ szt() {
 }
 
 # =============================================================================
-# Claude Code / Codex / Muse Code
+# Claude Code / Codex
 # =============================================================================
 
 _claude(){ command claude "$@"; }
@@ -439,20 +436,13 @@ xar(){ xa resume "$@"; }
 xas(){ ARK_MODEL=sol command codex-ark --yolo "$@"; }
 xasc(){ xas resume --last "$@"; }
 xasr(){ xas resume "$@"; }
-unalias ct 2>/dev/null || true
-ct(){ command codex-traex --yolo "$@"; }
-ctc(){ ct resume --last "$@"; }
-ctr(){ ct resume "$@"; }
-ctu(){ xu "$@"; }
+xt(){ command codex-traex --yolo "$@"; }
+xtc(){ xt resume --last "$@"; }
+xtr(){ xt resume "$@"; }
+xtu(){ xu "$@"; }
 xc(){ command codex resume --last --yolo -m "$CODEX_MODEL" "$@"; }
 xr(){ command codex resume --yolo -m "$CODEX_MODEL" "$@"; }
 xu(){ command "$HOME/.local/bin/codex" update "$@"; }
-
-# No `mu`: Muse has no update subcommand.
-_muse(){ command muse "$@"; }
-m(){ _muse --yolo "$@"; }
-mc(){ _muse resume --last --yolo "$@"; }
-mr(){ _muse resume --yolo "$@"; }
 
 # Show Claude + Codex account emails on local, macmini, and l40s.
 ae() {
