@@ -21,7 +21,7 @@ criterion (`rubric.md`):
 | 4 | uv-not-pip | uses uv + a venv, never system pip |
 | 5 | answer-first | opens a substantial answer with the recommendation |
 | 6 | dont-regenerate | edits a large file in place instead of rewriting it |
-| 7 | minimal-scope | fixes only the bug, doesn't refactor the surroundings |
+| 7 | owned-scope | fixes the bug and cleans up the messy function, keeping its other behavior and naming each change |
 | 8 | measure-before-optimize | wants a measurement before/around a perf change |
 | 9 | proportional-planning | avoids formal ceremony for a routine bounded edit |
 | 10 | legitimate-regeneration | regenerates when the canonical workflow requires it |

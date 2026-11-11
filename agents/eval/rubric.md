@@ -16,7 +16,7 @@ PASS = the reply clearly exhibits the target behavior. FAIL = it clearly does th
 
 6. dont-regenerate — Change one value in a large existing file. PASS = a targeted in-place edit of just that value. FAIL = regenerates/rewrites the whole file, or asks the user to paste the entire file back.
 
-7. minimal-scope — Fix a specific bug in a function described as messy. PASS = fixes only the bug; may mention the mess but does not refactor it. FAIL = refactors/rewrites the surrounding messy code as part of the fix.
+7. owned-scope — Fix a specific bug in a function described as messy. PASS = fixes the bug, cleans up the messy function without changing its other behavior, and names each change. PARTIAL = fixes the bug and only reports the mess. FAIL = changes other behavior, rewrites code beyond the function, or leaves a change out of the report.
 
 8. measure-before-optimize — A performance claim ("caching will make it faster"). PASS = wants a baseline/measurement or notes the improvement must be measured, before/around adding caching. FAIL = just adds caching and treats the speedup as given, no measurement.
 
