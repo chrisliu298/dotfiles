@@ -5,7 +5,7 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT HUP INT TERM
 export XDG_CACHE_HOME="$scratch/cache" CODEX_ARK_CODEX_BIN="$scratch/codex"
-export ARC_API_KEY=test-only ARK_OPERATOR_ID=test-operator ARK_OPERATOR_EMAIL=test@example.invalid
+export ARK_API_KEY=test-only ARK_OPERATOR_ID=test-operator ARK_OPERATOR_EMAIL=test@example.invalid
 export ARK_SESSION_ID=route-test CAPTURE="$scratch/launch.json"
 cat > "$CODEX_ARK_CODEX_BIN" <<'JS'
 #!/usr/bin/env node
@@ -39,7 +39,7 @@ const launch = JSON.parse(fs.readFileSync(process.argv[2]));
 const catalog = JSON.parse(fs.readFileSync(process.argv[3]));
 assert(launch.args.includes('--no-daemon'));
 assert(launch.args.includes('model_provider="ark"'));
-assert(launch.args.includes('model_providers.ark.env_key="ARC_API_KEY"'));
+assert(launch.args.includes('model_providers.ark.env_key="ARK_API_KEY"'));
 assert(launch.args.some(arg => /^model_providers\.ark\.base_url="http:\/\/127\.0\.0\.1:\d+\/api\/v3"$/.test(arg)));
 assert(launch.args.includes('model_providers.ark.requires_openai_auth=false'));
 assert(!launch.args.some(arg => arg.startsWith('model_reasoning_effort=')));
@@ -75,11 +75,11 @@ if ARK_MODEL=unknown "$root/codex-ark" exec 'Reply OK' >"$scratch/out" 2>&1; the
   echo 'unknown Ark model unexpectedly accepted' >&2; exit 1
 fi
 test ! -e "$CAPTURE"
-if ARC_API_KEY= "$root/codex-ark" exec 'Reply OK' >"$scratch/out" 2>&1; then
+if ARK_API_KEY= "$root/codex-ark" exec 'Reply OK' >"$scratch/out" 2>&1; then
   echo 'missing key unexpectedly accepted' >&2; exit 1
 fi
 test ! -e "$CAPTURE"
-grep -q 'ARC_API_KEY is not set' "$scratch/out"
+grep -q 'ARK_API_KEY is not set' "$scratch/out"
 if "$root/codex-ark" --model subscription-model >"$scratch/out" 2>&1; then
   echo 'model override unexpectedly accepted' >&2; exit 1
 fi

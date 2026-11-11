@@ -6,7 +6,7 @@
 #   codex-ark [codex options] [exec|resume ...]   # effort comes from config or /model
 #   ARK_MODEL=sol codex-ark [codex options]     # GPT-6.1-Sol on Ark
 #
-# Requires ARC_API_KEY, ARK_OPERATOR_ID and ARK_OPERATOR_EMAIL (~/.zshenv.local).
+# Requires ARK_API_KEY, ARK_OPERATOR_ID and ARK_OPERATOR_EMAIL (~/.zshenv.local).
 # ARK_SESSION_ID is the caller's fixed `extra` session_id (one value per caller).
 
 set -eu
@@ -25,7 +25,7 @@ session_id=${ARK_SESSION_ID:-codex-ark}
 codex_bin=${CODEX_ARK_CODEX_BIN:-$HOME/.local/bin/codex}
 catalog=${XDG_CACHE_HOME:-$HOME/.cache}/codex-ark/models.json
 
-for var in ARC_API_KEY ARK_OPERATOR_ID ARK_OPERATOR_EMAIL; do
+for var in ARK_API_KEY ARK_OPERATOR_ID ARK_OPERATOR_EMAIL; do
   eval "value=\${$var:-}"
   [ -n "$value" ] || { echo "codex-ark: $var is not set" >&2; exit 2; }
 done
@@ -101,7 +101,7 @@ exec "$codex_bin" --no-daemon \
   -c 'model_provider="ark"' \
   -c 'model_providers.ark.name="Ark"' \
   -c "model_providers.ark.base_url=\"http://127.0.0.1:$port/api/v3\"" \
-  -c 'model_providers.ark.env_key="ARC_API_KEY"' \
+  -c 'model_providers.ark.env_key="ARK_API_KEY"' \
   -c 'model_providers.ark.wire_api="responses"' \
   -c 'model_providers.ark.requires_openai_auth=false' \
   -c 'model_providers.ark.env_http_headers={"x-modelhub-operator-id"="ARK_OPERATOR_ID","x-modelhub-operator-email"="ARK_OPERATOR_EMAIL"}' \
