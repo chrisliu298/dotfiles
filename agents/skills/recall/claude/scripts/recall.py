@@ -129,7 +129,6 @@ class Event:
     ts: str | None = None
     sidechain: bool = False
     cwd: str = ""        # the record's own cwd (provenance for --scope all)
-    system: bool = False # a user-role record the harness wrote, not a person
 
 
 @dataclass
@@ -347,6 +346,17 @@ def events(path, cursor: dict | None = None):
             field = "customTitle" if t == "custom-title" else "aiTitle"
             if isinstance(rec.get(field), str):
                 cursor["title_custom" if t == "custom-title" else "title_ai"] = rec[field]
+        if t == "attachment":     # a message queued while the agent was mid-turn
+            att = rec.get("attachment") or {}
+            if att.get("type") == "queued_command":
+                prompt = att.get("prompt")
+                if isinstance(prompt, list):
+                    prompt = " ".join(b.get("text", "") for b in prompt if isinstance(b, dict))
+                role, text = speaker(att, prompt if isinstance(prompt, str) else "")
+                if role:
+                    yield Event(ln, role, f"{role}_message", redact(text), rec.get("timestamp"),
+                                bool(rec.get("isSidechain")), rec.get("cwd") if isinstance(rec.get("cwd"), str) else "")
+            continue
         if t not in ("user", "assistant"):
             continue
         if t == "user" and rec.get("isCompactSummary"):
@@ -382,7 +392,7 @@ def events(path, cursor: dict | None = None):
                     if isinstance(rc, list):
                         rc = " ".join(x.get("text", "") for x in rc if isinstance(x, dict))
                     if isinstance(rc, str) and rc:
-                        if b.get("tool_use_id") in question_tools:
+                        if b.get("tool_use_id") in question_tools and not b.get("is_error"):
                             text_parts.append(rc)
                         else:
                             tool_out.append(rc)
@@ -397,8 +407,43 @@ def events(path, cursor: dict | None = None):
             if tool_out and not any(p.strip() for p in text_parts):
                 yield Event(ln, "tool", "command_output", clip(" ".join(tool_out)), ts, sc, cwd)
             elif any(text_parts):
-                yield Event(ln, "user", "user_message", redact(" ".join(text_parts).strip()), ts, sc, cwd,
-                            bool(rec.get("isMeta")) or rec.get("promptSource") in ("system", "sdk"))
+                role, text = speaker(rec, " ".join(text_parts))
+                if role:
+                    yield Event(ln, role, f"{role}_message", redact(text), ts, sc, cwd)
+
+
+MESSAGE_KINDS = ("user_message", "assistant_message", "peer_message", "automated_message")
+# Prompts other tools type into a session (agent-team briefs, codex-exec lines, tmux-persist restarts):
+# origin says "human", the user did not write them. Same rule as agent-audit's AUTOMATED.
+_AUTOMATED = re.compile(r"^(#+\s|你是独立|你是新的|这个会话刚被重启|\[cx )")
+_PEER_PREFIXES = ("another claude session sent a message", "<cross-session-message", "<agent-message", "<channel ",
+                  "<teammate-message")
+_SLASH = re.compile(r"<command-name>\s*(/?[^<\s]+)\s*</command-name>.*?<command-args>(.*?)</command-args>", re.S)
+
+
+def speaker(rec: dict, text: str) -> tuple[str | None, str]:
+    """(role, text) for a user-role record or queued message: 'user' when the person typed it,
+    'peer' for another session, channel or teammate, 'automated' for a prompt a tool or the harness
+    wrote (isMeta: hook feedback, scheduled prompts), None for an empty one. A slash command keeps only the arguments the user typed after its name. `rec`
+    carries the `origin` (record or attachment)."""
+    text = text.strip()
+    origin = rec.get("origin")
+    kind = origin.get("kind") if isinstance(origin, dict) else None
+    if kind in ("task-notification",):
+        return None, text
+    if kind in ("peer", "channel") or text.lower().startswith(_PEER_PREFIXES):
+        return "peer", text
+    if kind not in (None, "human"):
+        return None, text
+    if rec.get("isMeta") is True or rec.get("promptSource") in ("system", "sdk"):
+        return ("automated", text) if text else (None, text)     # harness-written: hook feedback, cron
+    slash = _SLASH.search(text[:2000]) if "<command-args>" in text else None
+    if slash:
+        args = slash.group(2).strip()
+        return ("user", f"{slash.group(1)} {args}") if args else (None, text)
+    if _AUTOMATED.match(text):
+        return "automated", text
+    return ("user", text) if text else (None, text)
 
 
 # ---------------------------------------------------------------------------- retrieval
@@ -534,17 +579,16 @@ def normalize_query(q: str) -> tuple[str, list[str], list[frozenset[str]]]:
 
 
 def file_rows(path, cursor: dict | None = None) -> list:
-    """Statements of one transcript as [line, role, text, date, tokens, project, timestamp, system]; with a
+    """Statements of one transcript as [line, role, text, date, tokens, project, timestamp]; with a
     cursor, only those appended since its last pass."""
     path = Path(path)
     rows = []
     for e in events(path, cursor):
-        if e.sidechain or e.kind not in ("user_message", "assistant_message") or not e.text:
+        if e.sidechain or e.kind not in MESSAGE_KINDS or not e.text:
             continue
         if is_injected(e.text):
             continue
-        rows.append([e.line, e.role, e.text, iso_date(e.ts, path), tokenize(e.text), e.cwd or path.parent.name, e.ts,
-                     e.system])
+        rows.append([e.line, e.role, e.text, iso_date(e.ts, path), tokenize(e.text), e.cwd or path.parent.name, e.ts])
     return rows
 
 
@@ -581,7 +625,7 @@ def build_corpus(cwd, *, include_all, since_secs, max_files, exclude_session, sc
         rows = get_or_build(f, "claude", PARSER_VERSION, lambda: file_rows(f))
         title = get_or_build(f, "claude-title", PARSER_VERSION, lambda: session_title(f))
         docs.extend(Doc(f.stem, str(f), line, role, text, date, toks, project, rank, title=title)
-                    for line, role, text, date, toks, project, _, _ in rows)
+                    for line, role, text, date, toks, project, _ in rows)
     stats = {"scope": scope, "files_total": len(files), "files_scanned": nfiles, "docs": len(docs),
              "skipped_noninteractive": skipped_noninteractive, "skipped_old": skipped_old,
              "excluded_current": excluded_current, "truncated": truncated}
@@ -795,7 +839,7 @@ def cmd_show(args):
         return 11
     path = pref[0]
     messages = [e for e in events(path) if not e.sidechain and e.text
-                and e.kind in ("user_message", "assistant_message") and not is_injected(e.text)]
+                and e.kind in MESSAGE_KINDS and not is_injected(e.text)]
     anchor = next((i for i, e in enumerate(messages) if e.line == args.line), None)
     if anchor is None:
         print(json.dumps({"status": "not_found", "reason": "no searchable message at that line"}))

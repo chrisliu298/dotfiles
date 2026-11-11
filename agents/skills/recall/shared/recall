@@ -1,0 +1,646 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""recall — read past Claude Code and Codex conversations.
+
+  search QUERY [-q QUERY ...]   ranked search of what was said (user, assistant, peer messages)
+  grep PATTERN [-e PATTERN ...] exact search of everything: messages, commands, tool outputs,
+                                subagents and spilled tool results
+  session ID|current            one session's latest (or first) items; --children for subagents
+  open REF                      context around a ref; --full pages its complete text
+  timeline --since WHEN         what was said in a time window, in order
+  sessions [--query TEXT]       find sessions by title, opening request or project
+
+Every item carries a ref (cl:SESSION:LINE / cx:SESSION:LINE) to pass to `open` unchanged.
+Output is compact text headed by the recall marker; --json gives the same items as JSON.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime, timedelta
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+os.environ.setdefault("RECALL_CACHE_DIR", str(Path.home() / ".cache" / "recall"))
+
+import items as raw  # noqa: E402
+import retrieve  # noqa: E402
+from index import Index  # noqa: E402
+from retrieve import backend  # noqa: E402
+
+SOURCES = ("claude", "codex")
+SCHEMA = "recall/2"
+ROLES = ("user", "assistant", "peer", "automated", "both")
+KINDS = ("message", "command", "output", "event")
+
+
+class Usage(Exception):
+    pass
+
+
+# ---------------------------------------------------------------------------- arguments
+def host() -> str | None:
+    if os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CLAUDECODE"):
+        return "claude"
+    if os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID"):
+        return "codex"
+    return None
+
+
+def pick_sources(value: str) -> list[str]:
+    here = host()
+    if value in SOURCES:
+        return [value]
+    if value == "all" or here is None:
+        return list(SOURCES)
+    return [here] if value == "self" else [s for s in SOURCES if s != here]
+
+
+def when(value: str | None, end: bool = False) -> float | None:
+    """Epoch for today/yesterday, 30m/6h/3d (ago), YYYY-MM-DD or YYYY-MM-DD[T ]HH:MM (local).
+    A bare day as an upper bound means the end of that day."""
+    if not value:
+        return None
+    value = value.strip()
+    day = {"today": date.today(), "yesterday": date.today() - timedelta(days=1)}.get(value)
+    if day is None:
+        ago = re.fullmatch(r"(\d+)([mhd])", value)
+        if ago:
+            return time.time() - int(ago.group(1)) * {"m": 60, "h": 3600, "d": 86400}[ago.group(2)]
+        try:
+            parsed = datetime.fromisoformat(value.replace(" ", "T"))
+        except ValueError:
+            raise Usage(f"unrecognized time {value!r}: use today, yesterday, 6h, 3d, YYYY-MM-DD or YYYY-MM-DDTHH:MM")
+        if len(value) > 10:
+            return parsed.timestamp()
+        day = parsed.date()
+    moment = datetime.combine(day, datetime.max.time() if end else datetime.min.time())
+    return moment.timestamp()
+
+
+def local(timestamp: str | float | None) -> str:
+    """Short local time for display: 2026-11-05 14:03."""
+    if timestamp in (None, ""):
+        return ""
+    try:
+        moment = (datetime.fromtimestamp(timestamp) if isinstance(timestamp, (int, float)) else
+                  datetime.fromisoformat(str(timestamp).replace("Z", "+00:00")))
+    except ValueError:
+        return str(timestamp)[:16]
+    return moment.astimezone().strftime("%Y-%m-%d %H:%M")
+
+
+def epoch_of(timestamp: str) -> float | None:
+    try:
+        return datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp()
+    except (ValueError, AttributeError):
+        return None
+
+
+def session_arg(source: str, value: str | None) -> tuple[str | None, bool]:
+    """(session prefix, includes the current session) for --session / the session command."""
+    if value != "current":
+        return value, bool(value)
+    current = backend(source).current_session_id()
+    if not current:
+        raise Usage(f"the current {source} session id is unknown here (no session id in the environment)")
+    return current, True
+
+
+# ---------------------------------------------------------------------------- commands
+def cmd_search(args) -> dict:
+    queries = [*args.query, *(args.q or [])]
+    since, until = when(args.since), when(args.until, end=True)
+    day = lambda moment: datetime.fromtimestamp(moment).date().isoformat() if moment else None  # noqa: E731
+    out_items, coverage, statuses = [], {}, []
+
+    def one(source):
+        session, include = session_arg(source, args.session) if args.session else (None, False)
+        return source, retrieve.search(source, queries, args.cwd, args.limit, args.role, day(since), day(until),
+                                       args.project, session, include_current=include, after=since, before=until)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(one, args.sources))
+    for source, result in results:
+        statuses.append(result.get("status"))
+        coverage[source] = result.get("coverage", {}) | {"elapsed_ms": result.get("elapsed_ms")}
+        for candidate in result.get("candidates", []):
+            for evidence in candidate.get("evidence", []):
+                line = evidence.get("line") or (evidence.get("locator") or {}).get("line")
+                session = evidence.get("session") or (evidence.get("locator") or {}).get("session_id")
+                out_items.append({
+                    "ref": f"{raw.PREFIX[source]}:{session}:{line}", "time": evidence.get("time", ""),
+                    "kind": "message", "role": evidence.get("role"), "text": evidence.get("excerpt", ""),
+                    "session": session, "rank": candidate["rank"], "match": candidate.get("match"),
+                    "title": candidate.get("title"), "project": evidence.get("project") or evidence.get("cwd")})
+    status = "ok" if out_items else "error" if "error" in statuses else \
+        "empty_query" if all(s == "empty_query" for s in statuses) else "no_match"
+    hints = ["open REF for context; grep for exact strings, commands or tool outputs"] if out_items else \
+        ["try other wording with more -q variants, widen --since, or grep an exact string"]
+    return {"status": status, "items": out_items, "coverage": coverage, "next": hints, "grouped": True}
+
+
+def _files(source: str, args) -> list[Path]:
+    if args.session:
+        session, _ = session_arg(source, args.session)
+        found = [t.path for t in raw.resolve(backend, source, session)]
+        if source == "claude" and not args.no_subagents:   # the session's subagents and spills too
+            for path in list(found):
+                folder = path.parent / path.stem
+                found += list(folder.glob("subagents/*.jsonl")) + list(folder.glob("tool-results/*.txt"))
+        return found
+    return []
+
+
+def _rg(patterns: list[str], args, roots: list[Path], files: list[Path], globs: list[str]) -> list[tuple[Path, int, int]]:
+    """(path, line, byte offset) of every line matching any pattern; long lines are not printed."""
+    command = ["rg", "--no-messages", "--line-number", "--byte-offset", "--max-columns", "1", "--no-heading",
+               "--with-filename", "--no-config"]
+    command += ["--ignore-case"] if args.ignore_case else []
+    for pattern in patterns:      # literal patterns are matched exactly later, on decoded text
+        command += ["-e", pattern if args.regex else raw.prefilter(pattern)]
+    for glob in globs:
+        command += ["--glob", glob]
+    command += ["--", *map(str, files or roots)]
+    result = subprocess.run(command, capture_output=True, text=True, errors="replace")
+    if result.returncode not in (0, 1):
+        raise RuntimeError(result.stderr.strip() or f"rg exit {result.returncode}")
+    hits = []
+    for row in result.stdout.splitlines():
+        found = re.match(r"^(.*?\.(?:jsonl|txt)):(\d+):(\d+):", row)
+        if found:
+            hits.append((Path(found.group(1)), int(found.group(2)), int(found.group(3))))
+    return hits
+
+
+def _record(path: Path, offset: int) -> dict | None:
+    with path.open("rb") as handle:
+        handle.seek(offset)
+        try:
+            return json.loads(handle.readline())
+        except ValueError:
+            return None
+
+
+def cmd_grep(args) -> dict:
+    if not shutil.which("rg"):
+        raise Usage("grep needs ripgrep (rg) on PATH")
+    patterns = [*args.pattern, *(args.e or [])]
+    flags = re.I if args.ignore_case else 0
+    matcher = re.compile("|".join(p if args.regex else re.escape(p) for p in patterns), flags)
+    kinds = set(KINDS) if "all" in args.kind else set(args.kind)
+    since, until = when(args.since), when(args.until, end=True)
+    found, scanned_records = [], 0
+    for source in args.sources:
+        api = backend(source)
+        language = backend("claude")
+        files = _files(source, args)
+        if args.session and not files:
+            continue
+        if source == "claude":
+            roots, globs = [raw.claude_root(backend)], ["*.jsonl", "**/tool-results/*.txt"]
+            if args.no_subagents:
+                globs.append("!**/subagents/**")
+        else:
+            roots, globs = [r for r in raw.codex_roots(backend) if r.is_dir()], ["*.jsonl"]
+        hits = _rg(patterns, args, roots, files, [] if files else globs)
+        # Like search, skip the session doing the lookup unless --session names it: it echoes the query.
+        current = None if args.session else api.current_session_id() or None
+        spills = defaultdict(list)
+        for path, line, offset in hits:
+            if since and path.stat().st_mtime < since:
+                continue
+            owner = path.parents[1].name if path.suffix == ".txt" else raw.transcript_of(source, path).session
+            if current and current in (owner, path.parents[1].name):
+                continue
+            if args.project and not _in_project(source, path, args.project):
+                continue
+            if path.suffix == ".txt":                           # a spilled tool result
+                spills[path].append(line)
+                continue
+            transcript = raw.transcript_of(source, path)
+            record = _record(path, offset)
+            if record is None:
+                continue
+            scanned_records += 1
+            batch = raw.claude_items(api, record, line) if source == "claude" else raw.codex_items(api, language, record, line)
+            for item in batch:
+                if item.kind in kinds and (args.role == "both" or item.role == args.role) and matcher.search(item.text) \
+                        and not raw.is_recall_echo(item):
+                    found.append((source, transcript, item, None))
+        for path, lines in spills.items():
+            session = path.parent.parent.name
+            text = path.read_text(errors="replace")
+            if raw.MARKER in text[:200]:
+                continue
+            item = raw.Item(lines[0], 0, "output", "tool", backend("claude").redact(text),
+                            datetime.fromtimestamp(path.stat().st_mtime).astimezone().isoformat(), spill=str(path))
+            if "output" in kinds and args.role in ("both", "tool"):
+                found.append((source, raw.Transcript(source, session, path), item, f"{raw.PREFIX[source]}:{session}:spill:{path.name}"))
+    rows = []
+    for source, transcript, item, ref in found:
+        moment = epoch_of(item.time)
+        if (since and moment and moment < since) or (until and moment and moment > until):
+            continue
+        match = matcher.search(item.text)
+        start = max(0, match.start() - args.context)
+        snippet = ("…" if start else "") + item.text[start:match.end() + args.context] + \
+            ("…" if match.end() + args.context < len(item.text) else "")
+        row = item.json(source, transcript.session, snippet)
+        if ref:
+            row["ref"] = ref
+        row["session"] = transcript.session
+        if transcript.parent:
+            row["parent"] = transcript.parent
+        row["matches"] = len(matcher.findall(item.text))
+        rows.append(row)
+    rows.sort(key=lambda r: epoch_of(r["time"]) or 0, reverse=True)
+    total = len(rows)
+    rows = rows[:args.limit]
+    return {"status": "ok" if rows else "no_match", "items": rows, "grouped": True,
+            "coverage": {"records_matched": scanned_records, "items_matched": total, "items_listed": len(rows),
+                         "omitted": total - len(rows), "subagents": not args.no_subagents},
+            "next": (["open REF --full for the complete command or output"] if rows else
+                     ["check spelling, try --ignore-case or --regex, or drop --since/--session"])
+            + ([f"{total - len(rows)} more: raise --limit or narrow with --since/--session/--kind"] if total > len(rows) else [])}
+
+
+def _in_project(source: str, path: Path, project: str) -> bool:
+    if source == "claude":           # <proj>/<s>.jsonl, <proj>/<s>/subagents/<a>.jsonl, <proj>/<s>/tool-results/<x>.txt
+        folder = path.parents[2] if path.parent.name in ("subagents", "tool-results") else path.parent
+        return backend("claude").encode_cwd(project).lower().strip("-") in folder.name.lower()
+    meta = backend("codex").read_file_meta(path)
+    return project.lower() in (meta.cwd or "").lower()
+
+
+def _transcript(source: str, session: str) -> raw.Transcript:
+    found = raw.resolve(backend, source, session)
+    if not found:
+        raise LookupError(f"no {source} session starts with {session!r}")
+    ids = {t.session for t in found}
+    if len(ids) > 1:
+        raise LookupError(f"{len(ids)} {source} sessions start with {session!r}: " + ", ".join(sorted(ids)[:5]))
+    return max(found, key=lambda t: t.path.stat().st_mtime)      # the newest copy of a forked/archived id
+
+
+def _source_for(session: str, sources: list[str]) -> list[str]:
+    return [s for s in sources if raw.resolve(backend, s, session)] or sources
+
+
+def cmd_session(args) -> dict:
+    kinds = set(KINDS) if "all" in args.kind else set(args.kind)
+    since, until = when(args.since), when(args.until, end=True)
+
+    def accept(item):
+        moment = epoch_of(item.time) or 0
+        return item.kind in kinds and (args.role == "both" or item.role == args.role) \
+            and not (since and moment < since) and not (until and moment > until)
+
+    errors = []
+    for source in _source_for(args.id, args.sources) if args.id != "current" else args.sources:
+        try:
+            session, _ = session_arg(source, args.id)
+            transcript = _transcript(source, session)
+        except (LookupError, Usage) as exc:
+            errors.append(str(exc))
+            continue
+        if args.head:
+            picked = transcript.head(backend, args.head, accept)
+        elif since or until:
+            picked = [i for i in transcript.items(backend) if accept(i)]
+            picked = picked[-args.tail:] if args.tail else picked
+        else:
+            picked = transcript.tail(backend, args.tail, accept)
+        rows = [i.json(source, transcript.session, clip(i.text, args.max_chars)) for i in picked]
+        if args.children:
+            rows += _children(source, transcript, args)
+        return {"status": "ok", "session": _session_info(source, transcript), "items": rows,
+                "coverage": {"items_listed": len(rows), "lines_in_session": transcript.lines()},
+                "next": ["open REF --full for a complete item", "--kind all adds commands, outputs and events",
+                         "--head N reads from the start; --tail 0 reads everything"]}
+    return {"status": "not_found", "items": [], "next": [], "warnings": errors}
+
+
+def _session_info(source: str, transcript: raw.Transcript) -> dict:
+    info = {"source": source, "session": transcript.session, "path": str(transcript.path)}
+    if transcript.parent:
+        info["parent"] = transcript.parent
+    if source == "claude":
+        info["title"] = Index("claude", backend).title(transcript.path)
+    else:
+        info["title"] = backend("codex").thread_titles(backend("codex").session_root()).get(transcript.session)
+        info["project"] = backend("codex").read_file_meta(transcript.path).cwd
+    anything = lambda item: bool(item.time)  # noqa: E731
+    first, last = transcript.head(backend, 1, anything), transcript.tail(backend, 1, anything)
+    if first:
+        info["first"], info["last"] = local(first[0].time), local(last[0].time)
+    return info
+
+
+def _children(source: str, transcript: raw.Transcript, args) -> list[dict]:
+    """One `subagent` item per child: its brief and its last reply (the ref opens that reply)."""
+    if source != "claude":
+        return []
+    folder = transcript.path.parent / transcript.path.stem / "subagents"
+    children = []
+    for path in sorted(folder.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)[-args.children_limit:]:
+        child = raw.transcript_of("claude", path)
+        prompt = child.head(backend, 1, lambda i: i.kind == "message")
+        final = child.tail(backend, 1, lambda i: i.kind == "message" and i.role == "assistant")
+        meta_path = path.with_suffix(".meta.json")
+        try:
+            meta = json.loads(meta_path.read_text()) if meta_path.is_file() else {}
+        except ValueError:
+            meta = {}
+        label = " · ".join(str(meta[k]) for k in ("agentType", "description") if isinstance(meta.get(k), str))
+        ref = final[0].ref(source, child.session) if final else f"{raw.PREFIX[source]}:{child.session}:1"
+        brief = clip(prompt[0].text, 300) if prompt else ""
+        reply = clip(final[0].text, args.max_chars) if final else "(no reply yet)"
+        children.append({"ref": ref, "time": final[0].time if final else "", "kind": "subagent", "role": "",
+                         "tool": label, "session": child.session, "parent": transcript.session,
+                         "text": f"brief: {brief}\nfinal: {reply}", "lines": child.lines()})
+    return children
+
+
+def cmd_open(args) -> dict:
+    if ":spill:" in args.ref:
+        prefix, session, _, name = args.ref.split(":", 3)
+        roots = [raw.claude_root(backend)]
+        paths = list(roots[0].glob(f"*/{session}*/tool-results/{name}"))
+        text = raw.read_spill(str(paths[0]), roots) if paths else None
+        if text is None:
+            return {"status": "not_found", "items": [], "warnings": [f"no spilled result {name} for {session}"]}
+        return _page(args, {"ref": args.ref, "kind": "output", "role": "tool", "time": "", "text": text,
+                            "chars": len(text), "spill": str(paths[0])}, backend("claude").redact(text))
+    try:
+        source, session, line, block = raw.parse_ref(args.ref)
+        transcript = _transcript(source, session)
+    except (ValueError, KeyError):
+        raise Usage(f"not a ref: {args.ref!r} (expected cl:SESSION:LINE or cx:SESSION:LINE)")
+    except LookupError as exc:
+        return {"status": "not_found", "items": [], "warnings": [str(exc)]}
+    kinds = set(KINDS) if "all" in args.kind else set(args.kind)
+    shown = lambda item: item.kind in kinds  # noqa: E731
+    everything = transcript.around(backend, line, shown, args.before, args.after)
+    position = next((n for n, i in enumerate(everything) if i.line == line and i.block == block), None)
+    if position is None:
+        return {"status": "not_found", "items": [], "warnings": [f"no item {args.ref} in {transcript.path}"]}
+    anchor = everything[position]
+    if args.full:
+        text = anchor.text
+        if anchor.spill:
+            full = raw.read_spill(anchor.spill, [raw.claude_root(backend)])
+            text = backend("claude").redact(full) if full is not None else text
+        return _page(args, anchor.json(source, transcript.session), text)
+    before = [i for i in everything[:position] if shown(i)][-args.before:] if args.before else []
+    after = [i for i in everything[position + 1:] if shown(i)][:args.after]
+    rows = [i.json(source, transcript.session, clip(i.text, args.context_chars)) for i in before]
+    anchor_row = anchor.json(source, transcript.session, clip(anchor.text, args.max_chars))
+    anchor_row["anchor"] = True
+    rows.append(anchor_row)
+    rows += [i.json(source, transcript.session, clip(i.text, args.context_chars)) for i in after]
+    return {"status": "ok", "session": _session_info(source, transcript), "items": rows,
+            "coverage": {"before": len(before), "after": len(after)},
+            "next": ["open REF --full for an item's complete text", "--kind message hides tool traffic"]}
+
+
+def _page(args, row: dict, text: str) -> dict:
+    start = max(0, args.cursor)
+    end = start + args.max_chars
+    row = dict(row, text=text[start:end], chars=len(text), offset=start)
+    more = end < len(text)
+    return {"status": "ok", "items": [row], "next_cursor": end if more else None,
+            "next": [f"open {row['ref']} --full --cursor {end} for the next {min(args.max_chars, len(text) - end)} chars"] if more else []}
+
+
+def cmd_timeline(args) -> dict:
+    since, until = when(args.since), when(args.until, end=True)
+    rows, coverage = [], {}
+    for source in args.sources:
+        session = session_arg(source, args.session)[0] if args.session else None
+        result = retrieve.timeline(source, args.cwd, since, until, args.role, args.project, session, args.limit,
+                                   args.max_chars)
+        coverage[source] = result.get("coverage", {})
+        for entry in result.get("sessions", []):
+            for message in entry["messages"]:
+                rows.append({"ref": f"{raw.PREFIX[source]}:{entry['session']}:{message['line']}", "time": message["time"],
+                             "kind": "message", "role": message["role"], "text": message["text"],
+                             "chars": message["chars"], "session": entry["session"], "title": entry.get("title"),
+                             "project": entry.get("project")})
+    rows.sort(key=lambda r: r["time"])
+    return {"status": "ok" if rows else "no_match", "items": rows, "coverage": coverage, "grouped": True,
+            "window": {"since": local(since), "until": local(until) if until else "now"},
+            "next": ["open REF for what happened around a message"]}
+
+
+def cmd_sessions(args) -> dict:
+    since = when(args.since)
+    rows = []
+    for source in args.sources:
+        found, _ = Index(source, backend).rows(args.cwd, set(), None)
+        grouped = defaultdict(list)
+        for row in found:
+            grouped[row["session"]].append(row)
+        for session, messages in grouped.items():
+            messages.sort(key=lambda r: r["epoch"])
+            title = next((r["title"] for r in messages if r.get("title")), None) or ""
+            project = messages[0].get("project") or messages[0].get("cwd") or ""
+            opening = next((retrieve.text_of(r) for r in messages if r["role"] == "user"), "")
+            haystack = f"{title}\n{opening}\n{project}"
+            if args.query and not all(re.search(rf"(?<![A-Za-z0-9]){re.escape(word)}(?![A-Za-z0-9])", haystack, re.I)
+                                      for word in args.query.split()):
+                continue
+            if args.project and args.project.lower() not in project.lower():
+                continue
+            if since and messages[-1]["epoch"] < since:
+                continue
+            rows.append({"ref": f"{raw.PREFIX[source]}:{session}:{messages[0]['line']}", "session": session,
+                         "source": source, "title": title, "project": project,
+                         "first": local(messages[0]["epoch"]), "last": local(messages[-1]["epoch"]),
+                         "time": local(messages[-1]["epoch"]), "messages": len(messages),
+                         "kind": "session", "role": "", "text": clip(" ".join(opening.split()), 200)})
+    rows.sort(key=lambda r: r["last"], reverse=True)
+    total = len(rows)
+    return {"status": "ok" if rows else "no_match", "items": rows[:args.limit],
+            "coverage": {"sessions_matched": total, "omitted": max(0, total - args.limit)},
+            "next": ["session ID --tail 20 to read one"]}
+
+
+# ---------------------------------------------------------------------------- output
+def clip(text: str, cap: int) -> str:
+    return text if len(text) <= cap else text[:cap] + f" …[+{len(text) - cap} chars]"
+
+
+def render(command: str, sources: list[str], result: dict, budget: int) -> str:
+    items = result.get("items", [])
+    head = f"{raw.MARKER} {command} · {'+'.join(sources)} · {result['status']} · {len(items)} items"
+    omitted = (result.get("coverage") or {}).get("omitted")
+    if omitted:
+        head += f" ({omitted} more not shown)"
+    lines = [head]
+    info = result.get("session")
+    if info:
+        lines.append(f"session {info['session']}" + "".join(f" · {info[k]}" for k in ("title", "project", "first", "last")
+                                                           if info.get(k)) + (f" · parent {info['parent']}" if info.get("parent") else ""))
+    current = None
+    used, cut = len(head), 0
+    for item in items:
+        block = []
+        if result.get("grouped") and item.get("session") != current:
+            current = item.get("session")
+            label = " · ".join(str(x) for x in (item.get("title"), item.get("project")) if x)
+            block.append(f"── {current}" + (f"  {label}" if label else ""))
+        what = item["kind"] if item["kind"] != "message" else item.get("role") or ""
+        if item["kind"] == "message" and item.get("role") == "peer" and item.get("tool"):
+            what = f"peer {item['tool']}"
+        elif item.get("tool"):
+            what += f":{item['tool']}"
+        flags = "".join(f" [{f}]" for f in ("error", "anchor") if item.get(f))
+        meta = f" · {item['messages']} msgs · {item['first']}" if item["kind"] == "session" else ""
+        text = item.get("text", "")
+        body = text if "\n" not in text.strip() else "\n    " + text.strip().replace("\n", "\n    ")
+        block.append(f"{item['ref']}  {local(item.get('time')) or item.get('time', '')}  {what}{flags}{meta}  {body}")
+        size = sum(len(x) + 1 for x in block)
+        if used + size > budget and used > len(head):
+            cut += 1
+            continue
+        used += size
+        lines.extend(block)
+    if cut:
+        lines.append(f"[{cut} items over the {budget}-char budget not shown: raise --budget or narrow the query]")
+    for warning in result.get("warnings", []):
+        lines.append(f"warning: {warning}")
+    for hint in result.get("next", []):
+        lines.append(f"next: {hint}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------- CLI
+class Parser(argparse.ArgumentParser):
+    """Argument errors become one parseable answer, like every other failure."""
+    def error(self, message):
+        raise Usage(f"{self.prog}: {message}")
+
+
+def parser() -> argparse.ArgumentParser:
+    common = Parser(add_help=False)
+    common.add_argument("--source", default="self", choices=("self", "other", "all", *SOURCES),
+                        help="self (default) = the agent running this; other; all; claude; codex")
+    common.add_argument("--json", action="store_true", help="print JSON instead of text")
+    common.add_argument("--budget", type=int, default=12000, help="max chars of text output (default 12000)")
+    common.add_argument("--cwd", default=os.getcwd(), help=argparse.SUPPRESS)
+    window = Parser(add_help=False)
+    window.add_argument("--since", help="today, yesterday, 6h, 3d, YYYY-MM-DD or YYYY-MM-DDTHH:MM (local)")
+    window.add_argument("--until", help="same forms; a bare day includes the whole day")
+    window.add_argument("--project", help="substring of the session's working directory")
+    window.add_argument("--session", help="session id prefix, or 'current' (then the current session is included)")
+
+    top = Parser(prog="recall", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = top.add_subparsers(dest="command", required=True)
+
+    s = sub.add_parser("search", parents=[common, window], help="ranked search of conversation messages")
+    s.add_argument("query", nargs="+", help="words to find; put -- before a query that starts with '-'")
+    s.add_argument("-q", action="append", help="another phrasing of the same question (repeatable, up to 6 total)")
+    s.add_argument("--role", choices=ROLES, default="both")
+    s.add_argument("--limit", type=int, default=5, help="sessions to return (default 5, max 20)")
+
+    g = sub.add_parser("grep", parents=[common, window], help="exact search of messages, commands, outputs, subagents")
+    g.add_argument("pattern", nargs="+", help="literal text to find (any of them); put -- before one starting with '-'")
+    g.add_argument("-e", action="append", help="another pattern (repeatable)")
+    g.add_argument("--regex", action="store_true", help="patterns are regular expressions")
+    g.add_argument("-i", "--ignore-case", action="store_true")
+    g.add_argument("--kind", nargs="+", choices=(*KINDS, "all"), default=["all"])
+    g.add_argument("--role", choices=(*ROLES, "tool"), default="both")
+    g.add_argument("--no-subagents", action="store_true", help="skip subagent transcripts and spilled results")
+    g.add_argument("--limit", type=int, default=20, help="items to return, newest first (default 20)")
+    g.add_argument("--context", type=int, default=160, help="chars shown around the match (default 160)")
+
+    ses = sub.add_parser("session", parents=[common], help="read one session")
+    ses.add_argument("id", help="session id prefix, subagent id (agent-…), or 'current'")
+    ses.add_argument("--tail", type=int, default=20, help="last N items (default 20; 0 = all)")
+    ses.add_argument("--head", type=int, help="first N items instead")
+    ses.add_argument("--kind", nargs="+", choices=(*KINDS, "all"), default=["message"])
+    ses.add_argument("--role", choices=(*ROLES, "tool"), default="both")
+    ses.add_argument("--since")
+    ses.add_argument("--until")
+    ses.add_argument("--children", action="store_true", help="list subagents with their prompt and final reply")
+    ses.add_argument("--children-limit", type=int, default=10, help="newest N subagents (default 10)")
+    ses.add_argument("--max-chars", type=int, default=600, help="chars per item (default 600)")
+
+    o = sub.add_parser("open", parents=[common], help="context around a ref, or its complete text")
+    o.add_argument("ref", help="a ref from any recall output, unchanged")
+    o.add_argument("--before", type=int, default=3)
+    o.add_argument("--after", type=int, default=3)
+    o.add_argument("--kind", nargs="+", choices=(*KINDS, "all"), default=["all"], help="kinds shown around the anchor")
+    o.add_argument("--full", action="store_true", help="the anchor's complete text (spilled outputs included), paged")
+    o.add_argument("--cursor", type=int, default=0, help="char offset for --full paging")
+    o.add_argument("--max-chars", type=int, default=6000, help="chars of the anchor / page (default 6000)")
+    o.add_argument("--context-chars", type=int, default=400, help="chars per surrounding item (default 400)")
+
+    t = sub.add_parser("timeline", parents=[common, window], help="messages in a time window, in order")
+    t.add_argument("--role", choices=ROLES, default="user", help="user (default), assistant, peer, automated or both")
+    t.add_argument("--limit", type=int, default=200)
+    t.add_argument("--max-chars", type=int, default=500, help="chars per message (default 500)")
+
+    ss = sub.add_parser("sessions", parents=[common], help="find sessions")
+    ss.add_argument("--query", help="words that must all appear in the title, opening request or project")
+    ss.add_argument("--project")
+    ss.add_argument("--since", help="sessions active since then")
+    ss.add_argument("--limit", type=int, default=20)
+    return top
+
+
+COMMANDS = {"search": cmd_search, "grep": cmd_grep, "session": cmd_session, "open": cmd_open,
+            "timeline": cmd_timeline, "sessions": cmd_sessions}
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    started = time.monotonic()
+    try:
+        args = parser().parse_args(argv)
+    except Usage as exc:
+        args = argparse.Namespace(json="--json" in argv, command=next((a for a in argv if a in COMMANDS), "recall"),
+                                  sources=[], budget=12000)
+        return finish(args, {"status": "usage_error", "items": [], "warnings": [str(exc)],
+                             "next": ["recall COMMAND --help"]}, started)
+    args.sources = pick_sources(args.source)
+    try:
+        if args.command == "search" and len(args.query) + len(args.q or []) > 6:
+            raise Usage("at most six phrasings")
+        if args.command == "search":
+            args.limit = max(1, min(args.limit, 20))
+        if args.command == "timeline" and not args.since:
+            raise Usage("timeline needs --since")
+        result = COMMANDS[args.command](args)
+    except Usage as exc:
+        result = {"status": "usage_error", "items": [], "warnings": [str(exc)]}
+    except Exception as exc:  # every failure is still one parseable answer
+        result = {"status": "error", "items": [], "warnings": [f"{type(exc).__name__}: {exc}"]}
+    return finish(args, result, started)
+
+
+def finish(args, result: dict, started: float) -> int:
+    result["elapsed_ms"] = round((time.monotonic() - started) * 1000)
+    if args.json:
+        result.pop("grouped", None)
+        print(json.dumps({"schema": SCHEMA, "marker": raw.MARKER, "command": args.command, "sources": args.sources,
+                          **result}, ensure_ascii=False, indent=1))
+    else:
+        print(render(args.command, args.sources, result, args.budget))
+    return {"usage_error": 2, "error": 1}.get(result["status"], 0)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

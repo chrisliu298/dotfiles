@@ -412,20 +412,21 @@ def extract_turns(path: Path, *, include_non_human: bool = False,
                 _metadata_from_payload(meta, record["payload"], str(record.get("timestamp") or ""))
                 own_meta_seen = True
             continue
-        if b'"response_item"' not in raw or b'"message"' not in raw:
+        if b'"response_item"' not in raw or b'message"' not in raw:   # message or agent_message
             continue
         record = _json_record(raw, stats)
         if not record or record.get("type") != "response_item":
             continue
         payload = record.get("payload")
-        if not isinstance(payload, dict) or payload.get("type") != "message":
+        if not isinstance(payload, dict) or payload.get("type") not in ("message", "agent_message"):
             continue
-        role = payload.get("role")
-        if role not in ("user", "assistant"):
+        # agent_message: a subagent or peer thread's message (author -> recipient), never the user.
+        role = "peer" if payload["type"] == "agent_message" else payload.get("role")
+        if role not in ("user", "assistant", "peer"):
             continue
         if not include_non_human and not _is_human_source(meta.thread_source):
             continue
-        text, injected_skipped = _message_text(payload, role)
+        text, injected_skipped = _message_text(payload, "user" if role == "peer" else role)
         stats.injected_parts_skipped += injected_skipped
         if not text.strip():
             continue

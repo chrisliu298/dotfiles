@@ -109,8 +109,7 @@ class IndexTests(unittest.TestCase):
         self.write(path, [{"type": "mode", "mode": "normal"}, claude_record("user", "go"), scheduled])
         with mock.patch.dict(os.environ, {"CLAUDE_CODE_SESSION_ID": "s1"}):
             found = r.timeline("claude", str(self.root), 0)
-        self.assertEqual([m["text"] for m in found["sessions"][0]["messages"]], ["go"])
-        self.assertEqual(found["coverage"]["messages_filtered"], 1)
+        self.assertEqual([m["text"] for m in found["sessions"][0]["messages"]], ["go"])   # the tick is `automated`
         self.assertEqual(found["current_task_exclusion"], "included")
 
     def test_timezone_change_rebuilds_local_dates(self):

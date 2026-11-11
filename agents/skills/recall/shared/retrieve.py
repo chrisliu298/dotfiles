@@ -29,11 +29,13 @@ def backend(source):
     return sys.modules[name]
 
 
-def load(source, cwd, queries):
-    """Index-backed rows for `queries`: refresh the source's index, then read only their terms."""
+def load(source, cwd, queries, include_current=False):
+    """Index-backed rows for `queries`: refresh the source's index, then read only their terms.
+    The current session is left out unless asked for (its text is already in context)."""
     language = backend("claude")
     terms = {term for query in queries for term in language.normalize_query(query)[1]}
-    return Index(source, backend).rows(cwd, terms, backend(source).current_session_id() or None)
+    exclude = None if include_current else backend(source).current_session_id() or None
+    return Index(source, backend).rows(cwd, terms, exclude)
 
 
 def excerpt_start(text, terms):
@@ -61,7 +63,10 @@ def session_fill(selected, normalized, hot, length, exclude, limit):
     """
     by_session = defaultdict(list)
     for row in selected:
-        by_session[row["session"]].append(row)
+        # A session is described by its own conversation; relayed peer text and tool-typed prompts
+        # belong to the session that wrote them and would otherwise inflate long resident sessions.
+        if row["role"] not in ("peer", "automated"):
+            by_session[row["session"]].append(row)
     counts, sizes, titles = {}, {}, {}
     language = backend("claude")
     for session, messages in by_session.items():
@@ -109,7 +114,7 @@ def session_fill(selected, normalized, hot, length, exclude, limit):
     return ordered
 
 
-PRIVATE = ("text", "order", "score", "coverage", "token_counts", "title", "render", "fetch", "length", "epoch", "system")
+PRIVATE = ("text", "order", "score", "coverage", "token_counts", "title", "render", "fetch", "length", "epoch")
 
 
 def evidence_hit(row, terms, query_index, coverage):
@@ -119,15 +124,18 @@ def evidence_hit(row, terms, query_index, coverage):
             hit.setdefault(key, value)
     text = text_of(row)
     hit.update(anchor_key=row.get("locator", {}).get("item_id", row.get("line")), excerpt=excerpt(text, terms),
+               time=datetime.fromtimestamp(row["epoch"]).astimezone().isoformat(timespec="minutes"),
                query_index=query_index, excerpt_offset=excerpt_start(text, terms), coverage=coverage)
     return hit
 
 
-def retrieve(rows, queries, limit=5, roles="both", since=None, until=None, project=None, session=None):
+def retrieve(rows, queries, limit=5, roles="both", since=None, until=None, project=None, session=None,
+             after=None, before=None):
     """Return distinct sessions with separately anchored supporting messages.
 
     Windows of up to three messages connect a topic, options and a short answer.
-    Role/date/project/session filters apply to each message before indexing. Fusion uses
+    Role/date/project/session filters apply to each message before indexing; `after`/`before`
+    are epoch bounds finer than the inclusive `since`/`until` dates. Fusion uses
     ranks, never raw scores across queries. Sessions matched only as a whole fill the list
     after message matches. No lexical hit is a verified decision.
 
@@ -138,6 +146,7 @@ def retrieve(rows, queries, limit=5, roles="both", since=None, until=None, proje
     language = backend("claude")
     selected = [r for r in rows if (roles == "both" or r["role"] == roles)
                 and (not since or r["date"] >= since) and (not until or r["date"] <= until)
+                and (after is None or r["epoch"] >= after) and (before is None or r["epoch"] <= before)
                 and (not project or project.lower() in (r.get("project") or r.get("cwd") or "").lower())
                 and (not session or r["session"].startswith(session))]
     normalized = [language.normalize_query(q) for q in queries]
@@ -262,16 +271,17 @@ def retrieve(rows, queries, limit=5, roles="both", since=None, until=None, proje
             "verification_required": True}
 
 
-def search(source, queries, cwd, limit, roles, since=None, until=None, project=None, session=None):
+def search(source, queries, cwd, limit, roles, since=None, until=None, project=None, session=None,
+           include_current=False, after=None, before=None):
     started = time.monotonic()
-    rows, metadata = load(source, cwd, queries)
-    result = retrieve(rows, queries, limit, roles, since, until, project, session)
+    rows, metadata = load(source, cwd, queries, include_current)
+    result = retrieve(rows, queries, limit, roles, since, until, project, session, after, before)
     result.update(metadata, elapsed_ms=round((time.monotonic() - started) * 1000))
     return result
 
 
-# Harness notices that carry no structural marker in the transcript (see the `system` field).
-NOT_TYPED = ("another claude session sent a message", "[request interrupted by user",
+# Harness notices that carry no structural marker in the transcript (marked ones are `automated`).
+NOT_TYPED = ("[request interrupted by user",
              "your response above was stop", "(re-invocation of")
 IMAGE_NOTICE = re.compile(r"^(?:\[image: [^\]]*\]\s*)+", re.I)
 
@@ -289,15 +299,14 @@ def list_window(rows, since, until=None, roles="user", project=None, session=Non
     filtered, kept = 0, []
     for row in inside:
         text = IMAGE_NOTICE.sub("", " ".join(text_of(row).split()))
-        if row["role"] == "user" and (row.get("system") or not text or text.lower().startswith(NOT_TYPED)):
+        if row["role"] == "user" and (not text or text.lower().startswith(NOT_TYPED)):
             filtered += 1
             continue
         message = {"time": datetime.fromtimestamp(row["epoch"]).astimezone().isoformat(timespec="minutes"),
                    "role": row["role"], "text": text[:max_chars], "chars": len(text), "truncated": len(text) > max_chars}
+        message["line"] = row["line"]
         if "locator" in row:
             message["item_id"] = row["locator"]["item_id"]
-        else:
-            message["line"] = row["line"]
         kept.append((row, message))
     sessions = {}
     for row, message in kept[:limit]:

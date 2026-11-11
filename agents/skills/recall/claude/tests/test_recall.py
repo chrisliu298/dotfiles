@@ -306,6 +306,68 @@ class RecallTests(unittest.TestCase):
         _, result = self.search("orchard database")
         self.assertEqual(result["candidates"][0]["role"], "user")
 
+    def test_mid_turn_user_messages_are_user_evidence(self):
+        def queued(text, kind):
+            return {"type": "attachment", "timestamp": "2026-09-01T10:00:04Z", "cwd": self.cwd,
+                    "isSidechain": False, "attachment": {
+                        "type": "queued_command", "prompt": text, "commandMode": "prompt",
+                        "origin": {"kind": kind}}}
+        self.write(S_OLD, [user("start the run"), tool_result("log"),
+                           queued("We decided the marmot cache keeps seven days.", "human"),
+                           queued("<cross-session-message>marmot peer note</cross-session-message>", "peer"),
+                           queued("<task-notification>marmot task done</task-notification>",
+                                  "task-notification"),
+                           assistant("ok")])
+        _, out = self.search("marmot", "--roles", "user")
+        texts = [c["gist"] for c in out["candidates"]]
+        self.assertEqual(len(texts), 1, texts)
+        self.assertIn("seven days", texts[0])
+
+    def test_peer_messages_are_not_user_statements(self):
+        path = self.write(S_OLD, [
+            user("Another Claude session sent a message:\n<cross-session-message>use the walrus cache</cross-session-message>",
+                 origin={"kind": "peer"}),
+            user("Another Claude session sent a message: walrus cache is warm"),
+            {"type": "attachment", "timestamp": "2026-09-01T10:00:04Z", "cwd": self.cwd, "isSidechain": False,
+             "attachment": {"type": "queued_command", "origin": {"kind": "peer"},
+                            "prompt": "<cross-session-message>walrus peer queued</cross-session-message>"}},
+            user("I decided the walrus cache stays local."),
+        ])
+        roles = {e.text[:40]: e.role for e in recall.events(path) if e.kind != "command_output"}
+        self.assertEqual(sorted(roles.values()), ["peer", "peer", "peer", "user"], roles)
+
+    def test_tool_typed_prompts_and_blocked_questions_are_not_user_words(self):
+        path = self.write(S_OLD, [
+            user("这个会话刚被重启了（tmux-persist restart）：先检查后台任务。", origin={"kind": "human"}),
+            user("# Review brief\n\nRead the repo.", origin={"kind": "human"}),
+            {"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "id": "ask1", "name": "AskUserQuestion", "input": {}}]}},
+            {"type": "user", "message": {"content": [
+                {"type": "tool_result", "tool_use_id": "ask1", "is_error": True, "content": "hook error: user away"}]}},
+            user("ship the otter build", origin={"kind": "human"}),
+        ])
+        roles = [(e.role, e.text[:12]) for e in recall.events(path) if e.kind != "command_output"]
+        self.assertEqual([r for r, _ in roles], ["automated", "automated", "user"], roles)
+
+    def test_harness_notes_and_teammate_messages_are_not_user_words(self):
+        path = self.write(S_OLD, [
+            user("Stop hook feedback:\n[lang-guard] rewrite in Chinese", isMeta=True),
+            user('<teammate-message teammate_id="team-lead">archive the builds</teammate-message>'),
+            user("keep the kestrel build", origin={"kind": "human"}),
+        ])
+        self.assertEqual([e.role for e in recall.events(path) if e.kind != "command_output"],
+                         ["automated", "peer", "user"])
+
+    def test_slash_command_arguments_are_user_words(self):
+        path = self.write(S_OLD, [
+            user("<command-message>recall</command-message>\n<command-name>/recall</command-name>\n"
+                 "<command-args>what did we settle about the narwhal budget</command-args>"),
+            user("Base directory for this skill: /x\n\n# Recall narwhal"),
+            user("<command-name>/clear</command-name>\n<command-args></command-args>"),
+        ])
+        texts = [r[2] for r in recall.file_rows(path)]
+        self.assertEqual(texts, ["/recall what did we settle about the narwhal budget"])
+
     # ------------------------------------------------------------------ show
     def test_show_returns_surrounding_turns(self):
         self.standard_store()

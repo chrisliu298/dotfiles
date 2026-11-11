@@ -1,6 +1,6 @@
 # Claude Code transcript store
 
-> Verified on this machine 2026-06-10, Claude Code ~2.1.x. The JSONL schema is **undocumented**
+> Verified on this machine 2026-06-10, Claude Code ~2.1.x; queued attachments, `origin`, subagent and spill layout re-checked 2026-11-11. The JSONL schema is **undocumented**
 > (see anthropics/claude-code#53516) and drifts — re-verify shapes if the locator misbehaves.
 
 ## Location & cwd encoding
@@ -27,10 +27,12 @@ disk and is recallable. recall reads each transcript in full (no boundary cutoff
 
 ## The current session
 
-recall **excludes the current session by default** — its content is already in your live context,
-and its just-typed query would otherwise self-match. The current session is identified by the
-**`CLAUDE_CODE_SESSION_ID`** env var (its transcript is `<projects>/<enc>/<that-id>.jsonl`). Pass
-`--include-current` to search it anyway (e.g. recovering this session's own pre-compaction history).
+`search` and `grep` **exclude the current session by default** — its content is already in your
+live context, and its just-typed query would otherwise self-match. The current session is identified
+by the **`CLAUDE_CODE_SESSION_ID`** env var (its transcript is `<projects>/<enc>/<that-id>.jsonl`).
+`--session current` searches it anyway (e.g. recovering this session's own pre-compaction history);
+`session current`, `open` and `timeline` always include it. Lines printed by recall itself start
+with `⟦recall⟧`, and `grep` drops items carrying that marker or a `recall` invocation.
 recall never needs the live-PID / mtime session resolution rehydrate used — it searches *all* past
 sessions, not one.
 
@@ -46,11 +48,33 @@ the latest generated title. Codex thread names live in `~/.codex/session_index.j
 
 - **`isSidechain: true`** marks subagent/sidechain branches — parallel exploration, not the main
   thread. Filtered out of the corpus.
-- Only `type` ∈ {`user`, `assistant`} carry searchable turns. Message content is `message.content`:
-  either a string, or a list of blocks (`{type:"text"}`, `{type:"tool_use", name, input}`,
-  `{type:"tool_result", content}`). A `type:"user"` record whose blocks are `tool_result` is a
-  **tool-output** turn, not a genuine user message — kept apart so user-vs-agent attribution stays
-  clean (the confirmation line says "you decided" only for real user turns).
+- Messages come from `type` ∈ {`user`, `assistant`} and from queued attachments (below). Message
+  content is `message.content`: either a string, or a list of blocks (`{type:"text"}`,
+  `{type:"tool_use", name, input}`, `{type:"tool_result", content}`). A `type:"user"` record whose
+  blocks are `tool_result` is a **tool-output** turn, not a genuine user message. The index holds
+  messages only; `grep`/`open`/`session` read `tool_use` blocks as `command` items and
+  `tool_result` blocks as `output` items straight from the transcript (`shared/items.py`).
+- **Mid-turn messages** (typed while the agent was working) are not `type:"user"` records but
+  `type:"attachment"` with `attachment.type:"queued_command"` and the text in `attachment.prompt`;
+  `queue-operation` records duplicate it and are ignored.
+- **Who spoke** — `speaker()` in `scripts/recall.py`, from the record's (or attachment's)
+  `origin.kind` and text: `human` → `user`; `peer`/`channel`, or text opening with "Another Claude
+  session sent a message", `<cross-session-message`, `<agent-message`, `<channel ` or
+  `<teammate-message` → `peer`; `task-notification` and other non-human kinds → dropped.
+  `isMeta:true` or `promptSource` `system`/`sdk` (hook feedback, scheduled prompts) → `automated`,
+  as is a `human` prompt another tool typed (`# ` brief, `你是独立`/`你是新的`, `这个会话刚被重启`,
+  `[cx `; agent-audit's `AUTOMATED` rule — on 2026-11-11 all 261 human-origin `# ` messages were a
+  session's first, tool-sent brief). A slash command keeps `/<name> <args>` when its
+  `<command-args>` is non-empty. An `AskUserQuestion` result (call id seen, or
+  `toolUseResult.answers`) is the user's answer unless `is_error` (a blocking hook). Inside a
+  subagent transcript every user-role message is the parent agent's, so `peer`.
+- **Events** (`event` items, not indexed): `type:"system"` records (`subtype`, `content`) and the
+  compaction summary (`isCompactSummary`, shown as `compacted`).
+- **Spilled tool results**: an oversized `tool_result` keeps a `<persisted-output>` preview naming
+  `<projects>/<enc>/<session>/tool-results/<id>.txt`; `grep` searches those files and
+  `open REF --full` pages the full text. Subagent transcripts live at
+  `<projects>/<enc>/<session>/subagents/agent-<id>.jsonl` with an `agent-<id>.meta.json` beside them
+  (`agentType`, `description`, …); `session ID --children` lists them.
 - **Injected user-role turns are dropped from the corpus** (they share the user role but aren't the
   user speaking): skill-load preambles (`Base directory for this skill:`), slash-command echoes
   (`<command-name>`, `<command-message>`), background-task notices (`<task-notification>`), local
@@ -66,8 +90,7 @@ recall searches only **user-spawned interactive** sessions by default — not re
 `permission-mode`, `file-history-snapshot`, `ai-title` (`mode` is typically record #1).
 Relay/headless transcripts ("Read and execute this relay request: …", first record
 `type:"queue-operation"`) carry none of them. `is_interactive()` returns True on the first TUI-type
-record within a bounded probe; presence of any ⇒ interactive. In 2.1.175 subagents (Agent/Task tool)
-do **not** write into the project dir (their transcripts live under a session-scoped temp dir), so
-the projects-dir list is already subagent-free; the TUI-type predicate additionally excludes
-relay/headless runs. In this repo's store ~35% of session files are relay/headless dispatch noise,
+record within a bounded probe; presence of any ⇒ interactive. Subagent transcripts sit one level
+deeper (`<session>/subagents/`), so the `*/*.jsonl` listing the index uses is subagent-free; the
+TUI-type predicate additionally excludes relay/headless runs. In this repo's store ~35% of session files are relay/headless dispatch noise,
 so this filter is the single biggest precision lever.

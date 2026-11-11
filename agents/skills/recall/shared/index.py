@@ -161,9 +161,9 @@ class Index:
             info, terms = {}, set()
         records = []
         if self.source == "claude":
-            for line, role, text, date, tokens, project, timestamp, system in api.file_rows(path, cursor):
+            for line, role, text, date, tokens, project, timestamp in api.file_rows(path, cursor):
                 records.append(((path.stem, line, line, role, timestamp, _epoch(timestamp, mtime_ns / 1e9), date,
-                                 project, None, "system" if system else None, None, None), text, Counter(tokens)))
+                                 project, None, None, None, None), text, Counter(tokens)))
             if not info.get("interactive"):
                 info["interactive"] = api.is_interactive(path)
             info["title"] = api.cursor_title(cursor)
@@ -218,6 +218,11 @@ class Index:
                     found[message][term] = count
         return found
 
+    def title(self, path: Path) -> str | None:
+        """The title recorded at the file's last indexing, without reading the transcript."""
+        found = self.db.execute("SELECT info FROM files WHERE path=?", (str(path),)).fetchone()
+        return json.loads(found[0]).get("title") or None if found and found[0] else None
+
     def text(self, message: int) -> str:
         return self.db.execute("SELECT text FROM msgs WHERE id=?", (message,)).fetchone()[0]
 
@@ -242,7 +247,7 @@ class Index:
             title = info[file_id].get("title") or ""
             for m in messages[file_id]:
                 doc = partial(self._doc, path, m, title)
-                rows.append(dict(session=m[2], role=m[5], date=m[8], epoch=m[7], system=m[11] == "system", line=m[3],
+                rows.append(dict(session=m[2], role=m[5], date=m[8], epoch=m[7], line=m[3],
                                  project=m[9], order=m[3],
                                  title=title or None, token_counts=counts.get(m[0], {}), length=m[14],
                                  fetch=partial(self.text, m[0]), render=doc))
@@ -277,7 +282,7 @@ class Index:
         for m, path in kept:
             if exclude and m[2] == exclude:
                 continue
-            rows.append(dict(session=m[2], role=m[5], timestamp=m[6], cwd=m[9], locator={"item_id": m[10]},
+            rows.append(dict(session=m[2], role=m[5], timestamp=m[6], cwd=m[9], line=m[3], locator={"item_id": m[10]},
                              title=titles.get(m[2]), date=m[8], epoch=m[7], order=m[4], token_counts=counts.get(m[0], {}),
                              length=m[14], fetch=partial(self.text, m[0]), render=partial(self._turn, path, m, root)))
         return rows, {"stats": total.as_dict(),

@@ -11,7 +11,7 @@ SPEC.loader.exec_module(r)
 
 
 def row(session, text, order=1, role="user", date="2026-09-01"):
-    return dict(session=session, text=text, order=order, role=role, date=date,
+    return dict(session=session, text=text, order=order, role=role, date=date, epoch=1000.0 + order,
                 line=order, confirmation=f"recall: {date} · {session} · {text[:30]}")
 
 
@@ -116,13 +116,16 @@ class TimelineTests(unittest.TestCase):
                      project="/work/app", title="T") for i, text in enumerate(texts)]
 
     def test_drops_system_and_harness_turns(self):
-        rows = self.rows("Another Claude session sent a message: hi", "[Request interrupted by user]",
+        rows = self.rows("[Request interrupted by user]",
                          "Your response above was stopped", "(Re-invocation of /recall — x", "[Image: source: /a.png]",
                          "ship it")
-        rows.append(dict(rows[0], text="scheduled tick", order=9, line=9, epoch=1009.0, system=True))
+        # The parser marks peers and harness prompts; a user-only window leaves them out.
+        rows.append(dict(rows[0], text="scheduled tick", order=9, line=9, epoch=1009.0, role="automated"))
+        rows.append(dict(rows[0], text="Another Claude session sent a message: hi", order=10, line=10, epoch=1010.0,
+                         role="peer"))
         found = r.list_window(rows, 0, 2000)
         self.assertEqual([m["text"] for m in found["sessions"][0]["messages"]], ["ship it"])
-        self.assertEqual(found["coverage"]["messages_filtered"], 6)
+        self.assertEqual(found["coverage"]["messages_filtered"], 4)
 
     def test_keeps_real_requests_and_every_repeat(self):
         rows = self.rows("Generate a title for this report", "[Image: source: /a.png] 修复按钮", "继续", "只改文档", "继续")

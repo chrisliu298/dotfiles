@@ -62,6 +62,18 @@ parser discards that injected preamble and keeps the text after `## My request:`
 For response annotations, it retains only the user's annotation comments and
 trailing request, not the selected assistant text or annotation boilerplate.
 
+## Commands, outputs and peer messages
+
+The index holds `message` items only. `recall grep`, `open` and `session` read the rest straight
+from the rollout (`shared/items.py`, verified 2026-11-11): `response_item` payloads of type
+`function_call` (`arguments`, the `cmd`/`command` field when present), `custom_tool_call`
+(`input`) and `local_shell_call` become `command` items; their `*_output` payloads (matched by
+`call_id`) become `output` items; `agent_message` (`author` → `recipient`, a subagent or peer
+thread) becomes a `peer` message and is indexed like other messages. `event_msg` payloads
+`task_started`, `task_complete` (`last_agent_message`), `turn_aborted` (`reason`), `error` and
+`stream_error`, and top-level `compacted` records, become `event` items (not indexed).
+Reasoning is never read.
+
 ## Bounded parsing
 
 The store can contain extremely large one-line payloads such as image data or
