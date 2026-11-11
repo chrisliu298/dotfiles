@@ -22,11 +22,10 @@ minimum-contrast = 1.1
 # Claude Code marks deleted diff text as faint; keep it readable in both modes.
 # faint-opacity = 0.75
 
-font-family = Berkeley Mono
-font-style = SemiCondensed
-font-style-bold = Bold SemiCondensed
-font-style-italic = SemiCondensed Oblique
-font-style-bold-italic = Bold SemiCondensed Oblique
+# Select SemiCondensed by its legacy family name, not `font-style`: Ghostty
+# applies `font-style-*` to every family, and PingFang has no "Bold
+# SemiCondensed", so bold Han text would fall back to Regular.
+font-family = Berkeley Mono SemiCondensed
 # Pin the Han fallback. Ghostty reuses whichever fallback face it loaded first,
 # so one Hangul or kana glyph otherwise makes shared Han characters render in a
 # Korean or Japanese font while simplified-only ones use PingFang, mixing weights.
