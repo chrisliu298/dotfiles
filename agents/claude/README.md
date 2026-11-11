@@ -8,6 +8,7 @@ Config for [Claude Code](https://claude.com/claude-code). Everything here target
 | `settings.json` | **merged** by `dotfiles.sh` | Merged onto the live file so keys Claude Code writes (e.g. `/effort`'s `modelSettings`) survive; repo values win and arrays are replaced whole, so a key deleted here must also be deleted from `~/.claude/settings.json`. `~/` is expanded to an absolute path, which Claude Code requires. `theme` is not set here; `shell/theme-apply` owns it (see below). |
 | `lang-guard.py` | symlink | Stop and PostToolUse hooks that keep interactive replies in Simplified Chinese: an English final reply is blocked once and rewritten, English narration before a tool call adds a reminder to the context. |
 | `computer-use-mcp.sh`, `computer-use-mcp-proxy.mjs`, `computer-use-mcp-smoke.mjs`, `computer-use-mcp-browser-smoke.mjs` | not installed; Claude and Codex MCP registrations point at the same repo path | The shared `codex-computer-use` MCP server — see [Codex Computer Use](#codex-computer-use). Tests: `node --test agents/claude/computer-use-mcp-proxy.test.mjs`. |
+| `channels.md` | not installed | How a running session gets woken by external events (bot messages, webhooks): a channel MCP server, compared with Monitor, cron, and the `asyncRewake` hook fallback. |
 | `statusline-command.sh` | symlink | Status line renderer. ANSI *named* colors only, so it follows the terminal palette — see below. |
 | `themes/anthropic-{dark,light}.json` | symlinks | Claude themes in Anthropic's brand palette, built on the ANSI variants so code syntax follows the terminal. |
 | `themes/openai-{dark,light}.json` | symlinks | Claude themes based on the built-in ANSI variants, with tuned text hierarchy, surfaces, and diff backgrounds. |
@@ -75,8 +76,10 @@ ChatGPT update or the Computer Use service breaks it, check how lcu handled the 
 - **Proxy.** `computer-use-mcp-proxy.mjs` makes every host behave the same; its header comment
   lists what it does and why.
 - **Requirements.** Helium open with the ChatGPT extension connected (its native host
-  manifest comes from the Codex app). After a ChatGPT update, restart long-running sessions
-  so their servers pick up the new runtime, and run
+  manifest comes from the Codex app). A ChatGPT update strands running servers on the old
+  runtime (every app and browser vanishes, with `native pipe startup failed`); the proxy notices
+  the replaced files on the next tool call and restarts its server, which resets the JS bindings
+  and tabs. After an update, run
   `node agents/claude/computer-use-mcp-smoke.mjs`, which drives the real runtime without
   changing anything (unless the refusal is broken, when it may launch 1Password), checks that
   1Password is refused and lists what it could not confirm.

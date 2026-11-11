@@ -250,6 +250,29 @@ test('a host that closes its read end does not crash the proxy past tab cleanup'
   assert.ok(p.serverLog().some((m) => m.params?.name === 'turn_ended'), 'turn_ended was not sent');
 });
 
+test('after an app update replaces the server files, the next call ends the old turn and runs on a fresh server', async (t) => {
+  const p = start(t);
+  await p.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't' } });
+  const oldPid = Number((await p.call('pid')).result.content[0].text);
+  assert.equal(Number((await p.call('pid')).result.content[0].text), oldPid, 'restarted without an update');
+  const fake = path.join(p.dir, 'fake.cjs');
+  fs.writeFileSync(fake + '.new', FAKE);
+  fs.renameSync(fake + '.new', fake); // what a Sparkle update does to the app bundle: same path, new file
+  const r = await p.call('pid');
+  const [note, pid] = r.result.content;
+  assert.match(note.text, /ChatGPT app was updated/);
+  assert.notEqual(Number(pid.text), oldPid);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(isAlive(oldPid), false);
+  const log = p.serverLog();
+  const ended = log.findIndex((m) => m.params?.name === 'turn_ended');
+  const reinit = log.findLastIndex((m) => m.method === 'initialize');
+  assert.ok(ended > 0 && reinit > ended, 'old turn did not end before the new server started');
+  assert.deepEqual(log[reinit].params.capabilities.elicitation, { form: {} });
+  assert.equal(log[reinit + 1].method, 'notifications/initialized');
+  assert.equal(Number((await p.call('pid')).result.content[0].text), Number(pid.text));
+});
+
 test('smoke only counts the real refusal as a refusal', () => {
   assert.equal(classifyDenial('Computer Use was not approved to use 1Password'), 'refused');
   assert.equal(classifyDenial('Invalid app: com.1password.1password'), 'not-installed');
