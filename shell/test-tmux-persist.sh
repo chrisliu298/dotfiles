@@ -8,6 +8,8 @@ repo_root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 test_root=$(mktemp -d "${TMPDIR:-/tmp}/tmux-persist-test.XXXXXX")
 export TMUX_PERSIST_STATE="$test_root/state" TMUX_PERSIST_CLAUDE_SESSIONS="$test_root/sessions"
 export TMUX_PERSIST_SOCKET="tmux-persist-test-$$" TMUX_PERSIST_LAUNCH="echo resumed"
+# The fake Claudes that show no launch dialog need not be waited on for long.
+export TMUX_PERSIST_DIALOG_WAIT=20
 unset TMUX_PANE  # a real pane id could collide with the private server's
 cleanup() {
     t kill-server 2>/dev/null || true
@@ -37,18 +39,19 @@ busy() {
     busy_epoch=$(LC_ALL=C /bin/date -j -f '%a %b %d %T %Y' "$(LC_ALL=C /bin/ps -o lstart= -p "$busy_pid" | xargs)" +%s)
     session "$busy_pid" "$(LC_ALL=C /bin/date -u -r "$busy_epoch" '+%a %b %d %T %Y')" "$1:@9.$busy_pane" "$2"
 }
-# resumed <pid> <pane> <id>: wait until <pane> resumed <id>, telling it about the
-# restart, and the old Claude <pid> is gone.
+# resumed <pid> <pane> <id> [<flags>]: wait until <pane> resumed <id>, telling it
+# about the restart right after the id (multi-value flags such as --mcp-config
+# would take it as one of their values), then <flags>, and the old Claude <pid> is gone.
 resumed() {
     tries=0
-    until t capture-pane -p -J -t "$2" | grep -q "^resumed $3 .*重启"; do
+    until t capture-pane -p -J -t "$2" | grep -q "^resumed $3 这个会话.*重启.*${4:+ $4}\$"; do
         tries=$((tries + 1)); [ "$tries" -lt 50 ] || fail "resume $3 not run in restarted pane"
         sleep 0.1
     done
     ! kill -0 "$1" 2>/dev/null || fail "old Claude still running"
 }
 snap() { cat "$TMUX_PERSIST_STATE/snapshot"; }
-row() { printf '%s\t%s\t%s\t%s' "$1" "$test_root" "$2" "${3:-}"; }
+row() { printf '%s\t%s\t%s\t%s\t%s' "$1" "$test_root" "$2" "${3:-}" "${4:-}"; }
 
 # No tmux server yet (as at boot): save leaves the snapshot alone.
 printf 'gone-r2v\t/x\tid-gone\n' > "$TMUX_PERSIST_STATE/snapshot"
@@ -115,6 +118,48 @@ until t capture-pane -p -t "=keep-r2v:" | grep -qxF "resumed id-keep --effort hi
     sleep 0.1
 done
 
+# Channel launch flags (--mcp-config, --dangerously-load-development-channels,
+# --channels) are saved and restored with it; other flags are not.
+t kill-session -t "=keep-r2v"
+busy keep-r2v id-ch --effort high --mcp-config /x/mcp.json --dangerously-load-development-channels server:avatar --channels=plugin:p@m --verbose
+"$tp" save
+[ "$(snap)" = "$(row keep-r2v id-ch high '--mcp-config /x/mcp.json --dangerously-load-development-channels server:avatar --channels plugin:p@m')" ] \
+    || fail "channel flags not saved: $(snap)"
+t kill-server
+"$tp" restore > /dev/null
+tries=0
+until t capture-pane -p -J -t "=keep-r2v:" | grep -qxF "resumed id-ch --effort high --mcp-config /x/mcp.json --dangerously-load-development-channels server:avatar --channels plugin:p@m"; do
+    tries=$((tries + 1)); [ "$tries" -lt 50 ] || fail "channel flags not restored: $(t capture-pane -p -J -t "=keep-r2v:")"
+    sleep 0.1
+done
+
+# Without an effort, the flags stay in their own column (an empty column must not
+# collapse), and a flag keeps all of its values.
+t kill-session -t "=keep-r2v"
+busy keep-r2v id-noeff --channels plugin:a@m plugin:b@m --verbose
+"$tp" save
+[ "$(snap)" = "$(row keep-r2v id-noeff '' '--channels plugin:a@m plugin:b@m')" ] || fail "flags without effort not saved: $(snap)"
+t kill-server
+"$tp" restore > /dev/null
+tries=0
+until t capture-pane -p -J -t "=keep-r2v:" | grep -qxF "resumed id-noeff --channels plugin:a@m plugin:b@m"; do
+    tries=$((tries + 1)); [ "$tries" -lt 50 ] || fail "flags without effort not restored: $(t capture-pane -p -J -t "=keep-r2v:")"
+    sleep 0.1
+done
+
+# A snapshot written before the flags column still restores.
+t kill-server
+printf 'old-r2v\t%s\tid-old4\thigh\n' "$test_root" > "$TMUX_PERSIST_STATE/snapshot"
+"$tp" restore > /dev/null
+tries=0
+until t capture-pane -p -J -t "=old-r2v:" | grep -qxF "resumed id-old4 --effort high"; do
+    tries=$((tries + 1)); [ "$tries" -lt 50 ] || fail "old snapshot not restored: $(t capture-pane -p -J -t "=old-r2v:")"
+    sleep 0.1
+done
+t kill-session -t "=old-r2v"
+busy keep-r2v id-keep --effort high
+"$tp" save
+
 # Running sessions are left alone.
 [ -z "$("$tp" restore)" ] || fail "restore touched a running session"
 
@@ -139,15 +184,60 @@ resumed "$busy_pid" "$busy_pane" id-two
 # restart keeps the effort the old Claude was launched with, as --effort or --effort=.
 busy busy id-high --effort high
 "$tp" restart busy > /dev/null
-resumed "$busy_pid" "$busy_pane" "id-high --effort high"
+resumed "$busy_pid" "$busy_pane" id-high "--effort high"
 busy busy id-eq --effort=xhigh
 "$tp" restart busy > /dev/null
-resumed "$busy_pid" "$busy_pane" "id-eq --effort xhigh"
+resumed "$busy_pid" "$busy_pane" id-eq "--effort xhigh"
+
+# restart keeps the channel launch flags too.
+busy busy id-chr --mcp-config /x/mcp.json --dangerously-load-development-channels server:avatar
+"$tp" restart busy > /dev/null
+resumed "$busy_pid" "$busy_pane" id-chr "--mcp-config /x/mcp.json --dangerously-load-development-channels server:avatar"
+
+# A development channel's launch dialog is accepted on restart and restore: a fake
+# Claude shows it and resumes only after Enter.
+dialog="$test_root/dialog"
+cat > "$dialog" <<'SH'
+#!/bin/sh
+printf '  WARNING: Loading development channels\n  --dangerously-load-development-channels is for local channel development only.\n  Channels: server:avatar\n  \342\235\257 1. I am using this for local development\n    2. Exit\n  Enter to confirm \302\267 Esc to cancel\n'
+read -r _
+echo "accepted $*"
+SH
+chmod +x "$dialog"
+# A resumed conversation quoting that dialog has its input box below it: no Enter.
+quoted="$test_root/quoted"
+cat > "$quoted" <<'SH'
+#!/bin/sh
+printf '  WARNING: Loading development channels\n  --dangerously-load-development-channels is for local channel development only.\n  Channels: server:avatar\n  \342\235\257 1. I am using this for local development\n    2. Exit\n  Enter to confirm \302\267 Esc to cancel\n\n\342\235\257 \n'
+read -r _
+echo "wrongly accepted"
+SH
+chmod +x "$quoted"
+busy busy id-quoted --dangerously-load-development-channels server:avatar
+TMUX_PERSIST_LAUNCH="$quoted" "$tp" restart busy > /dev/null 2>&1
+! t capture-pane -p -J -t "$busy_pane" | grep -q "wrongly accepted" || fail "Enter pressed on a quoted dialog"
+busy busy id-dlg --mcp-config /x/mcp.json --dangerously-load-development-channels server:avatar
+TMUX_PERSIST_LAUNCH="$dialog" "$tp" restart busy > /dev/null
+tries=0
+until t capture-pane -p -J -t "$busy_pane" | grep -q "^accepted id-dlg 这个会话.*重启.* --mcp-config /x/mcp.json --dangerously-load-development-channels server:avatar\$"; do
+    tries=$((tries + 1)); [ "$tries" -lt 100 ] || fail "dialog not accepted on restart: $(t capture-pane -p -J -t "$busy_pane")"
+    sleep 0.1
+done
+t kill-server
+printf 'dlg-r2v\t%s\tid-dlg2\t\t--dangerously-load-development-channels server:avatar\n' "$test_root" > "$TMUX_PERSIST_STATE/snapshot"
+TMUX_PERSIST_LAUNCH="$dialog" "$tp" restore > /dev/null
+tries=0
+until t capture-pane -p -J -t "=dlg-r2v:" | grep -qxF "accepted id-dlg2 --dangerously-load-development-channels server:avatar"; do
+    tries=$((tries + 1)); [ "$tries" -lt 100 ] || fail "dialog not accepted on restore: $(t capture-pane -p -J -t "=dlg-r2v:")"
+    sleep 0.1
+done
+t kill-server
+rm "$TMUX_PERSIST_STATE/snapshot"
 
 # restart --effort sets the level for the restarted sessions.
 busy busy id-set --effort high
 "$tp" restart --effort medium busy > /dev/null
-resumed "$busy_pid" "$busy_pane" "id-set --effort medium"
+resumed "$busy_pid" "$busy_pane" id-set "--effort medium"
 
 # restart --all restarts every session running a Claude, and only those.
 t kill-server
@@ -156,8 +246,8 @@ busy two id-all2
 t new-session -d -s plain "sleep 600"
 [ "$("$tp" restart --effort low --all | sort)" = "$(printf 'restarted one (%s)\nrestarted two (%s)' "$one_pane" "$busy_pane" | sort)" ] \
     || fail "restart --all did not report exactly the Claude sessions"
-resumed "$one_pid" "$one_pane" "id-all1 --effort low"
-resumed "$busy_pid" "$busy_pane" "id-all2 --effort low"
+resumed "$one_pid" "$one_pane" id-all1 "--effort low"
+resumed "$busy_pid" "$busy_pane" id-all2 "--effort low"
 ! "$tp" restart --all one 2>/dev/null || fail "restart --all accepted session names"
 
 # A session without a running Claude stops the whole restart.

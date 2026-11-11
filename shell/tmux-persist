@@ -25,7 +25,12 @@ SESSIONS_DIR=${TMUX_PERSIST_CLAUDE_SESSIONS:-$HOME/.claude/sessions}
 # reply, which is Opus 5 after a refusal fallback even once /model switched back.
 LAUNCH=${TMUX_PERSIST_LAUNCH:-claude --dangerously-skip-permissions --model claude-opus-5-5 --resume}
 PATTERN='(*-r2v|adapt-clf|thesis)'
-SNAP=$STATE/snapshot  # name<TAB>cwd<TAB>sessionId<TAB>effort (empty: none given)
+SNAP=$STATE/snapshot  # name<TAB>cwd<TAB>sessionId<TAB>effort<TAB>flags (empty: none given)
+# Launch flags a session needs again on every launch: a channel (e.g. the Feishu
+# avatar bot's) only pushes messages into a Claude started with them. Each takes
+# one or more values, which must not contain spaces (ps drops the quoting).
+# `--effort` is kept on its own, as restart can override it.
+KEEP=(--mcp-config --dangerously-load-development-channels --channels)
 # The first message of a restarted conversation: inspect restored state before
 # recreating missing work; %s is the session id.
 RESTARTED="这个会话刚被重启了（tmux-persist restart）：Claude 进程已被替换，对话已恢复。先检查后台任务、Monitor、cron、scheduled wakeup 和 loop 的现状；定时任务先用 CronList 核对，只恢复仍需要且缺失的工作，保留已有频率，不重复创建。子代理上下文在 ~/.claude/projects/*/%s/subagents/，没有 \"finished\":true 的 meta.json 记录未完成工作，用 SendMessage 按文件名里的 agentId 继续，不要重新起。然后继续当前任务。"
@@ -95,6 +100,58 @@ effort_of() {
     (( i )) && print -r -- "${w[i]#--effort=}" || true
 }
 
+# flags_of <pid>: the KEEP flags Claude <pid> was launched with, each as
+# "<flag> <value>..." (from <flag> <value>... or <flag>=<value>), or nothing.
+# A flag's values run to the next word starting with "-", as Claude parses them.
+flags_of() {
+    local -a w out
+    local i f
+    w=(${(s: :)"$(/bin/ps -o command= -p "$1" 2>/dev/null)"})
+    for (( i = 1; i <= ${#w}; i++ )); do
+        for f in $KEEP; do
+            if [[ ${w[i]} == "$f" ]]; then
+                out+=("$f")
+                while (( i < ${#w} )) && [[ ${w[i+1]} != -* ]]; do out+=("${w[++i]}"); done
+                break
+            elif [[ ${w[i]} == "$f="* ]]; then
+                out+=("$f" "${w[i]#$f=}"); break
+            fi
+        done
+    done
+    print -r -- "${out[*]}"
+}
+
+# accept_dev_channels <target> <flags> <tenths>: a Claude launched with
+# --dangerously-load-development-channels first shows a full-screen warning
+# whose default is "1. I am using this for local development"; the session was
+# already confirmed by hand on its first launch, so press Enter on that dialog
+# alone: it counts only as the bottom of the screen (a resumed conversation
+# quoting it has its input box below). Up to 3 presses until it goes away; gives
+# up after <tenths> of a second without it, noting so in $STATE/dialog.log.
+on_dev_dialog() {
+    local screen
+    local -a last
+    screen=$(tmux_ capture-pane -p -t "$1" 2>/dev/null) || return 1
+    last=(${(f)"$(print -r -- "$screen" | grep -v '^[[:space:]]*$' | tail -4)"})
+    [[ $screen == *'WARNING: Loading development channels'* && ${last[1]} == *'Channels: '* \
+        && ${last[2]} == *'❯ 1. I am using this for local development'* && ${last[3]} == *'2. Exit'* \
+        && ${last[4]} == *'Enter to confirm'* ]]
+}
+accept_dev_channels() {
+    [[ " $2 " == *" --dangerously-load-development-channels "* ]] || return 0
+    local tries=0 presses wait
+    until on_dev_dialog "$1"; do
+        (( ++tries < $3 )) || { note "no development channel dialog in $1"; return 0; }
+        sleep 0.1
+    done
+    for (( presses = 0; presses < 3; presses++ )); do
+        tmux_ send-keys -t "$1" Enter
+        for (( wait = 0; wait < 30; wait++ )); do on_dev_dialog "$1" || return 0; sleep 0.1; done
+    done
+    note "development channel dialog in $1 still open after 3 presses"
+}
+note() { print -u2 "tmux-persist: $1"; mkdir -p "$STATE"; print -r -- "$(date '+%F %T') $1" >> "$STATE/dialog.log"; }
+
 # live <name>: "pid<TAB>pane<TAB>cwd<TAB>sessionId<TAB>version" for each live Claude in <name>.
 live() {
     local name rest
@@ -107,21 +164,23 @@ live() {
 save() {
     local -A rows
     local -a open
-    local name pid pane cwd id ver effort
+    local name pid pane cwd id ver effort flags
     open=(${(f)"$(tmux_ list-sessions -F '#S' 2>/dev/null || true)"})
     # No tmux server (e.g. at boot, before restore) says nothing about which
     # sessions were closed, so the snapshot stays as it is.
     (( ${#open} )) || return 0
     # Keep the last known entry for a session that is still open but whose
     # Claude is not running now; a session closed on purpose drops out.
-    [[ -f $SNAP ]] && while IFS=$'\t' read -r name cwd id effort; do
+    # A doubled tab makes it a non-whitespace separator, so an empty effort
+    # column does not collapse and shift the flags into it.
+    [[ -f $SNAP ]] && while IFS=$'\t\t' read -r name cwd id effort flags; do
         persisted "$name" && (( ${open[(Ie)$name]} )) || continue
         native_owned "$name" "$id" && continue
-        rows[$name]="$cwd"$'\t'"$id"$'\t'"$effort"
+        rows[$name]="$cwd"$'\t'"$id"$'\t'"$effort"$'\t'"$flags"
     done < "$SNAP"
     while IFS=$'\t' read -r name pid pane cwd id ver; do
         persisted "$name" || continue
-        rows[$name]="$cwd"$'\t'"$id"$'\t'"$(effort_of "$pid")"
+        rows[$name]="$cwd"$'\t'"$id"$'\t'"$(effort_of "$pid")"$'\t'"$(flags_of "$pid")"
     done < <(claudes)
     mkdir -p "$STATE"
     for name in ${(ko)rows}; do print -r -- "$name"$'\t'"${rows[$name]}"; done > "$SNAP.tmp"
@@ -129,26 +188,31 @@ save() {
 }
 
 restore() {
-    local name cwd id effort
+    local name cwd id effort flags
     [[ -f $SNAP ]] || return 0
-    while IFS=$'\t' read -r name cwd id effort; do
+    while IFS=$'\t\t' read -r name cwd id effort flags; do  # \t\t: see save
         persisted "$name" || continue
         native_owned "$name" "$id" && continue
         tmux_ has-session -t "=$name" 2>/dev/null && continue
         [[ -d $cwd ]] || cwd=$HOME
         # Typed into the pane's shell, so exiting Claude leaves a shell behind.
         tmux_ new-session -d -s "$name" -c "$cwd"
-        tmux_ send-keys -t "=$name:" "$LAUNCH $id${effort:+ --effort $effort}" Enter
+        tmux_ send-keys -t "=$name:" "$LAUNCH $id${effort:+ --effort $effort}${flags:+ $flags}" Enter
+        # At login the network and several Claudes start together: wait up to 5 min.
+        accept_dev_channels "=$name:" "$flags" ${TMUX_PERSIST_DIALOG_WAIT:-3000} &
         print -r -- "restored $name"
     done < "$SNAP"
+    wait
 }
 
 # restart_pane <shell> <name> <pid> <pane> <cwd> <id>: same pane, window and
 # attached clients; only the pane's process is replaced, by a login <shell>.
-# The new Claude gets EFFORT if set, else the old one's launch effort.
+# The new Claude gets EFFORT if set, else the old one's launch effort, and the
+# old one's KEEP flags; the message goes right after the id, as a flag taking
+# several values would swallow it.
 restart_pane() {
     local shell=$1 name=$2 pid=$3 pane=$4 cwd=$5 id=$6 tries=0
-    local effort=${EFFORT:-$(effort_of "$pid")}
+    local effort=${EFFORT:-$(effort_of "$pid")} flags=$(flags_of "$pid")
     [[ -d $cwd ]] || cwd=$HOME
     # An explicit command, since a bare respawn reruns the pane's original one.
     tmux_ respawn-pane -k -t "$pane" -c "$cwd" "exec ${(q)shell} -l"
@@ -158,7 +222,8 @@ restart_pane() {
         sleep 0.1
     done
     local msg; printf -v msg "$RESTARTED" "$id"
-    tmux_ send-keys -t "$pane" "$LAUNCH $id${effort:+ --effort $effort} ${(qq)msg}" Enter
+    tmux_ send-keys -t "$pane" "$LAUNCH $id ${(qq)msg}${effort:+ --effort $effort}${flags:+ $flags}" Enter
+    accept_dev_channels "$pane" "$flags" ${TMUX_PERSIST_DIALOG_WAIT:-600}
     print -r -- "restarted $name ($pane)"
 }
 
