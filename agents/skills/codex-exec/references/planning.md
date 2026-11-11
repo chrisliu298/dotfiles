@@ -1,6 +1,6 @@
 ## When to use
 
-Only delegate to Codex when the user explicitly requests it for this work.
+Delegate only when authorized by [Execution boundaries](../SKILL.md#execution-boundaries), including its exception only for the user-facing resident `*-r2v` Claude sessions and difficult Ark tasks.
 Otherwise do the work yourself or use the host's native subagent when delegation helps.
 For authorized Codex work, hand off once the plan and its boundaries are settled and
 you can check the result independently: changes spanning several files,

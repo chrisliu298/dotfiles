@@ -30,7 +30,7 @@ function descendant(pid, root) {
   for (let i = 0; pid > 1 && i < 40; i++, pid = parent(pid)) if (pid === root) return true;
   return false;
 }
-function composer(raw, kind) {
+function composer(raw, kind, cursor) {
   const lines = raw.split('\n'), plain = lines.map(clean);
   const mark = kind === 'claude' ? '❯' : '›';
   let i = plain.length - 1;
@@ -47,10 +47,14 @@ function composer(raw, kind) {
   }
   if (end < 0) throw Error('incomplete composer');
   let text = plain.slice(i, end).join('\n').slice(mark.length).trim();
+  if (/\[Pasted text/.test(text)) throw Error('collapsed paste');
+  // Claude's native ghost suggestion is dim, with the cursor still after the empty
+  // prompt. Check both signals; dim text alone must never waive a human draft.
+  if (kind === 'claude' && cursor?.cursorX === 2 && cursor?.cursorY === i &&
+      /^(?:\x1b\[[0-9;]*m)*❯[ \u00a0]\x1b\[2m(?:[^\x1b]|\x1b\[(?:0|22)m[ \t]*\n\x1b\[2m)*\x1b\[(?:0|22)m[ \t\n]*$/.test(lines.slice(i, end).join('\n'))) text = '';
   const rawFirst = lines[i];
   if (kind === 'codex' && /\x1b\[2m/.test(rawFirst) &&
       /^(Ask Codex to do anything|Summarize recent commits|Find and fix a bug in .+|Explain this codebase|Implement .+|Write tests for .+)$/.test(text)) text = '';
-  if (/\[Pasted text/.test(text)) throw Error('collapsed paste');
   return text;
 }
 function db() {
@@ -69,7 +73,7 @@ function agent(d, name) {
   if (!r) throw Error('unregistered agent: ' + name);
   return JSON.parse(r.data);
 }
-function self(d) {
+function registered(d) {
   const {kind, pid} = callerAgent();
   const sid = kind === 'codex' ? process.env.CODEX_THREAD_ID || process.env.CODEX_SESSION_ID : process.env.CLAUDE_CODE_SESSION_ID;
   if (!sid) throw Error('run inside a registered agent session');
@@ -78,38 +82,69 @@ function self(d) {
   if (pid !== r.pid || start(r.pid) !== r.procStart) throw Error('caller process differs; register again');
   return r;
 }
+// A send-only peer (an agent-team backend or a cx line) is known by its pane process, an
+// ancestor of every command the agent in that pane runs, whatever the agent is.
+function self(d) {
+  try { return registered(d); } catch (e) {
+    const peers = d.prepare("SELECT data FROM agents WHERE identity LIKE 'send-only:%'").all().map(x => JSON.parse(x.data));
+    for (let p = parent(process.pid), i = 0; p > 1 && i < 40; p = parent(p), i++) {
+      // A stale row for a reused PID differs in start time, so it never hides the live one.
+      const started = start(p), r = peers.find(x => x.pid === p && x.host === os.hostname() && x.procStart === started);
+      if (r) return r;
+    }
+    throw e;
+  }
+}
 function inspect(r) {
   const info = tmux(r.socket, 'display-message', '-p', '-t', r.pane,
-    '#{pane_pid}\t#{pane_in_mode}\t#{pane_width}\t#{pane_dead}').split('\t');
+    '#{pane_pid}\t#{pane_in_mode}\t#{pane_width}\t#{pane_dead}\t#{cursor_x}\t#{cursor_y}').split('\t');
   if (r.host !== os.hostname() || Number(info[0]) !== r.panePid || start(r.panePid) !== r.paneStart ||
       start(r.pid) !== r.procStart || !descendant(r.pid, r.panePid)) throw Error('target identity stale; register again');
   if (info[1] !== '0' || info[3] !== '0') throw Error('target copy mode or ended pane');
-  return {width: Number(info[2]), raw: tmux(r.socket, 'capture-pane', '-p', '-e', '-J', '-t', r.pane)};
+  // Keep Claude's physical rows so cursor_y and the prompt row share coordinates.
+  const join = r.kind === 'claude' ? [] : ['-J'];
+  return {width: Number(info[2]), cursorX: Number(info[4]), cursorY: Number(info[5]),
+    raw: tmux(r.socket, 'capture-pane', '-p', '-e', ...join, '-t', r.pane)};
 }
 function register(d, name, o) {
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$/.test(name || '')) throw Error('invalid agent name');
-  const caller = o.kind && o.pid ? null : callerAgent();
-  const kind = o.kind || caller.kind;
-  const sid = o.session || (kind === 'codex' ? process.env.CODEX_THREAD_ID || process.env.CODEX_SESSION_ID : process.env.CLAUDE_CODE_SESSION_ID);
-  if (!['claude', 'codex'].includes(kind) || !/^[a-f0-9-]{36}$/.test(sid || '')) throw Error('kind/session required');
-  const pane = o.pane || process.env.TMUX_PANE;
-  if (!/^%\d+$/.test(pane || '')) throw Error('tmux pane required');
-  const socket = o.socket || run('tmux', ['display-message', '-p', '-t', pane, '#{socket_path}']);
-  const panePid = Number(tmux(socket, 'display-message', '-p', '-t', pane, '#{pane_pid}'));
-  const pid = Number(o.pid || caller.pid);
-  if (!pid || !descendant(pid, panePid)) throw Error('agent PID is not in the selected pane');
-  const r = {name, identity: kind + ':' + sid, kind, sessionId: sid, host: os.hostname(), socket, pane,
-    panePid, paneStart: start(panePid), pid, procStart: start(pid)};
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(name || '')) throw Error('invalid agent name');
+  const r = o['send-only'] ? peer(name, o) : agentRecord(name, o);
   inspect(r);
-  const old = d.prepare('SELECT * FROM agents WHERE name=? OR identity=?').all(name, r.identity);
-  if (old.some(x => x.identity !== r.identity || x.name !== name) && !o.replace) throw Error('name/identity already bound; explicit --replace required');
+  // A send-only identity is its name, so another pane taking that name is a rebind too.
+  const rebind = x => x.identity !== r.identity || x.name !== name || r.sendOnly && ['socket', 'pane', 'panePid', 'paneStart'].some(k => JSON.parse(x.data)[k] !== r[k]);
   d.exec('BEGIN IMMEDIATE');
   try {
+    // Checked inside the write transaction, so a concurrent registration cannot slip between.
+    const old = d.prepare('SELECT * FROM agents WHERE name=? OR identity=?').all(name, r.identity);
+    if (old.some(rebind) && !o.replace) throw Error('name/identity already bound; explicit --replace required');
     d.prepare('DELETE FROM agents WHERE name=? OR identity=?').run(name, r.identity);
     d.prepare('INSERT INTO agents VALUES(?,?,?)').run(name, r.identity, JSON.stringify(r));
     d.exec('COMMIT');
   } catch (e) { d.exec('ROLLBACK'); throw e; }
   return r;
+}
+function paneOf(o) {
+  const pane = o.pane || process.env.TMUX_PANE;
+  if (!/^%\d+$/.test(pane || '')) throw Error('tmux pane required');
+  const socket = o.socket || run('tmux', ['display-message', '-p', '-t', pane, '#{socket_path}']);
+  return {pane, socket, panePid: Number(tmux(socket, 'display-message', '-p', '-t', pane, '#{pane_pid}'))};
+}
+// Registered by whoever starts the pane; it can send and be read, but nothing is typed into it.
+function peer(name, o) {
+  const {pane, socket, panePid} = paneOf(o), paneStart = start(panePid);
+  return {name, identity: 'send-only:' + name, kind: 'send-only', sendOnly: true, host: os.hostname(), socket, pane,
+    panePid, paneStart, pid: panePid, procStart: paneStart};
+}
+function agentRecord(name, o) {
+  const caller = o.kind && o.pid ? null : callerAgent();
+  const kind = o.kind || caller.kind;
+  const sid = o.session || (kind === 'codex' ? process.env.CODEX_THREAD_ID || process.env.CODEX_SESSION_ID : process.env.CLAUDE_CODE_SESSION_ID);
+  if (!['claude', 'codex'].includes(kind) || !/^[a-f0-9-]{36}$/.test(sid || '')) throw Error('kind/session required');
+  const {pane, socket, panePid} = paneOf(o);
+  const pid = Number(o.pid || caller.pid);
+  if (!pid || !descendant(pid, panePid)) throw Error('agent PID is not in the selected pane');
+  return {name, identity: kind + ':' + sid, kind, sessionId: sid, host: os.hostname(), socket, pane,
+    panePid, paneStart: start(panePid), pid, procStart: start(pid)};
 }
 async function deliver(d, m) {
   const state = (s, detail) => d.prepare('UPDATE messages SET state=?,detail=? WHERE id=?').run(s, detail, m.id);
@@ -125,12 +160,13 @@ async function deliver(d, m) {
   try {
     const before = inspect(r), text = '[peer] agent-msg read ' + m.id;
     if (text.length + 4 > before.width) throw Error('pane too narrow');
-    if (composer(before.raw, r.kind) !== '') throw Error('unsent draft');
+    if (composer(before.raw, r.kind, before) !== '') throw Error('unsent draft');
     // Persist uncertainty before typing. A crash must never cause an automatic resend.
     state('typed_unsubmitted', 'typing; inspect before any retry');
     tmux(r.socket, 'send-keys', '-t', r.pane, '-l', text);
     await pause(250);
-    if (composer(inspect(r).raw, r.kind) !== text) return state('typed_unsubmitted', 'input changed or folded; Enter withheld');
+    const after = inspect(r);
+    if (composer(after.raw, r.kind, after) !== text) return state('typed_unsubmitted', 'input changed or folded; Enter withheld');
     state('submit_unknown', 'submitting Enter; do not resend');
     tmux(r.socket, 'send-keys', '-t', r.pane, 'Enter');
     d.prepare("UPDATE messages SET state='submitted',detail=NULL WHERE id=? AND state='submit_unknown'").run(m.id);
@@ -145,26 +181,39 @@ async function deliver(d, m) {
 async function main(args) {
   const [cmd, ...rest] = args, o = {}, pos = [];
   for (let i = 0; i < rest.length; i++) {
-    if (rest[i] === '--replace' || rest[i] === '--retry' || rest[i] === '--self') o[rest[i].slice(2)] = true;
+    if (['--replace', '--retry', '--self', '--send-only'].includes(rest[i])) o[rest[i].slice(2)] = true;
     else if (['--kind','--session','--pane','--socket','--pid','--file','--id'].includes(rest[i])) {
       if (!rest[i + 1] || rest[i + 1].startsWith('--')) throw Error('missing option value');
       o[rest[i].slice(2)] = rest[++i];
     } else if (rest[i].startsWith('--')) throw Error('unknown option: ' + rest[i]);
     else pos.push(rest[i]);
   }
-  if (!cmd || cmd === '--help' || cmd === 'help') return console.log('agent-msg register NAME [--kind claude|codex --session ID --pane %N --pid PID]\nagent-msg list\nagent-msg send NAME --file FILE [--id ID]\nagent-msg send --self --file FILE --id ID   # explicit session timer wake\nagent-msg read ID\nagent-msg reply ID --file FILE [--id ID]\nagent-msg status [ID]\nagent-msg send --retry ID   # only deferred messages; never resends uncertain submissions');
+  if (!cmd || cmd === '--help' || cmd === 'help') return console.log('agent-msg register NAME [--kind claude|codex --session ID --pane %N --pid PID]\nagent-msg register NAME --send-only --pane %N   # by whoever starts that pane\nagent-msg unregister NAME [--pane %N --pid PANE_PID]   # send-only peers only; limited to that pane\nagent-msg whoami\nagent-msg list\nagent-msg send NAME --file FILE [--id ID]\nagent-msg send --self --file FILE --id ID   # explicit session timer wake\nagent-msg read ID\nagent-msg reply ID --file FILE [--id ID]\nagent-msg status [ID]\nagent-msg send --retry ID   # only deferred messages; never resends uncertain submissions');
   if (o.self && (cmd !== 'send' || pos.length || o.retry)) throw Error('--self requires send without a named target or retry');
   if (o.self && !o.id) throw Error('--self requires an explicit stable --id');
   const d = db();
   try {
     if (cmd === 'register') return console.log(JSON.stringify(register(d, pos[0], o)));
+    if (cmd === 'unregister') {
+      const r = d.prepare('SELECT data FROM agents WHERE name=?').get(pos[0] || '');
+      if (r && !JSON.parse(r.data).sendOnly) throw Error('only send-only peers can be unregistered');
+      // One conditional DELETE: --pane and --pid limit cleanup to that pane's registration, which a
+      // reopened pane may have replaced meanwhile; pane numbers repeat across tmux servers.
+      const pane = o.pane || null, pid = o.pid ? Number(o.pid) : null;
+      const removed = d.prepare(`DELETE FROM agents WHERE name=? AND identity LIKE 'send-only:%'
+        AND (? IS NULL OR json_extract(data, '$.pane')=?) AND (? IS NULL OR json_extract(data, '$.panePid')=?)`)
+        .run(pos[0] || '', pane, pane, pid, pid).changes > 0;
+      return console.log(JSON.stringify({name: pos[0], removed}));
+    }
     if (cmd === 'list') return console.log(JSON.stringify(d.prepare('SELECT name,identity,data FROM agents').all().map(x=>JSON.parse(x.data)), null, 2));
     const me = self(d);
+    if (cmd === 'whoami') return console.log(JSON.stringify({name: me.name, identity: me.identity, kind: me.kind}));
     if (cmd === 'read') {
       const m = d.prepare('SELECT * FROM messages WHERE id=?').get(pos[0]);
       if (!m || m.recipient !== me.identity) throw Error('message is not addressed to this session');
       d.prepare("UPDATE messages SET read_at=COALESCE(read_at,?),state='read' WHERE id=? AND state!='replied'").run(new Date().toISOString(), m.id);
-      console.log(JSON.stringify({peer_message: true, not_user_authorization: true,
+      const sender = d.prepare('SELECT name FROM agents WHERE identity=?').get(m.sender);
+      console.log(JSON.stringify({peer_message: true, not_user_authorization: true, sender_name: sender ? sender.name : null,
         ...d.prepare('SELECT * FROM messages WHERE id=?').get(m.id)}, null, 2)); return;
     }
     if (cmd === 'status') return console.log(JSON.stringify(pos[0] ? d.prepare('SELECT id,sender,recipient,state,detail,reply_to,read_at FROM messages WHERE id=? AND (sender=? OR recipient=?)').get(pos[0], me.identity, me.identity) :
@@ -185,6 +234,7 @@ async function main(args) {
       to = agent(d, original.sender); replyTo = original.id;
     } else to = o.self ? me : agent(d, pos[0]);
     if (to.identity === me.identity && !o.self) throw Error('cannot steer own session');
+    if (to.sendOnly) throw Error(to.name + ' is send-only; answer it through the command that started it (agent-team send or cx send)');
     const id = o.id || crypto.randomBytes(6).toString('hex');
     if (!/^[a-zA-Z0-9_-]{1,32}$/.test(id)) throw Error('invalid message id');
     const fingerprint = hash(JSON.stringify([me.identity, to.identity, body, replyTo]));

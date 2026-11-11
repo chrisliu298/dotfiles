@@ -12,12 +12,14 @@ people stay with you.
 
 ## Ark
 
-Only when the user asks for Ark (方舟) or Astra for that line (“用方舟 gpt 做”, “Astra 来改”),
-pass `--ark` to `cx start`; Ark replaces the subscription for that line, it is not a second
-line. The line then runs through `codex-ark` on Ark's GPT-6-Astra endpoint, or GPT-6.1-Sol
+When the user asks for Ark (方舟) or Astra, or a user-facing resident `*-r2v` Claude
+session delegates a difficult task under its standing authorization in global AGENTS,
+pass `--ark` to `cx start`. That exception excludes agent-team Claude instances and other subagents.
+Ark replaces the subscription for that line; it is not a second line. The line then runs through `codex-ark` on Ark's GPT-6-Astra endpoint, or GPT-6.1-Sol
 when the user asks for Sol (`ARK_MODEL=sol cx start ... --ark`). The choice is fixed when the line starts and kept
 across `open`, `send` and resume; a line cannot switch between Ark and the subscription. Never
-choose Ark yourself or fall back to it when the subscription is rate-limited; report that instead.
+choose Ark without explicit user request outside the resident `*-r2v` Claude difficult-task exception,
+or switch providers as an automatic rate-limit fallback; report that instead.
 An Ark 429 is the endpoint's rate limit: report it, and use Sol only if the user asks.
 
 ## Effort

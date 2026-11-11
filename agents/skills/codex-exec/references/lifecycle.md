@@ -1,8 +1,8 @@
 ## Closing and resuming
 
 Lines outlive your turn and your context, so close or remove each one as its state calls for.
-A line belongs to the Claude session that last started, sent to or opened it successfully,
-which is where `cx ask` questions go; `cx ls` shows it as OWNER (`me` for you), and `attach`
+A line belongs to the session that last started, sent to or opened it, whose agent-msg name
+its questions go to; `cx ls` shows it as OWNER (`me` for you), and `attach`
 does not change it. Act only on your own lines or ones the user hands you; a `cx send` or
 `cx open` from a restarted session takes a line over.
 

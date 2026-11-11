@@ -18,12 +18,24 @@ test('composer rejects modals/unknown layouts and preserves multiline drafts', (
   assert.equal(composer('› Ask Codex to do anything\n \n\x1b[49m footer', 'codex'), 'Ask Codex to do anything');
 });
 
-test('delivery, drafts, races, deduplication, locks, read/reply and stale identities', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-msg-test-'));
-  const sid = '11111111-1111-4111-8111-111111111111';
-  const sid2 = '22222222-2222-4222-8222-222222222222';
-  const env = {AGENT_MSG_HOME: root, CODEX_THREAD_ID: sid, TMUX_PANE: '%1'};
-  const state = {draft: '', width: 80, mode: 0, panePid: 42, race: false, submitted: [], agentKind: 'codex'};
+test('Claude dim prompt suggestions are empty only with the cursor at the empty input origin', () => {
+  const raw = '\x1b[39m❯\u00a0\x1b[2m目前进度如何\x1b[0m\n────\nstatus';
+  assert.equal(composer(raw, 'claude', {cursorX: 2, cursorY: 0}), '');
+  assert.equal(composer(raw, 'claude'), '目前进度如何');
+  assert.equal(composer(raw, 'claude', {cursorX: 8, cursorY: 0}), '目前进度如何');
+  assert.equal(composer(raw, 'claude', {cursorX: 2, cursorY: 1}), '目前进度如何');
+  const human = '\x1b[39m❯\u00a0\x1b[38;2;242;242;242m目前进度如何\x1b[39m\n────\nstatus';
+  assert.equal(composer(human, 'claude', {cursorX: 2, cursorY: 0}), '目前进度如何');
+  const mixed = raw.replace('目前进度如何', '目前进度如何\x1b[0m真实输入');
+  assert.equal(composer(mixed, 'claude', {cursorX: 2, cursorY: 0}), '目前进度如何真实输入');
+  assert.equal(composer(raw.replace('\n────', '\n真实的第二行\n────'), 'claude', {cursorX: 2, cursorY: 0}), '目前进度如何\n真实的第二行');
+  assert.equal(composer(raw.replace('目前进度如何', '目前进度\n如何'), 'claude', {cursorX: 2, cursorY: 0}), '');
+  assert.equal(composer(raw.replace('目前进度如何', '目前进度\x1b[0m\n\x1b[2m如何'), 'claude', {cursorX: 2, cursorY: 0}), '');
+  assert.throws(() => composer(raw.replace('目前进度如何', '[Pasted text 4 lines]'), 'claude', {cursorX: 2, cursorY: 0}), /collapsed/);
+});
+
+// Runs agent-msg against a fake ps/tmux: the caller's parent is PID 42, whose parent is 1.
+function fixture(env, state) {
   const output = [];
   const context = {module: {exports: {}}, __filename: source, console: {log: x => output.push(x)},
     process: {...process, env}, setTimeout,
@@ -33,20 +45,54 @@ test('delivery, drafts, races, deduplication, locks, read/reply and stale identi
         if (cmd === '/bin/ps') {
           if (args.at(-1) === 'ppid=') return String(Number(args[1]) === process.pid ? 42 : 1);
           if (args.at(-1) === 'comm=') return state.agentKind;
-          if (args.at(-1) === 'lstart=') return 'fixture-start';
+          if (args.at(-1) === 'lstart=') return (state.starts || {})[args[1]] || 'fixture-start';
         }
         if (cmd !== 'tmux') return cp.execFileSync(cmd, args, options);
         const a = args.slice(2), verb = a[0];
-        if (verb === 'display-message') return a.at(-1).includes('pane_in_mode') ? `${state.panePid}\t${state.mode}\t${state.width}\t0` : String(state.panePid);
-        if (verb === 'capture-pane') return state.screenKind === 'codex' ? `› ${state.draft}\n \n\x1b[49m footer` : `❯ ${state.draft}\n────\nstatus`;
+        if (verb === 'display-message') return a.at(-1).includes('pane_in_mode') ? `${state.panePid}\t${state.mode}\t${state.width}\t0\t${state.cursorX ?? 2}\t0` : String(state.panePid);
+        if (verb === 'capture-pane') return state.screenKind === 'codex' ? `› ${state.draft}\n \n\x1b[49m footer` : state.suggestion && !state.draft ? `\x1b[39m❯\u00a0\x1b[2m${state.suggestion}\x1b[0m\n────\nstatus` : `❯ ${state.draft}\n────\nstatus`;
         if (verb === 'send-keys' && a.includes('-l')) { state.draft += a.at(-1); if (state.race) state.draft += ' user typing'; return ''; }
         if (verb === 'send-keys' && a.at(-1) === 'Enter') { state.submitted.push(state.draft); state.draft = ''; return ''; }
         throw Error('unexpected tmux call');
       }};
     }};
   vm.runInNewContext(fs.readFileSync(source, 'utf8'), context);
-  const cli = (...args) => context.module.exports.main(args);
-  const last = () => JSON.parse(output.at(-1));
+  return {cli: (...args) => context.module.exports.main(args), last: () => JSON.parse(output.at(-1))};
+}
+
+test('delivery accepts a Claude ghost suggestion but preserves identical real input and typing races', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-msg-ghost-test-'));
+  const sid = '11111111-1111-4111-8111-111111111111';
+  const env = {AGENT_MSG_HOME: root, CODEX_THREAD_ID: sid, TMUX_PANE: '%1'};
+  const state = {draft: '', suggestion: '目前进度如何', width: 80, mode: 0, panePid: 42,
+    race: false, submitted: [], agentKind: 'codex'};
+  const {cli, last} = fixture(env, state);
+  const body = path.join(root, 'body'); fs.writeFileSync(body, 'peer body');
+  try {
+    await cli('register', 'sender', '--socket', '/test', '--pid', '42');
+    await cli('register', 'target', '--kind', 'claude', '--session', '22222222-2222-4222-8222-222222222222', '--pane', '%2', '--socket', '/test', '--pid', '42');
+    await cli('send', 'target', '--file', body, '--id', 'ghost');
+    assert.equal(last().state, 'submitted');
+    assert.deepEqual(state.submitted, ['[peer] agent-msg read ghost']);
+    state.draft = '目前进度如何'; // The user accepted/typed the same words and moved Home.
+    await cli('send', 'target', '--file', body, '--id', 'real');
+    assert.equal(last().state, 'deferred');
+    assert.equal(state.draft, '目前进度如何');
+    assert.equal(state.submitted.length, 1);
+    state.draft = ''; state.race = true;
+    await cli('send', 'target', '--file', body, '--id', 'race');
+    assert.equal(last().state, 'typed_unsubmitted');
+    assert.equal(state.submitted.length, 1);
+  } finally { fs.rmSync(root, {recursive: true}); }
+});
+
+test('delivery, drafts, races, deduplication, locks, read/reply and stale identities', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-msg-test-'));
+  const sid = '11111111-1111-4111-8111-111111111111';
+  const sid2 = '22222222-2222-4222-8222-222222222222';
+  const env = {AGENT_MSG_HOME: root, CODEX_THREAD_ID: sid, TMUX_PANE: '%1'};
+  const state = {draft: '', width: 80, mode: 0, panePid: 42, race: false, submitted: [], agentKind: 'codex'};
+  const {cli, last} = fixture(env, state);
   const body = path.join(root, 'body'); fs.writeFileSync(body, 'peer body');
   try {
     await cli('register', 'sender', '--socket', '/test', '--pid', '42');
@@ -90,5 +136,56 @@ test('delivery, drafts, races, deduplication, locks, read/reply and stale identi
     await cli('status', 'first'); assert.equal(last().state, 'replied');
     state.mode = 1; await cli('send', 'sender', '--file', body, '--id', 'copy'); assert.equal(last().state, 'deferred');
     state.mode = 0; state.panePid = process.pid + 100000; await cli('send', 'sender', '--file', body, '--id', 'stale'); assert.equal(last().state, 'deferred');
+  } finally { fs.rmSync(root, {recursive: true}); }
+});
+
+test('send-only peers ask registered agents but never receive', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-msg-test-'));
+  const sid = '11111111-1111-4111-8111-111111111111';
+  const env = {AGENT_MSG_HOME: root, CLAUDE_CODE_SESSION_ID: sid, TMUX_PANE: '%1'};
+  const state = {draft: '', width: 80, mode: 0, panePid: 42, race: false, submitted: [], agentKind: 'claude'};
+  const {cli, last} = fixture(env, state);
+  const body = path.join(root, 'body'); fs.writeFileSync(body, 'question');
+  const peer = 'cursor-review-0f0e0d0c-1111-2222-3333-444455556666';
+  try {
+    await cli('register', 'caller', '--socket', '/test', '--pid', '42');
+    await cli('whoami'); assert.equal(last().name, 'caller');
+    // A backend is known by its pane process, not by an agent session ID.
+    await cli('register', peer, '--send-only', '--pane', '%3', '--socket', '/test');
+    assert.equal(last().identity, 'send-only:' + peer);
+    // Any agent under that pane, including ones agent-msg cannot recognize, sends as the peer.
+    delete env.CLAUDE_CODE_SESSION_ID; state.agentKind = 'cursor-agent';
+    await cli('whoami'); assert.equal(last().name, peer);
+    await cli('send', 'caller', '--file', body, '--id', 'q1'); assert.equal(last().state, 'submitted');
+    env.CLAUDE_CODE_SESSION_ID = sid; state.agentKind = 'claude';
+    await cli('read', 'q1'); assert.equal(last().sender_name, peer); assert.equal(last().body, 'question');
+    // Answers go through the channel that started the peer, never agent-msg.
+    await assert.rejects(cli('reply', 'q1', '--file', body, '--id', 'a1'), /send-only/);
+    await assert.rejects(cli('send', peer, '--file', body, '--id', 'a2'), /send-only/);
+    await assert.rejects(cli('unregister', 'caller'), /only send-only/);
+    // Another pane cannot take a peer's name without --replace.
+    await assert.rejects(cli('register', peer, '--send-only', '--pane', '%4', '--socket', '/test'), /--replace/);
+    // A late cleanup for an earlier pane must not remove the current registration.
+    await cli('unregister', peer, '--pane', '%9'); assert.equal(last().removed, false);
+    await cli('unregister', peer, '--pane', '%3'); assert.equal(last().removed, true);
+    await cli('register', peer, '--send-only', '--pane', '%3', '--socket', '/test');
+    // A pane respawned within the same second keeps its start string but not its PID.
+    state.panePid = 43;
+    await assert.rejects(cli('register', peer, '--send-only', '--pane', '%3', '--socket', '/test'), /--replace/);
+    state.panePid = 42;
+    // The same pane number on another server, or after a restart, is a different pane.
+    await cli('unregister', peer, '--pane', '%3', '--pid', '43'); assert.equal(last().removed, false);
+    await cli('unregister', peer, '--pane', '%3', '--pid', '42'); assert.equal(last().removed, true);
+    await cli('register', peer, '--send-only', '--pane', '%3', '--socket', '/test');
+    await cli('unregister', peer); assert.equal(last().removed, true);
+    await cli('unregister', peer); assert.equal(last().removed, false);
+    delete env.CLAUDE_CODE_SESSION_ID; state.agentKind = 'cursor-agent';
+    await assert.rejects(cli('whoami'), /no parent Claude\/Codex agent|unregistered/);
+    // A stale row for a reused PID must not hide the live registration of that PID.
+    state.starts = {42: 'old-start'};
+    await cli('register', 'stale-peer', '--send-only', '--pane', '%5', '--socket', '/test');
+    state.starts = {42: 'new-start'};
+    await cli('register', 'live-peer', '--send-only', '--pane', '%6', '--socket', '/test');
+    await cli('whoami'); assert.equal(last().name, 'live-peer');
   } finally { fs.rmSync(root, {recursive: true}); }
 });

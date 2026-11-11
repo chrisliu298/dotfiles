@@ -4,7 +4,7 @@
 
 ```bash
 cx start NAME --effort LEVEL [--ark] [--repo DIR] [--base REF] [--branch BRANCH] < task.md
-                               # --ark only when the user asks for Ark; see Lines and effort
+                               # --ark under Execution boundaries; see Lines and effort
 cx send NAME < message.md      # follow-up or rework; resumes a closed line first
 cx wait NAME [--timeout S]     # until the turn that got the latest message ends; prints the reply
 cx diff NAME                   # uncommitted files, commits and diff since the line's base
@@ -18,8 +18,8 @@ cx rm NAME [--unmerged|--force]  # when done: remove worktree and line state; br
 
 `start` creates the worktree from a fresh `origin/main` by default on branch `codex/NAME`;
 pass `--branch` when the repository names branches by convention. Lines live in
-`~/.local/share/cx/NAME/` (`msg-NNN.md` sent, `reply-NNN.md` received, `ask-NNN.md` questions,
-`wt/` worktree).
+`~/.local/share/cx/NAME/` (`msg-NNN.md` sent, `reply-NNN.md` received, `planner` the
+agent-msg name questions go to, `wt/` worktree).
 
 After `start` or `send`, run `cx wait` in the background so its completion notifies you, and
 keep doing independent work. `send` to a running line steers the message into the current turn

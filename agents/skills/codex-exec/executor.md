@@ -25,14 +25,14 @@ When a decision is the planner's (a premise is wrong, the plan has two readings,
 needs something only it knows), ask it instead of guessing:
 
 ```bash
-<this skill>/scripts/cx ask < question.md     # scripts/cx beside this file
+agent-msg send "$(cat LINE_DIR/planner)" --file question.md     # exactly as the message pointer gives it
 ```
 
-Write the question so it can be answered without your context: what you found, the options,
-and your recommendation. The answer arrives as a new message in this session. Keep working on
-parts that do not depend on it; when everything left depends on it, end the turn with the
-question in your reply instead of waiting idle. When `cx ask` fails, put the question in your
-final reply.
+Write the question to a file outside the worktree so it can be answered without your context:
+what you found, the options, and your recommendation. The answer arrives as a new message in
+this session. Keep working on parts that do not depend on it; when everything left depends on
+it, end the turn with the question in your reply instead of waiting idle. When `agent-msg send`
+fails (no planner is recorded, or it is not reachable), put the question in your final reply.
 
 ## Each turn
 

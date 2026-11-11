@@ -11,7 +11,7 @@ Zsh with Zinit plugin manager and Starship prompt.
 | `.aliases` | Command shortcuts |
 | `.functions` | Shell utility functions |
 | `remap-keys` | macOS: right Option → right Control via `hidutil`, merged with existing mappings (e.g. Raycast Hyper Key); re-applied at login by the `local.remap-keys` LaunchAgent that `dotfiles.sh` writes. `remap-keys --reset` removes it |
-| `tmux-persist` | macOS: recreate the `*-r2v`, `adapt-clf` and `thesis` tmux sessions after a reboot, each resuming its Claude Code conversation in its cwd. `local.tmux-persist-save` snapshots them every 5 min (a session closed on purpose drops out), `local.tmux-persist-restore` restores at login; `tmux-persist` alone shows the snapshot. `tmux-persist restart [--effort <level>] <session>...` restarts the Claude in running sessions (e.g. after an update; `--all` in place of the names restarts every session running one) in place and in parallel, resuming the same conversations with a first message saying the session was restarted, so the agent checks background tasks, Monitors, cron jobs and loops before restoring only missing work (CronList first for timers, preserving their frequency; unfinished subagents are continued via `SendMessage`, not respawned); each keeps the `--effort` its Claude was launched with (also saved in the snapshot for restore), unless `--effort` sets a new one; `tmux-persist stale` lists the sessions whose Claude predates the installed version (the ones showing "Restart to update"), so `tpr $(tps)` restarts them all. Both resume on Opus 5.5, since `claude --resume` alone takes the model of the transcript's last reply. Test: `shell/test-tmux-persist.sh` |
+| `tmux-persist` | macOS: recreate the `*-r2v`, `adapt-clf` and `thesis` tmux sessions after a reboot, each resuming its Claude Code conversation in its cwd. `local.tmux-persist-save` snapshots them every 5 min (a session closed on purpose drops out), `local.tmux-persist-restore` restores at login; `tmux-persist` alone shows the snapshot. `tmux-persist restart [--effort <level>] <session>...` restarts the Claude in running sessions (e.g. after an update; `--all` in place of the names restarts every session running one) in place and in parallel, resuming the same conversations with a first message saying the session was restarted, so the agent checks background tasks, Monitors, cron jobs and loops before restoring only missing work (CronList first for timers, preserving their frequency; unfinished subagents are continued via `SendMessage`, not respawned); each keeps the `--effort` its Claude was launched with (also saved in the snapshot for restore), unless `--effort` sets a new one; restart and restore likewise keep the channel launch flags (`--mcp-config`, `--dangerously-load-development-channels`, `--channels`) a session was started with, so a Claude that receives a bot's messages through a channel keeps receiving them (the development-channel warning at launch, confirmed by hand on the session's first launch, is then accepted automatically: Enter only while that dialog is the bottom of the screen, up to 3 presses, giving up after 60 s on restart and 5 min on restore with a line in `~/.local/state/tmux-persist/dialog.log`), and the restart message goes right after the id so a multi-value flag cannot swallow it; `tmux-persist stale` lists the sessions whose Claude predates the installed version (the ones showing "Restart to update"), so `tpr $(tps)` restarts them all. Both resume on Opus 5.5, since `claude --resume` alone takes the model of the transcript's last reply. Test: `shell/test-tmux-persist.sh` |
 | `reap_agent_team.sh` | macOS: run by cron every 15 minutes; archives and stops idle agent-team sessions and closes idle Codex executor lines. `dotfiles.sh` adds the cron entry once. |
 | `rc-title` | After a Claude Code account switch, set each Remote Control session's title to its local name. Claude Code marks a conversation reconnected under another account as cross-account, gives its new remote session a random title, and stops pushing `/rename`; `rc-title` puts the local title (custom title, else AI title) on the sessions the current account owns, and archives the stale remote sessions earlier reconnects left active (skipping any still connected). Takes no options; a second run reporting `renamed 0, archived 0` verifies it |
 
@@ -30,7 +30,7 @@ its own private runtimes, which are managed by the app rather than dotfiles.
 `codex-ark` launches the native CLI on Ark's GPT-6-Astra (default) or
 GPT-6.1-Sol endpoint. Reasoning
 effort comes from `~/.codex/config.toml`, a selected profile, or `/model`.
-It uses `ARC_API_KEY`, `ARK_OPERATOR_ID`, and `ARK_OPERATOR_EMAIL`
+It uses `ARK_API_KEY`, `ARK_OPERATOR_ID`, and `ARK_OPERATOR_EMAIL`
 from the shell environment; keep their exports in `~/.zshenv.local`, outside Git.
 It uses launch-only provider overrides and `--no-daemon`, leaving the ordinary
 `codex`/`x` subscription route and both agent skills unchanged. Sessions remain
@@ -76,7 +76,7 @@ the user asks for Ark; `gpt` and ordinary cx lines stay on the subscription.
 
 ### Rex agent communication
 
-For registered Claude/Codex sessions in tmux, use the global `agent-msg` CLI:
+Claude-to-Claude peers use native `SendMessage`, even when both sessions run in tmux. Do not use `agent-msg`, `tmux send-keys`, or terminal input injection between Claude sessions. For Claude-to-Codex or Codex-to-Claude peers, use the global `agent-msg` CLI:
 
 ```sh
 agent-msg register training              # run inside that agent; uses its session env
@@ -86,7 +86,14 @@ agent-msg read question_1                # receiver only; confirms actual readin
 agent-msg reply question_1 --file answer.md --id answer_1
 agent-msg status question_1
 agent-msg send --retry question_1        # only an explicitly deferred, untyped message
+agent-msg whoami                         # the caller's registered name
 ```
+
+agent-team backends and cx lines are send-only peers: the command that starts the pane runs
+`agent-msg register NAME --send-only --pane %N` (and `agent-msg unregister NAME` when it ends),
+so the agent inside, whatever it is, can ask its registered caller. It is recognized by its pane
+process, an ancestor of every command it runs. Nothing is typed into a send-only peer; answers go
+back through `agent-team send` or `cx send`.
 
 Human registration can specify `--kind claude|codex --session UUID --pane %N
 --pid PID --socket PATH`; `--replace` explicitly rebinds an existing name.
@@ -157,19 +164,19 @@ codex-traex resume --last
 codex-traex --model GPT-5.6-Sol exec '只回复 OK'
 ```
 
-The `ct` shell shortcut launches `codex-traex --yolo`, matching `x`'s approval
+The `xt` shell shortcut launches `codex-traex --yolo`, matching `x`'s approval
 behavior. Its companion shortcuts mirror `xc`, `xr`, and `xu`:
 
 | Official | TraeX | Action |
 |----------|-------|--------|
-| `x` | `ct` | Start a session |
-| `xc` | `ctc` | Continue the most recent session |
-| `xr` | `ctr` | Open the session picker, or resume the supplied session ID |
-| `xu` | `ctu` | Update the shared native Codex CLI |
+| `x` | `xt` | Start a session |
+| `xc` | `xtc` | Continue the most recent session |
+| `xr` | `xtr` | Open the session picker, or resume the supplied session ID |
+| `xu` | `xtu` | Update the shared native Codex CLI |
 
-`ctc` and `ctr` select sessions from the independent TraeX home. Both accept
-additional Codex arguments, such as `ctr <session-id>` or
-`ctc --model GPT-5.6-Sol`. `ctu` calls `xu`; it does not update TraeX or the bridge.
+`xtc` and `xtr` select sessions from the independent TraeX home. Both accept
+additional Codex arguments, such as `xtr <session-id>` or
+`xtc --model GPT-5.6-Sol`. `xtu` calls `xu`; it does not update TraeX or the bridge.
 
 `setup` downloads `@byted/codex-traex-hybrid@0.3.32` from the internal registry
 with lifecycle scripts disabled, extracts only `payload/traex-bridge`, and stores
@@ -183,7 +190,7 @@ An existing package archive can be reused with `codex-traex setup /path/to/packa
 the installer checks its package name and pinned version before installation.
 
 The bridge reuses the native TraeX login. If startup reports an expired login,
-run `traex login`, complete the authentication flow, and retry `ct`.
+run `traex login`, complete the authentication flow, and retry `xt`.
 `traex login status` may still report a stored login after its token has expired.
 
 Choose models with `/model` or `--model`; model metadata and context limits come
@@ -299,10 +306,9 @@ See `.aliases` and `.functions` for the full list. Highlights:
 - **Python/uv**: `sv` (source venv), `us` (sync), `ua` (add)
 - **Claude Code**: `c` (auto-accept), `cc` (continue), `cr` (resume), `csd` / `csall` (Claude Desktop account / switch CLI + Desktop together), `scout-papers-scholar-inbox-all` (sequentially scout five awesome lists with Opus at high effort, showing final messages only)
 - **DeepSeek** (Claude Code on DeepSeek's Anthropic endpoint; every tier on `deepseek-flash`, 1M context, needs `DEEPSEEK_API_KEY` in `~/.zshenv.local`): `ds` (start), `dsc` (continue), `dsr` (resume)
-- **Codex**: `x` / `ct` (official / TraeX), `xc` / `ctc` (resume --last), `xr` / `ctr` (resume picker or session ID), `xu` / `ctu` (update shared CLI), `cal`/`cas`/`caw`/`caa` (codex-auth list/status/switch/login)
-- **Muse Code**: `m` (--yolo), `mc` (resume --last), `mr` (resume picker, or session name/ID); no `mu` — Muse has no update subcommand
+- **Codex**: `x` / `xt` (official / TraeX), `xc` / `xtc` (resume --last), `xr` / `xtr` (resume picker or session ID), `xu` / `xtu` (update shared CLI), `cal`/`cas`/`caw`/`caa` (codex-auth list/status/switch/login)
 - **Homebrew**: `bi`/`bu`/`bic` (install/uninstall/cask), `bupd`/`bupg` (update/upgrade)
-- **Functions**: `theme [light|dark|toggle|status]` (Ghostty + Starship + btop + tmux + Neovim + Codex TUI + Claude Code OpenAI/Anthropic themes + Muse Code + macOS; fastfetch follows ANSI), `rename_device`
+- **Functions**: `theme [light|dark|toggle|status]` (Ghostty + Starship + btop + tmux + Neovim + Codex TUI + Claude Code OpenAI/Anthropic themes + macOS; fastfetch follows ANSI), `rename_device`
 
 ### Reasoning effort
 
@@ -322,7 +328,7 @@ after updating to discard old function definitions. The headless shortcuts
 `chl` and `xhl` were also removed; invoke `claude -p` or `codex exec` directly
 for non-interactive work.
 
-Continue/resume suffixes (`*c`/`*r`) are uniform across the Claude/Codex/Muse aliases.
+Continue/resume suffixes (`*c`/`*r`) are uniform across the Claude/Codex aliases.
 
 ### User availability
 
@@ -333,8 +339,20 @@ the project and session IDs configured under `~/.local/state/presence/`. The eig
 active R2V sessions are configured on this host; retired and temporary sessions are excluded.
 
 Away questions are queued per session. Typing in one window keeps its 15-minute
-check-in grace without changing the global state. On return, each window asks its
+check-in grace without changing the global state. Only verified human input starts
+that grace; scheduled wakeups, peer messages and other automatic turns cannot renew it.
+When Claude omits the hook's `source`, the hook checks the current `prompt_id` in
+the transcript (a 1 MiB peek at input submission, then backwards to the latest input
+before a question). An unavailable or unverified origin grants no grace; the question
+hook can recover a delayed record using its original human input time. `prs back`
+still permits normal questions. Human messages typed while an agent is working
+also count; recovering an earlier input never shortens a newer check-in.
+On return, each window asks its
 own still-relevant questions; answered entries are removed by the passive hook.
+The prompt hook supplies each queued item with a stable `待问-xxxxxxxx` header.
+Re-asking with that header permits rewording without orphaning the original item;
+if it is deferred again, the same item is updated with the corrected wording and options.
+Only answered items are removed. Plain chat is not interpreted as an answer by the queue.
 Use `prs questions` to inspect queues; queue updates are internal to the passive hooks. The program lives in `shell/presence`, with
 `~/.local/bin/presence` pointing to it; no CLI guidance belongs in agent instructions.
 
