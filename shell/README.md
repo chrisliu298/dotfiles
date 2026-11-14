@@ -302,7 +302,7 @@ Verify: `node --test shell/rex-claude.test.cjs` and `shell/test-rex-tmux-exclusi
 See `.aliases` and `.functions` for the full list. Highlights:
 
 - **Shell**: `ez` (reload), `o` (open), `b` (btop), `theme [light|dark|toggle|status]` (OpenAI light/dark across terminal tools and macOS appearance)
-- **Tmux**: `t`, `ta`, `tl`, `tn`, `tk`, `to` (new/attach to `$PWD` name), `tka` (kill all)
+- **Tmux**: `t`, `ta`, `tl [substring]` (filter by name), `tn`, `tk`, `to` (new/attach to `$PWD` name), `tka` (kill all)
 - **Python/uv**: `sv` (source venv), `us` (sync), `ua` (add)
 - **Claude Code**: `c` (auto-accept), `cc` (continue), `cr` (resume), `csd` / `csall` (Claude Desktop account / switch CLI + Desktop together), `scout-papers-scholar-inbox-all` (sequentially scout five awesome lists with Opus at high effort, showing final messages only)
 - **DeepSeek** (Claude Code on DeepSeek's Anthropic endpoint; every tier on `deepseek-flash`, 1M context, needs `DEEPSEEK_API_KEY` in `~/.zshenv.local`): `ds` (start), `dsc` (continue), `dsr` (resume)
