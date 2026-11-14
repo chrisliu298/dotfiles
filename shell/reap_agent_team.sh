@@ -1,5 +1,5 @@
 #!/bin/bash
-# 回收空闲的 agent-team 会话：空闲超过阈值且无人 attach 的 review 会话，先存档屏幕再 stop。
+# 回收空闲的 agent-team 会话（按会话名格式 <backend>-review-<uuid> 匹配，不写死后端名单：11-08 加 ark 时名单没跟上，ark 会话从未被回收）：空闲超过阈值且无人 attach 的 review 会话，先存档屏幕再 stop。
 # 之所以先存档：后端报 provider error 时 waiter 会超时退出，回复只留在屏幕上（2026-10-21 第十四轮 gemini），
 # 盲停会丢掉已经产出的内容。
 export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
@@ -15,7 +15,7 @@ NOW=$(date +%s)
 # - 轮次已完成（turn_dir/done 的计数 > @review_sent）：从最后完成的时刻算空闲；
 # - 轮次在跑：只有窗口也超过阈值没有任何输出（TUI 跑轮次时转圈会持续刷屏）才算卡死。
 tmux list-sessions -F '#{session_name}|#{session_activity}|#{session_attached}|#{window_activity}' 2>/dev/null \
-| grep -E '^(claude|gpt|cursor|gemini|ds)-review-' \
+| grep -E '^[a-z]+-review-[0-9a-f-]{36}[|]' \
 | while IFS='|' read -r name act attached winact; do
     [ "$attached" != "0" ] && continue
     turn_dir=$(tmux show-options -v -t "$name" @review_turn_dir 2>/dev/null)
@@ -37,7 +37,7 @@ tmux list-sessions -F '#{session_name}|#{session_activity}|#{session_attached}|#
     $H stop "$name" >/dev/null 2>&1
     echo "$(date '+%FT%T%z') REAPED $name idle=${idle}min archived=$f" >> "$LOG"
   done
-left=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -cE '^(claude|gpt|cursor|gemini|ds)-review-')
+left=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -cE '^[a-z]+-review-[0-9a-f-]{36}$')
 echo "$(date '+%FT%T%z') checked idle>=${IDLE_MIN}min, remaining review sessions: $left" >> "$LOG"
 
 # Codex 执行线（cx-*）：最新一条消息已有回复、回复距今超过阈值、无人 attach 的，用 cx close 关掉。
