@@ -207,3 +207,17 @@ def test_cursor_turn_that_ended_before_the_supplement_is_never_replayed(session)
     time.sleep(0.3)
     assert (directory / 'done').read_text() == '2'
     assert (directory / 'last').read_text() == 'Follow-up answer.'
+
+
+def test_supplement_with_characters_cursor_garbled_still_completes(session):
+    # Cursor decodes pasted input per 1024-byte read, so a multibyte character split
+    # across reads reaches the transcript as U+FFFD bytes.
+    directory, transcript = session
+    history = supplement(directory, [record('user', 'Original.'), record('assistant', 'Previous answer.')])
+    history[-2] = record('user', TIMESTAMP + '\n<user_query>\n补\ufffd\ufffd\ufffd信息\nsecond line\n</user_query>')
+    write(transcript, history)
+    assert subprocess.run(['node', str(SCRIPT), 'received', str(directory)]).returncode == 0
+    write(transcript, history + [{'type': 'turn_ended', 'status': 'success'}])
+    until(lambda: (directory / 'done').read_text() == '2')
+    assert not (directory / 'latest-message.json').exists()
+    assert (directory / 'last').read_text() == 'Supplement included.'

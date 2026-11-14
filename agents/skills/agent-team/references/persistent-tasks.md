@@ -19,19 +19,19 @@ From the authorized working directory:
 ```bash
 # helper is scripts/agent-team beside this SKILL.md.
 $helper backends
-session="$($helper start --backend claude < /tmp/review.md)"
-# Same assignment for gpt, cursor and ds, a distinct one for claude:
-$helper start --backend gpt --backend cursor --backend ds \
+session="$($helper start --effort medium --backend claude < /tmp/review.md)"
+# Same assignment for gpt, carbon and hydro, a distinct one for claude:
+$helper start --effort high --backend gpt --backend carbon --backend hydro \
   --backend claude=/tmp/claude-review.md < /tmp/review.md
-# pro receives the file contents; claude receives the path:
-$helper start --backend pro --backend claude --file src/main.py < /tmp/review.md
+# pro receives the file contents and ignores --effort; claude receives the path:
+$helper start --effort high --backend pro --backend claude --file src/main.py < /tmp/review.md
 $helper wait "$session"
 $helper send "$session" < /tmp/supplement.md
 $helper wait "$session"
 $helper stop "$session"
 
 # A multi-backend start returns a JSON manifest of independent sessions.
-$helper start --backend claude --backend gpt --backend ds < /tmp/review.md
+$helper start --effort high --backend claude --backend gpt --backend hydro < /tmp/review.md
 # Read session handles from the manifest; later actions infer each backend.
 $helper wait "$session1" "$session2" "$session3"
 $helper send "$session1" "$session2" "$session3" < /tmp/supplement.md
@@ -39,6 +39,7 @@ $helper wait "$session1" "$session2" "$session3"
 $helper stop "$session1" "$session2" "$session3"
 ```
 
+A session keeps the effort it started with; `send` cannot change it.
 Single-backend start prints its session name. Multi-backend start returns
 `{"sessions":[{"backend":"claude","session":"..."}],"errors":[],"is_error":false}`.
 Inspect the exit code and errors. A partial startup returns nonzero while retaining

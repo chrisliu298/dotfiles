@@ -33,9 +33,15 @@ function userKey(records) {
   const index = records.findLastIndex(isRequest);
   return index < 0 ? null : hash([index, records[index]]);
 }
+// Cursor decodes pasted input per 1024-byte read, so a multibyte character split across
+// reads reaches the transcript as one U+FFFD per byte.
+const pasted = text => new RegExp(Array.from(text, char => {
+  const literal = char.replace(/[\\^$.*+?()[\]{}|/]/g, '\\$&');
+  return Buffer.byteLength(char) > 1 ? `(?:${literal}|\\uFFFD{1,4})` : literal;
+}).join(''), 'u');
 function received(records, expected) {
   const user = records.findLast(isRequest);
-  return userKey(records) !== expected.userKey && textOf(user || {}).includes(expected.text);
+  return userKey(records) !== expected.userKey && pasted(expected.text).test(textOf(user || {}));
 }
 
 if (action === 'config') {

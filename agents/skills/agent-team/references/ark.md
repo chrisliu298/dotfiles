@@ -2,7 +2,7 @@
 
 Use only when the user names Ark (方舟). It is the [`gpt`](gpt.md) backend launched through
 `~/.local/bin/codex-ark` instead of the subscription login: the same Codex CLI (0.159.2+),
-`~/.codex` sessions, `--yolo`-equivalent full access, effort `high`, turn detection, `wait`,
+`~/.codex` sessions, `--yolo`-equivalent full access, `--effort` handling, turn detection, `wait`,
 `send`, `interrupt` and one-shot behavior, so read `gpt.md` for those.
 
 The model is GPT-6-Astra on Ark. When the user asks for Sol, run the helper with

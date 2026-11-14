@@ -1,14 +1,17 @@
 ---
 name: agent-team
-description: Delegate read-only analysis, research, planning or review to the gpt (Codex), ark (Codex on Ark/方舟), claude, cursor (Gemini), ds (DeepSeek) or pro (ChatGPT Pro) backends, alone or in parallel, when the user names one. Not for implementation (codex-exec), pro alone (gpt-pro), or a bare "subagent"/"子代理" (native Agent tool).
+description: Delegate read-only analysis, research, planning or review to the gpt (Codex), ark (Codex on Ark/方舟), claude, carbon (Gemini 4 Carbon), hydro (Gemini 4 Hydrogen) or pro (ChatGPT Pro) backends, alone or in parallel, when the user names one. Not for implementation (codex-exec), pro alone (gpt-pro), or a bare "subagent"/"子代理" (native Agent tool).
 ---
 
 # Agent Team
 
-The user chooses the backend, not a
-model or effort tier. Each backend runs with its pinned model and effort, `high`
-for all of them; no model, effort, or mode selection
-options are exposed. Every backend runs with the
+The user chooses the backend, not a model. Each backend runs its pinned model; no
+model or mode selection options are exposed. You choose the reasoning effort for
+every `start` and `--once` with `--effort medium|high`: `medium` for bounded,
+well-specified work (a focused question, a small diff, a lookup across known files),
+`high` for open-ended or hard work (architecture, subtle correctness, debugging
+without a reproduction, broad research). The user's explicit effort wins. `pro`
+takes no effort. Every backend runs with the
 same full access as the user's own launchers: no approval prompts, no sandbox, and
 network access (including SSH to dev machines). Read-only scope is an assignment
 instruction, not a permission boundary. Default to a persistent session;
@@ -24,7 +27,8 @@ Verify consequential claims against primary artifacts and preserve backend attri
 
 The user's fixed form is `/agent-team ID ID ...` followed by the assignment, with ids
 `gpt` (subscription GPT-6.1-Sol), `ark` (方舟 GPT-6-Astra), `ark-sol` (方舟 GPT-6.1-Sol,
-i.e. `ark` with `ARK_MODEL=sol`), `claude`, `cursor`, `ds` and `pro`. Take those ids
+i.e. `ark` with `ARK_MODEL=sol`), `claude`, `carbon` (Gemini 4 Carbon), `hydro` (Gemini 4
+Hydrogen) and `pro`. Take those ids
 literally: run exactly those backends, nothing added. Lines after it that start with `ID:` give
 that backend its own assignment; every other line is shared, and backends without an `ID:` line
 take the shared text as their assignment. An `ID:` line for a backend not on the first line is a

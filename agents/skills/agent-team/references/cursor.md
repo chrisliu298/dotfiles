@@ -1,8 +1,12 @@
-# `cursor` backend
+# `carbon` and `hydro` backends
 
-Uses Cursor Agent (`cursor-agent`) with fixed `gemini-4-carbon-high`, native Agent mode, and automatic
-`--trust` for the authorized working directory. Mode/model/effort flags are not
-exposed. The calling agent can select this backend directly when the CLI is installed.
+Both use Cursor Agent (`cursor-agent`) in native Agent mode with automatic `--trust`
+for the authorized working directory, and differ only in the model: `carbon`
+runs `gemini-4-carbon-<effort>`, `hydro` runs `gemini-4-hydrogen-<effort>`, where `<effort>`
+is the call's `--effort` (`medium` or `high`); Cursor carries the tier in the model id.
+Mode and model flags are not exposed. The calling agent can select either backend directly when the
+CLI is installed. Everything below applies to both. Sessions started as `cursor-review-*`
+or `gemini-review-*` under the former backend names are `carbon` sessions.
 
 Cursor has full tool permissions: file reads/writes, shell commands, web fetch
 and MCP tools. The isolated session configuration clears inherited deny rules

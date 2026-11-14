@@ -30,14 +30,15 @@ print(json.dumps({{'type': 'result', 'is_error': False, 'result': 'review comple
     return env, capture
 
 
+@pytest.mark.parametrize('name, model', [('carbon', 'gemini-4-carbon-high'), ('hydro', 'gemini-4-hydrogen-high')])
 @pytest.mark.parametrize('options', [[], ['--output-format', 'json']])
-def test_one_shot_trusts_authorized_workspace(cursor_backend, options):
+def test_one_shot_trusts_authorized_workspace(cursor_backend, options, name, model):
     env, capture = cursor_backend
-    result = subprocess.run([str(SCRIPTS / 'review-subagent'), 'cursor', '--once', *options],
+    result = subprocess.run([str(SCRIPTS / 'review-subagent'), name, '--once', *options],
                             input='Read only this brief.', text=True,
                             capture_output=True, env=env, timeout=10)
     assert result.returncode == 0, result.stderr
     args = json.loads(capture.read_text())
     assert args.count('--trust') == 1
     assert '--mode' not in args
-    assert args[args.index('--model') + 1] == 'gemini-4-carbon-high'
+    assert args[args.index('--model') + 1] == model

@@ -1,11 +1,11 @@
 ## One-shot task
 
 ```bash
-$helper --once --backend gpt < /tmp/review.md
-$helper --once --backend gpt --output-format json < /tmp/review.md
-$helper --once --backend claude --backend gpt < /tmp/review.md
-$helper --once --backend claude --backend gpt --timeout 300 < /tmp/review.md
-$helper --once --backend gpt=/tmp/a.md --backend ds=/tmp/b.md
+$helper --once --effort medium --backend gpt < /tmp/review.md
+$helper --once --effort medium --backend gpt --output-format json < /tmp/review.md
+$helper --once --effort high --backend claude --backend gpt < /tmp/review.md
+$helper --once --effort high --backend claude --backend gpt --timeout 300 < /tmp/review.md
+$helper --once --effort high --backend gpt=/tmp/a.md --backend hydro=/tmp/b.md
 ```
 
 Single text mode returns the final reply. Single JSON mode uses

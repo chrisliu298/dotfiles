@@ -3,8 +3,15 @@
 emulate -L zsh
 setopt pipe_fail
 
+# review-subagent supplies the backend (carbon or hydro) and its model at the chosen effort.
+backend="${AGENT_TEAM_BACKEND:-}" model="${CURSOR_MODEL:-}"
+if [[ -z "$backend" || -z "$model" ]]; then
+    print -u2 'cursor-once: AGENT_TEAM_BACKEND and CURSOR_MODEL must be set; run it through agent-team'
+    exit 2
+fi
+
 if [[ "${CODEX_REVIEW_SUBAGENT_ACTIVE:-}" == 1 ]]; then
-    print -u2 'agent-team (cursor): recursive Codex subagent delegation is blocked'
+    print -u2 "agent-team ($backend): recursive Codex subagent delegation is blocked"
     exit 126
 fi
 
@@ -19,7 +26,7 @@ else
 fi
 
 if [[ "$cursor_agent_available" == false ]]; then
-    print -u2 "agent-team (cursor): cursor-agent is not installed or not on PATH"
+    print -u2 "agent-team ($backend): cursor-agent is not installed or not on PATH"
     exit 127
 fi
 
@@ -29,7 +36,7 @@ output_format=text
 usage() {
     print -u2 'usage: cursor-once [cursor-agent options] [prompt]'
     print -u2 '       cursor-once [cursor-agent options] < prompt.md'
-    print -u2 '       model=gemini-4-carbon-high, effort=high, native Agent mode (fixed)'
+    print -u2 "       model=$model (its effort tier is set by agent-team), native Agent mode (fixed)"
 }
 
 while (( $# > 0 )); do
@@ -38,7 +45,7 @@ while (( $# > 0 )); do
             shift
             ;;
         --mode|--mode=*|--plan)
-            print -u2 'agent-team (cursor): uses native Agent mode with review permissions; mode selection is not supported'
+            print -u2 "agent-team ($backend): uses native Agent mode with review permissions; mode selection is not supported"
             exit 2
             ;;
         --output-format)
@@ -55,7 +62,7 @@ while (( $# > 0 )); do
             shift
             ;;
         --effort|--effort=*|--model|--model=*)
-            print -u2 'agent-team (cursor): model is fixed to gemini-4-carbon-high; model and effort options are not supported'
+            print -u2 "agent-team ($backend): model is fixed to $model; model and effort options are not supported"
             exit 2
             ;;
         --)
@@ -71,12 +78,12 @@ while (( $# > 0 )); do
 done
 
 if [[ "$output_format" != text && "$output_format" != json && "$output_format" != stream-json ]]; then
-    print -u2 'agent-team (cursor): output format must be text, json, or stream-json'
+    print -u2 "agent-team ($backend): output format must be text, json, or stream-json"
     exit 2
 fi
 
 if (( ! $+commands[jq] || ! $+commands[node] )); then
-    print -u2 'agent-team (cursor): jq and Node.js are required'
+    print -u2 "agent-team ($backend): jq and Node.js are required"
     exit 127
 fi
 
@@ -85,9 +92,9 @@ if [[ -t 0 && ${#cursor_args} -eq 0 ]]; then
     exit 2
 fi
 
-diagnostic_file="$(mktemp "${TMPDIR:-/tmp}/agent-team-cursor.err.XXXXXX")" || exit 1
-events_file="$(mktemp "${TMPDIR:-/tmp}/agent-team-cursor.events.XXXXXX")" || exit 1
-config_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-team-cursor-config.XXXXXX")" || exit 1
+diagnostic_file="$(mktemp "${TMPDIR:-/tmp}/agent-team-$backend.err.XXXXXX")" || exit 1
+events_file="$(mktemp "${TMPDIR:-/tmp}/agent-team-$backend.events.XXXXXX")" || exit 1
+config_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-team-$backend-config.XXXXXX")" || exit 1
 cleanup() {
     rm -f -- "$diagnostic_file" "$events_file"
     rm -rf -- "$config_dir"
@@ -99,7 +106,7 @@ export CODEX_REVIEW_SUBAGENT_ACTIVE=1
 
 completion_instruction='Complete the entire read-only assignment in this turn. Return the requested findings, evidence, and final deliverable; do not end with an acknowledgement, an opening remark, or a promise to investigate later. If blocked, state the concrete blocker and the work actually completed.'
 run_cursor() {
-    local -a launch_args=(--print --trust --force --sandbox disabled --approve-mcps --model gemini-4-carbon-high
+    local -a launch_args=(--print --trust --force --sandbox disabled --approve-mcps --model "$model"
         --output-format stream-json --stream-partial-output "${cursor_args[@]}")
     local prompt=
     [[ -t 0 ]] || prompt="$(command cat)" || return $?
@@ -122,13 +129,13 @@ result_event="$(jq -ce -s '
 session_id="$(jq -r 'select(.type == "system" and .subtype == "init" or .type == "result")
     | .session_id? | select(type == "string" and length > 0)' \
     "$events_file" 2>/dev/null | tail -n 1)"
-[[ -n "$session_id" ]] && print -u2 -r -- "agent-team (cursor): session_id=$session_id"
+[[ -n "$session_id" ]] && print -u2 -r -- "agent-team ($backend): session_id=$session_id"
 
 if [[ -z "$result_event" ]]; then
-    print -u2 'agent-team (cursor): no complete terminal result; the response is unfinished'
+    print -u2 "agent-team ($backend): no complete terminal result; the response is unfinished"
     (( exit_status == 0 )) && exit_status=1
 elif (( exit_status != 0 )) && command grep -q 'WritableIterable is closed' "$diagnostic_file"; then
-    print -u2 'agent-team (cursor): recovered verified terminal result after its output stream closed'
+    print -u2 "agent-team ($backend): recovered verified terminal result after its output stream closed"
     exit_status=0
 fi
 
@@ -141,7 +148,7 @@ if [[ -n "$result_event" ]]; then
 fi
 
 if (( exit_status != 0 )) && grep -q 'SecItemCopyMatching failed -50' "$diagnostic_file"; then
-    print -u2 'agent-team (cursor): Cursor could not read its macOS Keychain login. If this command is running in a restricted sandbox, rerun this helper with narrowly scoped unsandboxed execution; do not replace the login or model based on this error alone.'
+    print -u2 "agent-team ($backend): Cursor could not read its macOS Keychain login. If this command is running in a restricted sandbox, rerun this helper with narrowly scoped unsandboxed execution; do not replace the login or model based on this error alone."
 fi
 
 exit "$exit_status"

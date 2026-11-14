@@ -5,29 +5,44 @@ setopt pipe_fail
 
 harness="$1"
 shift
+# agent-team passes --effort medium|high on every start and --once; persistent sessions carry it
+# into __run. Cursor's Gemini model ids carry the tier, so their model follows the effort.
 case "$harness" in
-    claude) model=opus effort=high ;;
-    gpt) model=gpt-6.1-sol effort=high ;;
+    claude) model=opus ;;
+    gpt) model=gpt-6.1-sol ;;
     # Ark's endpoints through codex-ark, only when asked for; ARK_MODEL=sol picks Sol.
     ark)
-        ark_model=${ARK_MODEL:-astra} effort=high
+        ark_model=${ARK_MODEL:-astra}
         case "$ark_model" in
             astra) model=gpt-6-astra ;;
             sol) model=gpt-6.1-sol ;;
             *) print -u2 'agent-team: ARK_MODEL must be astra or sol'; exit 2 ;;
         esac ;;
-    cursor) model=gemini-4-carbon-high effort=high ;;
-    # DeepSeek maps xhigh to high, so high is its real top tier below max.
-    ds) model='deepseek-flash[1m]' effort=high ;;
+    # Both Gemini backends run through Cursor Agent.
+    carbon) model_family=gemini-4-carbon ;;
+    hydro) model_family=gemini-4-hydrogen ;;
     *) print -u2 'unknown review harness'; exit 2 ;;
 esac
+set_effort() {
+    if [[ "$1" != (medium|high) ]]; then
+        print -u2 "agent-team: effort must be medium or high"
+        return 2
+    fi
+    effort="$1"
+    [[ -n "${model_family:-}" ]] && model="$model_family-$effort"
+    return 0
+}
+set_effort high
 # Diagnostics name the public entrypoint; temp files carry the backend.
 helper=agent-team
 tmp="agent-team-${harness}"
 prefix="${harness}-review-"
-# Sessions started before the gemini backend was renamed to cursor keep their old names.
-legacy=
-[[ "$harness" == cursor ]] && legacy=gemini
+cursor=0
+[[ "$harness" == (carbon|hydro) ]] && cursor=1
+# Session and turn-directory names this backend answers to: sessions started before carbon
+# was renamed from cursor (and, earlier, from gemini) keep their old names.
+names="$harness"
+[[ "$harness" == carbon ]] && names='carbon|cursor|gemini'
 runner="${0:A}"
 codex_cli="$HOME/.local/bin/codex"
 ark_cli="$HOME/.local/bin/codex-ark"
@@ -35,7 +50,7 @@ notifier="${runner:h}/turn-notifier"
 cursor_cli="${CURSOR_AGENT_BIN:-cursor-agent}"
 
 check_harness_cli() {
-    if [[ "$harness" == cursor ]]; then
+    if (( cursor )); then
         if (( ! $+commands[jq] || ! $+commands[node] )); then
             print -u2 "$helper: jq and Node.js are required"
             return 127
@@ -74,18 +89,18 @@ parse_options() {
     while (( $# )); do
         case "$1" in
             --trust)
-                [[ "$harness" == cursor ]] || { usage; return 2; }
+                (( cursor )) || { usage; return 2; }
                 shift
                 ;;
             --effort|--model|--output-format)
                 local option="$1" value="${2:-}"
                 if (( $# < 2 )); then usage; return 2; fi
-                if [[ "$harness" == cursor && "$option" != --output-format ]]; then
-                    print -u2 "$helper: model and effort are fixed; selection options are not supported"
+                if (( cursor )) && [[ "$option" == --model ]]; then
+                    print -u2 "$helper: model is fixed to $model_family-<effort>; model selection is not supported"
                     return 2
                 fi
                 case "$option" in
-                    --effort) [[ "$value" == "$effort" ]] || { print -u2 "$helper: effort is fixed to $effort"; return 2; } ;;
+                    --effort) set_effort "$value" || return ;;
                     --model) [[ "$value" == "$model" ]] || { print -u2 "$helper: model is fixed to $model"; return 2; } ;;
                     --output-format) [[ "$action" == --once && ( "$value" == text || "$value" == json ) ]] || { usage; return 2; }; output_format="$value" ;;
                 esac
@@ -119,10 +134,8 @@ accept_trust() {
 launch() {
     local mode="$1" prompt="$2"
     export CODEX_REVIEW_SUBAGENT_ACTIVE=1
-    if [[ "$harness" == (claude|ds) ]]; then
-        # DeepSeek runs Claude Code through the user's `ds` launcher, so it shares this path.
+    if [[ "$harness" == claude ]]; then
         local launcher=c
-        [[ "$harness" == ds ]] && launcher=ds
         source "$HOME/.functions" || return 127
         (( $+functions[$launcher] )) || { print -u2 "$helper: $launcher is not defined"; return 127; }
         if [[ "$mode" == once ]]; then
@@ -139,11 +152,11 @@ launch() {
             wait "$watcher" 2>/dev/null || true
             return "$rc"
         fi
-    elif [[ "$harness" == cursor ]]; then
+    elif (( cursor )); then
         if [[ "$mode" == once ]]; then
             # The internal one-shot adapter reinstates the sentinel for its Cursor child.
             print -rn -- "$prompt" | CODEX_REVIEW_SUBAGENT_ACTIVE=0 CURSOR_AGENT_BIN="$cursor_cli" \
-                "${runner:h}/cursor-once"
+                CURSOR_MODEL="$model" AGENT_TEAM_BACKEND="$harness" "${runner:h}/cursor-once"
         else
             # Native input supports steering the active turn. The primary transcript's
             # explicit turn_ended marker supplies the full completion signal for wait.
@@ -176,12 +189,12 @@ launch() {
 }
 
 usage() {
-    print -u2 "usage: ${runner:t} $harness [start] < prompt.md  (default: tmux)"
-    print -u2 "       ${runner:t} $harness --once [--output-format text|json] < prompt.md"
+    print -u2 "usage: ${runner:t} $harness [start] [--effort medium|high] < prompt.md  (default: tmux)"
+    print -u2 "       ${runner:t} $harness --once [--effort medium|high] [--output-format text|json] < prompt.md"
     print -u2 "       ${runner:t} $harness send SESSION < message.md"
     print -u2 "       ${runner:t} $harness wait SESSION [--timeout SECONDS]  (default: 3600)"
     print -u2 "       ${runner:t} $harness list | capture|status|interrupt|stop SESSION"
-    print -u2 "       model=$model, effort=$effort (fixed)"
+    print -u2 "       effort defaults to high; model=$model at that effort (fixed)"
 }
 
 tracker="${runner:h}/paste-mode-tracker"
@@ -239,7 +252,7 @@ auto_continue() {
     local error="$1" count deadline output rc
     print -r -- "$error" | command grep -Eq "$transient_failure" || return 1
     # A continuation would replace a Cursor message that never joined the failed turn.
-    [[ "$harness" == cursor && -e "$turn_dir/latest-message.json" ]] && return 1
+    (( cursor )) && [[ -e "$turn_dir/latest-message.json" ]] && return 1
     count="$(tmux show-options -v -t "$session" @review_auto_continued 2>/dev/null)" || count=0
     (( ${count:-0} < auto_continue_limit )) || return 1
     deadline=$(( SECONDS + 10 ))
@@ -263,9 +276,10 @@ action="${1:-start}"
 (( $# )) && shift
 
 if [[ "$action" == __run ]]; then
-    if [[ "${REVIEW_SUBAGENT_TMUX_RUNNER:-}" != 1 || $# -ne 1 ]]; then
+    if [[ "${REVIEW_SUBAGENT_TMUX_RUNNER:-}" != 1 || $# -ne 2 ]]; then
         exit 126
     fi
+    set_effort "$2" || exit
     scratch_dir="$1"
     for _ in {1..100}; do
         [[ -e "$scratch_dir/ready" ]] && break
@@ -326,7 +340,7 @@ case "$action" in
             usage
             exit 2
         fi
-        tmux list-sessions -F '#S' 2>/dev/null | command grep -E "^(${harness}${legacy:+|$legacy})-review-" || true
+        tmux list-sessions -F '#S' 2>/dev/null | command grep -E "^(${names})-review-" || true
         ;;
     start)
         parse_options "$@" || exit $?
@@ -367,7 +381,7 @@ case "$action" in
             exit 1
         fi
         harness_env=()
-        if [[ "$harness" == cursor ]]; then
+        if (( cursor )); then
             if ! node "${runner:h}/cursor-session.mjs" config "$turn_dir/cursor-config" || \
                 ! conversation="$("$cursor_cli" --trust create-chat)" || \
                 [[ -z "$conversation" || "$conversation" == *[^a-zA-Z0-9_-]* ]] || \
@@ -386,7 +400,7 @@ case "$action" in
             -e CODEX_REVIEW_SUBAGENT_ACTIVE=1 -e REVIEW_SUBAGENT_TMUX_RUNNER=1 \
             -e REVIEW_SUBAGENT_TURN_DIR="$turn_dir" \
             "${harness_env[@]}" \
-            -- "$runner" "$harness" __run "$scratch_dir")"; then
+            -- "$runner" "$harness" __run "$scratch_dir" "$effort")"; then
             command rm -rf -- "$turn_dir"
             command rm -f -- "$scratch_dir/prompt.md"
             command rmdir -- "$scratch_dir"
@@ -432,7 +446,7 @@ case "$action" in
             timeout="$3"
             set -- "$1"
         fi
-        if (( $# != 1 )) || [[ "$1" != "$prefix"* && ( -z "$legacy" || "$1" != "$legacy-review-"* ) ]]; then
+        if (( $# != 1 )) || [[ "$1" != (${~names})-review-* ]]; then
             usage
             exit 2
         fi
@@ -477,7 +491,7 @@ case "$action" in
                 fi
                 buffer="${prefix}${uuid:l}"
                 # `wait` returns only for a turn that finishes after this send.
-                if [[ "$harness" == cursor ]]; then
+                if (( cursor )); then
                     turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir)" || exit 1
                     command rm -f -- "$turn_dir/error" "$turn_dir/partial"
                     if ! node "${runner:h}/cursor-session.mjs" mark-send "$turn_dir" "$message_file"; then
@@ -494,12 +508,12 @@ case "$action" in
                     exit 1
                 fi
                 command rm -f -- "$message_file"
-                [[ "$harness" == cursor ]] && draft="$(cursor_draft)"
+                (( cursor )) && draft="$(cursor_draft)"
                 if ! tmux paste-buffer -pr -d -b "$buffer" -t "$pane"; then
                     tmux delete-buffer -b "$buffer" 2>/dev/null || true
                     exit 1
                 fi
-                if [[ "$harness" == cursor ]]; then
+                if (( cursor )); then
                     # Cursor ignores an Enter that arrives just after a paste, leaving
                     # the draft (e.g. `[Pasted text #1 +9 lines]`) unsent.
                     deadline=$(( SECONDS + 3 ))
@@ -511,7 +525,7 @@ case "$action" in
                 fi
                 tmux send-keys -t "$pane" Enter || exit 1
                 tmux set-option -t "$session" @review_send_state submitted || exit 1
-                if [[ "$harness" == cursor ]]; then
+                if (( cursor )); then
                     # Enter submits text; the queued-message footer offers another Enter
                     # to steer. Confirm its activation or transcript receipt; absence
                     # of a slowly rendered footer is not proof of delivery.
@@ -552,7 +566,7 @@ case "$action" in
             capture) tmux capture-pane -p -S -300 -t "$pane" && turn_hint ;;
             status) print -r -- "$(tmux display-message -p -t "$pane" '#{session_name} pane=#{pane_id} dead=#{pane_dead} exit_code=#{pane_dead_status}') input_ready=$(input_ready)" && turn_hint ;;
             interrupt)
-                if [[ "$harness" == cursor ]]; then
+                if (( cursor )); then
                     turn_dir="$(tmux show-options -v -t "$session" @review_turn_dir)" || exit 1
                     command rm -f -- "$turn_dir/latest-message.json"
                     tmux send-keys -t "$pane" C-c
@@ -570,10 +584,10 @@ case "$action" in
                     fi
                     sent="$(tmux show-options -v -t "$session" @review_sent)" || exit 1
                     if [[ "$delivery" != pending ]] && (( $(turns_done) > sent )) && \
-                        [[ "$harness" != cursor || ! -e "$turn_dir/latest-message.json" ]]; then
+                        { (( ! cursor )) || [[ ! -e "$turn_dir/latest-message.json" ]]; }; then
                         break
                     fi
-                    if [[ "$harness" == cursor && -s "$turn_dir/error" ]]; then
+                    if (( cursor )) && [[ -s "$turn_dir/error" ]]; then
                         auto_continue "$(<"$turn_dir/error")" && continue
                         print -u2 -r -- "$helper: $(<"$turn_dir/error")"
                         if [[ -s "$turn_dir/partial" ]]; then
@@ -590,7 +604,7 @@ case "$action" in
                     # Claude Code's workspace trust dialog blocks before any turn starts and fires no
                     # hook, so it would otherwise look like a running turn until the deadline. The
                     # launcher accepts it within seconds; one still showing after 10 is stuck.
-                    if [[ "$harness" == (claude|ds) ]] && \
+                    if [[ "$harness" == claude ]] && \
                         tmux capture-pane -p -t "$pane" | command grep -Fq 'Yes, I trust this folder'; then
                         (( trust_since >= 0 )) || trust_since=$SECONDS
                         if (( SECONDS - trust_since >= 10 )); then
@@ -605,7 +619,7 @@ case "$action" in
                         exit 124
                     fi
                     # Cursor steers one queued message at a time; steer the next when offered.
-                    if [[ "$harness" == cursor ]] && \
+                    if (( cursor )) && \
                         tmux capture-pane -p -t "$pane" | command grep -Eq "${cursor_footer}steer[[:space:]]*·"; then
                         tmux send-keys -t "$pane" Enter
                     fi
@@ -630,7 +644,7 @@ case "$action" in
                 tmux kill-session -t "=$session" || exit
                 command agent-msg unregister "$session" "${unregister[@]}" >/dev/null 2>&1 || true
                 # Sessions started before the legacy entrypoints were removed use the old prefix.
-                if [[ "$turn_dir" == */(${tmp}|${harness}-subagent|agent-team-${legacy:-$harness})-turns.* ]]; then
+                if [[ "$turn_dir" == */(agent-team-(${~names})|(${~names})-subagent)-turns.* ]]; then
                     command rm -rf -- "$turn_dir"
                 fi
                 ;;

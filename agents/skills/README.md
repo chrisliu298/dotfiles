@@ -20,21 +20,21 @@ Only symlinks are pruned in the three skill roots, so a hand-installed skill dir
 
 Host-local third-party skills installed into `~/.agents/skills/` are read natively by Codex and DeepSeek Harness (which scans `~/.agents/skills` as a default root); Claude Code does not read that directory. The Claude-only ones (`CLAUDE_ONLY_AGENT_SKILLS` in `dotfiles.sh`: `weekly-report` and `merlin-*`) are moved from there into `~/.claude/skills/` on every run, so only Claude sees them; an existing `~/.claude/skills/<name>` directory is never overwritten. Install new Merlin skills with `merlin-cli skill install <name> --agent claude-code`, which targets `~/.claude/skills/` directly.
 
-A shared/universal `SKILL.md` is written to work across agents; agent-specific scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., codex-exec is claude-only; agent-team is shared by Claude and Codex). Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex and DeepSeek Harness.
+A shared/universal `SKILL.md` is written to work across agents; agent-specific scope is set via explicit `SKILLS` entries in `dotfiles.sh` (e.g., codex-exec and agent-team are claude-only). Claude-specific frontmatter (`allowed-tools`, `user-invocable`, `effort`) is ignored by Codex and DeepSeek Harness.
 
-`agent-team` is auto-installed for Claude and Codex and provides one entrypoint for read-only `gpt` (Codex CLI), `claude`, `cursor` (Cursor Agent on Gemini), `ds` (DeepSeek through Claude Code) and `pro` (ChatGPT Pro) tasks (analysis, research, planning and review), running several backends in parallel. It is self-contained: its session runner and helpers live in `agent-team/scripts/`. Run regression checks with `uv run --with pytest pytest agents/skills/agent-team/tests`.
+`agent-team` is auto-installed for Claude only and provides one entrypoint for read-only `gpt` (Codex CLI), `ark` (Codex CLI on Ark), `claude`, `carbon` and `hydro` (Cursor Agent on Gemini 4 Carbon and Hydrogen) and `pro` (ChatGPT Pro) tasks (analysis, research, planning and review), running several backends in parallel at a caller-chosen `--effort medium|high` (pro excepted). It is self-contained: its session runner and helpers live in `agent-team/scripts/`. Run regression checks with `uv run --with pytest pytest agents/skills/agent-team/tests`.
 
 ### Skill matrix
 
 Columns: **C**laude · Code**x** · **D**eepSeek Harness. Legend: ✓ installed · — not wired to this agent.
 
-> The Claude-only skills (codex-exec, gpt-pro, and the host-local `weekly-report` and `merlin-*`) stay off Codex and DeepSeek. `recall` ships as two harness-specific builds (Claude, Codex) under one name; both drive one `recall` command (`agents/skills/recall/shared/recall`, linked into `~/.local/bin`), which defaults to the calling agent's complete history and reads the other agent's on request. It has no DeepSeek build, so `~/.dsh/sessions` history isn't searched.
+> The Claude-only skills (codex-exec, agent-team, gpt-pro, and the host-local `weekly-report` and `merlin-*`) stay off Codex and DeepSeek. `recall` ships as two harness-specific builds (Claude, Codex) under one name; both drive one `recall` command (`agents/skills/recall/shared/recall`, linked into `~/.local/bin`), which defaults to the calling agent's complete history and reads the other agent's on request. It has no DeepSeek build, so `~/.dsh/sessions` history isn't searched.
 
 Claude has no `pdf` skill: `agents/claude/settings.json` turns off the claude.ai-synced skills (`syncClaudeAiSkills: false`) and the built-in skills it never uses (`skillOverrides`).
 
 | Skill | C | X | D | Source · Description |
 |-------|:-:|:-:|:-:|----------------------|
-| agent-team              | ✓ | ✓ | — | local — Unified read-only gpt/claude/cursor/ds/pro tasks; parallel backends, tmux (pro via gpt-pro relay) |
+| agent-team              | ✓ | — | — | local — Unified read-only gpt/ark/claude/carbon/hydro/pro tasks; parallel backends, tmux (pro via gpt-pro relay) |
 | arxiv-reader            | ✓ | ✓ | ✓ | local — Read arxiv via TeX / HF markdown / HTML fallback |
 | gpt-pro                 | ✓ | — | — | local — ChatGPT Pro Extended through the local relay engine (the `gpt-pro` CLI is on PATH from the Claude copy) |
 | lark                    | ✓ | ✓ | ✓ | local — The `lark-cli` subset we use (docs fetch/update, sheets, wiki, chat reads); points to `lark-cli skills read` for the rest |

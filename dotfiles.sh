@@ -52,14 +52,14 @@ LINKS=(
 # source: ./path (local), ~/path (host-local, skipped when absent), or owner/repo[/subpath] (GitHub)
 SKILLS=(
     # The wildcard installs every skill to Claude, Codex and DeepSeek Harness as live symlinks;
-    # the explicit entries below narrow that (claude-only: codex-exec, gpt-pro; recall has a
-    # separate build per agent).
+    # the explicit entries below narrow that (claude-only: codex-exec, agent-team, gpt-pro; recall
+    # has a separate build per agent).
     # DeepSeek is installed only on hosts where the harness has run (its ~/.dsh exists).
     "*|./agents/skills|claude,codex,deepseek"
     # codex-exec: claude-only caller; Codex is its executor, so it must not get the skill.
     "codex-exec|./agents/skills/codex-exec|claude"
-    # agent-team: shared Claude/Codex caller; other hosts remain dispatched backends.
-    "agent-team|./agents/skills/agent-team|claude,codex"
+    # agent-team: claude-only caller; Codex and the other hosts remain dispatched backends.
+    "agent-team|./agents/skills/agent-team|claude"
     # gpt-pro: claude-only caller; its scripts dir is on PATH from the Claude copy (shell/.zshenv).
     "gpt-pro|./agents/skills/gpt-pro|claude"
     # recall: one skill name, two harness-specific implementations (like pdf). Both default to
@@ -265,7 +265,7 @@ setup_theme_state() {
     fi
 }
 
-# Unattended Claude Code sessions (agent-team's claude and ds) often start in a
+# Unattended Claude Code sessions (agent-team's claude) often start in a
 # session scratchpad under /tmp/claude-<uid>, where an unanswered workspace trust
 # dialog stalls them. Trust that root once: it covers every scratchpad below it
 # except nested git repositories, which still ask. Claude Code has no setting for

@@ -8,20 +8,24 @@ const skill = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const runner = resolve(skill, 'scripts/review-subagent');
 // Pro runs live in the gpt-pro relay rather than tmux, so a separate adapter drives them.
 const proSession = resolve(skill, 'scripts/pro-session.mjs');
-const names = ['claude', 'gpt', 'ark', 'cursor', 'ds', 'pro'];
+const names = ['claude', 'gpt', 'ark', 'carbon', 'hydro', 'pro'];
+const efforts = ['medium', 'high'];
+// Both Gemini backends run through Cursor Agent.
+const cursor = ['carbon', 'hydro'];
 const args = process.argv.slice(2);
 
 function usage(message) {
   if (message) process.stderr.write(`agent-team: ${message}\n`);
-  process.stderr.write('usage: agent-team [start] --backend NAME[=PROMPT] [--backend ...] [--file PATH ...] [< prompt.md]\n' +
-    '       agent-team --once --backend NAME[=PROMPT] [--backend ...] [--file PATH ...] [--output-format text|json] [--timeout SECONDS] [< prompt.md]\n' +
+  process.stderr.write('usage: agent-team [start] --effort medium|high --backend NAME[=PROMPT] [--backend ...] [--file PATH ...] [< prompt.md]\n' +
+    '       agent-team --once --effort medium|high --backend NAME[=PROMPT] [--backend ...] [--file PATH ...] [--output-format text|json] [--timeout SECONDS] [< prompt.md]\n' +
     '       agent-team send SESSION [SESSION ...] < message.md\n' +
     '       agent-team wait SESSION [SESSION ...] [--timeout SECONDS]\n' +
     '       agent-team capture|status|interrupt|stop SESSION [SESSION ...]\n' +
     '       agent-team list | backends\n' +
-    '       NAME is claude, gpt, ark, cursor, ds, or pro; each at most once per call. NAME=PROMPT gives that\n' +
+    '       NAME is claude, gpt, ark, carbon, hydro, or pro; each at most once per call. NAME=PROMPT gives that\n' +
     '       backend its own prompt file instead of stdin. --file attaches a file to pro and lists its\n' +
-    '       path for the others. Models and effort are fixed.\n');
+    '       path for the others. Models are fixed; --effort is required unless pro is the only backend,\n' +
+    '       which ignores it.\n');
   process.exit(2);
 }
 
@@ -31,13 +35,13 @@ if (process.env.CODEX_REVIEW_SUBAGENT_ACTIVE === '1') {
 }
 const action = !args.length || args[0].startsWith('-') && args[0] !== '--once' ? 'start' : args.shift();
 const selections = [], sessions = [], files = [];
-let format = 'text', timeout;
+let format = 'text', timeout, effort;
 while (args.length) {
   const option = args.shift();
   if (option === '--backend' && ['start', '--once'].includes(action)) {
     const [backend, ...file] = (args.shift() || '').split('=');
-    if (backend === 'gemini') usage('backend gemini was renamed to cursor (Cursor Agent on Gemini); use --backend cursor');
-    if (!names.includes(backend)) usage('backend must be claude, gpt, ark, cursor, ds, or pro');
+    if (['cursor', 'gemini'].includes(backend)) usage(`backend ${backend} was renamed to carbon (Gemini 4 Carbon through Cursor Agent); hydro is Gemini 4 Hydrogen`);
+    if (!names.includes(backend)) usage('backend must be claude, gpt, ark, carbon, hydro, or pro');
     if (selections.some(item => item.backend === backend)) usage(`each backend runs at most once per call: ${backend}`);
     const selection = { backend };
     if (file.length) {
@@ -55,6 +59,9 @@ while (args.length) {
     catch (error) { usage(`could not read --file ${path || '(empty path)'}: ${error.code || error.message}`); }
     if (!stats.isFile()) usage(`--file must name a regular file: ${path}`);
     if (!files.includes(resolve(path))) files.push(resolve(path));
+  } else if (option === '--effort' && ['start', '--once'].includes(action)) {
+    effort = args.shift();
+    if (!efforts.includes(effort)) usage('effort must be medium or high');
   } else if (option === '--output-format' && action === '--once') {
     format = args.shift();
     if (!['text', 'json'].includes(format)) usage('output format must be text or json');
@@ -62,14 +69,16 @@ while (args.length) {
     timeout = args.shift();
     if (!/^[1-9][0-9]*$/.test(timeout || '') || !Number.isSafeInteger(Number(timeout))) usage('timeout must be a positive integer');
   } else if (!option.startsWith('-') && ['send', 'wait', 'capture', 'status', 'interrupt', 'stop'].includes(action)) {
-    const match = /^(claude|gpt|ark|cursor|gemini|ds|pro)-review-[a-zA-Z0-9-]+$/.exec(option);
+    const match = /^(claude|gpt|ark|carbon|hydro|cursor|gemini|pro)-review-[a-zA-Z0-9-]+$/.exec(option);
     if (!match) usage(`invalid review session: ${option}`);
     if (sessions.some(item => item.session === option)) usage('the same session must not be targeted twice');
-    // Sessions started before the gemini backend was renamed to cursor keep their old prefix.
-    sessions.push({ backend: match[1] === 'gemini' ? 'cursor' : match[1], session: option });
+    // Sessions started before carbon was renamed from cursor (earlier gemini) keep their old prefix.
+    sessions.push({ backend: ['cursor', 'gemini'].includes(match[1]) ? 'carbon' : match[1], session: option });
   } else usage(`unsupported option or argument: ${option}`);
 }
 if (['start', '--once'].includes(action) && !selections.length) usage('specify at least one backend; there is no automatic fallback');
+// The caller picks the tier for each task; there is no default to fall back on.
+if (['start', '--once'].includes(action) && !effort && selections.some(item => item.backend !== 'pro')) usage('specify --effort medium or high');
 if (['send', 'wait', 'capture', 'status', 'interrupt', 'stop'].includes(action) && !sessions.length) usage('specify a review session');
 if (!['start', '--once', 'send', 'wait', 'capture', 'status', 'interrupt', 'stop', 'list', 'backends'].includes(action)) usage('unknown action');
 
@@ -87,9 +96,9 @@ function availability(backend) {
     if (named ? !(named.includes('/') && executable(named)) : !command('gpt-pro') && !executable(resolve(skill, '../gpt-pro/scripts/gpt-pro'))) {
       return 'gpt-pro is missing or not executable; install the gpt-pro skill';
     }
-  } else if (backend === 'cursor') {
+  } else if (cursor.includes(backend)) {
     if (!command(process.env.CURSOR_AGENT_BIN || 'cursor-agent')) return 'cursor-agent is missing or not executable';
-    if (!command('jq')) return 'jq is required for cursor';
+    if (!command('jq')) return `jq is required for ${backend}`;
   } else if (backend === 'gpt' || backend === 'ark') {
     const cli = join(homedir(), '.local/bin/codex');
     if (!executable(cli)) return 'managed Codex CLI is missing; run ./dotfiles.sh';
@@ -108,17 +117,12 @@ function availability(backend) {
       }
     }
   } else {
-    // claude and ds both run Claude Code through the user's shell launchers.
-    const launcher = backend === 'ds' ? 'ds' : 'c';
+    // claude runs Claude Code through the user's `c` shell launcher.
     const shell = command('zsh');
-    if (!shell) return `zsh is required for the ${launcher} launcher`;
-    const check = spawnSync(shell, ['-c', `source "$HOME/.functions" >/dev/null || exit 127; (( $+functions[${launcher}] ))`],
+    if (!shell) return 'zsh is required for the c launcher';
+    const check = spawnSync(shell, ['-c', 'source "$HOME/.functions" >/dev/null || exit 127; (( $+functions[c] ))'],
       { encoding: 'utf8', timeout: 5000 });
-    if (check.status !== 0) return `the configured ${launcher} launcher is unavailable`;
-    // The launcher's zsh reads the key from ~/.zshenv.local, which the caller may not have loaded.
-    if (backend === 'ds' && spawnSync(shell, ['-c', '[[ -n "${DEEPSEEK_API_KEY:-}" ]]'], { timeout: 5000 }).status !== 0) {
-      return 'DEEPSEEK_API_KEY is not set (see ~/.zshenv.local)';
-    }
+    if (check.status !== 0) return 'the configured c launcher is unavailable';
   }
   return null;
 }
@@ -260,7 +264,7 @@ if (action === 'backends') {
     const results = await Promise.all(selections.map(item => {
       if (!checks.has(item.backend)) checks.set(item.backend, probe(item.backend));
       const reason = checks.get(item.backend);
-      const extra = item.backend === 'pro' ? files.flatMap(path => ['--file', path]) : [];
+      const extra = item.backend === 'pro' ? files.flatMap(path => ['--file', path]) : ['--effort', effort];
       const task = reason ? Promise.resolve({ ...item, stdout: '', stderr: reason + '\n', exit_code: 1 }) : run(item, [action, ...extra], item.prompt);
       return task.then(outcome => {
         if (action === 'start' && outcome.exit_code === 0) {
@@ -301,7 +305,7 @@ if (action === 'backends') {
     diagnose(results);
     if (action === 'send') {
       const messages = results.map(item => ({ ...result(item), delivery: item.exit_code === 0 ?
-        ['cursor', 'pro'].includes(item.backend) ? 'confirmed' : 'submitted' : item.exit_code === 124 ? 'unconfirmed' : 'failed' }));
+        [...cursor, 'pro'].includes(item.backend) ? 'confirmed' : 'submitted' : item.exit_code === 124 ? 'unconfirmed' : 'failed' }));
       json(results.length === 1 ? messages[0] : { results: messages, is_error: results.some(item => item.exit_code !== 0) });
     } else if (results.length === 1) process.stdout.write(results[0].stdout);
     else json({ results: results.map(result), is_error: results.some(item => item.exit_code !== 0) });
