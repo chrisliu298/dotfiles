@@ -23,23 +23,23 @@ source "${ZINIT_HOME}/zinit.zsh"
 # =============================================================================
 # Theme & Plugins
 # =============================================================================
-# Zsh plugins
-zinit light zsh-users/zsh-syntax-highlighting
+# Loaded before the first prompt: compinit below needs zsh-completions in fpath
 zinit light zsh-users/zsh-completions
-zinit light zsh-users/zsh-autosuggestions
-
-# Oh My Zsh snippets
-# zinit snippet OMZP::git  # disabled — git aliases unused
-zinit snippet OMZP::sudo
-zinit snippet OMZP::command-not-found
 
 # fzf - fuzzy finder
 export FZF_DEFAULT_OPTS="--exact"
 zinit ice from"gh-r" as"program"
 zinit light junegunn/fzf
-zinit snippet https://raw.githubusercontent.com/junegunn/fzf/master/shell/key-bindings.zsh
-zinit snippet https://raw.githubusercontent.com/junegunn/fzf/master/shell/completion.zsh
-zinit light Aloxaf/fzf-tab
+
+# Turbo: loaded right after the first prompt, in this order (syntax highlighting
+# last, since it wraps every widget defined before it).
+# OMZP::git is disabled — git aliases unused.
+zinit wait lucid for \
+    OMZP::sudo \
+    OMZP::command-not-found \
+    https://raw.githubusercontent.com/junegunn/fzf/master/shell/key-bindings.zsh \
+    atload"_zsh_autosuggest_start" zsh-users/zsh-autosuggestions \
+    zsh-users/zsh-syntax-highlighting
 
 # Modern Unix tools (macOS ARM only - on Linux, install via package manager)
 if (( IS_MACOS )); then
@@ -60,7 +60,18 @@ fi
 # Completions
 # =============================================================================
 typeset -U fpath
-autoload -Uz compinit && compinit
+# Full compinit (compaudit + new-function scan) at most once a day; otherwise trust
+# the dump. Run `compinit` by hand to pick up a new completion sooner.
+autoload -Uz compinit
+() {
+    local dump=${ZDOTDIR:-$HOME}/.zcompdump
+    local -a stale=($dump(N.mh+24))
+    if (( $#stale )); then
+        compinit && touch $dump
+    else
+        compinit -C
+    fi
+}
 zinit cdreplay -q
 
 zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'm:{a-zA-Z}={A-Za-z} l:|=* r:|=*'
@@ -136,15 +147,33 @@ setopt interactive_comments  # allow # comments at the interactive prompt (e.g. 
 # Local binaries
 [[ -f "$HOME/.local/bin/env" ]] && source "$HOME/.local/bin/env"
 
+# Source `TOOL init zsh` from a cache keyed by the binary's mtime, so an upgrade
+# regenerates it and a normal startup spawns nothing.
+_source_init_cached() {
+    local bin=$commands[$1]
+    [[ -n $bin ]] || return 0
+    local -a mtime
+    zmodload -F zsh/stat b:zstat && zstat -A mtime +mtime $bin
+    local dir=${XDG_CACHE_HOME:-$HOME/.cache}/zsh-init
+    local cache=$dir/$1-$mtime.zsh
+    if [[ ! -s $cache ]]; then
+        mkdir -p $dir && rm -f $dir/$1-*.zsh(N) && $bin init zsh >| $cache
+    fi
+    source $cache
+}
+
 # Zoxide (smart cd)
-(( $+commands[zoxide] )) && eval "$(zoxide init zsh)"
+_source_init_cached zoxide
 
 # Reset stuck mouse tracking before every prompt (Ghostty + TUI apps / SSH disconnect)
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd disable_mouse_tracking
 
-# Starship prompt
-eval "$(starship init zsh)"
+# Starship prompt. The theme has no right_format, so drop RPROMPT rather than
+# spawn a second starship per prompt to render nothing.
+_source_init_cached starship
+unset RPROMPT
+unfunction _source_init_cached
 
 # Fix prompt duplication in cmux (https://github.com/manaflow-ai/cmux/issues/1236)
 if [[ -n "$CMUX_SHELL_INTEGRATION" ]]; then

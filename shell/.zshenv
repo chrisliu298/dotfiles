@@ -31,7 +31,7 @@ export STARSHIP_CONFIG="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme/sta
 # =============================================================================
 export PATH="$HOME/.claude/skills/gpt-pro/scripts:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/.local/bin:$PATH"
 if (( IS_MACOS )); then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
+    eval "$(/opt/homebrew/bin/brew shellenv zsh)"  # explicit shell skips brew's slow `ps` parent-shell probe
     export PATH="/opt/homebrew/opt/curl/bin:$PATH"
     export PATH="/Applications/Visual Studio Code.app/Contents/Resources/app/bin:$PATH"
     export PATH="/Library/TeX/texbin:$PATH"

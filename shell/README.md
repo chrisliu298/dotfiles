@@ -295,7 +295,7 @@ Verify: `node --test shell/rex-claude.test.cjs` and `shell/test-rex-tmux-exclusi
 
 ## Plugins (Zinit)
 
-`zsh-syntax-highlighting`, `zsh-completions`, `zsh-autosuggestions`, `fzf` + `fzf-tab`, Oh My Zsh snippets (`git`, `sudo`, `command-not-found`). Modern Unix tools (`fd`, `rg`, `zoxide`, `delta`) installed via Zinit from GitHub releases.
+`zsh-completions` and the `fzf` binary load before the first prompt; `zsh-autosuggestions`, `zsh-syntax-highlighting`, fzf key bindings and Oh My Zsh snippets (`sudo`, `command-not-found`) load in turbo mode right after it. Tab stays on `menu-complete`. `starship` and `zoxide` init scripts are cached in `~/.cache/zsh-init/`, keyed by binary mtime. Modern Unix tools (`fd`, `rg`, `zoxide`, `delta`) installed via Zinit from GitHub releases.
 
 ## Key Aliases & Functions
 
