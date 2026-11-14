@@ -353,7 +353,8 @@ The prompt hook supplies each queued item with a stable `待问-xxxxxxxx` header
 Re-asking with that header permits rewording without orphaning the original item;
 if it is deferred again, the same item is updated with the corrected wording and options.
 Only answered items are removed. Plain chat is not interpreted as an answer by the queue.
-Use `prs questions` to inspect queues; queue updates are internal to the passive hooks. The program lives in `shell/presence`, with
+Use `prs questions` to inspect queues and `prs clear 待问-xxxxxxxx` to drop items that no
+longer need asking (`prs clear` with no key empties every queue); other queue updates are internal to the passive hooks. The program lives in `shell/presence`, with
 `~/.local/bin/presence` pointing to it; no CLI guidance belongs in agent instructions.
 
 Run the isolated checks with `uv run --no-project --with pytest pytest shell/tests/test_presence.py`.

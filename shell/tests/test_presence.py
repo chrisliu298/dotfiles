@@ -304,6 +304,24 @@ def test_manual_view_and_removed_management_commands(context):
     assert (context[0] / "questions" / (SID + ".json")).exists()
 
 
+def test_user_clears_questions_by_key_or_all(context):
+    call(context, "away")
+    call(context, "hook-ask", event=event(context, tool_input=questions("One?", "Two?")))
+    call(context, "hook-ask", event=event(context, sid=OTHER, tool_input=questions("Three?")))
+    own, other = (context[0] / "questions" / (s + ".json") for s in (SID, OTHER))
+    one = json.loads(own.read_text())["items"][0]["key"]
+    assert call(context, "clear", one, agent={"CLAUDECODE": "1"}).returncode != 0
+    before = own.read_bytes()
+    assert call(context, "clear", one, "nosuchkey").returncode != 0
+    assert own.read_bytes() == before
+    assert call(context, "clear", "待问-" + one).returncode == 0
+    assert [i["question"] for i in json.loads(own.read_text())["items"]] == ["Two?"]
+    assert other.exists()
+    assert call(context, "clear").returncode == 0
+    assert not own.exists() and not other.exists()
+    assert "没有待问问题" in call(context).stdout
+
+
 def test_rephrased_answer_uses_queue_identity_and_keeps_other_questions(context):
     call(context, "away")
     call(context, "hook-ask", event=event(context, tool_input=questions("Original?", "Other?")))

@@ -5,6 +5,7 @@
   prs away [NOTE]                  mark away (note is informational)
   prs back                         mark present
   prs questions                   all queued questions
+  prs clear [KEY ...]              drop queued questions by 待问 key (no KEY: all)
 
 Passive hook modes are internal. They never instruct an agent to use this CLI.
 State and the configured project/session allowlists live in XDG_STATE_HOME/presence
@@ -353,6 +354,20 @@ def switch(s, state, note):
     print(describe(s) + pending_summary())
 
 
+def clear(keys):
+    """Drop the named items across every queue, or all queues; an unknown key changes nothing."""
+    sids = [os.path.basename(f)[:-5] for f in sorted(glob.glob(os.path.join(QDIR, "*.json")))]
+    known = {i.get("key") for sid in sids for i in qload(sid)["items"]}
+    if missing := [k for k in keys if k not in known]:
+        sys.exit(f"没有这些待问项：{'、'.join(QUESTION_HEADER + k for k in missing)}（用 prs questions 查看）")
+    def drop(q):
+        kept = [i for i in q["items"] if keys and i.get("key") not in keys]
+        removed, q["items"] = len(q["items"]) - len(kept), kept
+        return removed
+    removed = sum(qupdate(sid, drop)[1] for sid in sids)
+    print(f"已清除 {removed} 条。{pending_summary()}")
+
+
 def main(argv):
     cmd = argv[0] if argv else "show"
     if cmd == "hook-prompt":
@@ -368,6 +383,8 @@ def main(argv):
             q = json.load(open(f))
             print(f"== {q.get('label')}\n{qlist(q)}")
         return
+    if cmd == "clear":
+        return clear([a.removeprefix(QUESTION_HEADER) for a in argv[1:]])
     if cmd == "away":
         return switch(load(), "away", " ".join(argv[1:]) or None)
     if cmd == "back":
