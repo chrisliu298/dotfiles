@@ -5,6 +5,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Declarative tables ───────────────────────────────────────────
 
+# Host-local opt-outs (not tracked; e.g. mbp14 runs only the Feishu bots), sourced if present:
+#   SKIP_SKILLS=(gpt-pro)                    skills this host does not install (and prunes)
+#   SKIP_LAUNCH_AGENTS=(local.agent-ask-hub) login agents this host does not run
+SKIP_SKILLS=() SKIP_LAUNCH_AGENTS=()
+HOST_CONF="${DOTFILES_HOST_CONF:-$HOME/.config/dotfiles/host.conf}"
+# shellcheck source=/dev/null
+[[ -f "$HOST_CONF" ]] && source "$HOST_CONF"
+skipped() { local x=$1; shift; local s; for s in "$@"; do [[ "$s" == "$x" ]] && return 0; done; return 1; }
+
 LINKS=(
     "shell/.aliases:.aliases"
     "shell/.functions:.functions"
@@ -134,7 +143,8 @@ compute_fingerprint() {
     local data
     data=$({ git -C "$ROOT" rev-parse HEAD 2>/dev/null
              git -C "$ROOT" status --porcelain=v1 2>/dev/null
-             git -C "$ROOT" diff --no-ext-diff --no-color HEAD -- . 2>/dev/null; })
+             git -C "$ROOT" diff --no-ext-diff --no-color HEAD -- . 2>/dev/null
+             cat "$HOST_CONF" 2>/dev/null; })
     printf '%s' "$data" | md5 2>/dev/null \
         || printf '%s' "$data" | md5sum 2>/dev/null | cut -d' ' -f1
 }
@@ -352,6 +362,9 @@ install_launch_agents() {
 # install_launch_agent <label> <ProgramArguments strings> [extra plist keys]
 install_launch_agent() {
     local label=$1
+    if skipped "$label" ${SKIP_LAUNCH_AGENTS[@]+"${SKIP_LAUNCH_AGENTS[@]}"}; then
+        log "skip $label (host.conf)"; return 0
+    fi
     local plist="$HOME/Library/LaunchAgents/$label.plist"
     local want
     want=$(cat <<EOF
@@ -532,6 +545,7 @@ install_skills() {
         local se
         for se in ${skill_entries[@]+"${skill_entries[@]}"}; do
             local sname="${se%%:*}" spath="${se#*:}"
+            skipped "$sname" ${SKIP_SKILLS[@]+"${SKIP_SKILLS[@]}"} && { log "skip $sname (host.conf)"; continue; }
             if [[ "$agents" == *claude* && $'\n'"$claude_expected" == *$'\n'"$sname"$'\n'* ]] \
                 || [[ "$agents" == *codex* && $'\n'"$codex_expected" == *$'\n'"$sname"$'\n'* ]]; then
                 warn "skip $sname from $source (already provided by an earlier entry)"; continue
