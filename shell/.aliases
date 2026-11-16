@@ -5,7 +5,6 @@ alias ls="ls --color"
 alias l="ls -lha"
 alias ez="exec zsh"
 alias ff="fastfetch"
-alias prs="presence"
 alias fx='printf "\e[?1000l\e[?1002l\e[?1003l\e[?1006l"'
 alias b="btop"
 alias kl="killall"

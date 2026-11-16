@@ -330,31 +330,23 @@ for non-interactive work.
 
 Continue/resume suffixes (`*c`/`*r`) are uniform across the Claude/Codex aliases.
 
-### User availability
+### Agent questions on Feishu
 
-`prs` is the user-only alias for `presence`. Use `prs away "back at 18:00"`,
-`prs back`, or `prs` to inspect the current state. The note does not schedule a return.
-Agent environments cannot actively use the CLI. Passive Claude hooks apply only to
-the project and session IDs configured under `~/.local/state/presence/`. The eight
-active R2V sessions are configured on this host; retired and temporary sessions are excluded.
+`shell/agent-ask` sends every AskUserQuestion call from a Claude session that runs in tmux and
+whose name ends with `(R2V)` to the user's private chat with the Feishu app 「Agent 待问」, as one
+card per call (single choice: one button per option that submits at once, carrying any text typed in
+the box as a note; multiple choice: checkboxes and 「提交所选」; previews fold under the option),
+and denies the terminal dialog so the session keeps working. Other sessions keep the terminal
+dialog. The `local.agent-ask-hub` launch agent runs `agent-ask hub`: it consumes
+card clicks over Feishu's long connection (lark-oapi under uv), accepts clicks only from the
+user's open_id, records the answer and answers the click with the redrawn card, so it turns
+answered at once. It reads the app secret from the login keychain (service `agent-ask`);
+store it once with `agent-ask store-secret` after copying it from the open platform. The asyncRewake `hook-wait` started
+with the question wakes the session with the answers (exit 2); `hook-deliver` on PostToolUse and
+UserPromptSubmit hands them to a busy session at its next tool call. Delivery stamps the card;
+an answer nobody picked up within 5 minutes is flagged on the card. The newest open card lists
+the other open questions, so no separate summary message is sent. State, the lark-cli profile name, the
+chat and the user's open_id live in `~/.local/state/agent-ask/` (config.json, hub.log).
+`agent-ask list` shows open questions; agents withdraw a question with `agent-ask withdraw QID REASON`.
 
-Away questions are queued per session. Typing in one window keeps its 15-minute
-check-in grace without changing the global state. Only verified human input starts
-that grace; scheduled wakeups, peer messages and other automatic turns cannot renew it.
-When Claude omits the hook's `source`, the hook checks the current `prompt_id` in
-the transcript (a 1 MiB peek at input submission, then backwards to the latest input
-before a question). An unavailable or unverified origin grants no grace; the question
-hook can recover a delayed record using its original human input time. `prs back`
-still permits normal questions. Human messages typed while an agent is working
-also count; recovering an earlier input never shortens a newer check-in.
-On return, each window asks its
-own still-relevant questions; answered entries are removed by the passive hook.
-The prompt hook supplies each queued item with a stable `待问-xxxxxxxx` header.
-Re-asking with that header permits rewording without orphaning the original item;
-if it is deferred again, the same item is updated with the corrected wording and options.
-Only answered items are removed. Plain chat is not interpreted as an answer by the queue.
-Use `prs questions` to inspect queues and `prs clear 待问-xxxxxxxx` to drop items that no
-longer need asking (`prs clear` with no key empties every queue); other queue updates are internal to the passive hooks. The program lives in `shell/presence`, with
-`~/.local/bin/presence` pointing to it; no CLI guidance belongs in agent instructions.
-
-Run the isolated checks with `uv run --no-project --with pytest pytest shell/tests/test_presence.py`.
+Run the isolated checks with `uv run --no-project --with pytest pytest shell/tests/test_agent_ask.py`.

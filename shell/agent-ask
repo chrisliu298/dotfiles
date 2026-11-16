@@ -1,0 +1,533 @@
+#!/usr/bin/env python3
+"""Route agent questions to the user's Feishu and deliver the answers back.
+
+  agent-ask hub                    long-running receiver (launchd): card clicks -> answers
+  agent-ask list                   questions still waiting for the user
+  agent-ask withdraw QID [REASON]  an agent settled its own question; grey the card out
+  agent-ask store-secret           put the app secret from the clipboard into the keychain
+
+Hook modes (wired in ~/.claude/settings.json):
+  hook-ask      PreToolUse AskUserQuestion: in scope, send one card per call and deny the
+                terminal dialog; out of scope, leave the terminal dialog alone
+  hook-wait     PreToolUse AskUserQuestion, asyncRewake: wait for that call's answers and
+                wake the session with them (exit 2)
+  hook-deliver  PostToolUse and UserPromptSubmit: hand over any answer the waiter has not
+                delivered yet, so a busy session gets it at its next tool call
+
+Scope: Claude sessions running inside tmux whose name ends with "(R2V)". State lives in
+XDG_STATE_HOME/agent-ask (default ~/.local/state/agent-ask); config.json there holds the
+lark-cli profile used to send and patch cards, the app id, the private chat with the user
+and the user's open_id under that app. The hub receives clicks itself (lark-oapi long
+connection) so it can answer each click with the redrawn card.
+"""
+import fcntl, glob, hashlib, json, os, re, subprocess, sys, threading, time
+from contextlib import contextmanager
+
+ROOT = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "agent-ask")
+QDIR = os.path.join(ROOT, "questions")
+CONFIG = os.path.join(ROOT, "config.json")
+SUMMARY = os.path.join(ROOT, "summary.json")
+LOG = os.path.join(ROOT, "hub.log")
+LARK = os.environ.get("AGENT_ASK_LARK", "lark-cli")
+SCOPE_SUFFIX = "(R2V)"
+LETTERS = "ABCDEFGH"
+UNDELIVERED_AFTER = 5 * 60        # answered but not picked up: flag the card
+# Questions are read later on a phone, without the session's context: keep them short.
+MAX_QUESTION, MAX_DESCRIPTION, MAX_LABEL = 120, 80, 30
+WAIT_SLICE = float(os.environ.get("AGENT_ASK_WAIT_SLICE", "1"))
+WAIT_LIMIT = float(os.environ.get("AGENT_ASK_WAIT_LIMIT", str(23 * 3600)))
+
+
+def now():
+    return time.time()
+
+
+def hhmm(ts):
+    return time.strftime("%m-%d %H:%M", time.localtime(ts))
+
+
+def config():
+    return json.load(open(CONFIG))
+
+
+@contextmanager
+def locked():
+    os.makedirs(QDIR, exist_ok=True)
+    with open(os.path.join(ROOT, ".lock"), "w") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        yield
+
+
+def qpath(qid):
+    return os.path.join(QDIR, f"{qid}.json")
+
+
+def load(qid):
+    try:
+        return json.load(open(qpath(qid)))
+    except (OSError, ValueError):
+        return None
+
+
+def save(record):
+    tmp = f"{qpath(record['qid'])}.{os.getpid()}.tmp"
+    json.dump(record, open(tmp, "w"), ensure_ascii=False, indent=1)
+    os.replace(tmp, qpath(record["qid"]))
+
+
+def records():
+    out = []
+    for path in glob.glob(os.path.join(QDIR, "*.json")):
+        try:
+            out.append(json.load(open(path)))
+        except (OSError, ValueError):
+            continue
+    return sorted(out, key=lambda r: r["asked_at"])
+
+
+def session_name(sid):
+    for path in glob.glob(os.path.expanduser("~/.claude/sessions/*.json")):
+        try:
+            record = json.load(open(path))
+        except (OSError, ValueError):
+            continue
+        if record.get("sessionId") == sid and record.get("name"):
+            return record["name"]
+    return None
+
+
+def in_scope(sid):
+    name = session_name(sid)
+    return bool(os.environ.get("TMUX")) and bool(name) and name.endswith(SCOPE_SUFFIX), name
+
+
+def qid_for(event):
+    key = f"{event.get('session_id')}:{event.get('tool_use_id') or json.dumps(event.get('tool_input'), sort_keys=True)}"
+    return hashlib.sha1(key.encode()).hexdigest()[:8]
+
+
+# ---- Feishu ---------------------------------------------------------------------------
+
+def lark(args, stdin=None):
+    cfg = config()
+    result = subprocess.run([LARK, "--profile", cfg["profile"], *args, "--as", "bot"], input=stdin,
+                            capture_output=True, text=True, timeout=60)
+    try:
+        body = json.loads(result.stdout)
+    except ValueError:
+        body = {}
+    if not body.get("ok"):
+        raise RuntimeError(f"lark-cli {args[:3]} failed: {result.stdout[-400:]} {result.stderr[-400:]}")
+    return body.get("data") or {}
+
+
+def send_card(card):
+    data = lark(["im", "+messages-send", "--chat-id", config()["chat_id"], "--msg-type", "interactive",
+                 "--content", "-"], stdin=json.dumps(card, ensure_ascii=False))
+    return data["message_id"]
+
+
+def patch_card(message_id, card):
+    lark(["im", "messages", "patch", "--message-id", message_id,
+          "--data", json.dumps({"content": json.dumps(card, ensure_ascii=False)}, ensure_ascii=False)])
+
+
+def md(text):
+    return {"tag": "markdown", "content": text}
+
+
+def grey(text):
+    return md(f"<font color='grey'>{text}</font>")
+
+
+def note(text):
+    return {"tag": "markdown", "content": f"<font color='grey'>{text}</font>", "text_size": "notation"}
+
+
+def submit(name, label, value, fill=False):
+    button = {"tag": "button", "name": name, "form_action_type": "submit", "type": "default",
+              "text": {"tag": "plain_text", "content": label}, "behaviors": [{"type": "callback", "value": value}]}
+    return {**button, "width": "fill"} if fill else button
+
+
+def question_block(record, i, last):
+    """Each question is one form. Single choice: one full-width button per option with its description
+    underneath; clicking it submits the option together with whatever is in the text box. Multiple
+    choice: checkboxes plus 「提交所选」. The text box alone answers with free text; on the last question
+    「没看懂」 closes the whole card."""
+    q = record["questions"][i]
+    multi = bool(q.get("multiSelect"))
+    head = f"**{i + 1}. {q['question']}**" if len(record["questions"]) > 1 else f"**{q['question']}**"
+    elements = [md(head)]
+    answer = record["answers"].get(str(i))
+    if answer is not None:
+        return elements + [md(f"✅ **{answer}**")]
+    value = {"qid": record["qid"], "i": i}
+    form = [note("可多选，勾好后点「提交所选」")] if multi else []
+    for j, o in enumerate(q.get("options", [])):
+        desc = o.get("description", "")
+        if multi:
+            form.append({"tag": "checker", "name": f"c{j}", "checked": False, "text": {"tag": "lark_md", "content":
+                         o["label"] + (f"　<font color='grey'>{desc}</font>" if desc else "")}})
+        else:
+            form.append(submit(f"o{i}_{j}", o["label"], {**value, "pick": o["label"]}, fill=True))
+            if desc:
+                form.append(note(desc))
+        if o.get("preview"):
+            form.append({"tag": "collapsible_panel", "expanded": False,
+                         "header": {"title": {"tag": "plain_text", "content": f"预览：{o['label']}"}},
+                         "elements": [md(f"```\n{o['preview'][:1500]}\n```")]})
+    hint = "补充说明" if multi else "补充说明（先写再点选项）或别的回答"
+    buttons = [submit(f"s{i}", "提交所选" if multi else "提交文字", {**value, "pick": "__form__"})]
+    if last:
+        buttons.append(submit("su", "🤔 没看懂", {"qid": record["qid"], "i": -1, "pick": "__unclear__"}))
+    form.append({"tag": "column_set", "columns": [
+        {"tag": "column", "width": "weighted", "weight": 1, "vertical_align": "center", "elements": [
+            {"tag": "input", "name": f"t{i}", "placeholder": {"tag": "plain_text", "content": hint}}]},
+        *({"tag": "column", "width": "auto", "vertical_align": "center", "elements": [b]} for b in buttons)]})
+    return elements + [{"tag": "form", "name": f"f{i}", "elements": form}]
+
+
+def render(record):
+    status = record["status"]
+    if record.get("unclear") is not None:
+        return render_unclear(record)
+    title, color = {"pending": (f"❓ {record['session']} 在问", "blue"),
+                    "answered": (f"✅ 已答 · {record['session']}", "green"),
+                    "delivered": (f"✅ 已答 · {record['session']}", "green"),
+                    "withdrawn": (f"已撤回 · {record['session']}", "grey")}[status]
+    elements = summary_block(record) if status == "pending" else []
+    n = len(record["questions"])
+    for i in range(n):
+        elements += question_block(record, i, i == n - 1) if status != "withdrawn" else [md(record["questions"][i]["question"])]
+        elements.append({"tag": "hr"})
+    footer = [f"{hhmm(record['asked_at'])[6:]} 提问"]
+    if status == "pending" and any(not q.get("multiSelect") and str(i) not in record["answers"]
+                                   for i, q in enumerate(record["questions"])):
+        footer.insert(0, "点选项即提交")
+    if status == "delivered":
+        footer.append(f"{hhmm(record['delivered_at'])[6:]} 已送达")
+    elif status == "answered" and now() - record["answered_at"] > UNDELIVERED_AFTER:
+        footer.append("⚠️ 还没送达：会话可能已退出或卡住")
+    elif status == "answered":
+        footer.append("等会话收下")
+    elif status == "withdrawn":
+        footer.append(f"会话已撤回：{record.get('withdraw_reason') or '不再需要'}")
+    elements.append(grey(" · ".join(footer)))
+    return {"schema": "2.0", "config": {"update_multi": True},
+            "header": {"title": {"tag": "plain_text", "content": title}, "template": color},
+            "body": {"elements": elements}}
+
+
+def render_unclear(record):
+    elements = [md("\n".join(f"- {q['question']}" for q in record["questions"]))]
+    if record["unclear"]:
+        elements.append(md(f"🤔 **你的反馈：{record['unclear']}**"))
+    footer = [f"{hhmm(record['asked_at'])[6:]} 提问"]
+    footer.append(f"{hhmm(record['delivered_at'])[6:]} 已送达，会话会换个说法重问" if record["status"] == "delivered"
+                  else "等会话收下后重问")
+    elements.append(grey(" · ".join(footer)))
+    return {"schema": "2.0", "config": {"update_multi": True},
+            "header": {"title": {"tag": "plain_text", "content": f"🤔 没看懂 · {record['session']}"}, "template": "orange"},
+            "body": {"elements": elements}}
+
+
+def too_long(questions):
+    """What to shorten, or [] when every part fits."""
+    problems = []
+    for n, q in enumerate(questions, 1):
+        if len(q.get("question", "")) > MAX_QUESTION:
+            problems.append(f"第 {n} 题题干 {len(q['question'])} 字（上限 {MAX_QUESTION}）")
+        for o in q.get("options", []):
+            if len(o.get("label", "")) > MAX_LABEL:
+                problems.append(f"第 {n} 题选项「{o['label'][:12]}…」标签 {len(o['label'])} 字（上限 {MAX_LABEL}）")
+            if len(o.get("description", "")) > MAX_DESCRIPTION:
+                problems.append(f"第 {n} 题选项「{o['label'][:12]}」说明 {len(o['description'])} 字（上限 {MAX_DESCRIPTION}）")
+    return problems
+
+
+def pending_records():
+    return [r for r in records() if r["status"] == "pending"]
+
+
+def summary_block(record):
+    """The newest pending card lists the others, so the user needs no separate summary message."""
+    pending = pending_records()
+    if len(pending) < 2 or pending[-1]["qid"] != record["qid"]:
+        return []
+    lines = [f"• **{r['session']}**　{r['questions'][0]['question'][:40]}　<font color='grey'>{hhmm(r['asked_at'])[6:]}</font>"
+             for r in pending[:-1]]
+    return [md(f"📋 **还有 {len(pending) - 1} 条没答**（往上翻）\n" + "\n".join(lines)), {"tag": "hr"}]
+
+
+def refresh_summary():
+    """Move the list of other open questions onto the newest pending card."""
+    pending = pending_records()
+    holder = pending[-1]["qid"] if len(pending) > 1 else None
+    try:
+        old = json.load(open(SUMMARY)).get("holder")
+    except (OSError, ValueError):
+        old = None
+    for qid in {old, holder} - {None}:
+        record = load(qid)
+        if record:
+            try:
+                patch_card(record["message_id"], render(record))
+            except RuntimeError as error:
+                log(f"summary patch failed {qid}: {error}")
+    json.dump({"holder": holder}, open(SUMMARY, "w"))
+
+
+def log(text):
+    os.makedirs(ROOT, exist_ok=True)
+    with open(LOG, "a") as handle:
+        handle.write(f"{time.strftime('%F %T')} {text}\n")
+
+
+# ---- answers --------------------------------------------------------------------------
+
+def answer_text(record):
+    if record.get("unclear") is not None:
+        feedback = f"，反馈：{record['unclear']}" if record["unclear"] else ""
+        return (f"[飞书回答] 用户没看懂你 {hhmm(record['asked_at'])} 的提问（待答 {record['qid']}）{feedback}。"
+                "这是用户本人的反馈。重新调用 AskUserQuestion，换成离开上下文也能看懂的说法再问一遍："
+                "补上用户不知道的背景，内部编号和缩写换成白话，题干一两句、选项说明各一句。"
+                "这是唯一允许重问同一个问题的情况；在用户答新卡片之前，照旧按可逆默认推进。")
+    lines = [f"[飞书回答] 用户在飞书回答了你 {hhmm(record['asked_at'])} 的提问（待答 {record['qid']}），"
+             "这是用户本人的回答："]
+    for i, q in enumerate(record["questions"]):
+        lines.append(f"- {q['question']} → {record['answers'].get(str(i))}")
+    lines.append("按回答继续；如果你已按默认推进，按回答核对并改正。不要再问同一个问题。")
+    return "\n".join(lines)
+
+
+def take_answer(qid):
+    """answered -> delivered exactly once across the waiter and the per-tool hook."""
+    with locked():
+        record = load(qid)
+        if not record or record["status"] != "answered":
+            return None
+        record["status"], record["delivered_at"] = "delivered", now()
+        save(record)
+    try:
+        patch_card(record["message_id"], render(record))
+    except (RuntimeError, OSError, subprocess.SubprocessError) as error:
+        log(f"delivered patch failed {qid}: {error}")
+    return record
+
+
+# ---- hooks ----------------------------------------------------------------------------
+
+def hook_ask(raw):
+    event = json.loads(raw)
+    sid = event.get("session_id") or "?"
+    scoped, name = in_scope(sid)
+    if not scoped:
+        return
+    qid = qid_for(event)
+    questions = event.get("tool_input", {}).get("questions", [])
+    problems = too_long(questions)
+    if problems:
+        reason = ("问题没有发出：用户会在手机上、离开当前上下文时读它，题目要短而自包含。"
+                  + "；".join(problems) + "。删掉过程细节，只留要定什么、为什么现在定、各选项的后果，"
+                  "用户不知道的背景用一句白话补上，然后重新调用 AskUserQuestion。")
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                                 "permissionDecisionReason": reason}}, ensure_ascii=False))
+        return
+    record = {"qid": qid, "sid": sid, "session": name, "project": os.path.basename(event.get("cwd") or ""),
+              "questions": questions, "answers": {}, "status": "pending", "asked_at": now()}
+    try:
+        record["message_id"] = send_card(render(record))
+    except (RuntimeError, OSError, subprocess.SubprocessError, KeyError, ValueError) as error:
+        log(f"send failed {qid}: {error}")
+        return  # fall back to the terminal dialog rather than losing the question
+    with locked():
+        save(record)
+    try:
+        refresh_summary()
+    except (RuntimeError, OSError, subprocess.SubprocessError) as error:
+        log(f"summary failed: {error}")
+    reason = (f"这些问题已发到用户的飞书（待答 {qid}），终端里不会再弹出。不要重复调用提问工具。"
+              "用户回答后，答案会作为 hook 消息送到本会话（空闲时也会唤醒你）。"
+              "用户要在飞书里看到才会答，可能几分钟，也可能几小时后。不要因为没答复而停工或结束回合等答案："
+              "照推荐项（可逆的默认）继续做并记下用了哪个默认；只有不可逆或对外的那一步先跳过，其余工作照常推进。"
+              f"如果之后你自己定了或问题已过时，运行 `agent-ask withdraw {qid} 一句话原因` 撤回卡片。")
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                             "permissionDecisionReason": reason}}, ensure_ascii=False))
+
+
+def hook_wait(raw):
+    event = json.loads(raw)
+    if not in_scope(event.get("session_id") or "?")[0]:
+        return 0
+    qid, start = qid_for(event), now()
+    while now() - start < WAIT_LIMIT:
+        record = load(qid)
+        if record is None and now() - start > 120:
+            return 0  # the card never went out; the terminal dialog handled it
+        if record and record["status"] in ("delivered", "withdrawn"):
+            return 0
+        if record and record["status"] == "answered":
+            taken = take_answer(qid)
+            if taken:
+                sys.stderr.write(answer_text(taken) + "\n")
+                return 2
+        time.sleep(WAIT_SLICE)
+    return 0
+
+
+def hook_deliver(raw):
+    event = json.loads(raw)
+    sid = event.get("session_id")
+    if not sid or not os.path.isdir(QDIR):
+        return
+    texts = []
+    for record in records():
+        if record["sid"] == sid and record["status"] == "answered":
+            taken = take_answer(record["qid"])
+            if taken:
+                texts.append(answer_text(taken))
+    if texts:
+        name = event.get("hook_event_name") or "PostToolUse"
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": name, "additionalContext": "\n\n".join(texts)}},
+                         ensure_ascii=False))
+
+
+# ---- hub ------------------------------------------------------------------------------
+
+def on_action(operator, value, form):
+    """Record one click and return the card it should turn into, or None to leave the card as is.
+    The hub hands the card back in the callback response, so Feishu redraws it the moment the click returns."""
+    if operator != config()["user_open_id"]:
+        log(f"ignored click from {operator}")
+        return None
+    value, form = value or {}, form or {}
+    qid, i = value.get("qid"), value.get("i")
+    if not qid or i is None or not os.path.exists(qpath(qid)):
+        log(f"click for unknown question: {value} form={form}")
+        return None
+    with locked():
+        record = load(qid)
+        if not record or record["status"] != "pending":
+            return None
+        if value.get("pick") == "__unclear__":
+            record["unclear"] = next((v.strip() for v in form.values() if isinstance(v, str) and v.strip()), "")
+            answer = None
+        else:
+            if str(i) in record["answers"]:
+                return None
+            answer = answer_for(record["questions"][i], value.get("pick"), form, i)
+            if answer is None:
+                return None
+            record["answers"][str(i)] = answer
+        if answer is None or len(record["answers"]) == len(record["questions"]):
+            record["status"], record["answered_at"] = "answered", now()
+        save(record)
+    log(f"unclear {qid}: {record['unclear']}" if answer is None else f"answer {qid}[{i}] = {answer}")
+    if record["status"] == "answered":
+        threading.Thread(target=refresh_summary).start()  # other cards; must not delay the response
+    return render(record)
+
+
+def answer_for(q, pick, form, i):
+    text = (form.get(f"t{i}") or "").strip()
+    if pick != "__form__":
+        return pick + (f"（补充：{text}）" if text else "")
+    if q.get("multiSelect"):
+        picks = [o["label"] for j, o in enumerate(q.get("options", [])) if form.get(f"c{j}")]
+        if picks:
+            return ", ".join(picks) + (f"（补充：{text}）" if text else "")
+    return text or None
+
+
+def watch_delivery():
+    """Flag answers no session picked up, so the user sees it on the card."""
+    flagged = set()
+    while True:
+        time.sleep(60)
+        for record in records():
+            if (record["status"] == "answered" and now() - record["answered_at"] > UNDELIVERED_AFTER
+                    and record["qid"] not in flagged):
+                flagged.add(record["qid"])
+                try:
+                    patch_card(record["message_id"], render(record))
+                except Exception as error:
+                    log(f"undelivered patch failed: {error!r}")
+
+
+def hub():
+    """Receive card clicks over Feishu's long connection and answer each with the redrawn card.
+    Runs under `uv run --with lark-oapi`; the app secret is read from the login keychain
+    (service agent-ask, account = app id)."""
+    import lark_oapi as lark
+    from lark_oapi.event.callback.model.p2_card_action_trigger import P2CardActionTriggerResponse
+
+    def handle(data):
+        e = data.event
+        try:
+            card = on_action(e.operator.open_id, e.action.value, e.action.form_value)
+        except Exception as error:  # one bad click must not kill the receiver
+            log(f"action error: {error!r}")
+            card = None
+        return P2CardActionTriggerResponse({"card": {"type": "raw", "data": card}} if card else {})
+
+    app_id = config()["app_id"]
+    secret = subprocess.run(["security", "find-generic-password", "-s", "agent-ask", "-a", app_id, "-w"],
+                            capture_output=True, text=True, check=True).stdout.strip()
+    handler = lark.EventDispatcherHandler.builder("", "").register_p2_card_action_trigger(handle).build()
+    log("hub start")
+    threading.Thread(target=watch_delivery, daemon=True).start()
+    lark.ws.Client(app_id, secret, event_handler=handler, log_level=lark.LogLevel.WARNING).start()
+
+
+def store_secret():
+    """Move the app secret from the clipboard into the login keychain without printing it."""
+    secret = subprocess.run(["pbpaste"], capture_output=True, text=True).stdout.strip()
+    if not re.fullmatch(r"[A-Za-z0-9]{20,64}", secret):
+        sys.exit("剪贴板里不像 App Secret：先在开放平台「凭证与基础信息」点 App Secret 旁的复制按钮")
+    app_id = config()["app_id"]
+    subprocess.run(["security", "-i"], input=f"add-generic-password -U -s agent-ask -a {app_id} -w {secret}\n",
+                   text=True, check=True, capture_output=True)
+    subprocess.run(["pbcopy"], input="", text=True, check=True)
+    print(f"已存入钥匙串（服务 agent-ask，账户 {app_id}），剪贴板已清空")
+
+
+def withdraw(qid, reason):
+    with locked():
+        record = load(qid)
+        if not record or record["status"] != "pending":
+            print(f"{qid}: 不在待答状态（{record and record['status']}）")
+            return 1
+        record["status"], record["withdraw_reason"] = "withdrawn", reason
+        save(record)
+    patch_card(record["message_id"], render(record))
+    refresh_summary()
+    print(f"{qid}: 已撤回")
+    return 0
+
+
+def main(argv):
+    mode = argv[1] if len(argv) > 1 else "list"
+    if mode == "hook-ask":
+        return hook_ask(sys.stdin.read())
+    if mode == "hook-wait":
+        return hook_wait(sys.stdin.read())
+    if mode == "hook-deliver":
+        return hook_deliver(sys.stdin.read())
+    if mode == "hub":
+        return hub()
+    if mode == "store-secret":
+        return store_secret()
+    if mode == "withdraw" and len(argv) >= 3:
+        return withdraw(argv[2], " ".join(argv[3:]))
+    if mode == "list":
+        for r in records():
+            if r["status"] in ("pending", "answered"):
+                print(f"{r['qid']}  {r['status']:<9} {hhmm(r['asked_at'])}  {r['session']}  {r['questions'][0]['question'][:60]}")
+        return 0
+    print(__doc__)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv) or 0)

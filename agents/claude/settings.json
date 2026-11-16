@@ -61,21 +61,25 @@
     "PreToolUse": [
       {
         "matcher": "AskUserQuestion",
-        "hooks": [{ "type": "command", "command": "python3 ~/.local/bin/presence hook-ask" }]
+        "hooks": [
+          { "type": "command", "command": "python3 ~/.local/bin/agent-ask hook-ask" },
+          { "type": "command", "command": "python3 ~/.local/bin/agent-ask hook-wait", "asyncRewake": true, "timeout": 86400 }
+        ]
       }
     ],
     "UserPromptSubmit": [
       {
-        "hooks": [{ "type": "command", "command": "python3 ~/.local/bin/presence hook-prompt" }]
+        "hooks": [
+          { "type": "command", "command": "python3 ~/.local/bin/agent-ask hook-deliver" }
+        ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "AskUserQuestion",
-        "hooks": [{ "type": "command", "command": "python3 ~/.local/bin/presence hook-post" }]
+        "hooks": [{ "type": "command", "command": "python3 ~/.claude/lang-guard.py post-tool" }]
       },
       {
-        "hooks": [{ "type": "command", "command": "python3 ~/.claude/lang-guard.py post-tool" }]
+        "hooks": [{ "type": "command", "command": "python3 ~/.local/bin/agent-ask hook-deliver" }]
       }
     ],
     "Stop": [
