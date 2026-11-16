@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# repo-sync: fast-forward repos to their upstream, so a Mac whose agents only read them (mbp14)
+# sees what was pushed from the Mac where they are edited (K65).
+#
+#     repo-sync [REPO...]    # default: SYNC_REPOS from ~/.config/dotfiles/host.conf
+#
+# Run every 5 minutes by the local.repo-sync login agent, which dotfiles.sh installs only on a
+# host whose host.conf sets SYNC_REPOS. A repo with uncommitted changes to tracked files, or
+# whose history diverged from upstream, is left alone and reported. When the dotfiles repo itself
+# moves, ./dotfiles.sh runs so new links, skills and login agents take effect. Silent when nothing
+# changed.
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+if (($# == 0)); then
+    SYNC_REPOS=()
+    HOST_CONF="${DOTFILES_HOST_CONF:-$HOME/.config/dotfiles/host.conf}"
+    # shellcheck source=/dev/null
+    [[ -f "$HOST_CONF" ]] && source "$HOST_CONF"
+    set -- ${SYNC_REPOS[@]+"${SYNC_REPOS[@]}"}
+fi
+
+say() { echo "$(date '+%F %T') $*"; }
+
+for repo in "$@"; do
+    if ! git -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
+        say "$repo: not a git repo"; continue
+    fi
+    if [[ -n "$(git -C "$repo" status --porcelain --untracked-files=no)" ]]; then
+        say "$repo: dirty, not synced"; continue
+    fi
+    git -C "$repo" fetch -q 2>/dev/null || { say "$repo: fetch failed"; continue; }
+    head=$(git -C "$repo" rev-parse HEAD)
+    up=$(git -C "$repo" rev-parse '@{u}' 2>/dev/null) || { say "$repo: no upstream"; continue; }
+    [[ "$head" == "$up" ]] && continue
+    if ! git -C "$repo" merge-base --is-ancestor HEAD "$up"; then
+        git -C "$repo" merge-base --is-ancestor "$up" HEAD || say "$repo: diverged from upstream, not synced"
+        continue
+    fi
+    git -C "$repo" merge -q --ff-only "$up" || { say "$repo: fast-forward failed"; continue; }
+    say "$repo: ${head:0:7} -> ${up:0:7}"
+    if [[ "$(cd "$repo" && pwd -P)" == "$(cd "$ROOT" && pwd -P)" ]]; then
+        "$ROOT/dotfiles.sh" >/dev/null 2>&1 && say "$repo: dotfiles.sh ok" || say "$repo: dotfiles.sh failed"
+    fi
+done

@@ -8,7 +8,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Host-local opt-outs (not tracked; e.g. mbp14 runs only the Feishu bots), sourced if present:
 #   SKIP_SKILLS=(gpt-pro)                    skills this host does not install (and prunes)
 #   SKIP_LAUNCH_AGENTS=(local.agent-ask-hub) login agents this host does not run
-SKIP_SKILLS=() SKIP_LAUNCH_AGENTS=()
+#   SYNC_REPOS=(~/dotfiles)                  repos shell/repo-sync fast-forwards every 5 minutes
+SKIP_SKILLS=() SKIP_LAUNCH_AGENTS=() SYNC_REPOS=()
 HOST_CONF="${DOTFILES_HOST_CONF:-$HOME/.config/dotfiles/host.conf}"
 # shellcheck source=/dev/null
 [[ -f "$HOST_CONF" ]] && source "$HOST_CONF"
@@ -25,6 +26,7 @@ LINKS=(
     "shell/rex-claude:.local/bin/rex-claude"
     "shell/agent-msg:.local/bin/agent-msg"
     "shell/peer:.local/bin/peer"
+    "shell/repo-sync:.local/bin/repo-sync"
     "shell/codex-traex:.local/bin/codex-traex"
     "shell/codex-ark:.local/bin/codex-ark"
     "shell/cdswap:.local/bin/cdswap"
@@ -357,6 +359,11 @@ install_launch_agents() {
     install_launch_agent local.agent-ask-hub \
         "<string>$HOME/.local/bin/uv</string><string>run</string><string>--no-project</string><string>--with</string><string>lark-oapi==1.7.5</string><string>python3</string><string>$HOME/.local/bin/agent-ask</string><string>hub</string>" \
         "<key>KeepAlive</key><true/><key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin</string></dict>"
+    # Keep read-only clones current (shell/repo-sync); only hosts that list SYNC_REPOS run it.
+    ((${#SYNC_REPOS[@]})) && install_launch_agent local.repo-sync \
+        "<string>$HOME/.local/bin/repo-sync</string>" \
+        "<key>StartInterval</key><integer>300</integer><key>StandardOutPath</key><string>$HOME/.local/state/repo-sync.log</string><key>StandardErrorPath</key><string>$HOME/.local/state/repo-sync.log</string><key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>"
+    return 0
 }
 
 # install_launch_agent <label> <ProgramArguments strings> [extra plist keys]
