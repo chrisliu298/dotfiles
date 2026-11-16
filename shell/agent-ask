@@ -289,15 +289,12 @@ def log(text):
 def answer_text(record):
     if record.get("unclear") is not None:
         feedback = f"，反馈：{record['unclear']}" if record["unclear"] else ""
-        return (f"[飞书回答] 用户没看懂你 {hhmm(record['asked_at'])} 的提问（待答 {record['qid']}）{feedback}。"
-                "这是用户本人的反馈。重新调用 AskUserQuestion，换成离开上下文也能看懂的说法再问一遍："
-                "补上用户不知道的背景，内部编号和缩写换成白话，题干一两句、选项说明各一句。"
-                "这是唯一允许重问同一个问题的情况；在用户答新卡片之前，照旧按可逆默认推进。")
-    lines = [f"[飞书回答] 用户在飞书回答了你 {hhmm(record['asked_at'])} 的提问（待答 {record['qid']}），"
-             "这是用户本人的回答："]
+        return (f"[飞书回答] 用户本人没看懂你 {hhmm(record['asked_at'])} 的提问（待答 {record['qid']}）{feedback}。"
+                "补上背景、编号和缩写换成白话，重新调用 AskUserQuestion 问一次；答复前照旧按默认推进。")
+    lines = [f"[飞书回答] 用户本人回答了你 {hhmm(record['asked_at'])} 的提问（待答 {record['qid']}）："]
     for i, q in enumerate(record["questions"]):
         lines.append(f"- {q['question']} → {record['answers'].get(str(i))}")
-    lines.append("按回答继续；如果你已按默认推进，按回答核对并改正。不要再问同一个问题。")
+    lines.append("照此继续，已按默认做的部分按回答改正。")
     return "\n".join(lines)
 
 
@@ -328,9 +325,8 @@ def hook_ask(raw):
     questions = event.get("tool_input", {}).get("questions", [])
     problems = too_long(questions)
     if problems:
-        reason = ("问题没有发出：用户会在手机上、离开当前上下文时读它，题目要短而自包含。"
-                  + "；".join(problems) + "。删掉过程细节，只留要定什么、为什么现在定、各选项的后果，"
-                  "用户不知道的背景用一句白话补上，然后重新调用 AskUserQuestion。")
+        reason = ("问题没有发出，用户在手机上读，要短而自包含：" + "；".join(problems)
+                  + "。只留要定什么和各选项的后果，缺的背景用一句白话补上，再调用 AskUserQuestion。")
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
                                                  "permissionDecisionReason": reason}}, ensure_ascii=False))
         return
@@ -347,11 +343,9 @@ def hook_ask(raw):
         refresh_summary()
     except (RuntimeError, OSError, subprocess.SubprocessError) as error:
         log(f"summary failed: {error}")
-    reason = (f"这些问题已发到用户的飞书（待答 {qid}），终端里不会再弹出。不要重复调用提问工具。"
-              "用户回答后，答案会作为 hook 消息送到本会话（空闲时也会唤醒你）。"
-              "用户要在飞书里看到才会答，可能几分钟，也可能几小时后。不要因为没答复而停工或结束回合等答案："
-              "照推荐项（可逆的默认）继续做并记下用了哪个默认；只有不可逆或对外的那一步先跳过，其余工作照常推进。"
-              f"如果之后你自己定了或问题已过时，运行 `agent-ask withdraw {qid} 一句话原因` 撤回卡片。")
+    reason = (f"已发到用户飞书（待答 {qid}），不要重问。答复可能几分钟到几小时后以 hook 消息送来，空闲时也会唤醒你。"
+              "别停下等：照推荐项继续做并记下用了哪个默认，只把不可逆或对外的那步留到答复后。"
+              f"问题过时或你已自己定了，运行 `agent-ask withdraw {qid} 原因`。")
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
                                              "permissionDecisionReason": reason}}, ensure_ascii=False))
 
