@@ -20,7 +20,7 @@ lark-cli profile used to send and patch cards, the app id, the private chat with
 and the user's open_id under that app. The hub receives clicks itself (lark-oapi long
 connection) so it can answer each click with the redrawn card.
 """
-import fcntl, glob, hashlib, json, os, re, subprocess, sys, threading, time
+import fcntl, glob, hashlib, json, logging, os, re, subprocess, sys, threading, time
 from contextlib import contextmanager
 
 ROOT = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "agent-ask")
@@ -85,7 +85,26 @@ def records():
     return sorted(out, key=lambda r: r["asked_at"])
 
 
+def owning_session():
+    """The session record of the Claude process this hook runs under. A resumed session can leave its
+    old process alive under the same session id, so matching on the id alone may pick the old name."""
+    pid = os.getppid()
+    while pid > 1:
+        path = os.path.expanduser(f"~/.claude/sessions/{pid}.json")
+        if os.path.exists(path):
+            try:
+                return json.load(open(path))
+            except (OSError, ValueError):
+                return None
+        out = subprocess.run(["ps", "-o", "ppid=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+        pid = int(out) if out.isdigit() else 1
+    return None
+
+
 def session_name(sid):
+    own = owning_session()
+    if own and own.get("sessionId") == sid and own.get("name"):
+        return own["name"]
     for path in glob.glob(os.path.expanduser("~/.claude/sessions/*.json")):
         try:
             record = json.load(open(path))
@@ -458,20 +477,28 @@ def hub():
 
     def handle(data):
         e = data.event
+        started = time.monotonic()
+        value = e.action.value or {}
         try:
             card = on_action(e.operator.open_id, e.action.value, e.action.form_value)
         except Exception as error:  # one bad click must not kill the receiver
             log(f"action error: {error!r}")
             card = None
+        log(f"click {value.get('qid')}[{value.get('i')}] {'redraw' if card else 'no-op'} "
+            f"{(time.monotonic() - started) * 1000:.0f} ms")
         return P2CardActionTriggerResponse({"card": {"type": "raw", "data": card}} if card else {})
 
     app_id = config()["app_id"]
     secret = subprocess.run(["security", "find-generic-password", "-s", "agent-ask", "-a", app_id, "-w"],
                             capture_output=True, text=True, check=True).stdout.strip()
     handler = lark.EventDispatcherHandler.builder("", "").register_p2_card_action_trigger(handle).build()
+    sdk_file = logging.FileHandler(LOG)  # connection drops and reconnects; launchd drops stderr
+    sdk_file.setFormatter(logging.Formatter("%(asctime)s %(message)s", "%Y-%m-%d %H:%M:%S"))
+    sdk_file.addFilter(lambda r: setattr(r, "msg", re.sub(r"\?\S*", "", str(r.msg))) or True)  # url carries a ticket
+    logging.getLogger("Lark").addHandler(sdk_file)
     log("hub start")
     threading.Thread(target=watch_delivery, daemon=True).start()
-    lark.ws.Client(app_id, secret, event_handler=handler, log_level=lark.LogLevel.WARNING).start()
+    lark.ws.Client(app_id, secret, event_handler=handler, log_level=lark.LogLevel.INFO).start()
 
 
 def store_secret():
