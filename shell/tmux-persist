@@ -74,18 +74,24 @@ alive() {
 
 # claudes: "name<TAB>pid<TAB>pane<TAB>cwd<TAB>sessionId<TAB>version" for each
 # live Claude in a tmux pane. The session file keeps the session name from Claude's start, so
-# the current name comes from the pane id, which survives a rename.
+# the current name comes from the pane id, which survives a rename. Only the pane's own
+# Claude counts (the pane process or its child): one a tool started (agent-team, a nested
+# `claude -p`) inherits TMUX_PANE and records the same pane, and restarting the pane with
+# its id would kill the real one.
 claudes() {
-    local -A owner
-    local row f pid start tmux cwd id ver name
-    for row in ${(f)"$(tmux_ list-panes -a -F '#{pane_id} #{session_name}' 2>/dev/null || true)"}; do
-        owner[${row%% *}]=${row#* }
+    local -A owner panepid
+    local row f pid start tmux cwd id ver name pane
+    for row in ${(f)"$(tmux_ list-panes -a -F '#{pane_id} #{pane_pid} #{session_name}' 2>/dev/null || true)"}; do
+        pane=${row%% *}; row=${row#* }
+        panepid[$pane]=${row%% *}; owner[$pane]=${row#* }
     done
     for f in "$SESSIONS_DIR"/*.json(N); do
         IFS=$'\t' read -r pid start tmux cwd id ver < <(
             jq -r '[.pid, .procStart, .tmux // "", .cwd, .sessionId, .version // ""] | @tsv' "$f") || continue
         [[ -n $tmux ]] && name=${owner[${tmux##*.}]:-} && [[ -n $name ]] || continue
         alive "$pid" "$start" || continue
+        [[ $pid == "${panepid[${tmux##*.}]}" \
+            || $(/bin/ps -o ppid= -p "$pid" | tr -d ' ') == "${panepid[${tmux##*.}]}" ]] || continue
         native_owned "$name" "$id" && continue
         print -r -- "$name"$'\t'"$pid"$'\t'"${tmux##*.}"$'\t'"$cwd"$'\t'"$id"$'\t'"$ver"
     done

@@ -280,6 +280,19 @@ busy busy id-untouched
 ! "$tp" restart busy missing 2>/dev/null || fail "restart succeeded without a running Claude"
 kill -0 "$busy_pid" 2>/dev/null || fail "restart touched busy although missing has no Claude"
 
+# A Claude that a session's tool started (agent-team, a nested `claude -p`) inherits the pane's
+# TMUX_PANE and so records the same pane; it is not the pane's Claude, so restart and save
+# leave it alone instead of "restarting" the pane a second time with the child's id.
+busy busy id-main
+perl -e 'sleep 600' & child=$!
+child_epoch=$(LC_ALL=C /bin/date -j -f '%a %b %d %T %Y' "$(LC_ALL=C /bin/ps -o lstart= -p "$child" | xargs)" +%s)
+session "$child" "$(LC_ALL=C /bin/date -u -r "$child_epoch" '+%a %b %d %T %Y')" "busy:@9.$busy_pane" id-child
+out=$("$tp" restart busy)
+[ "$out" = "restarted busy ($busy_pane)" ] || fail "restart counted a tool's child Claude as the pane's: $out"
+resumed "$busy_pid" "$busy_pane" id-main
+kill -0 "$child" 2>/dev/null || fail "restart killed a tool's child Claude"
+kill "$child"
+
 # stale lists each session whose Claude predates the installed version, once.
 # version <pid> <v>: record the Claude Code version in <pid>'s session file.
 version() {
