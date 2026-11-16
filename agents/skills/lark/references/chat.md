@@ -8,7 +8,11 @@ lark-cli im +messages-search --as user --query "关键词" [--chat-id oc_…] [-
 lark-cli im +threads-messages-list --as user --thread om_…|omt_…
 lark-cli im +messages-mget --as user --message-ids om_a,om_b
 lark-cli contact +search-user --as user --query "姓名"                       # → open_id ou_…
+lark-cli im +messages-resources-download --as user --message-id om_… --file-key img_…|file_… \
+  --type image|file --output ./a                                           # a screenshot or file posted in chat
 ```
+
+The `img_…` / `file_…` key is in the message content returned by the list/mget commands.
 
 Times are ISO 8601 with offset. Sending messages is outward-facing: only on the user's
 explicit request (`lark-cli skills read lark-im` for the send commands).
