@@ -1,8 +1,9 @@
 ---
 name: lark
 description: |
-  Read and edit Feishu/Lark docs, wiki pages and sheets, and read group chats, via lark-cli. Use
-  for a larkoffice.com / feishu.cn URL or token, or lark-cli auth/scope errors (飞书文档、知识库、表格、群消息).
+  Read and edit Feishu/Lark docs, wiki pages, sheets and whiteboards, and read group chats, via
+  lark-cli. Use for a larkoffice.com / feishu.cn URL or token, or lark-cli auth/scope errors
+  (飞书文档、知识库、表格、画板/白板、群消息).
 ---
 
 # lark-cli
@@ -46,4 +47,5 @@ Read only the procedures required by the operation.
 - Read document version history or document comments: [DocxXML's other doc commands](references/doc-xml.md), which includes `docs +history-list` and `drive +list-comments`.
 - Resolve wiki nodes, list/create pages, or search: [Wiki and search](references/wiki.md). A wiki URL may hold a sheet rather than a doc.
 - Read or update spreadsheet cells: [Sheets](references/sheets.md).
+- View, export, create or redraw a whiteboard (画板), or put a diagram in a doc: [Whiteboards](references/whiteboard.md).
 - Read group history, threads or contacts: [Chat](references/chat.md). Sending messages requires the user's explicit request; read the embedded `lark-im` skill for sending commands.
