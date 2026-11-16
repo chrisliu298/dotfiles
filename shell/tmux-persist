@@ -35,6 +35,9 @@ KEEP=(--mcp-config --dangerously-load-development-channels --channels)
 # recreating missing work; %s is the session id.
 RESTARTED="这个会话刚被重启了（tmux-persist restart）：Claude 进程已被替换，对话已恢复。先检查后台任务、Monitor、cron、scheduled wakeup 和 loop 的现状；定时任务先用 CronList 核对，只恢复仍需要且缺失的工作，保留已有频率，不重复创建。子代理上下文在 ~/.claude/projects/*/%s/subagents/，没有 \"finished\":true 的 meta.json 记录未完成工作，用 SendMessage 按文件名里的 agentId 继续，不要重新起。然后继续当前任务。"
 SELF=${0:A}
+# The cross-machine mailbox channel (agents/claude/peer, see its README): every launch gets it,
+# so each session can be messaged from another Mac. Empty disables it.
+PEER_MCP=${TMUX_PERSIST_PEER_MCP-${SELF:h:h}/agents/claude/peer/mcp.json}
 
 # launchd starts us with a bare PATH.
 path=(/opt/homebrew/bin /usr/local/bin $path)
@@ -86,6 +89,22 @@ claudes() {
         native_owned "$name" "$id" && continue
         print -r -- "$name"$'\t'"$pid"$'\t'"${tmux##*.}"$'\t'"$cwd"$'\t'"$id"$'\t'"$ver"
     done
+}
+
+# with_peer <flags>: <flags> plus the peer channel: its config after any --mcp-config values
+# and server:peer after any development channels, each added with its flag when absent.
+with_peer() {
+    local -a w=(${=1})
+    local f v i
+    [[ -n $PEER_MCP ]] || { print -r -- "$1"; return; }
+    for f v in --mcp-config $PEER_MCP --dangerously-load-development-channels server:peer; do
+        (( ${w[(Ie)$v]} )) && continue
+        i=${w[(i)$f]}
+        if (( i > ${#w} )); then w+=("$f" "$v"); continue; fi
+        while (( i < ${#w} )) && [[ ${w[i+1]} != -* ]]; do (( ++i )); done
+        w[i]=("${w[i]}" "$v")
+    done
+    print -r -- "${w[*]}"
 }
 
 # effort_of <pid>: the level Claude <pid> was launched with (--effort <level> or
@@ -195,6 +214,7 @@ restore() {
         native_owned "$name" "$id" && continue
         tmux_ has-session -t "=$name" 2>/dev/null && continue
         [[ -d $cwd ]] || cwd=$HOME
+        flags=$(with_peer "$flags")
         # Typed into the pane's shell, so exiting Claude leaves a shell behind.
         tmux_ new-session -d -s "$name" -c "$cwd"
         tmux_ send-keys -t "=$name:" "$LAUNCH $id${effort:+ --effort $effort}${flags:+ $flags}" Enter
@@ -212,7 +232,7 @@ restore() {
 # several values would swallow it.
 restart_pane() {
     local shell=$1 name=$2 pid=$3 pane=$4 cwd=$5 id=$6 tries=0
-    local effort=${EFFORT:-$(effort_of "$pid")} flags=$(flags_of "$pid")
+    local effort=${EFFORT:-$(effort_of "$pid")} flags=$(with_peer "$(flags_of "$pid")")
     [[ -d $cwd ]] || cwd=$HOME
     # An explicit command, since a bare respawn reruns the pane's original one.
     tmux_ respawn-pane -k -t "$pane" -c "$cwd" "exec ${(q)shell} -l"

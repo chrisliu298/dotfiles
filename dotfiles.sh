@@ -15,6 +15,7 @@ LINKS=(
     "shell/tmux-persist:.local/bin/tmux-persist"
     "shell/rex-claude:.local/bin/rex-claude"
     "shell/agent-msg:.local/bin/agent-msg"
+    "shell/peer:.local/bin/peer"
     "shell/codex-traex:.local/bin/codex-traex"
     "shell/codex-ark:.local/bin/codex-ark"
     "shell/cdswap:.local/bin/cdswap"
@@ -326,6 +327,14 @@ install_links() {
 # shell/remap-keys; tmux sessions die with the machine, so shell/tmux-persist
 # snapshots the *-r2v sessions every 5 minutes and restores them at login
 # (separate agents, so a session closed on purpose is not revived).
+# The peer channel (agents/claude/peer/server.mjs) needs its MCP SDK next to it.
+install_peer_channel() {
+    local dir="$ROOT/agents/claude/peer"
+    command -v npm >/dev/null 2>&1 || { warn "npm not found; skipping peer channel"; return; }
+    [[ -d "$dir/node_modules" && "$dir/node_modules/.package-lock.json" -nt "$dir/package-lock.json" ]] && return
+    (cd "$dir" && npm ci --silent --no-audit --no-fund) && log "peer channel: npm ci" || warn "peer channel: npm ci failed"
+}
+
 install_launch_agents() {
     [[ "$(uname)" == Darwin ]] || return 0
     install_launch_agent local.remap-keys "<string>$HOME/.local/bin/remap-keys</string>"
@@ -854,7 +863,7 @@ main() {
 
     # Foreground: local-only sections
     section "Theme"; setup_theme_state
-    section "Links";  install_links; install_launch_agents; install_cron; install_vscode_theme
+    section "Links";  install_links; install_launch_agents; install_cron; install_vscode_theme; install_peer_channel
 
     # Must start after Links: TPM reads ~/.config/tmux/tmux.conf (the symlink
     # install_links creates), not the repo copy. Launched here rather than with

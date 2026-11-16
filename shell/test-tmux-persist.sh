@@ -10,6 +10,8 @@ export TMUX_PERSIST_STATE="$test_root/state" TMUX_PERSIST_CLAUDE_SESSIONS="$test
 export TMUX_PERSIST_SOCKET="tmux-persist-test-$$" TMUX_PERSIST_LAUNCH="echo resumed"
 # The fake Claudes that show no launch dialog need not be waited on for long.
 export TMUX_PERSIST_DIALOG_WAIT=20
+# No peer channel unless a check sets one (see the peer checks below).
+export TMUX_PERSIST_PEER_MCP=""
 unset TMUX_PANE  # a real pane id could collide with the private server's
 cleanup() {
     t kill-server 2>/dev/null || true
@@ -193,6 +195,29 @@ resumed "$busy_pid" "$busy_pane" id-eq "--effort xhigh"
 busy busy id-chr --mcp-config /x/mcp.json --dangerously-load-development-channels server:avatar
 "$tp" restart busy > /dev/null
 resumed "$busy_pid" "$busy_pane" id-chr "--mcp-config /x/mcp.json --dangerously-load-development-channels server:avatar"
+
+# With a peer channel set, restart and restore add it to every session's flags: its config
+# joins an existing --mcp-config and server:peer an existing channel list, else both are
+# added; a session that has them already keeps one copy.
+peer='/p/mcp.json'
+busy busy id-pr --mcp-config /x/mcp.json --dangerously-load-development-channels server:avatar
+TMUX_PERSIST_PEER_MCP=$peer "$tp" restart busy > /dev/null
+resumed "$busy_pid" "$busy_pane" id-pr "--mcp-config /x/mcp.json $peer --dangerously-load-development-channels server:avatar server:peer"
+busy busy id-pn
+TMUX_PERSIST_PEER_MCP=$peer "$tp" restart busy > /dev/null
+resumed "$busy_pid" "$busy_pane" id-pn "--mcp-config $peer --dangerously-load-development-channels server:peer"
+busy busy id-pd --mcp-config $peer --dangerously-load-development-channels server:peer
+TMUX_PERSIST_PEER_MCP=$peer "$tp" restart busy > /dev/null
+resumed "$busy_pid" "$busy_pane" id-pd "--mcp-config $peer --dangerously-load-development-channels server:peer"
+t kill-session -t "=peer-r2v" 2>/dev/null || true
+printf 'peer-r2v\t%s\tid-prs\t\t\n' "$test_root" > "$TMUX_PERSIST_STATE/snapshot"
+TMUX_PERSIST_PEER_MCP=$peer TMUX_PERSIST_DIALOG_WAIT=1 "$tp" restore > /dev/null
+tries=0
+until t capture-pane -p -J -t "=peer-r2v:" | grep -qxF "resumed id-prs --mcp-config $peer --dangerously-load-development-channels server:peer"; do
+    tries=$((tries + 1)); [ "$tries" -lt 50 ] || fail "peer channel not added on restore: $(t capture-pane -p -J -t "=peer-r2v:")"
+    sleep 0.1
+done
+t kill-session -t "=peer-r2v"
 
 # A development channel's launch dialog is accepted on restart and restore: a fake
 # Claude shows it and resumes only after Enter.
