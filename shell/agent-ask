@@ -163,15 +163,31 @@ def note(text):
     return {"tag": "markdown", "content": f"<font color='grey'>{text}</font>", "text_size": "notation"}
 
 
-def submit(name, label, value, fill=False):
-    button = {"tag": "button", "name": name, "form_action_type": "submit", "type": "default",
-              "text": {"tag": "plain_text", "content": label}, "behaviors": [{"type": "callback", "value": value}]}
-    return {**button, "width": "fill"} if fill else button
+def submit(name, label, value, kind="default"):
+    return {"tag": "button", "name": name, "form_action_type": "submit", "type": kind,
+            "text": {"tag": "plain_text", "content": label}, "behaviors": [{"type": "callback", "value": value}]}
+
+
+RECOMMENDED = re.compile(r"\s*[（(](推荐|Recommended)[）)]\s*$")
+
+
+def option_row(name, option, value):
+    """Label and description read together on the left, one button on the right: a full-width button
+    with its description below left the description looking like it belonged to the next button."""
+    label = option["label"]
+    recommended = bool(RECOMMENDED.search(label))
+    text = f"**{RECOMMENDED.sub('', label)}**" + ("　<font color='blue'>推荐</font>" if recommended else "")
+    if option.get("description"):
+        text += f"\n<font color='grey'>{option['description']}</font>"
+    return {"tag": "column_set", "flex_mode": "none", "horizontal_spacing": "12px", "margin": "8px 0 0 0", "columns": [
+        {"tag": "column", "width": "weighted", "weight": 1, "vertical_align": "center", "elements": [md(text)]},
+        {"tag": "column", "width": "auto", "vertical_align": "center", "elements": [
+            submit(name, "选这个", value, "primary_filled" if recommended else "default")]}]}
 
 
 def question_block(record, i, last):
-    """Each question is one form. Single choice: one full-width button per option with its description
-    underneath; clicking it submits the option together with whatever is in the text box. Multiple
+    """Each question is one form. Single choice: one row per option (label and description, 「选这个」 on
+    the right); clicking it submits the option together with whatever is in the text box. Multiple
     choice: checkboxes plus 「提交所选」. The text box alone answers with free text; on the last question
     「没看懂」 closes the whole card."""
     q = record["questions"][i]
@@ -189,14 +205,14 @@ def question_block(record, i, last):
             form.append({"tag": "checker", "name": f"c{j}", "checked": False, "text": {"tag": "lark_md", "content":
                          o["label"] + (f"　<font color='grey'>{desc}</font>" if desc else "")}})
         else:
-            form.append(submit(f"o{i}_{j}", o["label"], {**value, "pick": o["label"]}, fill=True))
-            if desc:
-                form.append(note(desc))
+            form.append(option_row(f"o{i}_{j}", o, {**value, "pick": o["label"]}))
         if o.get("preview"):
             form.append({"tag": "collapsible_panel", "expanded": False,
                          "header": {"title": {"tag": "plain_text", "content": f"预览：{o['label']}"}},
                          "elements": [md(f"```\n{o['preview'][:1500]}\n```")]})
-    hint = "补充说明" if multi else "补充说明（先写再点选项）或别的回答"
+    if not multi:
+        form += [{"tag": "hr", "margin": "12px 0 0 0"}, note("都不合适就写下你的回答点「提交文字」；也可以先写补充再点上面的选项")]
+    hint = "补充说明" if multi else "你的回答或补充"
     buttons = [submit(f"s{i}", "提交所选" if multi else "提交文字", {**value, "pick": "__form__"})]
     if last:
         buttons.append(submit("su", "🤔 没看懂", {"qid": record["qid"], "i": -1, "pick": "__unclear__"}))
