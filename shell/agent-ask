@@ -33,7 +33,7 @@ SCOPE_SUFFIX = "(R2V)"
 LETTERS = "ABCDEFGH"
 UNDELIVERED_AFTER = 5 * 60        # answered but not picked up: flag the card
 # Questions are read later on a phone, without the session's context: keep them short.
-MAX_QUESTION, MAX_DESCRIPTION, MAX_LABEL = 120, 80, 30
+MAX_QUESTION, MAX_DESCRIPTION, MAX_LABEL = 160, 100, 30
 WAIT_SLICE = float(os.environ.get("AGENT_ASK_WAIT_SLICE", "1"))
 WAIT_LIMIT = float(os.environ.get("AGENT_ASK_WAIT_LIMIT", str(23 * 3600)))
 
