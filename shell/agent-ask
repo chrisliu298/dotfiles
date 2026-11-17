@@ -473,6 +473,7 @@ def hub():
     Runs under `uv run --with lark-oapi`; the app secret is read from the login keychain
     (service agent-ask, account = app id)."""
     import lark_oapi as lark
+    import lark_oapi.ws.client as lark_ws_client
     from lark_oapi.event.callback.model.p2_card_action_trigger import P2CardActionTriggerResponse
 
     def handle(data):
@@ -498,7 +499,21 @@ def hub():
     logging.getLogger("Lark").addHandler(sdk_file)
     log("hub start")
     threading.Thread(target=watch_delivery, daemon=True).start()
-    lark.ws.Client(app_id, secret, event_handler=handler, log_level=lark.LogLevel.INFO).start()
+
+    class FeishuLink(lark.ws.Client):
+        """Clash Verge re-applying its network config silently kills the socket (no close frame), so the
+        SDK only notices when keepalive times out (websockets default 20 s + 20 s), then the server config
+        adds up to 30 s random jitter and 120 s between retries: about a minute of lost clicks per drop.
+        One connection per Mac needs no jitter; ping fast and retry fast."""
+
+        def _configure(self, conf):
+            super()._configure(conf)
+            self._reconnect_nonce = min(self._reconnect_nonce, 1)
+            self._reconnect_interval = min(self._reconnect_interval, 10)
+
+    _sdk_connect_kwargs = lark_ws_client._ws_connect_kwargs
+    lark_ws_client._ws_connect_kwargs = lambda *a: {**_sdk_connect_kwargs(*a), "ping_interval": 5, "ping_timeout": 5}
+    FeishuLink(app_id, secret, event_handler=handler, log_level=lark.LogLevel.INFO).start()
 
 
 def store_secret():
