@@ -199,7 +199,7 @@ resumed "$busy_pid" "$busy_pane" id-chr "--mcp-config /x/mcp.json --dangerously-
 # With a peer channel set, restart and restore add it to every session's flags: its config
 # joins an existing --mcp-config and server:peer an existing channel list, else both are
 # added; a session that has them already keeps one copy.
-peer='/p/mcp.json'
+peer=$test_root/peer-mcp.json; : > $peer
 busy busy id-pr --mcp-config /x/mcp.json --dangerously-load-development-channels server:avatar
 TMUX_PERSIST_PEER_MCP=$peer "$tp" restart busy > /dev/null
 resumed "$busy_pid" "$busy_pane" id-pr "--mcp-config /x/mcp.json $peer --dangerously-load-development-channels server:avatar server:peer"

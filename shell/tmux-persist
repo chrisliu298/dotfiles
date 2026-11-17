@@ -102,7 +102,9 @@ claudes() {
 with_peer() {
     local -a w=(${=1})
     local f v i
-    [[ -n $PEER_MCP ]] || { print -r -- "$1"; return; }
+    # A copy run from elsewhere resolves PEER_MCP to a missing file, and Claude refuses to start
+    # over one missing --mcp-config (autoeval-bot-r2v, 2026-11-17 14:53): drop the channel instead.
+    [[ -n $PEER_MCP && -f $PEER_MCP ]] || { print -r -- "$1"; return; }
     for f v in --mcp-config $PEER_MCP --dangerously-load-development-channels server:peer; do
         (( ${w[(Ie)$v]} )) && continue
         i=${w[(i)$f]}
