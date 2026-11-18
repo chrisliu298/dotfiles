@@ -7,6 +7,7 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 test_root=$(mktemp -d "${TMPDIR:-/tmp}/tmux-persist-test.XXXXXX")
 export TMUX_PERSIST_STATE="$test_root/state" TMUX_PERSIST_CLAUDE_SESSIONS="$test_root/sessions"
+export TMUX_PERSIST_CLAUDE_PROJECTS="$test_root/projects"
 export TMUX_PERSIST_SOCKET="tmux-persist-test-$$" TMUX_PERSIST_LAUNCH="echo resumed"
 # The fake Claudes that show no launch dialog need not be waited on for long.
 export TMUX_PERSIST_DIALOG_WAIT=20
@@ -159,6 +160,40 @@ until t capture-pane -p -J -t "=old-r2v:" | grep -qxF "resumed id-old4 --effort 
     sleep 0.1
 done
 t kill-session -t "=old-r2v"
+
+# The model and effort a session runs now (from its transcript) outrank the ones it
+# was launched with, so /model and /effort survive a restore; a replayed
+# api-request-blob line must not be mistaken for the last request.
+mkdir -p "$TMUX_PERSIST_CLAUDE_PROJECTS/proj"
+{
+    printf '{"type":"api-request","querySource":"repl_main_thread","params":{"model":"claude-fable-5-2","output_config":{"effort":"high"}}}\n'
+    printf '{"type":"api-request-blob","querySource":"repl_main_thread","params":{"model":"claude-opus-5-5","output_config":{"effort":"low"}}}\n'
+} > "$TMUX_PERSIST_CLAUDE_PROJECTS/proj/id-live.jsonl"
+busy keep-r2v id-live --model claude-opus-5-5 --effort medium
+"$tp" save
+[ "$(snap)" = "$(printf '%s\tclaude-fable-5-2' "$(row keep-r2v id-live high)")" ] \
+    || fail "live model/effort not saved: $(snap)"
+t kill-server
+TMUX_PERSIST_LAUNCH="echo resumed --model claude-opus-5-5" "$tp" restore > /dev/null
+tries=0
+until t capture-pane -p -J -t "=keep-r2v:" | grep -qxF "resumed --model claude-fable-5-2 id-live --effort high"; do
+    tries=$((tries + 1)); [ "$tries" -lt 50 ] || fail "live model not restored: $(t capture-pane -p -J -t "=keep-r2v:")"
+    sleep 0.1
+done
+rm -f "$TMUX_PERSIST_CLAUDE_PROJECTS/proj/id-live.jsonl"
+t kill-session -t "=keep-r2v" 2>/dev/null || true
+
+# A session a refusal moved to the fallback keeps the launched model in the snapshot:
+# a relaunch is one way out of the fallback, so it must not be pinned there.
+printf '{"type":"api-request","querySource":"repl_main_thread","params":{"model":"claude-opus-5","output_config":{"effort":"high"}}}\n' \
+    > "$TMUX_PERSIST_CLAUDE_PROJECTS/proj/id-fb.jsonl"
+busy keep-r2v id-fb --model claude-opus-5-5 --effort high
+"$tp" save
+[ "$(snap)" = "$(printf '%s\tclaude-opus-5-5' "$(row keep-r2v id-fb high)")" ] \
+    || fail "fallback model pinned into snapshot: $(snap)"
+rm -f "$TMUX_PERSIST_CLAUDE_PROJECTS/proj/id-fb.jsonl"
+t kill-session -t "=keep-r2v" 2>/dev/null || true
+
 busy keep-r2v id-keep --effort high
 "$tp" save
 
@@ -169,6 +204,50 @@ busy keep-r2v id-keep --effort high
 busy busy id-busy
 [ "$("$tp" restart busy)" = "restarted busy ($busy_pane)" ] || fail "restart did not report busy"
 resumed "$busy_pid" "$busy_pane" id-busy
+
+# A Claude that reports itself idle and has no subagent left unfinished since it started
+# resumes without the restart message. Its session crons and wakeups need none: Claude
+# re-arms them itself on --resume. startedAt is set two hours back, so "since" has room.
+start=$(($(date +%s) - 7200))
+log_dir="$TMUX_PERSIST_CLAUDE_PROJECTS/-proj"
+# idle <session> <id> [<status>]: a fake Claude like busy's, reporting <status> (idle).
+idle() {
+    busy "$1" "$2"
+    f="$TMUX_PERSIST_CLAUDE_SESSIONS/$busy_pid.json"
+    jq --arg s "${3:-idle}" --argjson t "$((start * 1000))" '.status = $s | .startedAt = $t' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+}
+# agent <id> <name> <meta> [<touch time>]: a subagent of <id>, its transcript last written then.
+agent() {
+    mkdir -p "$log_dir/$1/subagents"
+    printf '%s' "$3" > "$log_dir/$1/subagents/agent-$2.meta.json"
+    : > "$log_dir/$1/subagents/agent-$2.jsonl"
+    [ -z "${4:-}" ] || touch -t "$4" "$log_dir/$1/subagents/agent-$2.meta.json" "$log_dir/$1/subagents/agent-$2.jsonl"
+}
+# plain <pid> <pane> <id>: like resumed, but without the restart message.
+plain() {
+    tries=0
+    until t capture-pane -p -J -t "$2" | grep -qxF "resumed $3"; do
+        tries=$((tries + 1)); [ "$tries" -lt 50 ] || fail "$3 not resumed without the message: $(t capture-pane -p -J -t "$2")"
+        sleep 0.1
+    done
+    ! kill -0 "$1" 2>/dev/null || fail "old Claude still running"
+}
+restarts() { "$tp" restart busy > /dev/null; }
+
+# Nothing at all, or only a subagent an earlier process left: no message.
+idle busy id-quiet; restarts; plain "$busy_pid" "$busy_pane" id-quiet
+agent id-old a1 '{"agentType": "general-purpose"}' "$(/bin/date -r "$((start - 600))" '+%Y%m%d%H%M.%S')"
+idle busy id-old; restarts; plain "$busy_pid" "$busy_pane" id-old
+# A turn, a background shell or a permission prompt in progress (or no status at all,
+# as in the checks above): the message.
+idle busy id-turn busy; restarts; resumed "$busy_pid" "$busy_pane" id-turn
+idle busy id-shell shell; restarts; resumed "$busy_pid" "$busy_pane" id-shell
+idle busy id-wait waiting; restarts; resumed "$busy_pid" "$busy_pane" id-wait
+# A subagent written to since the start without "finished":true keeps the message.
+agent id-sub s1 '{"agentType": "general-purpose"}'
+idle busy id-sub; restarts; resumed "$busy_pid" "$busy_pane" id-sub
+agent id-done s2 '{"agentType": "general-purpose", "finished": true}'
+idle busy id-done; restarts; plain "$busy_pid" "$busy_pane" id-done
 
 # Run from inside the Claude's own pane, the restart is handed to the tmux server.
 busy busy id-inside

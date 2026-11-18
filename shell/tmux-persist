@@ -13,7 +13,8 @@
 #                                restart the Claude in running sessions (--all:
 #                                every session running one, e.g. after an
 #                                update), resuming the same conversations
-#                                with a message saying they were restarted, at the
+#                                with a message saying they were restarted (only
+#                                to a Claude that left work to recover), at the
 #                                effort each was launched with (or <level>)
 #        tmux-persist stale      sessions whose Claude predates the installed
 #                                version (shows "Restart to update"): tpr $(tps)
@@ -21,11 +22,13 @@ set -euo pipefail
 
 STATE=${TMUX_PERSIST_STATE:-$HOME/.local/state/tmux-persist}
 SESSIONS_DIR=${TMUX_PERSIST_CLAUDE_SESSIONS:-$HOME/.claude/sessions}
+PROJECTS=${TMUX_PERSIST_CLAUDE_PROJECTS:-$HOME/.claude/projects}
 # --model: `claude --resume` otherwise takes the model of the transcript's last
 # reply, which is Opus 5 after a refusal fallback even once /model switched back.
+# It names the default; a session running another model keeps that one (live_of).
 LAUNCH=${TMUX_PERSIST_LAUNCH:-claude --dangerously-skip-permissions --model claude-opus-5-5 --resume}
 PATTERN='(*-r2v|adapt-clf|thesis)'
-SNAP=$STATE/snapshot  # name<TAB>cwd<TAB>sessionId<TAB>effort<TAB>flags (empty: none given)
+SNAP=$STATE/snapshot  # name<TAB>cwd<TAB>sessionId<TAB>effort<TAB>flags<TAB>model (trailing ones may be absent)
 # Launch flags a session needs again on every launch: a channel (e.g. the Feishu
 # avatar bot's) only pushes messages into a Claude started with them. Each takes
 # one or more values, which must not contain spaces (ps drops the quoting).
@@ -47,29 +50,25 @@ persisted() { [[ $1 == ${~PATTERN} ]]; }
 
 # A migrated identity stays excluded even if an old snapshot still names it.
 # Prepared entries also block upgrade restarts while the owner saves its work.
+# The Rex entries ("role<TAB>sessionId" of each non-tmux one) are read once per process,
+# as one jq per entry and session made a restart wait seconds per session.
+NATIVE=() NATIVE_READ=0
 native_owned() {
-    local f code
-    for f in "${REX_CLAUDE_STATE:-$HOME/.local/state/rex-claude}"/sessions/*.json(N); do
-        if jq -e --arg name "$1" --arg id "${2:-}" \
-            '(.role == $name or (.sessionId == $id and $id != "")) and .transport != "tmux"' "$f" >/dev/null; then
-            return 0
-        else
-            code=$?
-            (( code == 1 )) || { print -u2 'tmux-persist: unreadable Rex ownership; refusing operation'; exit 1; }
+    local -a files
+    local out row
+    if (( ! NATIVE_READ )); then
+        files=("${REX_CLAUDE_STATE:-$HOME/.local/state/rex-claude}"/sessions/*.json(N))
+        if (( ${#files} )); then
+            out=$(jq -r 'select(.transport != "tmux") | [.role // "", .sessionId // ""] | @tsv' $files) \
+                || { print -u2 'tmux-persist: unreadable Rex ownership; refusing operation'; exit 1; }
+            NATIVE=(${(f)out})
         fi
+        NATIVE_READ=1
+    fi
+    for row in $NATIVE; do
+        [[ ${row%%$'\t'*} == "$1" || ( -n ${2:-} && ${row#*$'\t'} == "$2" ) ]] && return 0
     done
     return 1
-}
-
-# True when <pid> is still the process that started at <procStart> (UTC), so a
-# pid reused after a reboot is not mistaken for the old Claude.
-# BSD date/ps by absolute path: a GNU coreutils date may lead PATH.
-alive() {
-    local started now was
-    started=$(LC_ALL=C /bin/ps -o lstart= -p "$1" 2>/dev/null) || return 1
-    now=$(LC_ALL=C /bin/date -j -f '%a %b %d %T %Y' "${(j: :)${(z)started}}" +%s) || return 1
-    was=$(LC_ALL=C /bin/date -u -j -f '%a %b %d %T %Y' "$2" +%s) || return 1
-    [[ $now == "$was" ]]
 }
 
 # claudes: "name<TAB>pid<TAB>pane<TAB>cwd<TAB>sessionId<TAB>version" for each
@@ -77,24 +76,33 @@ alive() {
 # the current name comes from the pane id, which survives a rename. Only the pane's own
 # Claude counts (the pane process or its child): one a tool started (agent-team, a nested
 # `claude -p`) inherits TMUX_PANE and records the same pane, and restarting the pane with
-# its id would kill the real one.
+# its id would kill the real one. A pid counts only while it is still the process that
+# started at the file's procStart (UTC, as ps prints it with TZ=UTC), so a pid reused after
+# a reboot is not mistaken for the old Claude. One ps and one jq serve every file, as a few
+# processes per file made listing take seconds; BSD ps by absolute path.
 claudes() {
-    local -A owner panepid
-    local row f pid start tmux cwd id ver name pane
+    local -A owner panepid parent started
+    local -a w files
+    local row pid start tmux cwd id ver name pane f
     for row in ${(f)"$(tmux_ list-panes -a -F '#{pane_id} #{pane_pid} #{session_name}' 2>/dev/null || true)"}; do
         pane=${row%% *}; row=${row#* }
         panepid[$pane]=${row%% *}; owner[$pane]=${row#* }
     done
-    for f in "$SESSIONS_DIR"/*.json(N); do
-        IFS=$'\t' read -r pid start tmux cwd id ver < <(
-            jq -r '[.pid, .procStart, .tmux // "", .cwd, .sessionId, .version // ""] | @tsv' "$f") || continue
+    for row in ${(f)"$(TZ=UTC LC_ALL=C /bin/ps -axo pid=,ppid=,lstart=)"}; do
+        w=(${=row}); parent[${w[1]}]=${w[2]}; started[${w[1]}]="${w[3,4]} ${w[5]#0} ${w[6,-1]}"
+    done
+    files=("$SESSIONS_DIR"/*.json(N))
+    (( ${#files} )) || return 0
+    # The files joined by NULs, so a file caught mid-write skips only itself.
+    while IFS=$'\t' read -r pid start tmux cwd id ver; do
         [[ -n $tmux ]] && name=${owner[${tmux##*.}]:-} && [[ -n $name ]] || continue
-        alive "$pid" "$start" || continue
-        [[ $pid == "${panepid[${tmux##*.}]}" \
-            || $(/bin/ps -o ppid= -p "$pid" | tr -d ' ') == "${panepid[${tmux##*.}]}" ]] || continue
+        w=(${=start})  # e.g. "Tue Nov 08 01:49:24 2026", the day padded or not
+        [[ ${started[$pid]:-} == "${w[1,2]} ${w[3]#0} ${w[4,-1]}" ]] || continue
+        [[ $pid == "${panepid[${tmux##*.}]}" || ${parent[$pid]} == "${panepid[${tmux##*.}]}" ]] || continue
         native_owned "$name" "$id" && continue
         print -r -- "$name"$'\t'"$pid"$'\t'"${tmux##*.}"$'\t'"$cwd"$'\t'"$id"$'\t'"$ver"
-    done
+    done < <(for f in $files; do print -rn -- "$(<$f)"$'\0'; done \
+        | jq -rRs 'split("\u0000")[] | fromjson? | [.pid, .procStart, .tmux // "", .cwd, .sessionId, .version // ""] | @tsv')
 }
 
 # with_peer <flags>: <flags> plus the peer channel: its config after any --mcp-config values
@@ -112,6 +120,60 @@ with_peer() {
         while (( i < ${#w} )) && [[ ${w[i+1]} != -* ]]; do (( ++i )); done
         w[i]=("${w[i]}" "$v")
     done
+    print -r -- "${w[*]}"
+}
+
+# live_of <id>: "<model>\t<level>" of the last main-thread request in conversation
+# <id>'s transcript, or nothing. A model or level set with /model or /effort shows up
+# only there: the launch args keep naming what the session started on (2026-11-18
+# Training ran claude-fable-5-2 at high while its argv still said claude-opus-5-5),
+# so a restart off the args alone silently moves the session back. Transcripts reach
+# hundreds of MB, so only the tail is read; the request records are near the end, and
+# a session with none yet falls back to the launch args.
+live_of() {
+    local t line
+    for t in "$PROJECTS"/*/$1.jsonl(N); do
+        line=$(tail -c ${TMUX_PERSIST_TAIL:-4000000} "$t" 2>/dev/null |
+            grep -a '^{"type":"api-request",' | grep -a -F '"querySource":"repl_main_thread"' | tail -1) || true
+        [[ -n $line ]] || return 0
+        print -r -- "$line" | jq -r '[(.params.model // ""), (.params.output_config.effort // "")] | @tsv' 2>/dev/null || true
+        return 0
+    done
+}
+
+# live_model <id> / live_effort <id>: one field of live_of, validated. A model id must
+# look like one (a relaunch on a bad --model would not start), and the 1M-context
+# suffix is not part of it. The safeguards fallback is not reported: a session that a
+# refusal moved there runs it only until opus-repin gets it back, and a relaunch is
+# the other way out, so it must start on the model $LAUNCH names, not on the fallback.
+live_model() {
+    local m=${"$(live_of "$1")"%%$'\t'*}
+    m=${m%\[1m\]}
+    [[ $m == ${TMUX_PERSIST_FALLBACK_MODEL:-claude-opus-5} ]] && return 0
+    [[ $m == claude-?* && $m != *[^a-z0-9.-]* ]] && print -r -- "$m" || true # no extendedglob here
+}
+live_effort() {
+    local e=${"$(live_of "$1")"##*$'\t'}
+    [[ $e == (low|medium|high|xhigh|max) ]] && print -r -- "$e" || true
+}
+
+# model_of <pid>: the model Claude <pid> was launched with, or nothing.
+model_of() {
+    local -a w
+    w=(${(s: :)"$(/bin/ps -o command= -p "$1" 2>/dev/null)"})
+    local i=${w[(i)--model]}
+    if (( i < ${#w} )); then print -r -- "${w[i+1]}"; return; fi
+    i=${w[(I)--model=*]}
+    (( i )) && print -r -- "${w[i]#--model=}" || true
+}
+
+# launch_with <model>: $LAUNCH with its --model replaced by <model>. Leaves $LAUNCH
+# alone when it names no model (a TMUX_PERSIST_LAUNCH override) or <model> is empty.
+launch_with() {
+    [[ -n $1 ]] || { print -r -- "$LAUNCH"; return; }
+    local -a w=(${=LAUNCH})
+    local i=${w[(i)--model]}
+    (( i < ${#w} )) && w[i+1]=$1
     print -r -- "${w[*]}"
 }
 
@@ -179,19 +241,10 @@ accept_dev_channels() {
 }
 note() { print -u2 "tmux-persist: $1"; mkdir -p "$STATE"; print -r -- "$(date '+%F %T') $1" >> "$STATE/dialog.log"; }
 
-# live <name>: "pid<TAB>pane<TAB>cwd<TAB>sessionId<TAB>version" for each live Claude in <name>.
-live() {
-    local name rest
-    claudes | while IFS=$'\t' read -r name rest; do
-        [[ $name == "$1" ]] || continue
-        print -r -- "$rest"
-    done
-}
-
 save() {
     local -A rows
     local -a open
-    local name pid pane cwd id ver effort flags
+    local name pid pane cwd id ver effort flags model
     open=(${(f)"$(tmux_ list-sessions -F '#S' 2>/dev/null || true)"})
     # No tmux server (e.g. at boot, before restore) says nothing about which
     # sessions were closed, so the snapshot stays as it is.
@@ -200,14 +253,17 @@ save() {
     # Claude is not running now; a session closed on purpose drops out.
     # A doubled tab makes it a non-whitespace separator, so an empty effort
     # column does not collapse and shift the flags into it.
-    [[ -f $SNAP ]] && while IFS=$'\t\t' read -r name cwd id effort flags; do
+    [[ -f $SNAP ]] && while IFS=$'\t\t' read -r name cwd id effort flags model; do
         persisted "$name" && (( ${open[(Ie)$name]} )) || continue
         native_owned "$name" "$id" && continue
-        rows[$name]="$cwd"$'\t'"$id"$'\t'"$effort"$'\t'"$flags"
+        rows[$name]="$cwd"$'\t'"$id"$'\t'"$effort"$'\t'"$flags"${model:+$'\t'"$model"}
     done < "$SNAP"
     while IFS=$'\t' read -r name pid pane cwd id ver; do
         persisted "$name" || continue
-        rows[$name]="$cwd"$'\t'"$id"$'\t'"$(effort_of "$pid")"$'\t'"$(flags_of "$pid")"
+        # What the session runs now outranks what it was launched with.
+        effort=$(live_effort "$id"); [[ -n $effort ]] || effort=$(effort_of "$pid")
+        model=$(live_model "$id"); [[ -n $model ]] || model=$(model_of "$pid")
+        rows[$name]="$cwd"$'\t'"$id"$'\t'"$effort"$'\t'"$(flags_of "$pid")"${model:+$'\t'"$model"}
     done < <(claudes)
     mkdir -p "$STATE"
     for name in ${(ko)rows}; do print -r -- "$name"$'\t'"${rows[$name]}"; done > "$SNAP.tmp"
@@ -215,9 +271,9 @@ save() {
 }
 
 restore() {
-    local name cwd id effort flags
+    local name cwd id effort flags model
     [[ -f $SNAP ]] || return 0
-    while IFS=$'\t\t' read -r name cwd id effort flags; do  # \t\t: see save
+    while IFS=$'\t\t' read -r name cwd id effort flags model; do  # \t\t: see save
         persisted "$name" || continue
         native_owned "$name" "$id" && continue
         tmux_ has-session -t "=$name" 2>/dev/null && continue
@@ -225,7 +281,7 @@ restore() {
         flags=$(with_peer "$flags")
         # Typed into the pane's shell, so exiting Claude leaves a shell behind.
         tmux_ new-session -d -s "$name" -c "$cwd"
-        tmux_ send-keys -t "=$name:" "$LAUNCH $id${effort:+ --effort $effort}${flags:+ $flags}" Enter
+        tmux_ send-keys -t "=$name:" "$(launch_with "$model") $id${effort:+ --effort $effort}${flags:+ $flags}" Enter
         # At login the network and several Claudes start together: wait up to 5 min.
         accept_dev_channels "=$name:" "$flags" ${TMUX_PERSIST_DIALOG_WAIT:-3000} &
         print -r -- "restored $name"
@@ -233,15 +289,44 @@ restore() {
     wait
 }
 
+# owes <pid> <id>: true when Claude <pid>, about to be replaced, leaves work that only
+# the restart message gets the new one to pick up; one with none resumes without it, so
+# it is not handed a turn for nothing. That work is a turn, background shell or Monitor,
+# or permission prompt in progress (any status but idle; a session file without one
+# counts too), or a subagent written to since the process started without
+# "finished":true in its meta (background subagents leave the status idle). Session
+# crons and wakeups are not: Claude re-arms them itself on --resume.
+owes() {
+    local st started m j
+    local -a mt
+    IFS=$'\t' read -r st started < <(jq -r '[.status // "", .startedAt // 0] | @tsv' "$SESSIONS_DIR/$1.json") || return 0
+    [[ $st == idle ]] || return 0
+    started=$(( started / 1000 ))
+    zmodload -F zsh/stat b:zstat
+    for m in "$PROJECTS"/*/$2/subagents/*.meta.json(N); do
+        j=${m%.meta.json}.jsonl; [[ -f $j ]] || j=$m
+        zstat -A mt +mtime -- "$j"
+        (( mt[1] >= started )) || continue
+        jq -e '.finished == true' "$m" > /dev/null || return 0
+    done
+    return 1
+}
+
 # restart_pane <shell> <name> <pid> <pane> <cwd> <id>: same pane, window and
 # attached clients; only the pane's process is replaced, by a login <shell>.
 # The new Claude gets EFFORT if set, else the old one's launch effort, and the
-# old one's KEEP flags; the message goes right after the id, as a flag taking
-# several values would swallow it.
+# old one's KEEP flags; the message, when the old one owes work, goes right after
+# the id, as a flag taking several values would swallow it.
 restart_pane() {
-    local shell=$1 name=$2 pid=$3 pane=$4 cwd=$5 id=$6 tries=0
-    local effort=${EFFORT:-$(effort_of "$pid")} flags=$(with_peer "$(flags_of "$pid")")
+    local shell=$1 name=$2 pid=$3 pane=$4 cwd=$5 id=$6 tries=0 msg=
+    local effort=${EFFORT:-$(live_effort "$id")} flags=$(with_peer "$(flags_of "$pid")")
+    local model=$(live_model "$id") launch
+    [[ -n $effort ]] || effort=$(effort_of "$pid")
+    [[ -n $model ]] || model=$(model_of "$pid")
+    launch=$(launch_with "$model")
     [[ -d $cwd ]] || cwd=$HOME
+    # Read before the old Claude goes: its status is gone with it.
+    if owes "$pid" "$id"; then printf -v msg "$RESTARTED" "$id"; fi
     # An explicit command, since a bare respawn reruns the pane's original one.
     tmux_ respawn-pane -k -t "$pane" -c "$cwd" "exec ${(q)shell} -l"
     # Two Claude processes must not share one transcript.
@@ -249,23 +334,28 @@ restart_pane() {
         (( ++tries < 100 )) || { kill -9 "$pid" 2>/dev/null; break; }
         sleep 0.1
     done
-    local msg; printf -v msg "$RESTARTED" "$id"
-    tmux_ send-keys -t "$pane" "$LAUNCH $id ${(qq)msg}${effort:+ --effort $effort}${flags:+ $flags}" Enter
+    tmux_ send-keys -t "$pane" "$launch $id${msg:+ ${(qq)msg}}${effort:+ --effort $effort}${flags:+ $flags}" Enter
     accept_dev_channels "$pane" "$flags" ${TMUX_PERSIST_DIALOG_WAIT:-600}
     print -r -- "restarted $name ($pane)"
 }
 
-# restart <name>...: every Claude in the named sessions, in parallel. Nothing
-# restarts unless each session has one.
+# restart <name>...|--all: every Claude in the named sessions (--all: in every session
+# running one), in parallel. Nothing restarts unless each session has one. The Claudes
+# are listed once, as listing them takes seconds.
 restart() {
     local name row pid pane cwd id ver v shell missing=0
-    local -a rows found env
+    local -a all rows found env
+    all=(${(f)"$(claudes)"})
+    if [[ $* == --all ]]; then
+        set -- ${(u)all%%$'\t'*}
+        (( $# )) || { print -u2 "tmux-persist: no running Claude in any session"; exit 1; }
+    fi
     for name in "$@"; do
-        found=("${(@f)$(live "$name")}")
-        if [[ -z ${found[1]} ]]; then
+        found=("${(@M)all:#$name$'\t'*}")
+        if (( ! ${#found} )); then
             print -u2 "tmux-persist: no running Claude in session $name"; missing=1; continue
         fi
-        for row in "${found[@]}"; do rows+=("$name"$'\t'"$row"); done
+        rows+=("${found[@]}")
     done
     (( ! missing )) || exit 1
     # Run from inside one of those Claudes (e.g. via `!`), killing its pane would
@@ -307,12 +397,8 @@ case ${1:-} in
             EFFORT=${2:-}; shift $(( $# < 2 ? $# : 2 ))
             [[ -n $EFFORT ]] || set --  # --effort without a level
         fi
-        if [[ $* == --all ]]; then
-            set -- ${(f)"$(claudes | cut -f1 | sort -u)"}
-            (( $# )) || { print -u2 "tmux-persist: no running Claude in any session"; exit 1; }
-        elif (( ${@[(Ie)--all]} )); then
-            set --  # --all with session names
-        fi
+        # --all alone is expanded by restart, which lists the Claudes anyway.
+        [[ $* != --all ]] && (( ${@[(Ie)--all]} )) && set --  # --all with session names
         (( $# >= 1 )) || { print -u2 "usage: tmux-persist restart [--effort <level>] <session>...|--all"; exit 2; }
         restart "$@" ;;
     '') [[ -f $SNAP ]] && cat "$SNAP"

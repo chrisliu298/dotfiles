@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Switch a Claude Code session back to Opus 5.5 after a compaction when its
-# current model came from a safeguards refusal fallback.
+# Switch a Claude Code session back to the model it was running after a
+# compaction when its current model came from a safeguards refusal fallback.
+# That model is whichever one the refusal record names as refused (Opus 5.5 for
+# most sessions; Training moved to Fable 5.2 on 2026-11-18), not a fixed one.
 #
 # A refusal fallback swaps the session to the fallback model for good. This
-# retries 5.5 once per compaction; it is a recovery attempt, not a sign that
+# retries that model once per compaction; it is a recovery attempt, not a sign that
 # the context is safe (the first request after a compaction is often refused
 # again). No hook output can change the model, so the SessionStart(compact)
 # hook types `/model` into the session's tmux pane, and the PreModelSwitch hook
@@ -15,7 +17,7 @@
 # types `/effort <level settings give the fallback in this project, else
 # $FALLBACK_EFFORT>` after an automatic switch to the fallback,
 # and `/effort <level the session was launched with, else the one settings give
-# 5.5 in this project>` after a switch from it back to 5.5, accepting the cache-miss dialog /effort shows while the cache
+# it in this project>` after a switch from it back, accepting the cache-miss dialog /effort shows while the cache
 # is warm. A typed /effort also saves its level as the model's default in the
 # user settings; the hook puts back the default that was there before. A
 # session resumed on the fallback loses that level, so the SessionStart(resume)
@@ -25,7 +27,7 @@
 # the same.
 #
 # Sessions named in $STATE/pinned (one agent name per line) stay on the
-# fallback: for them 5.5 refuses almost every first request after a compaction,
+# fallback: for them the refused model refuses almost every first request after a compaction,
 # so retrying only rewrites the cache.
 #
 #   bash opus-repin.sh session-start   # SessionStart hook, matcher "compact"
@@ -34,8 +36,7 @@
 #   bash opus-repin.sh post-switch     # PostModelSwitch hook
 set -u
 
-TARGET=claude-opus-5-5
-COMMAND="/model $TARGET"
+TARGET=claude-opus-5-5 # the default; session-start uses the refused model instead
 FALLBACK=claude-opus-5
 FALLBACK_EFFORT=high # when settings give the fallback no level
 TTL=180 # seconds an approval stays valid
@@ -192,6 +193,13 @@ launch_effort() {
     done
 }
 
+# The model this session's last repin aimed at, else the default target.
+repin_target() {
+    local t
+    t=$(cat "$STATE/$sid.target" 2>/dev/null) || true
+    [[ "$t" == claude-[a-z0-9.-]* ]] && echo "$t" || echo "$TARGET"
+}
+
 # The level for the fallback: the one settings give it here, else the default.
 fallback_effort() {
     local level
@@ -243,9 +251,10 @@ type_effort() {
 case "${1:-}" in
 pre-switch)
     fresh "$STATE/$sid" || exit 0
-    [[ "$(jq -r '.to_model // empty' <<<"$input")" == "$TARGET" ]] || exit 0
+    target=$(cat "$STATE/$sid" 2>/dev/null); target=${target:-$TARGET}
+    [[ "$(jq -r '.to_model // empty' <<<"$input")" == "$target" ]] || exit 0
     rm -f "$STATE/$sid"
-    log "approve switch to $TARGET"
+    log "approve switch to $target"
     printf '%s' '{"hookSpecificOutput":{"hookEventName":"PreModelSwitch","permissionDecision":"allow"}}'
     ;;
 session-start)
@@ -257,7 +266,8 @@ session-start)
     [[ -n "$fallback" ]] || exit 0
     line=${fallback%%:*}
     fallback=${fallback#*:}
-    [[ "$(jq -r '.originalModel // empty' <<<"$fallback")" == "$TARGET" ]] || exit 0
+    target=$(jq -r '.originalModel // empty' <<<"$fallback")
+    [[ "$target" == claude-[a-z0-9.-]* ]] || exit 0
     model=$(jq -r '.model // empty' <<<"$input")
     [[ "$model" == "$(jq -r '.fallbackModel // empty' <<<"$fallback")" ]] || exit 0
     # Only undo the fallback itself: a model set with /model after it is a
@@ -270,29 +280,32 @@ session-start)
         exit 0
     fi
     fresh "$STATE/$sid" && exit 0 # another attempt is in flight
-    touch "$STATE/$sid"
-    log "compacted on $model after a $TARGET refusal; typing /model in $pane"
+    # The id goes in the file: pre-switch approves exactly this switch, and
+    # post-switch reads it to tell our own switch back from a hand-typed one.
+    printf '%s' "$target" > "$STATE/$sid"
+    printf '%s' "$target" > "$STATE/$sid.target"
+    log "compacted on $model after a $target refusal; typing /model in $pane"
     (
         # A queued /model may only show up as the next request's model attachment,
         # or, when that first request is refused at once, as the refusal record.
-        confirmed() { records_after "$transcript" "$1" | grep -a -c -e 'Set model to `Opus 5.5`' -e "\"modelId\":\"$TARGET\"" -e "\"originalModel\":\"$TARGET\""; }
+        confirmed() { records_after "$transcript" "$1" | grep -a -c -e "\"modelId\":\"$target\"" -e "\"originalModel\":\"$target\""; }
         wanted() { :; }
-        type_when_idle "$pane" "$COMMAND" "$transcript" || rm -f "$STATE/$sid"
+        type_when_idle "$pane" "/model $target" "$transcript" || rm -f "$STATE/$sid"
     ) </dev/null >/dev/null 2>&1 &
     ;;
 post-switch)
     # A level set with /effort outlives a model switch, so set it both ways:
     # the fallback level after the automatic fallback, and the level saved for
-    # 5.5 when a switch from the fallback returns to it.
+    # the repinned model when a switch from the fallback returns to it.
     source=$(jq -r '.source // empty' <<<"$input")
     from=$(jq -r '.from_model // empty' <<<"$input")
     to=$(jq -r '.to_model // empty' <<<"$input")
     from=${from%\[1m\]} to=${to%\[1m\]}
     if [[ "$source" == auto && "$to" == "$FALLBACK" ]]; then
         effort=$(fallback_effort)
-    elif [[ "$from" == "$FALLBACK" && "$to" == "$TARGET" ]]; then
+    elif [[ "$from" == "$FALLBACK" && "$to" == "$(repin_target)" ]]; then
         effort=$(launch_effort)
-        effort=${effort:-$(settings_effort "$TARGET")}
+        effort=${effort:-$(settings_effort "$to")}
         effort=${effort:-medium}
     else
         exit 0
