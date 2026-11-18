@@ -85,6 +85,9 @@
     "Stop": [
       {
         "hooks": [{ "type": "command", "command": "python3 ~/.claude/lang-guard.py stop" }]
+      },
+      {
+        "hooks": [{ "type": "command", "command": "python3 ~/.local/bin/agent-ask hook-reply", "timeout": 60 }]
       }
     ],
     "SessionStart": [

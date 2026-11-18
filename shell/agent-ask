@@ -13,6 +13,8 @@ Hook modes (wired in ~/.claude/settings.json):
                 wake the session with them (exit 2)
   hook-deliver  PostToolUse and UserPromptSubmit: hand over any answer the waiter has not
                 delivered yet, so a busy session gets it at its next tool call
+  hook-reply    Stop: when a delivered answer had typed text (often a question back), post the
+                session's reply to it under the card, so the exchange stays on the phone
 
 Scope: Claude sessions running inside tmux whose name ends with "(R2V)". State lives in
 XDG_STATE_HOME/agent-ask (default ~/.local/state/agent-ask); config.json there holds the
@@ -20,7 +22,7 @@ lark-cli profile used to send and patch cards, the app id, the private chat with
 and the user's open_id under that app. The hub receives clicks itself (lark-oapi long
 connection) so it can answer each click with the redrawn card.
 """
-import fcntl, glob, hashlib, json, logging, os, re, subprocess, sys, threading, time
+import datetime, fcntl, glob, hashlib, json, logging, os, re, subprocess, sys, threading, time
 from contextlib import contextmanager
 
 ROOT = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "agent-ask")
@@ -34,6 +36,7 @@ LETTERS = "ABCDEFGH"
 UNDELIVERED_AFTER = 5 * 60        # answered but not picked up: flag the card
 # Questions are read later on a phone, without the session's context: keep them short.
 MAX_QUESTION, MAX_DESCRIPTION, MAX_LABEL = 160, 100, 30
+MAX_REPLY = 3000                  # characters of the session's reply posted under the card
 WAIT_SLICE = float(os.environ.get("AGENT_ASK_WAIT_SLICE", "1"))
 WAIT_LIMIT = float(os.environ.get("AGENT_ASK_WAIT_LIMIT", str(23 * 3600)))
 
@@ -333,6 +336,12 @@ def answer_text(record):
     return "\n".join(lines)
 
 
+def typed(record):
+    """Whether the user wrote anything rather than only clicking options: such answers often ask back."""
+    labels = {o["label"] for q in record["questions"] for o in q.get("options", [])}
+    return any("（补充：" in a or not set(a.split(", ")) <= labels for a in record["answers"].values())
+
+
 def take_answer(qid):
     """answered -> delivered exactly once across the waiter and the per-tool hook."""
     with locked():
@@ -340,6 +349,7 @@ def take_answer(qid):
         if not record or record["status"] != "answered":
             return None
         record["status"], record["delivered_at"] = "delivered", now()
+        record["reply_pending"] = typed(record)
         save(record)
     try:
         patch_card(record["message_id"], render(record))
@@ -420,6 +430,59 @@ def hook_deliver(raw):
         name = event.get("hook_event_name") or "PostToolUse"
         print(json.dumps({"hookSpecificOutput": {"hookEventName": name, "additionalContext": "\n\n".join(texts)}},
                          ensure_ascii=False))
+
+
+def last_reply(transcript, since):
+    """The session's last text message written after `since` (epoch seconds), or None."""
+    text = None
+    try:
+        lines = open(transcript, encoding="utf-8")
+    except (OSError, TypeError):
+        return None
+    with lines:
+        for line in lines:
+            if '"assistant"' not in line:
+                continue
+            try:
+                entry = json.loads(line)
+                ts = entry["timestamp"].replace("Z", "+00:00")
+                when = datetime.datetime.fromisoformat(ts).timestamp()
+            except (ValueError, KeyError, AttributeError):
+                continue
+            if entry.get("type") != "assistant" or when < since:
+                continue
+            parts = [c.get("text", "") for c in entry.get("message", {}).get("content", [])
+                     if isinstance(c, dict) and c.get("type") == "text"]
+            if "".join(parts).strip():
+                text = "\n".join(parts).strip()
+    return text
+
+
+def hook_reply(raw):
+    event = json.loads(raw)
+    sid = event.get("session_id")
+    if not sid or not os.path.isdir(QDIR):
+        return
+    for record in records():
+        if record["sid"] != sid or not record.get("reply_pending"):
+            continue
+        text = last_reply(event.get("transcript_path"), record["delivered_at"])
+        if not text:
+            continue
+        with locked():
+            current = load(record["qid"])
+            if not current or not current.get("reply_pending"):
+                continue
+            current["reply_pending"] = False
+            save(current)
+        if len(text) > MAX_REPLY:
+            text = text[:MAX_REPLY] + "\n\n…（后面还有，全文在终端）"
+        try:
+            lark(["im", "+messages-reply", "--message-id", current["message_id"], "--reply-in-thread",
+                  "--markdown", "-"], stdin=f"💬 **{current['session']}** 回复：\n\n{text}")
+            log(f"reply {current['qid']} posted {len(text)} chars")
+        except (RuntimeError, OSError, subprocess.SubprocessError) as error:
+            log(f"reply failed {current['qid']}: {error}")
 
 
 # ---- hub ------------------------------------------------------------------------------
@@ -566,6 +629,8 @@ def main(argv):
         return hook_wait(sys.stdin.read())
     if mode == "hook-deliver":
         return hook_deliver(sys.stdin.read())
+    if mode == "hook-reply":
+        return hook_reply(sys.stdin.read())
     if mode == "hub":
         return hub()
     if mode == "store-secret":
