@@ -661,7 +661,10 @@ def main(argv):
         return hook_deliver(sys.stdin.read())
     if mode == "hook-session":
         return hook_session(sys.stdin.read())
-    if mode == "notify" and len(argv) >= 3:
+    if mode == "notify":
+        if len(argv) < 3 or argv[2].startswith("-") and argv[2] != "-":
+            print('用法：agent-ask notify "一两句白话"，或 agent-ask notify - 从 stdin 读。没有推送。')
+            return 1
         return notify(sys.stdin.read() if argv[2] == "-" else " ".join(argv[2:]))
     if mode == "hook-reply":
         return hook_reply(sys.stdin.read())
