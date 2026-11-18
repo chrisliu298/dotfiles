@@ -101,6 +101,9 @@
       {
         "matcher": "resume",
         "hooks": [{ "type": "command", "command": "bash ~/.claude/opus-repin.sh session-resume" }]
+      },
+      {
+        "hooks": [{ "type": "command", "command": "python3 ~/.local/bin/agent-ask hook-session", "timeout": 10 }]
       }
     ],
     "PreModelSwitch": [

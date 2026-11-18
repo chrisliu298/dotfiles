@@ -4,6 +4,7 @@
   agent-ask hub                    long-running receiver (launchd): card clicks -> answers
   agent-ask list                   questions still waiting for the user
   agent-ask withdraw QID [REASON]  an agent settled its own question; grey the card out
+  agent-ask notify TEXT|-          push a message that needs no decision to the user's Feishu
   agent-ask store-secret           put the app secret from the clipboard into the keychain
 
 Hook modes (wired in ~/.claude/settings.json):
@@ -13,6 +14,7 @@ Hook modes (wired in ~/.claude/settings.json):
                 wake the session with them (exit 2)
   hook-deliver  PostToolUse and UserPromptSubmit: hand over any answer the waiter has not
                 delivered yet, so a busy session gets it at its next tool call
+  hook-session  SessionStart: tell sessions in scope that `agent-ask notify` exists
   hook-reply    Stop: when a delivered answer had typed text (often a question back), post the
                 session's reply to it under the card, so the exchange stays on the phone
 
@@ -36,6 +38,7 @@ LETTERS = "ABCDEFGH"
 UNDELIVERED_AFTER = 5 * 60        # answered but not picked up: flag the card
 # Questions are read later on a phone, without the session's context: keep them short.
 MAX_QUESTION, MAX_DESCRIPTION, MAX_LABEL = 160, 100, 30
+MAX_NOTIFY = 300                  # a notification is a line or two, not a report
 MAX_REPLY = 3000                  # characters of the session's reply posted under the card
 WAIT_SLICE = float(os.environ.get("AGENT_ASK_WAIT_SLICE", "1"))
 WAIT_LIMIT = float(os.environ.get("AGENT_ASK_WAIT_LIMIT", str(23 * 3600)))
@@ -388,9 +391,9 @@ def hook_ask(raw):
         refresh_summary()
     except (RuntimeError, OSError, subprocess.SubprocessError) as error:
         log(f"summary failed: {error}")
-    reason = (f"已发到用户飞书（待答 {qid}），不要重问。答复可能几分钟到几小时后以 hook 消息送来，空闲时也会唤醒你。"
-              "别停下等：照推荐项继续做并记下用了哪个默认，只把不可逆或对外的那步留到答复后。"
-              f"问题过时或你已自己定了，运行 `agent-ask withdraw {qid} 原因`。")
+    reason = (f"✅ 已发到用户飞书（待答 {qid}）。这是回执，不是故障：不要重问，也别停下等，先照推荐项继续，"
+              "只把不可逆或对外的那步留到答复后。答复会以 hook 消息送来，空闲时也会唤醒你；"
+              f"问题过时了就 `agent-ask withdraw {qid} 原因`。")
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
                                              "permissionDecisionReason": reason}}, ensure_ascii=False))
 
@@ -413,6 +416,17 @@ def hook_wait(raw):
                 return 2
         time.sleep(WAIT_SLICE)
     return 0
+
+
+NOTIFY_HINT = ("你的提问（AskUserQuestion）会发到用户飞书。不需要用户决定、但用户该马上知道的事"
+               "（坏消息、长任务跑完、需要他回电脑看）用 `agent-ask notify \"一两句白话\"` 推到他飞书；"
+               f"例行进度不要推，上限 {MAX_NOTIFY} 字。")
+
+
+def hook_session(raw):
+    if in_scope(json.loads(raw).get("session_id") or "?")[0]:
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": NOTIFY_HINT}},
+                         ensure_ascii=False))
 
 
 def hook_deliver(raw):
@@ -607,6 +621,22 @@ def store_secret():
     print(f"已存入钥匙串（服务 agent-ask，账户 {app_id}），剪贴板已清空")
 
 
+def notify(text):
+    own = owning_session() or {}
+    name = own.get("name") or ""
+    if not (os.environ.get("TMUX") and name.endswith(SCOPE_SUFFIX)):
+        print(f"没有发出：只有 tmux 里名字以 {SCOPE_SUFFIX} 结尾的会话能推飞书（当前：{name or '找不到会话'}）")
+        return 1
+    text = text.strip()
+    if not text or len(text) > MAX_NOTIFY:
+        print(f"没有发出：通知要一两句白话，现在 {len(text)} 字（上限 {MAX_NOTIFY}）")
+        return 1
+    lark(["im", "+messages-send", "--chat-id", config()["chat_id"], "--markdown", "-"], stdin=f"📣 **{name}**：{text}")
+    log(f"notify {name} {len(text)} chars")
+    print("已推到用户飞书")
+    return 0
+
+
 def withdraw(qid, reason):
     with locked():
         record = load(qid)
@@ -629,6 +659,10 @@ def main(argv):
         return hook_wait(sys.stdin.read())
     if mode == "hook-deliver":
         return hook_deliver(sys.stdin.read())
+    if mode == "hook-session":
+        return hook_session(sys.stdin.read())
+    if mode == "notify" and len(argv) >= 3:
+        return notify(sys.stdin.read() if argv[2] == "-" else " ".join(argv[2:]))
     if mode == "hook-reply":
         return hook_reply(sys.stdin.read())
     if mode == "hub":
