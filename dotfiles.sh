@@ -461,7 +461,10 @@ EOF
     [[ -f "$plist" && "$(cat "$plist")" == "$want" ]] && return
     mkdir -p "${plist%/*}"
     printf '%s\n' "$want" > "$plist"
+    # bootout returns before the old job is gone; bootstrapping meanwhile fails with error 5.
     launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    local tries=0
+    while launchctl print "gui/$(id -u)/$label" &>/dev/null && (( tries++ < 100 )); do sleep 0.1; done
     launchctl bootstrap "gui/$(id -u)" "$plist" || warn "launchctl bootstrap $label failed"
     log "load ${plist/#$HOME/~}"
 }
