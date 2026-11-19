@@ -332,7 +332,7 @@ if __name__ == "__main__":
     import argparse
     import json
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", choices=("codex", "claude"), required=True)
+    parser.add_argument("--source", choices=("codex", "claude", "agy"), required=True)
     parser.add_argument("--query", action="append")
     parser.add_argument("--timeline", action="store_true")
     parser.add_argument("--since-epoch", type=float)

@@ -1,10 +1,11 @@
-"""The recall CLI end to end on synthetic Claude and Codex stores (needs ripgrep for grep)."""
+"""The recall CLI end to end on synthetic Claude, Codex and agy stores (needs ripgrep for grep)."""
 
 from __future__ import annotations
 
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,31 @@ OLD = "aaaaaaaa-0000-4000-8000-000000000001"
 CUR = "cccccccc-0000-4000-8000-000000000003"
 CODEX = "01a10000-0000-7000-8000-000000000009"
 CODEX_CUR = "01a10000-0000-7000-8000-00000000000c"
+AGY = "a9a90000-0000-4000-8000-00000000000a"
+AGY_CUR = "a9a90000-0000-4000-8000-00000000000c"
+AGY_SUB = "a9a90000-0000-4000-8000-00000000000d"
+STAMPS = "Created At: 2026-09-01T18:00:00+08:00\nCompleted At: 2026-09-01T18:00:01+08:00\n"
+
+
+def step(kind, ts="2026-09-01T10:00:00Z", source="MODEL", status="DONE", **extra):
+    return {"step_index": 0, "source": source, "type": kind, "status": status, "created_at": ts, **extra}
+
+
+def request(text, ts="2026-09-01T10:00:00Z"):
+    content = (f"<USER_REQUEST>\n{text}\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\nThe current local time is: "
+               "2026-09-01T18:00:00+08:00.\n</ADDITIONAL_METADATA>\n<USER_SETTINGS_CHANGE>\nThe user changed setting "
+               "`Model Selection`.\n</USER_SETTINGS_CHANGE>")
+    return step("USER_INPUT", ts, source="USER_EXPLICIT", content=content)
+
+
+def system(body, ts="2026-09-01T10:00:00Z", source="SYSTEM"):
+    return step("SYSTEM_MESSAGE", ts, source=source, content="The following is a <SYSTEM_MESSAGE> not actually sent by "
+                "the user. It is provided by the system as important information to pay attention to.\n\n"
+                f"<SYSTEM_MESSAGE>\n{body}\n</SYSTEM_MESSAGE>")
+
+
+def pushed(sender, text, ts="2026-09-01T10:00:00Z"):
+    return system(f"[Message] timestamp={ts} sender={sender} priority=MESSAGE_PRIORITY_HIGH content={text}", ts)
 
 
 def user(text, ts="2026-09-01T10:00:00Z", **extra):
@@ -101,18 +127,66 @@ class CliTests(unittest.TestCase):
             {"type": "response_item", "timestamp": "2026-09-01T01:00:01Z",
              "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "otter again"}]}},
         ])
+        self.write_agy()
         self.env = {**os.environ, "CLAUDE_CONFIG_DIR": str(self.root / "claude"), "CODEX_HOME": str(self.root / "codex"),
-                    "RECALL_CACHE_DIR": str(self.root / "cache"), "CLAUDE_CODE_SESSION_ID": CUR}
-        self.env.pop("CODEX_THREAD_ID", None)
-        self.env.pop("CODEX_RECALL_ROOT", None)
+                    "AGY_RECALL_ROOT": str(self.root / "agy"), "RECALL_CACHE_DIR": str(self.root / "cache"),
+                    "CLAUDE_CODE_SESSION_ID": CUR}
+        for name in ("CODEX_THREAD_ID", "CODEX_RECALL_ROOT", "ANTIGRAVITY_CONVERSATION_ID"):
+            self.env.pop(name, None)
+        self.agy_env = dict(self.env, ANTIGRAVITY_CONVERSATION_ID=AGY_CUR)
+
+    def write_agy(self):
+        """One agy conversation with every step type, the current one, and a subagent of the first."""
+        store = self.root / "agy"
+        transcript = lambda conversation: store / "brain" / conversation / ".system_generated" / "logs" / "transcript_full.jsonl"  # noqa: E731
+        for conversation in (AGY, AGY_CUR, AGY_SUB):
+            transcript(conversation).parent.mkdir(parents=True)
+        self.write(transcript(AGY), [
+            system("The following system message was injected by a SessionStart hook:\nkingfisher memory index",
+                   source="SYSTEM_SDK"),                                                                    # L1
+            request("We decided the kingfisher export keeps CSV."),                                          # L2
+            step("PLANNER_RESPONSE", "2026-09-01T10:00:05Z", content="Plotting the kingfisher now.",
+                 thinking="kingfisher-thought", model="gemini", tool_calls=[
+                     {"name": "run_command", "args": json.dumps({"CommandLine": "python plot_kingfisher.py --out fig.png",
+                                                                 "WaitMsBeforeAsync": 5000})},
+                     {"name": "read_file", "args": {"Path": "/work/app/kingfisher.md", "StartLine": 1}}]),    # L3
+            step("GENERIC", "2026-09-01T10:00:06Z", content=STAMPS * 2 +
+                 "Command exited with code 0.\n\nCommand output:\nsaved kingfisher score 0.917"),          # L4
+            step("GENERIC", "2026-09-01T10:00:07Z", status="ERROR", error="invalid line range",
+                 content=STAMPS + "Encountered error in step execution: invalid line range"),                # L5
+            step("GENERIC", "2026-09-01T10:00:08Z", status="RUNNING", content="Created At: x\n"
+                 f"Tool is running as a background task with task id: {AGY}/task-6"),                       # L6
+            pushed("system", "[peer] agent-msg read kingfisher-note", "2026-09-01T10:00:09Z"),               # L7
+            pushed(f"{AGY}/task-6", "Task finished: kingfisher plot done", "2026-09-01T10:00:10Z"),          # L8
+            step("ERROR_MESSAGE", "2026-09-01T10:00:11Z", source="SYSTEM", error="API error: UNAVAILABLE"),  # L9
+            step("CHECKPOINT", "2026-09-01T12:00:00Z", source="SYSTEM",
+                 content="# Resuming from a compaction\nkingfisher summary"),                              # L10
+            request("Later we chose parquet for the kingfisher export.", "2026-09-01T15:00:00Z"),            # L11
+            step("PLANNER_RESPONSE", "2026-09-01T15:00:05Z", content="", tool_calls=[
+                {"name": "run_command", "args": {"CommandLine": "agent-msg send kingfisher-peer --file note.md"}}]),  # L12
+        ])
+        self.write(transcript(AGY_CUR), [request("kingfisher current thought", "2026-09-02T09:00:00Z")])
+        self.write(transcript(AGY_SUB), [pushed(AGY, "audit the kingfisher export"),
+                                         step("PLANNER_RESPONSE", content="kingfisher audit finished OK")])
+        db = sqlite3.connect(store / "conversation_summaries.db")
+        db.execute("CREATE TABLE conversation_summaries(conversation_id TEXT PRIMARY KEY, title TEXT,"
+                   " workspace_uris TEXT, parent_conversation_id TEXT)")
+        db.executemany("INSERT INTO conversation_summaries VALUES(?,?,?,?)", [
+            (AGY, "Kingfisher export", '["file:///work/app"]', ""),
+            (AGY_SUB, "", '["file:///work/app"]', AGY)])
+        db.commit()
+        db.close()
+        (store / "cache").mkdir()
+        (store / "cache" / "last_conversations.json").write_text(json.dumps({"/work/cur": AGY_CUR,
+                                                                             "/work/cur/sub": AGY_CUR}))
 
     @staticmethod
     def write(path, records):
         path.write_text("".join(json.dumps(r) + "\n" for r in records))
 
-    def run_cli(self, *args, code=0):
+    def run_cli(self, *args, code=0, env=None):
         p = subprocess.run([sys.executable, str(SCRIPT), *args[:1], "--json", *args[1:]], capture_output=True, text=True,
-                           env=self.env, cwd="/")
+                           env=env or self.env, cwd="/")
         self.assertEqual(p.returncode, code, p.stdout + p.stderr)
         out = json.loads(p.stdout)
         self.assertEqual(out["schema"], "recall/2")
@@ -218,6 +292,99 @@ class CliTests(unittest.TestCase):
     def test_unknown_refs_are_not_found(self):
         self.assertEqual(self.run_cli("open", f"cl:{OLD}:3.9")["status"], "not_found")
         self.assertEqual(self.run_cli("open", f"cl:{OLD}:9")["status"], "not_found")
+
+    # ------------------------------------------------------------------ agy
+    def agy(self, *args, code=0):
+        return self.run_cli(*args, code=code, env=self.agy_env)
+
+    def test_agy_steps_become_items(self):
+        out = self.agy("session", AGY, "--kind", "all", "--tail", "0")
+        self.assertEqual(out["sources"], ["agy"])                   # an agy shell reads agy by default
+        self.assertEqual(
+            [(i["ref"], i["kind"], i["role"], i.get("tool", ""), i.get("error", False)) for i in out["items"]], [
+                (f"ag:{AGY}:1", "event", "system", "system", False),
+                (f"ag:{AGY}:2", "message", "user", "", False),
+                (f"ag:{AGY}:3", "message", "assistant", "", False),
+                (f"ag:{AGY}:3.1", "command", "assistant", "run_command", False),
+                (f"ag:{AGY}:3.2", "command", "assistant", "read_file", False),
+                (f"ag:{AGY}:4", "output", "tool", "", False),
+                (f"ag:{AGY}:5", "output", "tool", "", True),
+                (f"ag:{AGY}:6", "output", "tool", "", False),
+                (f"ag:{AGY}:7", "message", "peer", "system", False),
+                (f"ag:{AGY}:8", "message", "automated", f"{AGY}/task-6", False),
+                (f"ag:{AGY}:9", "event", "system", "error", True),
+                (f"ag:{AGY}:10", "event", "system", "compacted", False),
+                (f"ag:{AGY}:11", "message", "user", "", False),
+                (f"ag:{AGY}:12", "command", "assistant", "run_command", False)])
+        text = {i["ref"]: i["text"] for i in out["items"]}
+        self.assertEqual(text[f"ag:{AGY}:1"], "The following system message was injected by a SessionStart hook:\n"
+                                              "kingfisher memory index")
+        self.assertEqual(text[f"ag:{AGY}:2"], "We decided the kingfisher export keeps CSV.")
+        self.assertEqual(text[f"ag:{AGY}:3.1"], "python plot_kingfisher.py --out fig.png")
+        self.assertEqual(text[f"ag:{AGY}:3.2"], "/work/app/kingfisher.md")
+        self.assertEqual(text[f"ag:{AGY}:4"], "Command exited with code 0.\n\nCommand output:\nsaved kingfisher score 0.917")
+        self.assertEqual(text[f"ag:{AGY}:7"], "[peer] agent-msg read kingfisher-note")
+        self.assertEqual(out["session"]["title"], "Kingfisher export")
+        self.assertEqual(out["session"]["project"], "/work/app")
+
+    def test_agy_grep_finds_commands_and_outputs_but_never_thinking(self):
+        out = self.agy("grep", "agent-msg", "--kind", "command")
+        self.assertEqual([(i["ref"], i["text"]) for i in out["items"]],
+                         [(f"ag:{AGY}:12", "agent-msg send kingfisher-peer --file note.md")])
+        self.assertEqual([i["ref"] for i in self.agy("grep", "0.917")["items"]], [f"ag:{AGY}:4"])
+        self.assertEqual(self.agy("grep", "kingfisher-thought")["status"], "no_match")
+        sessions = {i["session"] for i in self.agy("grep", "kingfisher", "--limit", "50")["items"]}
+        self.assertEqual(sessions, {AGY, AGY_SUB})                  # the current conversation only when named
+        self.assertEqual({i["session"] for i in self.agy("grep", "kingfisher", "--session", "current")["items"]},
+                         {AGY_CUR})
+        self.assertEqual(self.agy("grep", "kingfisher", "--project", "/nowhere")["items"], [])
+
+    def test_agy_search_sessions_and_timeline(self):
+        hits = self.agy("search", "kingfisher export")["items"]
+        self.assertEqual({i["session"] for i in hits}, {AGY})       # not the current one, not the subagent
+        self.assertTrue(all(i["ref"].startswith(f"ag:{AGY}:") for i in hits))
+        self.assertEqual((hits[0]["title"], hits[0]["project"]), ("Kingfisher export", "/work/app"))
+        self.assertEqual({i["role"] for i in self.agy("search", "kingfisher note", "--role", "peer")["items"]}, {"peer"})
+        listed = {i["session"]: i for i in self.agy("sessions")["items"]}
+        self.assertEqual(set(listed), {AGY, AGY_CUR})
+        self.assertEqual(listed[AGY_CUR]["project"], "/work/cur")    # from last_conversations.json
+        said = self.agy("timeline", "--since", "2026-09-01", "--until", "2026-09-01")["items"]
+        self.assertEqual([i["text"] for i in said], ["We decided the kingfisher export keeps CSV.",
+                                                     "Later we chose parquet for the kingfisher export."])
+
+    def test_agy_refs_open_and_subagents_show_their_parent(self):
+        context = self.agy("open", f"ag:{AGY}:3.1", "--before", "1", "--after", "1")["items"]
+        self.assertEqual([(i["ref"], i.get("anchor", False)) for i in context],
+                         [(f"ag:{AGY}:3", False), (f"ag:{AGY}:3.1", True), (f"ag:{AGY}:3.2", False)])
+        for command in (["search", "kingfisher export"], ["grep", "kingfisher"], ["sessions"],
+                        ["timeline", "--since", "2026-09-01"], ["session", AGY]):
+            with self.subTest(command=command[0]):
+                ref = self.agy(*command)["items"][0]["ref"]
+                self.assertEqual(self.agy("open", ref)["status"], "ok")
+        child = self.agy("session", AGY_SUB)
+        self.assertEqual(child["session"]["parent"], AGY)
+        self.assertEqual([(i["role"], i.get("tool")) for i in child["items"]], [("peer", AGY), ("assistant", None)])
+        self.assertEqual(self.agy("session", "current")["items"][0]["text"], "kingfisher current thought")
+
+    def test_agy_subagents_in_grep_and_children(self):
+        hit = next(i for i in self.agy("grep", "audit finished")["items"])
+        self.assertEqual((hit["session"], hit["parent"]), (AGY_SUB, AGY))
+        self.assertNotIn(AGY_SUB, {i["session"] for i in self.agy("grep", "kingfisher", "--no-subagents")["items"]})
+        named = {i["session"] for i in self.agy("grep", "kingfisher", "--session", AGY, "--limit", "50")["items"]}
+        self.assertEqual(named, {AGY, AGY_SUB})
+        alone = {i["session"] for i in self.agy("grep", "kingfisher", "--session", AGY, "--no-subagents")["items"]}
+        self.assertEqual(alone, {AGY})
+        # The lookup's own subagents echo it, like the lookup itself.
+        mine = self.run_cli("grep", "kingfisher", "--limit", "50", env=dict(self.agy_env, ANTIGRAVITY_CONVERSATION_ID=AGY))
+        self.assertEqual({i["session"] for i in mine["items"]}, {AGY_CUR})
+        kids = [i for i in self.agy("session", AGY, "--children")["items"] if i["kind"] == "subagent"]
+        self.assertEqual([(k["session"], k["parent"], k["ref"]) for k in kids], [(AGY_SUB, AGY, f"ag:{AGY_SUB}:2")])
+        self.assertEqual(kids[0]["text"], "brief: audit the kingfisher export\nfinal: kingfisher audit finished OK")
+
+    def test_sources_with_agy(self):
+        self.assertEqual(self.agy("grep", "otter", "--source", "other")["sources"], ["claude", "codex"])
+        self.assertEqual(self.run_cli("grep", "kingfisher", "--source", "all")["sources"], ["claude", "codex", "agy"])
+        self.assertEqual(self.run_cli("grep", "kingfisher")["items"], [])            # a Claude shell reads Claude
 
     # ------------------------------------------------------------------ errors
     def test_dash_query_and_usage_errors_stay_parseable(self):

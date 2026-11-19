@@ -14,8 +14,8 @@ metadata:
 # Recall
 
 Read saved local conversations with the `recall` command (on PATH). It searches every project of
-the agent running it; `--source other`, `all`, `claude` or `codex` reaches the other agent's
-history when asked. One call answers one lookup, and each item's ref feeds the next call, so do
+the agent running it; `--source other`, `all`, `claude`, `codex` or `agy` reaches the other
+agents' history when asked. One call answers one lookup, and each item's ref feeds the next call, so do
 not write python, jq or grep against transcript JSONL. If recall cannot answer, say what is
 missing; reading raw records is for investigating their schema
 ([transcript-store.md](references/transcript-store.md)), not for routine lookups.
@@ -81,7 +81,7 @@ An assistant saying "done" is a claim, not proof.
 Answer with exactly one provenance line from the evidence actually used:
 
 ```text
-recall [codex|claude]: <date> · <session prefix> · <gist>
+recall [codex|claude|agy]: <date> · <session prefix> · <gist>
 ```
 
 ## Limits

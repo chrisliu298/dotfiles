@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""Search the local Codex and Claude conversation stores with source attribution."""
+"""Search the local Codex, Claude and agy conversation stores with source attribution."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ SKILLS = Path(__file__).resolve().parents[1]
 SCRIPTS = {
     "codex": SKILLS / "codex" / "scripts" / "recall.py",
     "claude": SKILLS / "claude" / "scripts" / "recall.py",
+    "agy": SKILLS / "agy" / "scripts" / "recall.py",
 }
 
 
@@ -123,6 +124,8 @@ def timeline(cwd: str, sources: list[str], since: str, until: str | None, limit:
 
 
 def show(source: str, args: argparse.Namespace) -> dict:
+    if source == "agy":         # the agy backend has no command line of its own
+        return {"status": "error", "reason": "agy results open with `recall open ag:SESSION:LINE`"}
     if source == "codex":
         if not args.item_id:
             return {"status": "error", "reason": f"{source} results require --item-id"}
@@ -141,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     find = commands.add_parser("search")
     find.add_argument("--query", "-q", action="append", required=True, help="Repeat for up to six complementary phrasings")
     find.add_argument("--cwd", default=os.getcwd())
-    find.add_argument("--agent", choices=("codex", "claude"), required=True)
+    find.add_argument("--agent", choices=("codex", "claude", "agy"), required=True)
     find.add_argument("--source", choices=("self", "other", "all"), default="self")
     find.add_argument("--limit", type=int, choices=range(1, 21), default=5)
     find.add_argument("--roles", choices=("both", "user", "assistant"), default="both")
@@ -153,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     window.add_argument("--since", required=True, help="Local YYYY-MM-DD or YYYY-MM-DDTHH:MM")
     window.add_argument("--until", help="Local YYYY-MM-DD or YYYY-MM-DDTHH:MM, inclusive")
     window.add_argument("--cwd", default=os.getcwd())
-    window.add_argument("--agent", choices=("codex", "claude"), required=True)
+    window.add_argument("--agent", choices=("codex", "claude", "agy"), required=True)
     window.add_argument("--source", choices=("self", "other", "all"), default="self")
     window.add_argument("--limit", type=int, choices=range(1, 1001), metavar="1-1000", default=200)
     window.add_argument("--roles", choices=("both", "user", "assistant"), default="user")
@@ -165,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     context.add_argument("--before", type=int, choices=range(21), default=3)
     context.add_argument("--after", type=int, choices=range(21), default=5)
     context.add_argument("--max-chars", type=int, choices=range(1000, 50001), default=12000)
-    context.add_argument("--source", choices=("codex", "claude"), required=True)
+    context.add_argument("--source", choices=("codex", "claude", "agy"), required=True)
     context.add_argument("--session", required=True)
     context.add_argument("--item-id")
     context.add_argument("--line", type=int)

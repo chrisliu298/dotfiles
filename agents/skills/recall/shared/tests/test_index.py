@@ -36,10 +36,11 @@ class IndexTests(unittest.TestCase):
         self.root = Path(temp.name)
         env = mock.patch.dict(os.environ, {"RECALL_CACHE_DIR": str(self.root / "cache"),
                                           "CLAUDE_CONFIG_DIR": str(self.root / "claude"),
-                                          "CODEX_RECALL_ROOT": str(self.root / "codex" / "sessions")})
+                                          "CODEX_RECALL_ROOT": str(self.root / "codex" / "sessions"),
+                                          "AGY_RECALL_ROOT": str(self.root / "agy")})
         env.start()
         self.addCleanup(env.stop)
-        for name in ("CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
+        for name in ("CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID", "ANTIGRAVITY_CONVERSATION_ID"):
             os.environ.pop(name, None)
 
     def sessions(self, source, query):
@@ -79,6 +80,26 @@ class IndexTests(unittest.TestCase):
         result = r.search("codex", ["zeppelin hangar"], str(self.root), 5, "both")
         self.assertEqual(result["candidates"][0]["cwd"], "/work/app")
         self.assertEqual(result["stats"]["messages_kept"], 2)
+
+    def test_agy_append_and_partial_last_line(self):
+        path = self.root / "agy" / "brain" / "conv-a" / ".system_generated" / "logs" / "transcript_full.jsonl"
+        user = {"type": "USER_INPUT", "created_at": "2026-09-09T10:00:00Z",
+                "content": "<USER_REQUEST>\norchard websocket\n</USER_REQUEST>"}
+        self.write(path, [user])
+        self.assertEqual(self.sessions("agy", "orchard websocket"), ["conv-a"])
+        reply = json.dumps({"type": "PLANNER_RESPONSE", "created_at": "2026-09-09T10:00:05Z",
+                            "content": "zeppelin hangar ready"})
+        with path.open("a") as handle:
+            handle.write(reply[:20])                      # agy is mid-write: not indexed yet
+        self.assertEqual(self.sessions("agy", "zeppelin hangar"), [])
+        with path.open("a") as handle:
+            handle.write(reply[20:] + "\n")
+        result = r.search("agy", ["zeppelin hangar"], str(self.root), 5, "both")
+        self.assertEqual([(e["session"], e["line"], e["role"]) for e in result["candidates"][0]["evidence"]],
+                         [("conv-a", 2, "assistant")])
+        self.assertTrue(result["candidates"][0]["confirmation"].startswith("recall: 2026-09-09 · conv-a · agent turn"))
+        db = sqlite3.connect(self.root / "cache" / "index" / "agy.sqlite")
+        self.assertEqual(db.execute("SELECT count(*) FROM msgs").fetchone()[0], 2)   # appended, not re-indexed
 
     def test_claude_dates_are_local_not_utc(self):
         with mock.patch.dict(os.environ, {"TZ": "Asia/Shanghai"}):

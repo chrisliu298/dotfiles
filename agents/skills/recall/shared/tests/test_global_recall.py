@@ -34,7 +34,7 @@ class GlobalRecallTests(unittest.TestCase):
         return json.loads(output.getvalue())
 
     def test_default_reads_only_calling_agents_complete_history(self) -> None:
-        for agent in ("codex", "claude"):
+        for agent in ("codex", "claude", "agy"):
             with self.subTest(agent=agent), mock.patch.object(recall, "run_source", return_value=hit(agent)) as run:
                 result = self.invoke("--agent", agent)
                 self.assertEqual(run.call_count, 1)
@@ -92,8 +92,8 @@ class GlobalRecallTests(unittest.TestCase):
     def test_other_source_is_explicit(self) -> None:
         with mock.patch.object(recall, "run_source", side_effect=lambda source, _: hit(source)) as run:
             result = self.invoke("--agent", "codex", "--source", "other")
-        self.assertEqual({call.args[0] for call in run.call_args_list}, {"claude"})
-        self.assertEqual({c["source"] for c in result["candidates"]}, {"claude"})
+        self.assertEqual({call.args[0] for call in run.call_args_list}, {"claude", "agy"})
+        self.assertEqual({c["source"] for c in result["candidates"]}, {"claude", "agy"})
 
     def test_roles_reaches_each_source_before_ranking(self) -> None:
         for agent in ("codex", "claude"):
@@ -106,7 +106,7 @@ class GlobalRecallTests(unittest.TestCase):
         with mock.patch.object(recall, "run_source", side_effect=lambda source, _: hit(source)):
             result = self.invoke("--agent", "codex", "--source", "all")
         self.assertEqual(result["status"], "ambiguous")
-        self.assertEqual({c["source"] for c in result["candidates"]}, {"codex", "claude"})
+        self.assertEqual({c["source"] for c in result["candidates"]}, {"codex", "claude", "agy"})
 
     def test_timeline_needs_no_query_and_merges_sources(self) -> None:
         session = {"session": "s", "messages": [{"time": "2026-09-01T09:00"}]}
@@ -117,7 +117,7 @@ class GlobalRecallTests(unittest.TestCase):
                          "--since", "2026-09-01", "--until", "2026-09-01T12:00"])
         result = json.loads(output.getvalue())
         self.assertEqual(result["status"], "ok")
-        self.assertEqual({s["source"] for s in result["sessions"]}, {"codex", "claude"})
+        self.assertEqual({s["source"] for s in result["sessions"]}, {"codex", "claude", "agy"})
         command = run.call_args.args[1]
         self.assertEqual(command[0], "timeline")
         self.assertNotIn("--query", command)

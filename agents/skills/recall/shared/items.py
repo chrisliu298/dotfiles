@@ -6,8 +6,8 @@ here straight from the transcript, so an item's text is the recorded text (redac
 index snippet. Speaker rules come from the source backends (`speaker`, `_message_text`), so
 the index and this reader agree on who said what.
 
-An item is addressed by a ref, `cl:<session>:<line>[.<block>]` or `cx:<session>:<line>[.<block>]`:
-a Claude record can hold several blocks (text, tool calls, tool results), a Codex record one.
+An item is addressed by a ref, `cl:`, `cx:` or `ag:<session>:<line>[.<block>]`: a Claude record or
+an agy step can hold several blocks (text, tool calls, tool results), a Codex record one.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PREFIX = {"claude": "cl", "codex": "cx"}
+PREFIX = {"claude": "cl", "codex": "cx", "agy": "ag"}
 SOURCE = {v: k for k, v in PREFIX.items()}
 MARKER = "⟦recall⟧"          # heads every CLI output, so a later grep skips its own echoes
 _RECALL_CALL = re.compile(r"(^|[\s;&|(])recall\s+(search|grep|session|open|timeline|sessions)\b")
@@ -219,13 +219,55 @@ def codex_items(api, language, rec: dict, line: int) -> list[Item]:
     return []
 
 
+# ---------------------------------------------------------------------------- agy
+def agy_items(api, language, step: dict, line: int) -> list[Item]:
+    """Items of one agy step: its message (speaker rules from the backend), then each tool call of a
+    planner response, or the tool output, compaction, error or system text the step records."""
+    kind, ts = step.get("type"), str(step.get("created_at") or "")
+    content = step.get("content") if isinstance(step.get("content"), str) else ""
+    items: list[Item] = []
+    said = api.message(step)
+    if said:
+        role, text, sender = said
+        items.append(Item(line, 0, "message", role, language.redact(text), ts, tool=sender))
+    if kind == "PLANNER_RESPONSE":
+        for call in step.get("tool_calls") or []:
+            if isinstance(call, dict):
+                name = str(call.get("name") or "")
+                items.append(Item(line, len(items), "command", "assistant",
+                                  language.redact(api.tool_text(name, call.get("args"))), ts, tool=name))
+    elif kind == "GENERIC":            # status RUNNING: a background task's start notice, kept as is
+        text = api.output_text(content) or str(step.get("error") or "")
+        items.append(Item(line, 0, "output", "tool", language.redact(text), ts,
+                          error=step.get("status") == "ERROR" or bool(step.get("error"))))
+    elif kind == "CHECKPOINT":
+        items.append(Item(line, 0, "event", "system", "compacted: the conversation was summarized here", ts,
+                          tool="compacted"))
+    elif kind == "ERROR_MESSAGE":
+        items.append(Item(line, 0, "event", "system", language.redact(f"error: {step.get('error') or content}"), ts,
+                          tool="error", error=True))
+    elif kind == "SYSTEM_MESSAGE" and not said:     # hook injections and other harness text
+        items.append(Item(line, 0, "event", "system", language.redact(api.system_text(content)), ts, tool="system"))
+    return items
+
+
+def items_of(source: str, backend, record: dict, line: int, questions: set | None = None) -> list[Item]:
+    """Items of one transcript record of any source."""
+    api, language = backend(source), backend("claude")
+    if source == "claude":
+        return claude_items(api, record, line, questions)
+    if source == "codex":
+        return codex_items(api, language, record, line)
+    return agy_items(api, language, record, line)
+
+
 # ---------------------------------------------------------------------------- transcripts
 @dataclass
 class Transcript:
     source: str
-    session: str              # Claude session uuid / subagent stem, Codex session id
+    session: str              # Claude session uuid / subagent stem, Codex session id, agy conversation id
     path: Path
-    parent: str = ""          # a Claude subagent's parent session
+    parent: str = ""          # a Claude subagent's parent session, an agy subagent's parent conversation
 
     def items(self, backend) -> list[Item]:
         return self.window(backend, 1, None)
@@ -248,7 +290,7 @@ class Transcript:
     def window(self, backend, first: int, last: int | None) -> list[Item]:
         """Items of physical lines first..last (1-based, inclusive; None = to the end). Lines before
         `first` are skipped by counting newlines, never parsed, so a window costs its own lines."""
-        api, language = backend(self.source), backend("claude")
+        language = backend("claude")
         out: list[Item] = []
         questions: set = set()
         with self.path.open("rb") as handle:
@@ -275,9 +317,7 @@ class Transcript:
                     except ValueError:
                         rec = None
                     if isinstance(rec, dict):
-                        found = (claude_items(api, rec, line, questions) if self.source == "claude"
-                                 else codex_items(api, language, rec, line))
-                        out.extend(self.attribute(found))
+                        out.extend(self.attribute(items_of(self.source, backend, rec, line, questions)))
                 line += 1
         return out
 
@@ -341,7 +381,11 @@ def codex_files(backend) -> list[Path]:
 _CODEX_ID = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$")
 
 
-def transcript_of(source: str, path: Path) -> Transcript:
+def transcript_of(backend, source: str, path: Path) -> Transcript:
+    if source == "agy":                # brain/<conversation>/.system_generated/logs/transcript_full.jsonl
+        api = backend("agy")
+        session = api.session_of(path)
+        return Transcript("agy", session, path, parent=api.conversations().get(session, {}).get("parent", ""))
     if source == "codex":
         found = _CODEX_ID.search(path.name)
         return Transcript("codex", found.group(1) if found else path.stem, path)
@@ -352,14 +396,16 @@ def transcript_of(source: str, path: Path) -> Transcript:
 
 def resolve(backend, source: str, session: str) -> list[Transcript]:
     """Transcripts whose session id starts with `session` (every copy of a Codex fork/archive)."""
+    if source == "agy":
+        return [transcript_of(backend, "agy", p) for p in backend("agy").transcript_paths(session)]
     if source == "claude":
         root = claude_root(backend)
         paths = [] if session.startswith("agent-") else list(root.glob(f"*/{session}*.jsonl"))
         if not paths:        # a subagent: its own id, with or without the agent- prefix
             name = session if session.startswith("agent-") else f"agent-{session}"
             paths = list(root.glob(f"*/*/subagents/{name}*.jsonl"))
-        return [transcript_of("claude", p) for p in paths]
-    found = [transcript_of("codex", p) for p in codex_files(backend)
+        return [transcript_of(backend, "claude", p) for p in paths]
+    found = [transcript_of(backend, "codex", p) for p in codex_files(backend)
              if _CODEX_ID.search(p.name) and _CODEX_ID.search(p.name).group(1).startswith(session)]
     return found
 

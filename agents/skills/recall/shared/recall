@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""recall — read past Claude Code and Codex conversations.
+"""recall — read past Claude Code, Codex and Antigravity (agy) conversations.
 
   search QUERY [-q QUERY ...]   ranked search of what was said (user, assistant, peer messages)
   grep PATTERN [-e PATTERN ...] exact search of everything: messages, commands, tool outputs,
@@ -13,7 +13,7 @@
   timeline --since WHEN         what was said in a time window, in order
   sessions [--query TEXT]       find sessions by title, opening request or project
 
-Every item carries a ref (cl:SESSION:LINE / cx:SESSION:LINE) to pass to `open` unchanged.
+Every item carries a ref (cl:/cx:/ag:SESSION:LINE) to pass to `open` unchanged.
 Output is compact text headed by the recall marker; --json gives the same items as JSON.
 """
 from __future__ import annotations
@@ -39,7 +39,7 @@ import retrieve  # noqa: E402
 from index import Index  # noqa: E402
 from retrieve import backend  # noqa: E402
 
-SOURCES = ("claude", "codex")
+SOURCES = ("claude", "codex", "agy")
 SCHEMA = "recall/2"
 ROLES = ("user", "assistant", "peer", "automated", "both")
 KINDS = ("message", "command", "output", "event")
@@ -51,6 +51,8 @@ class Usage(Exception):
 
 # ---------------------------------------------------------------------------- arguments
 def host() -> str | None:
+    if os.environ.get("ANTIGRAVITY_CONVERSATION_ID"):          # set in agy's run_command shells
+        return "agy"
     if os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CLAUDECODE"):
         return "claude"
     if os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID"):
@@ -130,7 +132,7 @@ def cmd_search(args) -> dict:
         return source, retrieve.search(source, queries, args.cwd, args.limit, args.role, day(since), day(until),
                                        args.project, session, include_current=include, after=since, before=until)
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    with ThreadPoolExecutor(max_workers=len(SOURCES)) as pool:
         results = list(pool.map(one, args.sources))
     for source, result in results:
         statuses.append(result.get("status"))
@@ -159,6 +161,8 @@ def _files(source: str, args) -> list[Path]:
             for path in list(found):
                 folder = path.parent / path.stem
                 found += list(folder.glob("subagents/*.jsonl")) + list(folder.glob("tool-results/*.txt"))
+        if source == "agy" and not args.no_subagents:      # the conversation's subagent conversations
+            found += [path for t in raw.resolve(backend, source, session) for path in _agy_children(t.session)]
         return found
     return []
 
@@ -204,7 +208,6 @@ def cmd_grep(args) -> dict:
     found, scanned_records = [], 0
     for source in args.sources:
         api = backend(source)
-        language = backend("claude")
         files = _files(source, args)
         if args.session and not files:
             continue
@@ -212,8 +215,15 @@ def cmd_grep(args) -> dict:
             roots, globs = [raw.claude_root(backend)], ["*.jsonl", "**/tool-results/*.txt"]
             if args.no_subagents:
                 globs.append("!**/subagents/**")
-        else:
+        elif source == "codex":
             roots, globs = [r for r in raw.codex_roots(backend) if r.is_dir()], ["*.jsonl"]
+        else:                     # agy keeps transcripts under hidden folders, so list them
+            parents = {k: v["parent"] for k, v in api.conversations().items()}
+            roots, globs = [], []
+            files = files or [p for p in api.transcript_paths()
+                              if not (args.no_subagents and parents.get(api.session_of(p)))]
+        if not (files or roots):  # an absent store: rg without paths would read stdin
+            continue
         hits = _rg(patterns, args, roots, files, [] if files else globs)
         # Like search, skip the session doing the lookup unless --session names it: it echoes the query.
         current = None if args.session else api.current_session_id() or None
@@ -221,21 +231,21 @@ def cmd_grep(args) -> dict:
         for path, line, offset in hits:
             if since and path.stat().st_mtime < since:
                 continue
-            owner = path.parents[1].name if path.suffix == ".txt" else raw.transcript_of(source, path).session
-            if current and current in (owner, path.parents[1].name):
+            transcript = None if path.suffix == ".txt" else raw.transcript_of(backend, source, path)
+            owner = path.parents[1].name if transcript is None else transcript.session
+            # The lookup's own subagents too: a Claude one sits in the session's folder, an agy one names it.
+            if current and current in (owner, path.parents[1].name, transcript and transcript.parent):
                 continue
             if args.project and not _in_project(source, path, args.project):
                 continue
-            if path.suffix == ".txt":                           # a spilled tool result
+            if transcript is None:                              # a spilled tool result
                 spills[path].append(line)
                 continue
-            transcript = raw.transcript_of(source, path)
             record = _record(path, offset)
             if record is None:
                 continue
             scanned_records += 1
-            batch = raw.claude_items(api, record, line) if source == "claude" else raw.codex_items(api, language, record, line)
-            for item in batch:
+            for item in raw.items_of(source, backend, record, line):
                 if item.kind in kinds and (args.role == "both" or item.role == args.role) and matcher.search(item.text) \
                         and not raw.is_recall_echo(item):
                     found.append((source, transcript, item, None))
@@ -280,6 +290,9 @@ def _in_project(source: str, path: Path, project: str) -> bool:
     if source == "claude":           # <proj>/<s>.jsonl, <proj>/<s>/subagents/<a>.jsonl, <proj>/<s>/tool-results/<x>.txt
         folder = path.parents[2] if path.parent.name in ("subagents", "tool-results") else path.parent
         return backend("claude").encode_cwd(project).lower().strip("-") in folder.name.lower()
+    if source == "agy":
+        meta = backend("agy").conversations().get(backend("agy").session_of(path), {})
+        return project.lower() in (meta.get("project") or "").lower()
     meta = backend("codex").read_file_meta(path)
     return project.lower() in (meta.cwd or "").lower()
 
@@ -338,6 +351,9 @@ def _session_info(source: str, transcript: raw.Transcript) -> dict:
         info["parent"] = transcript.parent
     if source == "claude":
         info["title"] = Index("claude", backend).title(transcript.path)
+    elif source == "agy":
+        meta = backend("agy").conversations().get(transcript.session, {})
+        info.update(title=meta.get("title") or None, project=meta.get("project") or None)
     else:
         info["title"] = backend("codex").thread_titles(backend("codex").session_root()).get(transcript.session)
         info["project"] = backend("codex").read_file_meta(transcript.path).cwd
@@ -348,22 +364,38 @@ def _session_info(source: str, transcript: raw.Transcript) -> dict:
     return info
 
 
+def _agy_children(conversation: str) -> list[Path]:
+    """Transcripts of the agy conversations whose parent is `conversation`."""
+    api = backend("agy")
+    return [path for child, meta in api.conversations().items() if meta["parent"] == conversation
+            for path in api.transcript_paths(child)]
+
+
+def _child_label(source: str, child: raw.Transcript) -> str:
+    if source == "agy":
+        return backend("agy").conversations().get(child.session, {}).get("title", "")
+    meta_path = child.path.with_suffix(".meta.json")
+    try:
+        meta = json.loads(meta_path.read_text()) if meta_path.is_file() else {}
+    except ValueError:
+        meta = {}
+    return " · ".join(str(meta[k]) for k in ("agentType", "description") if isinstance(meta.get(k), str))
+
+
 def _children(source: str, transcript: raw.Transcript, args) -> list[dict]:
     """One `subagent` item per child: its brief and its last reply (the ref opens that reply)."""
-    if source != "claude":
+    if source == "claude":
+        paths = list((transcript.path.parent / transcript.path.stem / "subagents").glob("*.jsonl"))
+    elif source == "agy":
+        paths = _agy_children(transcript.session)
+    else:
         return []
-    folder = transcript.path.parent / transcript.path.stem / "subagents"
     children = []
-    for path in sorted(folder.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)[-args.children_limit:]:
-        child = raw.transcript_of("claude", path)
+    for path in sorted(paths, key=lambda p: p.stat().st_mtime)[-args.children_limit:]:
+        child = raw.transcript_of(backend, source, path)
         prompt = child.head(backend, 1, lambda i: i.kind == "message")
         final = child.tail(backend, 1, lambda i: i.kind == "message" and i.role == "assistant")
-        meta_path = path.with_suffix(".meta.json")
-        try:
-            meta = json.loads(meta_path.read_text()) if meta_path.is_file() else {}
-        except ValueError:
-            meta = {}
-        label = " · ".join(str(meta[k]) for k in ("agentType", "description") if isinstance(meta.get(k), str))
+        label = _child_label(source, child)
         ref = final[0].ref(source, child.session) if final else f"{raw.PREFIX[source]}:{child.session}:1"
         brief = clip(prompt[0].text, 300) if prompt else ""
         reply = clip(final[0].text, args.max_chars) if final else "(no reply yet)"
@@ -387,7 +419,7 @@ def cmd_open(args) -> dict:
         source, session, line, block = raw.parse_ref(args.ref)
         transcript = _transcript(source, session)
     except (ValueError, KeyError):
-        raise Usage(f"not a ref: {args.ref!r} (expected cl:SESSION:LINE or cx:SESSION:LINE)")
+        raise Usage(f"not a ref: {args.ref!r} (expected cl:, cx: or ag:SESSION:LINE)")
     except LookupError as exc:
         return {"status": "not_found", "items": [], "warnings": [str(exc)]}
     kinds = set(KINDS) if "all" in args.kind else set(args.kind)
@@ -536,7 +568,7 @@ class Parser(argparse.ArgumentParser):
 def parser() -> argparse.ArgumentParser:
     common = Parser(add_help=False)
     common.add_argument("--source", default="self", choices=("self", "other", "all", *SOURCES),
-                        help="self (default) = the agent running this; other; all; claude; codex")
+                        help="self (default) = the agent running this; other; all; claude; codex; agy")
     common.add_argument("--json", action="store_true", help="print JSON instead of text")
     common.add_argument("--budget", type=int, default=12000, help="max chars of text output (default 12000)")
     common.add_argument("--cwd", default=os.getcwd(), help=argparse.SUPPRESS)

@@ -1,4 +1,4 @@
-"""Persistent, incremental inverted index over one source's transcripts (claude or codex).
+"""Persistent, incremental inverted index over one source's transcripts (claude, codex or agy).
 
 One SQLite file per source under $RECALL_CACHE_DIR/index/. Each search stats the transcript
 files, parses only the bytes appended since the last pass (the backends' resumable cursors),
@@ -54,7 +54,7 @@ class Index:
     def __init__(self, source: str, backend):
         self.source = source
         self.api = backend(source)
-        self.language = backend("claude")        # one tokenizer for both stores
+        self.language = backend("claude")        # one tokenizer for every store
         root = os.environ.get("RECALL_CACHE_DIR")
         if root:
             directory = Path(root).expanduser() / "index"
@@ -93,6 +93,8 @@ class Index:
     def listing(self, cwd: str) -> list[tuple[Path, int, int]]:
         if self.source == "claude":
             _, paths = self.api.candidates(cwd, "all")
+        elif self.source == "agy":
+            paths = self.api.transcript_paths()
         else:
             root = self.api.session_root()
             paths = self.api.all_files(root) + self.api.all_files(root.parent / "archived_sessions")
@@ -157,7 +159,7 @@ class Index:
             if row:
                 self._drop(row)
             file_id = self.db.execute("INSERT INTO files(path) VALUES(?)", (str(path),)).lastrowid
-            cursor = api.new_cursor() if self.source == "claude" else api.new_cursor(path)
+            cursor = api.new_cursor(path) if self.source == "codex" else api.new_cursor()
             info, terms = {}, set()
         records = []
         if self.source == "claude":
@@ -167,6 +169,13 @@ class Index:
             if not info.get("interactive"):
                 info["interactive"] = api.is_interactive(path)
             info["title"] = api.cursor_title(cursor)
+        elif self.source == "agy":           # titles and workspaces are read at query time
+            session = api.session_of(path)
+            for line, role, text, timestamp in api.file_rows(path, cursor):
+                text = language.redact(text)
+                records.append(((session, line, line, role, timestamp, _epoch(timestamp, mtime_ns / 1e9),
+                                 language.iso_date(timestamp, path), None, None, None, None, None), text,
+                                Counter(language.tokenize(text))))
         else:
             if cursor["line"] <= 64:              # the inventory metadata is read from the head
                 head = api.read_file_meta(path)
@@ -236,7 +245,8 @@ class Index:
         for row in self.db.execute("SELECT id, file, session, line, ord, role, ts, epoch, date, place, key,"
                                    " source, branch, mtime, length FROM msgs ORDER BY id"):
             messages[row[1]].append(row)
-        return (self._claude if self.source == "claude" else self._codex)(files, info, messages, counts, exclude)
+        build = {"claude": self._claude, "codex": self._codex, "agy": self._agy}[self.source]
+        return build(files, info, messages, counts, exclude)
 
     def _claude(self, files, info, messages, counts, exclude):
         ordered = sorted(files, key=lambda f: files[f][2], reverse=True)       # candidates(): newest first
@@ -288,6 +298,34 @@ class Index:
         return rows, {"stats": total.as_dict(),
                       "current_task_exclusion": "resolved" if exclude else "unresolved",
                       "excluded_current_task": exclude or None}
+
+    def _agy(self, files, info, messages, counts, exclude):
+        """Top-level conversations newest first; subagent conversations stay out, like Claude's."""
+        meta = self.api.conversations()
+        ordered = sorted(files, key=lambda f: files[f][2], reverse=True)
+        rows, subagents, excluded = [], 0, 0
+        for file_id in ordered:
+            for m in messages[file_id]:
+                conversation = meta.get(m[2], {})
+                if conversation.get("parent"):
+                    subagents += 1
+                    continue
+                if m[2] == exclude:
+                    excluded += 1
+                    continue
+                rows.append(dict(session=m[2], role=m[5], date=m[8], epoch=m[7], line=m[3],
+                                 project=conversation.get("project") or "", order=m[3],
+                                 title=conversation.get("title") or None, token_counts=counts.get(m[0], {}),
+                                 length=m[14], fetch=partial(self.text, m[0]),
+                                 render=partial(self._confirmation, m)))
+        stats = {"files_total": len(files), "docs": len(rows), "skipped_subagent_messages": subagents,
+                 "excluded_current_messages": excluded}
+        return rows, {"stats": stats, "current_task_exclusion": "resolved" if exclude else "unresolved"}
+
+    def _confirmation(self, m):
+        gist = " ".join(self.text(m[0]).split())
+        gist = gist if len(gist) <= 220 else gist[:220] + " …"
+        return {"confirmation": self.api.confirmation_line(m[8], m[2], m[5], gist)}
 
     def _turn(self, path, m, root):
         turn = self.api.Turn(session_id=m[2], path=Path(path), line=m[3], ordinal=m[4], item_id=m[10],
