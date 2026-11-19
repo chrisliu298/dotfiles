@@ -463,7 +463,9 @@ xu(){ command "$HOME/.local/bin/codex" update "$@"; }
 # `proxy` alias's port) whenever it is listening; elsewhere it connects directly.
 _agy(){
     if nc -z -w 1 127.0.0.1 7897 2>/dev/null; then
-        local p=http://127.0.0.1:7897 s=socks5://127.0.0.1:7897 n=localhost,127.0.0.1,::1
+        # Internal platforms stay DIRECT: through the proxy their private addresses time out.
+        local p=http://127.0.0.1:7897 s=socks5://127.0.0.1:7897
+        local n=localhost,127.0.0.1,::1,.byted.org,.bytedance.net,.bytedance.com,.feishu.cn,.larkoffice.com,10.0.0.0/8
         https_proxy=$p http_proxy=$p all_proxy=$s no_proxy=$n \
             HTTPS_PROXY=$p HTTP_PROXY=$p ALL_PROXY=$s NO_PROXY=$n command agy "$@"
     else

@@ -101,7 +101,10 @@ t kill-session -t "=renamed-r2v"
 
 # After a reboot (no tmux server), restore recreates the snapshot sessions.
 t kill-server
-[ "$("$tp" restore)" = "restored keep-r2v" ] || fail "restore did not report keep-r2v"
+# Run with a proxy, as from agy's g: the server restore starts must not hand it to every session.
+[ "$(https_proxy=http://127.0.0.1:9 ALL_PROXY=socks5://127.0.0.1:9 NO_PROXY=x "$tp" restore)" = "restored keep-r2v" ] \
+    || fail "restore did not report keep-r2v"
+t show-environment -g 2>/dev/null | grep -iE '^(https?|all|no)_proxy=' && fail "restore passed the caller's proxy to the tmux server"
 t has-session -t "=keep-r2v" || fail "keep-r2v not recreated"
 tries=0
 until t capture-pane -p -t "=keep-r2v:" | grep -q "^resumed id-keep"; do

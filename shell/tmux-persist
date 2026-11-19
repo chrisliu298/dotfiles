@@ -50,6 +50,10 @@ RESTARTED="这个会话刚被重启了（tmux-persist restart）：Claude 进程
 # has work to recover. Registration and project memory need no step: agy's session start brings them.
 AGY_RESTARTED="这个会话刚被重启（tmux-persist）：agy 进程已替换，对话已恢复。重启会停掉所有后台任务和 schedule 定时任务，它们不会自己恢复；子代理还在，但都处于空闲，手上的活已中断。先用 manage_task list 看现状，用 ps 确认没有残留的常驻进程实例，再按你的记录或交接文档重建仍需要的常驻进程和定时任务，保留原来的频率，不要重复提交；用 manage_subagents 找到有未完成工作的子代理，给它发消息接着做，不要另起新的。然后继续当前任务。"
 SELF=${0:A}
+# A tmux server this starts (restore, the first command after kill-server) gives its environment to
+# every session; a caller's proxy (agy's g sets one) would then send them all, and the internal
+# platforms they reach DIRECT, through it. Each agent sets its own proxy where it needs one.
+unset http_proxy https_proxy all_proxy no_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY
 # The cross-machine mailbox channel (agents/claude/peer, see its README): every launch gets it,
 # so each session can be messaged from another Mac. Empty disables it.
 PEER_MCP=${TMUX_PERSIST_PEER_MCP-${SELF:h:h}/agents/claude/peer/mcp.json}
