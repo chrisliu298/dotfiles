@@ -11,7 +11,7 @@
     "type": "command",
     "command": "bash ~/.claude/statusline-command.sh"
   },
-  "effortLevel": "high",
+  "effortLevel": "medium",
   "language": "chinese",
   "autoCompactWindow": 400000,
   "subagentPromptCacheTtl": "1h",
@@ -70,7 +70,7 @@
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "python3 ~/.local/bin/agent-ask hook-deliver" }
+          { "type": "command", "command": "for f in \"${XDG_STATE_HOME:-$HOME/.local/state}\"/agent-ask/answered/*; do [ -e \"$f\" ] && exec python3 ~/.local/bin/agent-ask hook-deliver; done; :" }
         ]
       }
     ],
@@ -79,7 +79,7 @@
         "hooks": [{ "type": "command", "command": "python3 ~/.claude/lang-guard.py post-tool" }]
       },
       {
-        "hooks": [{ "type": "command", "command": "python3 ~/.local/bin/agent-ask hook-deliver" }]
+        "hooks": [{ "type": "command", "command": "for f in \"${XDG_STATE_HOME:-$HOME/.local/state}\"/agent-ask/answered/*; do [ -e \"$f\" ] && exec python3 ~/.local/bin/agent-ask hook-deliver; done; :" }]
       }
     ],
     "Stop": [
@@ -88,6 +88,9 @@
       },
       {
         "hooks": [{ "type": "command", "command": "python3 ~/.local/bin/agent-ask hook-reply", "timeout": 60 }]
+      },
+      {
+        "hooks": [{ "type": "command", "command": "python3 ~/.local/bin/agent-ask hook-listen", "asyncRewake": true, "timeout": 86400 }]
       }
     ],
     "SessionStart": [
@@ -103,7 +106,10 @@
         "hooks": [{ "type": "command", "command": "bash ~/.claude/opus-repin.sh session-resume" }]
       },
       {
-        "hooks": [{ "type": "command", "command": "python3 ~/.local/bin/agent-ask hook-session", "timeout": 10 }]
+        "hooks": [
+          { "type": "command", "command": "python3 ~/.local/bin/agent-ask hook-session", "timeout": 10 },
+          { "type": "command", "command": "agent-msg register --auto > /dev/null 2>&1 || true", "timeout": 10 }
+        ]
       }
     ],
     "PreModelSwitch": [

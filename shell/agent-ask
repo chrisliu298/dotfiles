@@ -6,6 +6,7 @@
   agent-ask withdraw QID [REASON]  an agent settled its own question; grey the card out
   agent-ask notify TEXT|-          push a message that needs no decision to the user's Feishu
   agent-ask store-secret           put the app secret from the clipboard into the keychain
+  agent-ask groups                 give every running session its own Feishu group with the user
 
 Hook modes (wired in ~/.claude/settings.json):
   hook-ask      PreToolUse AskUserQuestion: in scope, send one card per call and deny the
@@ -15,31 +16,63 @@ Hook modes (wired in ~/.claude/settings.json):
   hook-deliver  PostToolUse and UserPromptSubmit: hand over any answer the waiter has not
                 delivered yet, so a busy session gets it at its next tool call
   hook-session  SessionStart: tell sessions in scope that `agent-ask notify` exists
-  hook-reply    Stop: when a delivered answer had typed text (often a question back), post the
-                session's reply to it under the card, so the exchange stays on the phone
+  hook-reply    Stop: when a delivered answer had typed text (often a question back), or the user
+                replied in a thread, post the session's reply in that thread, so the exchange
+                stays on the phone
+  hook-listen   Stop, asyncRewake: while the session is idle, wait for the user's replies in the
+                threads of its cards and notifications and wake the session with them
 
-Scope: Claude sessions running inside tmux whose name ends with "(R2V)". State lives in
+Antigravity (agy) sessions (hooks in agents/agy/hooks.json, installed as ~/.gemini/config/hooks.json):
+  agy-session   SessionStart: file the conversation under its tmux session's name and tell it to run
+                `agent-ask agy-register` once
+  agy-register  run by the agent itself: add the address and token the hub needs to message it
+  agy-ask       PreToolUse ask_question: like hook-ask
+  agy-reply     Stop: like hook-reply
+  agy has no background wake-up hook, so instead of hook-wait/hook-deliver/hook-listen the hub pushes each
+  answer and thread message into the conversation itself (deliver_agy), which also wakes an idle session.
+
+Talking to a session: the user can type under a card, a notification or a posted reply (in its
+thread, or quoting it); start a message in the private chat with a session's name ("training 看下
+…", "@Compare：…"); or write in that session's own group (`agent-ask groups`). The hub files the
+text for the session now running under that name; the session gets it at its next tool call
+(hook-deliver) or, when idle, from hook-listen, and its reply goes back to the same thread or group.
+
+Scope: Claude sessions running inside tmux whose name ends with "(R2V)", and agy running in a tmux
+session whose name ends with "-r2v" ("probe-r2v" is "Probe (R2V)"). State lives in
 XDG_STATE_HOME/agent-ask (default ~/.local/state/agent-ask); config.json there holds the
 lark-cli profile used to send and patch cards, the app id, the private chat with the user
-and the user's open_id under that app. The hub receives clicks itself (lark-oapi long
+the user's open_id under that app, "groups": chat id -> session name, and "no_group": sessions that
+should get none. The hub receives clicks itself (lark-oapi long
 connection) so it can answer each click with the redrawn card.
 """
-import datetime, fcntl, glob, hashlib, json, logging, os, re, subprocess, sys, threading, time
+import contextlib, datetime, fcntl, glob, hashlib, json, logging, os, re, sqlite3, subprocess, sys, threading, time
 from contextlib import contextmanager
 
 ROOT = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "agent-ask")
 QDIR = os.path.join(ROOT, "questions")
+# One empty file per answer not yet delivered. The per-tool hook-deliver command in
+# agents/claude/settings.json checks it in sh, so tool calls start Python only while one waits.
+ANSWERED = os.path.join(ROOT, "answered")
 CONFIG = os.path.join(ROOT, "config.json")
 SUMMARY = os.path.join(ROOT, "summary.json")
+INBOX = os.path.join(ROOT, "inbox")       # one file per user message typed in a thread; the name dedupes redeliveries
+THREADS = os.path.join(ROOT, "threads")   # bot message id -> the session that sent it (notifications, posted replies)
+LISTENERS = os.path.join(ROOT, "listen")  # per session, the pid of the hook-listen that waits for it
+AGY_DIR = os.path.join(ROOT, "agy")       # per agy conversation: name, agy pid, and how to message it
+AGY_HOME = os.environ.get("AGENT_ASK_AGY_HOME") or os.path.expanduser("~/.gemini/antigravity-cli")
 LOG = os.path.join(ROOT, "hub.log")
 LARK = os.environ.get("AGENT_ASK_LARK", "lark-cli")
 SCOPE_SUFFIX = "(R2V)"
+AGY_TMUX_SUFFIX = "-r2v"
+TOOL = {"claude": "AskUserQuestion", "agy": "ask_question"}
 LETTERS = "ABCDEFGH"
 UNDELIVERED_AFTER = 5 * 60        # answered but not picked up: flag the card
 # Questions are read later on a phone, without the session's context: keep them short.
 MAX_QUESTION, MAX_DESCRIPTION, MAX_LABEL = 160, 100, 30
 MAX_NOTIFY = 300                  # a notification is a line or two, not a report
 MAX_REPLY = 3000                  # characters of the session's reply posted under the card
+MAX_INBOUND = 2000                # characters of a thread reply handed to the session
+LISTEN_SLICE = float(os.environ.get("AGENT_ASK_LISTEN_SLICE", "2"))
 WAIT_SLICE = float(os.environ.get("AGENT_ASK_WAIT_SLICE", "1"))
 WAIT_LIMIT = float(os.environ.get("AGENT_ASK_WAIT_LIMIT", str(23 * 3600)))
 
@@ -79,6 +112,12 @@ def save(record):
     tmp = f"{qpath(record['qid'])}.{os.getpid()}.tmp"
     json.dump(record, open(tmp, "w"), ensure_ascii=False, indent=1)
     os.replace(tmp, qpath(record["qid"]))
+    marker = os.path.join(ANSWERED, record["qid"])
+    if record["status"] == "answered" and record.get("host") != "agy":  # the hub pushes agy answers itself
+        os.makedirs(ANSWERED, exist_ok=True)
+        open(marker, "a").close()
+    elif os.path.exists(marker):
+        os.remove(marker)
 
 
 def records():
@@ -118,7 +157,236 @@ def session_name(sid):
             continue
         if record.get("sessionId") == sid and record.get("name"):
             return record["name"]
+    return (agy_load(sid) or {}).get("name")
+
+
+def alive(pid):
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass
+    return True
+
+
+def live_sessions():
+    """In-scope sessions running now, name -> session id; a restarted session resumes under a new id."""
+    found = []
+    for path in glob.glob(os.path.expanduser("~/.claude/sessions/*.json")):
+        try:
+            pid, record = int(os.path.basename(path)[:-5]), json.load(open(path))
+        except (OSError, ValueError):
+            continue
+        name = record.get("name") or ""
+        if name.endswith(SCOPE_SUFFIX) and record.get("sessionId") and alive(pid):
+            found.append((record.get("startedAt") or 0, name, record["sessionId"]))
+    found += [(r.get("startedAt") or 0, r["name"], r["sessionId"]) for r in agy_records()
+              if r.get("name") and r.get("sessionId") and alive(r.get("pid"))]
+    return {name: sid for _, name, sid in sorted(found)}  # the newest process wins a repeated name
+
+
+# ---- Antigravity (agy) sessions -------------------------------------------------------
+# agy keeps no session registry and has no background wake-up hook. SessionStart files each conversation
+# under its tmux session's name; `agent-ask agy-register`, which the agent runs itself, adds the language
+# server address and token that agy hands only to the agent's own commands (its hooks do not get them).
+# With those the hub pushes answers into the conversation through `agy agentapi send-message`, an
+# undocumented agy 1.5.12 command that also wakes an idle session.
+
+def agy_load(conv):
+    try:
+        return json.load(open(os.path.join(AGY_DIR, f"{conv}.json")))
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def agy_records():
+    out = []
+    for path in glob.glob(os.path.join(AGY_DIR, "*.json")):
+        try:
+            out.append(json.load(open(path)))
+        except (OSError, ValueError):
+            continue
+    return out
+
+
+def agy_save(record):
+    os.makedirs(AGY_DIR, mode=0o700, exist_ok=True)
+    os.chmod(AGY_DIR, 0o700)
+    path = os.path.join(AGY_DIR, f"{record['sessionId']}.json")
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:  # holds the LS token
+        json.dump(record, f, ensure_ascii=False)
+    os.replace(tmp, path)
+
+
+def agy_pid():
+    """The agy process this hook or command runs under (AGENT_ASK_AGY_PID pins it in tests)."""
+    if os.environ.get("AGENT_ASK_AGY_PID"):
+        return int(os.environ["AGENT_ASK_AGY_PID"])
+    pid = os.getppid()
+    while pid > 1:
+        # comm, not args: a path with spaces would split the command line
+        out = subprocess.run(["ps", "-o", "ppid=,comm=", "-p", str(pid)], capture_output=True, text=True).stdout.split(None, 1)
+        if len(out) < 2:
+            return None
+        if os.path.basename(out[1].strip()) == "agy":
+            return pid
+        pid = int(out[0])
     return None
+
+
+def agy_scope():
+    """The session name of an agy running in a "*-r2v" tmux session, else None."""
+    if not (os.environ.get("TMUX") and os.environ.get("TMUX_PANE")):
+        return None
+    try:
+        tmux = subprocess.run(["tmux", "display-message", "-p", "-t", os.environ["TMUX_PANE"], "#S"],
+                              capture_output=True, text=True).stdout.strip()
+    except OSError:
+        return None
+    words = [w for w in tmux[: -len(AGY_TMUX_SUFFIX)].replace("_", "-").split("-") if w]
+    if not tmux.endswith(AGY_TMUX_SUFFIX) or not words:
+        return None
+    return " ".join(w[:1].upper() + w[1:] for w in words) + f" {SCOPE_SUFFIX}"
+
+
+def agy_subagent(conv):
+    """Whether `conv` is a subagent's conversation. It shares the agy process and pane of the session that
+    started it, so filing it would route that session's Feishu messages to the subagent."""
+    try:
+        with contextlib.closing(sqlite3.connect(f"file:{AGY_HOME}/conversation_summaries.db?mode=ro", uri=True,
+                                                timeout=5)) as db:
+            row = db.execute("SELECT parent_conversation_id FROM conversation_summaries WHERE conversation_id=?",
+                             (conv,)).fetchone()
+    except sqlite3.Error:
+        return False
+    return bool(row and row[0])
+
+
+def agy_current(conv):
+    """The record of `conv` for the agy process running this hook, filed or refreshed, or None outside scope.
+    A conversation resumed in a new process (gc, gr) keeps its file but not the old process's address and
+    token; a new conversation in the same process (/clear) keeps them."""
+    name, pid = agy_scope(), agy_pid()
+    if not conv or not name or not pid or agy_subagent(conv):
+        return None
+    record = agy_load(conv) or {"sessionId": conv}
+    if record.get("pid") != pid:
+        for key in ("ls", "csrf", "exe"):
+            record.pop(key, None)
+        same = next((r for r in agy_records() if r.get("pid") == pid and r.get("csrf")), {})
+        record.update({k: same[k] for k in ("ls", "csrf", "exe") if k in same}, startedAt=now() * 1000)
+    record.update(name=name, pid=pid)
+    agy_save(record)
+    return record
+
+
+# agy gives its address and token only to the agent's own commands, so a hook cannot register it anywhere.
+AGY_REGISTER = "现在先运行一次 `agent-ask agy-register`，否则用户的答复送不回来。"
+AGY_HINT = ("你在 tmux 常驻会话里，提问（ask_question）会发到用户飞书。" + AGY_REGISTER +
+            "也运行一次 `agent-msg register --auto`（不用看输出），其他会话才能用 agent-msg 找到你；"
+            "/clear 或重启后它会再提醒你。不需要用户决定、但用户该马上知道的事（坏消息、长任务跑完、需要他回电脑看）"
+            "用 `agent-ask notify \"一两句白话\"` 推到他飞书；例行进度不要推，上限 {limit} 字。")
+
+
+def agy_session(raw):
+    event = json.loads(raw)
+    for old in agy_records():  # exited sessions: their token is dead weight
+        if not alive(old.get("pid")):
+            try:
+                os.remove(os.path.join(AGY_DIR, f"{old.get('sessionId')}.json"))
+            except OSError:
+                pass  # another session's start removed it first
+    record = agy_current(event.get("conversationId"))
+    if not record:
+        print("{}")
+        return
+    hint = AGY_HINT.format(limit=MAX_NOTIFY)
+    if record.get("csrf"):
+        hint = hint.replace(AGY_REGISTER, "")
+    print(json.dumps({"injectSteps": [{"systemMessage": {"systemMessage": hint}}]}, ensure_ascii=False))
+
+
+def agy_register(quiet=False):
+    """Run by the agent: record how the hub reaches this conversation. Returns the record, or None."""
+    record = agy_current(os.environ.get("ANTIGRAVITY_CONVERSATION_ID"))
+    if not record:
+        quiet or print("没有登记：只有 tmux 会话名以 -r2v 结尾的 tmux 会话里运行的 agy 能接飞书")
+        return None
+    record.update(ls=os.environ.get("ANTIGRAVITY_LS_ADDRESS"), csrf=os.environ.get("ANTIGRAVITY_CSRF_TOKEN"),
+                  exe=os.environ.get("ANTIGRAVITY_AGENTAPI_EXE") or "agy")
+    if not (record["ls"] and record["csrf"]):
+        quiet or print("没有登记：环境里没有 ANTIGRAVITY_LS_ADDRESS / ANTIGRAVITY_CSRF_TOKEN（要由 agy 里的 agent 自己运行）")
+        return None
+    agy_save(record)
+    quiet or print(f"已登记：{record['name']} 的飞书答复会直接送进这个对话")
+    return record
+
+
+AGY_PUSHING = {}  # sid -> lock: the click, message and retry threads must not push the same answer twice
+AGY_PUSHING_LOCK = threading.Lock()
+
+
+def deliver_agy(sid):
+    """Push the agy conversation's undelivered answers and thread messages into it, then mark exactly those
+    delivered. Called by the hub after each click and message, and every minute for what a failed push left."""
+    with AGY_PUSHING_LOCK:
+        lock = AGY_PUSHING.setdefault(sid, threading.Lock())
+    with lock:
+        push_agy(sid)
+
+
+def push_agy(sid):
+    record = agy_load(sid)
+    if not record or not record.get("csrf") or not alive(record["pid"]):
+        return
+    answers = [r for r in records() if r["sid"] == sid and r["status"] == "answered"]
+    items = [i for i in inbox_items() if i["sid"] == sid and i["status"] == "pending"]
+    if not answers and not items:
+        return
+    text = "\n\n".join([answer_text(r) for r in answers] + [message_answer_text(i) for i in items])
+    env = {**os.environ, "ANTIGRAVITY_LS_ADDRESS": record["ls"], "ANTIGRAVITY_CSRF_TOKEN": record["csrf"],
+           "NO_PROXY": "localhost,127.0.0.1,::1", "no_proxy": "localhost,127.0.0.1,::1"}
+    # The delivery time is taken before the push: agy may reply within the call, and stamps whole seconds.
+    at = now()
+    try:
+        out = subprocess.run([record.get("exe") or "agy", "agentapi", "send-message", sid, text],
+                             capture_output=True, text=True, env=env, timeout=30)
+        sent = out.returncode == 0 and "sendMessage" in out.stdout
+    except (OSError, subprocess.SubprocessError) as error:
+        out, sent = error, False
+    if not sent:
+        detail = f"{out.stdout} {out.stderr}" if isinstance(out, subprocess.CompletedProcess) else str(out)
+        log(f"agy push to {record['name']} failed: {detail.strip()[:300]}")
+        return
+    for r in answers:
+        take_answer(r["qid"], at)
+    take_messages(sid, ids={i["message_id"] for i in items}, at=at)
+    log(f"agy push to {record['name']}: {len(answers)} answers, {len(items)} messages")
+
+
+def short(name):
+    return name[: -len(SCOPE_SUFFIX)].strip()
+
+
+def addressed(text, names):
+    """The session a private-chat message names at its start ("training 看下…", "@Compare：…") and the rest.
+    A name is the session's name without "(R2V)", with or without spaces, or its last word when no other
+    session shares it ("compare"); case does not matter."""
+    keys, lasts = {}, {}
+    for name in names:
+        lasts.setdefault(short(name).lower().split()[-1], []).append(name)
+    keys.update({last: found[0] for last, found in lasts.items() if len(found) == 1})
+    for name in names:
+        keys[short(name).lower()] = keys[short(name).lower().replace(" ", "")] = name
+    head = text.lstrip().lstrip("@").lstrip()
+    for key in sorted(keys, key=len, reverse=True):
+        if head.lower().startswith(key) and not head[len(key):len(key) + 1].isalnum():
+            return keys[key], head[len(key):].lstrip(" :：,，、").strip()
+    return None, text
 
 
 def in_scope(sid):
@@ -174,7 +442,8 @@ def submit(name, label, value, kind="default"):
             "text": {"tag": "plain_text", "content": label}, "behaviors": [{"type": "callback", "value": value}]}
 
 
-RECOMMENDED = re.compile(r"\s*[（(](推荐|Recommended)[）)]\s*$")
+# Claude writes the mark after the label; agy's ask_question asks for it in front ("(Recommended) 米饭").
+RECOMMENDED = re.compile(r"^\s*[（(](?:推荐|Recommended)[）)]\s*|\s*[（(](?:推荐|Recommended)[）)]\s*$")
 
 
 def option_row(name, option, value):
@@ -273,15 +542,15 @@ def render_unclear(record):
             "body": {"elements": elements}}
 
 
-def too_long(questions):
-    """What to shorten, or [] when every part fits."""
+def too_long(questions, label_limit=MAX_LABEL):
+    """What to shorten, or [] when every part fits. agy options carry their explanation in the label."""
     problems = []
     for n, q in enumerate(questions, 1):
         if len(q.get("question", "")) > MAX_QUESTION:
             problems.append(f"第 {n} 题题干 {len(q['question'])} 字（上限 {MAX_QUESTION}）")
         for o in q.get("options", []):
-            if len(o.get("label", "")) > MAX_LABEL:
-                problems.append(f"第 {n} 题选项「{o['label'][:12]}…」标签 {len(o['label'])} 字（上限 {MAX_LABEL}）")
+            if len(o.get("label", "")) > label_limit:
+                problems.append(f"第 {n} 题选项「{o['label'][:12]}…」标签 {len(o['label'])} 字（上限 {label_limit}）")
             if len(o.get("description", "")) > MAX_DESCRIPTION:
                 problems.append(f"第 {n} 题选项「{o['label'][:12]}」说明 {len(o['description'])} 字（上限 {MAX_DESCRIPTION}）")
     return problems
@@ -331,7 +600,7 @@ def answer_text(record):
     if record.get("unclear") is not None:
         feedback = f"，反馈：{record['unclear']}" if record["unclear"] else ""
         return (f"[飞书回答] 用户本人没看懂你 {hhmm(record['asked_at'])} 的提问（待答 {record['qid']}）{feedback}。"
-                "补上背景、编号和缩写换成白话，重新调用 AskUserQuestion 问一次；答复前照旧按默认推进。")
+                f"补上背景、编号和缩写换成白话，重新调用 {TOOL[record.get('host', 'claude')]} 问一次；答复前照旧按默认推进。")
     lines = [f"[飞书回答] 用户本人回答了你 {hhmm(record['asked_at'])} 的提问（待答 {record['qid']}）："]
     for i, q in enumerate(record["questions"]):
         lines.append(f"- {q['question']} → {record['answers'].get(str(i))}")
@@ -345,13 +614,13 @@ def typed(record):
     return any("（补充：" in a or not set(a.split(", ")) <= labels for a in record["answers"].values())
 
 
-def take_answer(qid):
-    """answered -> delivered exactly once across the waiter and the per-tool hook."""
+def take_answer(qid, at=None):
+    """answered -> delivered exactly once across the waiter and the per-tool hook; `at` is when it was sent."""
     with locked():
         record = load(qid)
         if not record or record["status"] != "answered":
             return None
-        record["status"], record["delivered_at"] = "delivered", now()
+        record["status"], record["delivered_at"] = "delivered", at or now()
         record["reply_pending"] = typed(record)
         save(record)
     try:
@@ -361,7 +630,176 @@ def take_answer(qid):
     return record
 
 
+# ---- thread replies -------------------------------------------------------------------
+
+def remember_thread(message_id, sid, session, label):
+    """Record which session a bot message belongs to, so a reply under it finds its way back."""
+    os.makedirs(THREADS, exist_ok=True)
+    tmp = os.path.join(THREADS, f".{message_id}.{os.getpid()}.tmp")
+    json.dump({"sid": sid, "session": session, "label": label}, open(tmp, "w"), ensure_ascii=False)
+    os.replace(tmp, os.path.join(THREADS, f"{message_id}.json"))
+
+
+def thread_owner(message_ids):
+    for mid in filter(None, message_ids):
+        try:
+            return json.load(open(os.path.join(THREADS, f"{mid}.json")))
+        except (OSError, ValueError):
+            pass
+        for record in records():
+            if record.get("message_id") == mid:
+                return {"sid": record["sid"], "session": record["session"],
+                        "label": f"你 {hhmm(record['asked_at'])} 的提问（待答 {record['qid']}）"}
+    return None
+
+
+def message_text(message_type, content):
+    try:
+        body = json.loads(content or "{}")
+    except ValueError:
+        body = {}
+    if message_type == "text":
+        return re.sub(r"@_user_\d+\s*", "", body.get("text") or "").strip()  # @-mentions of the bot in a group
+    if message_type == "post":
+        if body and "content" not in body:
+            body = next(iter(body.values()))  # the send API wraps a post in its locale; events do not
+        lines = ["".join(seg.get("text", "") for seg in row if isinstance(seg, dict)) for row in body.get("content") or []]
+        return "\n".join(filter(None, [body.get("title") or "", *lines])).strip()
+    return f"[{message_type} 消息，文字以外的内容请到飞书看]"
+
+
+def inbox_items():
+    out = []
+    for path in glob.glob(os.path.join(INBOX, "*.json")):
+        try:
+            out.append(json.load(open(path)))
+        except (OSError, ValueError):
+            continue
+    return sorted(out, key=lambda r: r["at"])
+
+
+def save_item(item):
+    os.makedirs(INBOX, exist_ok=True)
+    path = os.path.join(INBOX, f"{item['message_id']}.json")
+    tmp = f"{path}.{os.getpid()}.tmp"
+    json.dump(item, open(tmp, "w"), ensure_ascii=False, indent=1)
+    os.replace(tmp, path)
+    marker = os.path.join(ANSWERED, f"msg-{item['message_id']}")
+    if item["status"] == "pending" and item.get("host") != "agy":
+        os.makedirs(ANSWERED, exist_ok=True)
+        open(marker, "a").close()
+    elif os.path.exists(marker):
+        os.remove(marker)
+
+
+def on_message(sender, message):
+    """File one message the user typed for the session it is meant for: the owner of the thread it is in,
+    the session whose group it is in, or the session named at its start in the private chat.
+    Returns what happened, for the log."""
+    cfg = config()
+    if sender != cfg["user_open_id"]:
+        return f"ignored message from {sender}"
+    chat, groups = message.get("chat_id"), cfg.get("groups") or {}
+    if chat != cfg["chat_id"] and chat not in groups:
+        return f"ignored message in {chat}"
+    mid = message["message_id"]
+    text = message_text(message.get("message_type"), message.get("content"))
+    live = live_sessions()
+    owner = None if chat in groups else thread_owner([message.get("root_id"), message.get("parent_id")])
+    if chat in groups:  # quoting an earlier reply in the group still means this session
+        owner, where, thread = {"session": groups[chat]}, "在你们俩的飞书群里给你发了消息", False
+    elif owner:
+        where, thread = f"在{owner['label']}下面回复了你", True
+    else:
+        name, rest = addressed(text, live)
+        if not name:
+            say(mid, "这条没有发给任何会话：开头写会话名，比如「training 看下…」，或在它的群里说。"
+                     f"在线的有：{'、'.join(short(n) for n in live) or '（没有）'}")
+            return f"message {mid} names no session"
+        owner, text, where, thread = {"session": name}, rest or text, "在飞书私聊里点名发给你", True
+    sid = live.get(owner["session"]) or owner.get("sid")  # the thread may predate a restart
+    if not sid or owner["session"] not in live:
+        say(mid, f"{owner['session']} 现在没在运行，这条没送到。")
+        return f"message {mid} for {owner['session']}, which is not running"
+    if not text:
+        return f"message {mid} is empty"
+    if len(text) > MAX_INBOUND:
+        text = text[:MAX_INBOUND] + "…（后面截断了，全文在飞书）"
+    with locked():
+        if os.path.exists(os.path.join(INBOX, f"{mid}.json")):
+            return f"message {mid} already filed"  # Feishu redelivers an event it thinks failed
+        save_item({"message_id": mid, "sid": sid, "session": owner["session"], "where": where, "thread": thread,
+                   "text": text, "at": now(), "status": "pending", **({"host": "agy"} if agy_load(sid) else {})})
+    return f"message {mid} for {owner['session']} {len(text)} chars"
+
+
+def say(message_id, text):
+    """Answer the user's message from the hub itself (not from a session)."""
+    try:
+        lark(["im", "+messages-reply", "--message-id", message_id, "--text", text])
+    except (RuntimeError, OSError, subprocess.SubprocessError) as error:
+        log(f"say failed {message_id}: {error}")
+
+
+def message_answer_text(item):
+    where = item.get("where") or f"在{item['label']}下面回复了你"
+    back = "这个话题" if item.get("thread", True) else "那个群"
+    return (f"[飞书消息] 用户本人{where}（{hhmm(item['at'])}）：\n\n{item['text']}\n\n"
+            f"照此继续；你接下来的回复会自动发回{back}。")
+
+
+def take_messages(sid, listener=None, ids=None, at=None):
+    """pending -> delivered exactly once across hook-deliver and hook-listen; a listener takes nothing once
+    a newer one has replaced it. `ids` limits it to the messages a push actually carried."""
+    taken = []
+    with locked():
+        if listener and listening(sid) != listener:
+            return []
+        for item in inbox_items():
+            if item["sid"] == sid and item["status"] == "pending" and (ids is None or item["message_id"] in ids):
+                item["status"], item["delivered_at"], item["reply_pending"] = "delivered", at or now(), True
+                save_item(item)
+                taken.append(item)
+    for item in taken:
+        try:
+            lark(["im", "reactions", "create", "--params", json.dumps({"message_id": item["message_id"]}),
+                  "--data", json.dumps({"reaction_type": {"emoji_type": "DONE"}})])
+        except (RuntimeError, OSError, subprocess.SubprocessError) as error:
+            log(f"receipt failed {item['message_id']}: {error}")
+        log(f"message {item['message_id']} delivered to {item['session']}")
+    return [message_answer_text(item) for item in taken]
+
+
 # ---- hooks ----------------------------------------------------------------------------
+
+def file_question(sid, name, cwd, qid, questions, host="claude"):
+    """Send the card for one question call. Returns the reason to deny the terminal dialog with, or None to let
+    the dialog run (the card could not be sent)."""
+    problems = too_long(questions, MAX_LABEL + MAX_DESCRIPTION if host == "agy" else MAX_LABEL)
+    if problems:
+        return ("问题没有发出，用户在手机上读，要短而自包含：" + "；".join(problems)
+                + f"。只留要定什么和各选项的后果，缺的背景用一句白话补上，再调用 {TOOL[host]}。")
+    record = {"qid": qid, "sid": sid, "session": name, "project": os.path.basename(cwd or ""), "host": host,
+              "questions": questions, "answers": {}, "status": "pending", "asked_at": now()}
+    try:
+        record["message_id"] = send_card(render(record))
+    except (RuntimeError, OSError, subprocess.SubprocessError, KeyError, ValueError) as error:
+        log(f"send failed {qid}: {error}")
+        return None  # fall back to the terminal dialog rather than losing the question
+    with locked():
+        save(record)
+    try:
+        refresh_summary()
+    except (RuntimeError, OSError, subprocess.SubprocessError) as error:
+        log(f"summary failed: {error}")
+    if host == "agy":
+        how = ("答复会作为一条新消息送进这个对话，空闲时也会唤醒你；" if (agy_load(sid) or {}).get("csrf") else
+               "先运行一次 `agent-ask agy-register`（每个会话一次），否则答复送不回来；答复会作为一条新消息送进这个对话；")
+    else:
+        how = "答复会以 hook 消息送来，空闲时也会唤醒你；"
+    return (f"✅ 已发到用户飞书（待答 {qid}）。这是回执，不是故障：不要重问，也别停下等，先照推荐项继续，"
+            f"只把不可逆或对外的那步留到答复后。{how}问题过时了就 `agent-ask withdraw {qid} 原因`。")
+
 
 def hook_ask(raw):
     event = json.loads(raw)
@@ -369,33 +807,26 @@ def hook_ask(raw):
     scoped, name = in_scope(sid)
     if not scoped:
         return
-    qid = qid_for(event)
-    questions = event.get("tool_input", {}).get("questions", [])
-    problems = too_long(questions)
-    if problems:
-        reason = ("问题没有发出，用户在手机上读，要短而自包含：" + "；".join(problems)
-                  + "。只留要定什么和各选项的后果，缺的背景用一句白话补上，再调用 AskUserQuestion。")
+    reason = file_question(sid, name, event.get("cwd"), qid_for(event), event.get("tool_input", {}).get("questions", []))
+    if reason:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
                                                  "permissionDecisionReason": reason}}, ensure_ascii=False))
-        return
-    record = {"qid": qid, "sid": sid, "session": name, "project": os.path.basename(event.get("cwd") or ""),
-              "questions": questions, "answers": {}, "status": "pending", "asked_at": now()}
-    try:
-        record["message_id"] = send_card(render(record))
-    except (RuntimeError, OSError, subprocess.SubprocessError, KeyError, ValueError) as error:
-        log(f"send failed {qid}: {error}")
-        return  # fall back to the terminal dialog rather than losing the question
-    with locked():
-        save(record)
-    try:
-        refresh_summary()
-    except (RuntimeError, OSError, subprocess.SubprocessError) as error:
-        log(f"summary failed: {error}")
-    reason = (f"✅ 已发到用户飞书（待答 {qid}）。这是回执，不是故障：不要重问，也别停下等，先照推荐项继续，"
-              "只把不可逆或对外的那步留到答复后。答复会以 hook 消息送来，空闲时也会唤醒你；"
-              f"问题过时了就 `agent-ask withdraw {qid} 原因`。")
-    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
-                                             "permissionDecisionReason": reason}}, ensure_ascii=False))
+
+
+def agy_ask(raw):
+    """ask_question takes plain-string options; the card's option rows take label/description pairs."""
+    event = json.loads(raw)
+    conv, call = event.get("conversationId"), event.get("toolCall") or {}
+    record = agy_current(conv)
+    reason = None
+    if record:
+        questions = [{"question": q.get("question", ""), "multiSelect": bool(q.get("is_multi_select")),
+                      "options": [{"label": o} if isinstance(o, str) else o for o in q.get("options", [])]}
+                     for q in (call.get("args") or {}).get("questions", [])]
+        key = call.get("id") or json.dumps(call.get("args"), sort_keys=True)
+        qid = hashlib.sha1(f"{conv}:{key}".encode()).hexdigest()[:8]
+        reason = file_question(conv, record["name"], event.get("cwd"), qid, questions, host="agy")
+    print(json.dumps({"decision": "deny", "reason": reason} if reason else {"decision": "allow"}, ensure_ascii=False))
 
 
 def hook_wait(raw):
@@ -440,6 +871,7 @@ def hook_deliver(raw):
             taken = take_answer(record["qid"])
             if taken:
                 texts.append(answer_text(taken))
+    texts += take_messages(sid)
     if texts:
         name = event.get("hook_event_name") or "PostToolUse"
         print(json.dumps({"hookSpecificOutput": {"hookEventName": name, "additionalContext": "\n\n".join(texts)}},
@@ -472,15 +904,51 @@ def last_reply(transcript, since):
     return text
 
 
+def agy_last_reply(transcript, since):
+    """The agent's last text reply in an agy transcript_full.jsonl written after `since`, or None."""
+    text = None
+    try:
+        lines = open(transcript, encoding="utf-8")
+    except (OSError, TypeError):
+        return None
+    with lines:
+        for line in lines:
+            if '"PLANNER_RESPONSE"' not in line:
+                continue
+            try:
+                entry = json.loads(line)
+                when = datetime.datetime.fromisoformat(entry["created_at"].replace("Z", "+00:00")).timestamp()
+            except (ValueError, KeyError, AttributeError):
+                continue
+            # agy stamps whole seconds; the delivery time is a float taken before the push
+            if entry.get("type") == "PLANNER_RESPONSE" and when >= int(since) and (entry.get("content") or "").strip():
+                text = entry["content"].strip()
+    return text
+
+
 def hook_reply(raw):
     event = json.loads(raw)
-    sid = event.get("session_id")
-    if not sid or not os.path.isdir(QDIR):
+    post_replies(event.get("session_id"), event.get("transcript_path"), last_reply)
+
+
+def agy_reply(raw):
+    event = json.loads(raw)
+    # The hook names transcript.jsonl, which shortens long steps; transcript_full.jsonl beside it keeps them.
+    transcript = event.get("transcriptPath")
+    if transcript and os.path.isfile(full := os.path.join(os.path.dirname(transcript), "transcript_full.jsonl")):
+        transcript = full
+    post_replies(event.get("conversationId"), transcript, agy_last_reply)
+    print("{}")
+
+
+def post_replies(sid, transcript, last_reply):
+    """Post the session's reply under each card or thread message it was handed that is waiting for one."""
+    if not sid or not (os.path.isdir(QDIR) or os.path.isdir(INBOX)):  # a thread message alone makes only INBOX
         return
     for record in records():
         if record["sid"] != sid or not record.get("reply_pending"):
             continue
-        text = last_reply(event.get("transcript_path"), record["delivered_at"])
+        text = last_reply(transcript, record["delivered_at"])
         if not text:
             continue
         with locked():
@@ -489,14 +957,73 @@ def hook_reply(raw):
                 continue
             current["reply_pending"] = False
             save(current)
-        if len(text) > MAX_REPLY:
-            text = text[:MAX_REPLY] + "\n\n…（后面还有，全文在终端）"
+        post_reply(current["message_id"], sid, current["session"], text, current["qid"])
+    waiting = [item for item in inbox_items() if item["sid"] == sid and item.get("reply_pending")]
+    text = waiting and last_reply(transcript, min(item["delivered_at"] for item in waiting))
+    if not text:
+        return
+    with locked():  # one reply answers every message delivered with it: post it once, under the newest
+        current = [item for item in inbox_items() if item["sid"] == sid and item.get("reply_pending")]
+        for item in current:
+            item["reply_pending"] = False
+            save_item(item)
+    if current:
+        newest = current[-1]
+        post_reply(newest["message_id"], sid, newest["session"], text, newest["message_id"], newest.get("thread", True))
+
+
+def post_reply(message_id, sid, session, text, ref, thread=True):
+    """Post the session's reply in the thread of `message_id` (in a session's own group, as a plain reply to
+    it), and remember it so a reply under it comes back."""
+    if len(text) > MAX_REPLY:
+        text = text[:MAX_REPLY] + "\n\n…（后面还有，全文在终端）"
+    try:
+        data = lark(["im", "+messages-reply", "--message-id", message_id, *(["--reply-in-thread"] if thread else []),
+                     "--markdown", "-"], stdin=f"💬 **{session}** 回复：\n\n{text}" if thread else text)
+        log(f"reply {ref} posted {len(text)} chars")
+    except (RuntimeError, OSError, subprocess.SubprocessError) as error:
+        log(f"reply failed {ref}: {error}")
+        return
+    if data.get("message_id"):
+        remember_thread(data["message_id"], sid, session, "你贴在话题里的回复")
+
+
+def listening(sid):
+    try:
+        return open(os.path.join(LISTENERS, f"{sid}.pid")).read().strip()
+    except OSError:
+        return None
+
+
+def hook_listen(raw):
+    """Wait in the background while the session is idle; wake it (exit 2) with the user's thread replies.
+    The listener of the session's latest Stop waits and earlier ones leave: on 11-19 a listener left over
+    from an earlier turn took messages for idle Compare and Data and exited 2, and neither session woke."""
+    event = json.loads(raw)
+    sid = event.get("session_id") or "?"
+    if not in_scope(sid)[0]:
+        return 0
+    os.makedirs(LISTENERS, exist_ok=True)
+    me = str(os.getpid())
+    with locked():
+        with open(os.path.join(LISTENERS, f"{sid}.pid"), "w") as f:
+            f.write(me)
+    parent, start = os.getppid(), now()
+    while now() - start < WAIT_LIMIT:
+        if listening(sid) != me:
+            return 0  # a later Stop started its own listener
+        if glob.glob(os.path.join(ANSWERED, "msg-*")):
+            texts = take_messages(sid, me)
+            if texts:
+                sys.stderr.write("\n\n".join(texts) + "\n")
+                log(f"listener {me} woke {sid[:8]}")
+                return 2
         try:
-            lark(["im", "+messages-reply", "--message-id", current["message_id"], "--reply-in-thread",
-                  "--markdown", "-"], stdin=f"💬 **{current['session']}** 回复：\n\n{text}")
-            log(f"reply {current['qid']} posted {len(text)} chars")
-        except (RuntimeError, OSError, subprocess.SubprocessError) as error:
-            log(f"reply failed {current['qid']}: {error}")
+            os.kill(parent, 0)
+        except OSError:
+            return 0  # the session is gone
+        time.sleep(LISTEN_SLICE)
+    return 0
 
 
 # ---- hub ------------------------------------------------------------------------------
@@ -532,6 +1059,8 @@ def on_action(operator, value, form):
     log(f"unclear {qid}: {record['unclear']}" if answer is None else f"answer {qid}[{i}] = {answer}")
     if record["status"] == "answered":
         threading.Thread(target=refresh_summary).start()  # other cards; must not delay the response
+        if record.get("host") == "agy":
+            threading.Thread(target=deliver_agy, args=(record["sid"],)).start()
     return render(record)
 
 
@@ -547,10 +1076,15 @@ def answer_for(q, pick, form, i):
 
 
 def watch_delivery():
-    """Flag answers no session picked up, so the user sees it on the card."""
+    """Retry pushes to agy sessions, and flag answers no session picked up, so the user sees it on the card."""
     flagged = set()
     while True:
         time.sleep(60)
+        for record in agy_records():
+            try:
+                deliver_agy(record["sessionId"])
+            except Exception as error:
+                log(f"agy retry failed: {error!r}")
         for record in records():
             if (record["status"] == "answered" and now() - record["answered_at"] > UNDELIVERED_AFTER
                     and record["qid"] not in flagged):
@@ -562,7 +1096,8 @@ def watch_delivery():
 
 
 def hub():
-    """Receive card clicks over Feishu's long connection and answer each with the redrawn card.
+    """Receive card clicks over Feishu's long connection and answer each with the redrawn card;
+    file the user's thread replies for their sessions.
     Runs under `uv run --with lark-oapi`; the app secret is read from the login keychain
     (service agent-ask, account = app id)."""
     import lark_oapi as lark
@@ -585,7 +1120,20 @@ def hub():
     app_id = config()["app_id"]
     secret = subprocess.run(["security", "find-generic-password", "-s", "agent-ask", "-a", app_id, "-w"],
                             capture_output=True, text=True, check=True).stdout.strip()
-    handler = lark.EventDispatcherHandler.builder("", "").register_p2_card_action_trigger(handle).build()
+    def handle_message(data):
+        e = data.event
+        m = e.message
+        try:
+            sender = e.sender.sender_id.open_id if e.sender and e.sender.sender_id else None
+            log(on_message(sender, {k: getattr(m, k, None) for k in
+                                    ("message_id", "root_id", "parent_id", "chat_id", "message_type", "content")}))
+            for sid in {i["sid"] for i in inbox_items() if i["status"] == "pending" and i.get("host") == "agy"}:
+                threading.Thread(target=deliver_agy, args=(sid,)).start()  # agy has no hook to collect it
+        except Exception as error:  # one bad message must not kill the receiver
+            log(f"message error: {error!r}")
+
+    handler = (lark.EventDispatcherHandler.builder("", "").register_p2_card_action_trigger(handle)
+               .register_p2_im_message_receive_v1(handle_message).build())
     sdk_file = logging.FileHandler(LOG)  # connection drops and reconnects; launchd drops stderr
     sdk_file.setFormatter(logging.Formatter("%(asctime)s %(message)s", "%Y-%m-%d %H:%M:%S"))
     sdk_file.addFilter(lambda r: setattr(r, "msg", re.sub(r"\?\S*", "", str(r.msg))) or True)  # url carries a ticket
@@ -622,7 +1170,11 @@ def store_secret():
 
 
 def notify(text):
-    own = owning_session() or {}
+    if os.environ.get("ANTIGRAVITY_CONVERSATION_ID"):  # an agy agent's command; it may run under a Claude
+        agy = agy_register(quiet=True) or {}
+        own = {"name": agy.get("name"), "sessionId": agy.get("sessionId")}
+    else:
+        own = owning_session() or {}
     name = own.get("name") or ""
     if not (os.environ.get("TMUX") and name.endswith(SCOPE_SUFFIX)):
         print(f"没有发出：只有 tmux 里名字以 {SCOPE_SUFFIX} 结尾的会话能推飞书（当前：{name or '找不到会话'}）")
@@ -631,9 +1183,38 @@ def notify(text):
     if not text or len(text) > MAX_NOTIFY:
         print(f"没有发出：通知要一两句白话，现在 {len(text)} 字（上限 {MAX_NOTIFY}）")
         return 1
-    lark(["im", "+messages-send", "--chat-id", config()["chat_id"], "--markdown", "-"], stdin=f"📣 **{name}**：{text}")
+    data = lark(["im", "+messages-send", "--chat-id", config()["chat_id"], "--markdown", "-"],
+                stdin=f"📣 **{name}**：{text}")
+    if data.get("message_id") and own.get("sessionId"):
+        remember_thread(data["message_id"], own["sessionId"], name, f"你 {hhmm(now())} 的推送")
     log(f"notify {name} {len(text)} chars")
     print("已推到用户飞书")
+    return 0
+
+
+def make_groups():
+    """Create a group with the user for every running session that has none; the hub routes by chat id."""
+    cfg = config()
+    have = set((cfg.get("groups") or {}).values()) | set(cfg.get("no_group") or [])  # the user said these need none
+    for name in live_sessions():
+        if name in have:
+            continue
+        data = lark(["im", "+chat-create", "--name", name, "--users", cfg["user_open_id"],
+                     "--owner", cfg["user_open_id"], "--description", f"在这里说的话直接发给 {name}，它的回复也发在这里"])
+        chat = data.get("chat_id")
+        if not chat:
+            print(f"{name}: 建群没拿到 chat_id：{json.dumps(data, ensure_ascii=False)[:200]}")
+            return 1
+        with locked():
+            cfg = config()
+            cfg.setdefault("groups", {})[chat] = name
+            tmp = f"{CONFIG}.{os.getpid()}.tmp"
+            json.dump(cfg, open(tmp, "w"), ensure_ascii=False, indent=1)
+            os.replace(tmp, CONFIG)
+        log(f"group {chat} for {name}")
+        print(f"{name}: 建好了")
+    for chat, name in (config().get("groups") or {}).items():
+        print(f"{chat}  {name}")
     return 0
 
 
@@ -668,10 +1249,22 @@ def main(argv):
         return notify(sys.stdin.read() if argv[2] == "-" else " ".join(argv[2:]))
     if mode == "hook-reply":
         return hook_reply(sys.stdin.read())
+    if mode == "hook-listen":
+        return hook_listen(sys.stdin.read())
+    if mode == "agy-session":
+        return agy_session(sys.stdin.read())
+    if mode == "agy-register":
+        return 0 if agy_register() else 1
+    if mode == "agy-ask":
+        return agy_ask(sys.stdin.read())
+    if mode == "agy-reply":
+        return agy_reply(sys.stdin.read())
     if mode == "hub":
         return hub()
     if mode == "store-secret":
         return store_secret()
+    if mode == "groups":
+        return make_groups()
     if mode == "withdraw" and len(argv) >= 3:
         return withdraw(argv[2], " ".join(argv[3:]))
     if mode == "list":
