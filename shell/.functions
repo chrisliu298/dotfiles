@@ -474,8 +474,22 @@ _agy(){
 }
 g(){ _agy --dangerously-skip-permissions "$@"; }
 gc(){ g --continue "$@"; }
-# agy has no resume picker flag: pass a conversation ID, or run /resume inside g.
-gr(){ (( $# )) || { echo "usage: gr <conversation-id> [agy flags]" >&2; return 2; }; g --conversation "$@"; }
+# gr <conversation-id> [agy flags] resumes that conversation. agy has no resume picker flag (only /resume
+# inside g), so a bare gr picks one with fzf from agy's conversation list, newest first, subagents left out,
+# and resumes it in its workspace, as agy keys a conversation to the directory it ran in.
+gr(){
+    if (( $# )); then g --conversation "$@"; return; fi
+    local db=$HOME/.gemini/antigravity-cli/conversation_summaries.db row ws
+    row=$(sqlite3 -separator $'\t' "file:$db?mode=ro" "SELECT conversation_id, ws,
+        strftime('%m-%d %H:%M', last_modified_time, 'localtime') || '  ' ||
+        coalesce(nullif(title, ''), nullif(substr(replace(preview, char(10), ' '), 1, 80), ''), conversation_id) ||
+        '  · ' || replace(ws, '$HOME', '~')
+        FROM (SELECT *, replace(json_extract(workspace_uris, '\$[0]'), 'file://', '') AS ws FROM conversation_summaries)
+        WHERE parent_conversation_id = '' ORDER BY last_modified_time DESC" |
+        fzf --delimiter=$'\t' --with-nth=3 --prompt='agy resume> ' --no-sort) || return
+    ws=${${row#*$'\t'}%%$'\t'*}
+    ( [[ -d $ws ]] && cd "$ws"; g --conversation "${row%%$'\t'*}" )
+}
 gu(){ _agy update "$@"; }
 
 # Show Claude + Codex account emails on local, macmini, and l40s.
