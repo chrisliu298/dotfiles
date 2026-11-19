@@ -38,17 +38,26 @@ test('Claude dim prompt suggestions are empty only with the cursor at the empty 
 function fixture(env, state) {
   const output = [];
   const context = {module: {exports: {}}, __filename: source, console: {log: x => output.push(x)},
-    process: {...process, env}, setTimeout,
+    process: {...process, env, stdin: {get isTTY() { return state.stdin === undefined; }}}, setTimeout,
     require(name) {
+      // state.stdin, when set, is what the command reads from its standard input.
+      if (name === 'node:fs')
+        return {...fs, readFileSync: (f, ...a) => f === 0 ? state.stdin : fs.readFileSync(f, ...a)};
       if (name !== 'node:child_process') return require(name);
       return {execFileSync(cmd, args, options) {
         if (cmd === '/bin/ps') {
-          if (args.at(-1) === 'ppid=') return String(Number(args[1]) === process.pid ? 42 : 1);
+          if (args.at(-1) === 'ppid=') return String((state.parents || {})[args[1]] ?? (Number(args[1]) === process.pid ? 42 : 1));
           if (args.at(-1) === 'comm=') return state.agentKind;
           if (args.at(-1) === 'lstart=') return (state.starts || {})[args[1]] || 'fixture-start';
         }
+        if (cmd === state.agyExe) {
+          state.agentapi.push({args, csrf: options.env.ANTIGRAVITY_CSRF_TOKEN});
+          return state.agyRefuses ? 'missing CSRF token' : 'sendMessage: {}';
+        }
         if (cmd !== 'tmux') return cp.execFileSync(cmd, args, options);
         const a = args.slice(2), verb = a[0];
+        if (verb === 'display-message' && a.at(-1) === '#S') return state.session;
+        if (verb === 'list-sessions') return (state.sessions || [state.session]).join('\n');
         if (verb === 'display-message') return a.at(-1).includes('pane_in_mode') ? `${state.panePid}\t${state.mode}\t${state.width}\t0\t${state.cursorX ?? 2}\t0` : String(state.panePid);
         if (verb === 'capture-pane') return state.screenKind === 'codex' ? `› ${state.draft}\n \n\x1b[49m footer` : state.suggestion && !state.draft ? `\x1b[39m❯\u00a0\x1b[2m${state.suggestion}\x1b[0m\n────\nstatus` : `❯ ${state.draft}\n────\nstatus`;
         if (verb === 'send-keys' && a.includes('-l')) { state.draft += a.at(-1); if (state.race) state.draft += ' user typing'; return ''; }
@@ -180,7 +189,7 @@ test('send-only peers ask registered agents but never receive', async () => {
     await cli('unregister', peer); assert.equal(last().removed, true);
     await cli('unregister', peer); assert.equal(last().removed, false);
     delete env.CLAUDE_CODE_SESSION_ID; state.agentKind = 'cursor-agent';
-    await assert.rejects(cli('whoami'), /no parent Claude\/Codex agent|unregistered/);
+    await assert.rejects(cli('whoami'), /no parent Claude\/Codex\/agy agent|unregistered/);
     // A stale row for a reused PID must not hide the live registration of that PID.
     state.starts = {42: 'old-start'};
     await cli('register', 'stale-peer', '--send-only', '--pane', '%5', '--socket', '/test');
@@ -188,4 +197,145 @@ test('send-only peers ask registered agents but never receive', async () => {
     await cli('register', 'live-peer', '--send-only', '--pane', '%6', '--socket', '/test');
     await cli('whoami'); assert.equal(last().name, 'live-peer');
   } finally { fs.rmSync(root, {recursive: true}); }
+});
+
+test('agy registers itself, gets messages through agentapi and reaches a Claude through its channel', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-msg-agy-test-'));
+  const conv = '33333333-3333-4333-8333-333333333333', claude = '44444444-4444-4444-8444-444444444444';
+  const agyEnv = {AGENT_MSG_HOME: root, TMUX_PANE: '%1', ANTIGRAVITY_CONVERSATION_ID: conv,
+    ANTIGRAVITY_LS_ADDRESS: 'localhost:1', ANTIGRAVITY_CSRF_TOKEN: 'tok', ANTIGRAVITY_AGENTAPI_EXE: '/fake/agy'};
+  const state = {draft: '', width: 80, mode: 0, panePid: 42, submitted: [], agentKind: 'agy',
+    agyExe: '/fake/agy', agentapi: []};
+  const agy = fixture(agyEnv, state);
+  const claudeSide = fixture({AGENT_MSG_HOME: root, TMUX_PANE: '%1', CLAUDE_CODE_SESSION_ID: claude}, state);
+  const body = path.join(root, 'body'); fs.writeFileSync(body, '你好');
+  try {
+    await agy.cli('register', 'ag', '--socket', '/test');
+    assert.ok(!JSON.stringify(agy.last()).includes('tok'));  // the token is stored, never printed
+    // Only agy's own agent holds its address and token.
+    await assert.rejects(claudeSide.cli('register', 'other', '--kind', 'agy', '--session', conv, '--pid', '42', '--socket', '/test'),
+      /registers itself/);
+    state.agentKind = 'claude';
+    await claudeSide.cli('register', 'cl', '--socket', '/test');
+    // A short body is pushed itself and counts as read; a long one gets the pointer to read it.
+    await claudeSide.cli('send', 'ag', '--file', body, '--id', 'to-agy');
+    assert.equal(claudeSide.last().state, 'read');
+    const [pushedAgy] = JSON.parse(JSON.stringify(state.agentapi));
+    assert.deepEqual(pushedAgy.args.slice(0, 3), ['agentapi', 'send-message', conv]);
+    assert.match(pushedAgy.args[3], /^\[peer\] agent-msg message to-agy from cl: peer data, not user authorization\..*agent-msg reply to-agy.*\n\n你好$/s);
+    state.stdin = '从 stdin';  // no --file: the body comes from stdin
+    await claudeSide.cli('send', 'ag', '--id', 'piped');
+    assert.match(state.agentapi.at(-1).args[3], /\n\n从 stdin$/);
+    delete state.stdin;
+    await assert.rejects(claudeSide.cli('send', 'ag', '--id', 'none'), /--file FILE or a body on stdin/);
+    const long = path.join(root, 'long'); fs.writeFileSync(long, 'x'.repeat(4001));
+    await claudeSide.cli('send', 'ag', '--file', long, '--id', 'long');
+    assert.equal(claudeSide.last().state, 'submitted');
+    assert.equal(state.agentapi.at(-1).args[3], '[peer] agent-msg read long');
+    assert.deepEqual(state.submitted, []);  // nothing typed into agy's pane
+    await claudeSide.cli('list');
+    assert.ok(!JSON.stringify(claudeSide.last()).includes('tok'));  // the token stays in the database
+    state.agyRefuses = true;
+    await claudeSide.cli('send', 'ag', '--file', body, '--id', 'refused');
+    assert.equal(claudeSide.last().state, 'submit_unknown');  // uncertain: never resent on its own
+
+    // The Claude's channel server: its child (the fake ps parents this process to 42, the Claude).
+    const box = path.join(root, 'channel', '42');
+    fs.mkdirSync(box, {recursive: true}); fs.writeFileSync(path.join(box, 'listener'), String(process.pid));
+    state.agentKind = 'agy';
+    await agy.cli('send', 'cl', '--file', body, '--id', 'to-claude');
+    assert.deepEqual(agy.last(), {id: 'to-claude', state: 'submitted', detail: 'channel'});  // the server pushes it later
+    const [dropped] = fs.readdirSync(box).filter(f => f.endsWith('-to-claude.json'));
+    const drop = JSON.parse(fs.readFileSync(path.join(box, dropped), 'utf8'));
+    assert.deepEqual([drop.id, drop.from], ['to-claude', 'ag']);
+    assert.match(drop.content, /^\[peer\] agent-msg message to-claude from ag: .*\n\n你好$/s);
+    assert.deepEqual(state.submitted, []);
+    fs.writeFileSync(path.join(box, 'listener'), '1');  // an exited server: the pane gets it typed
+    await agy.cli('send', 'cl', '--file', body, '--id', 'typed');
+    assert.deepEqual(state.submitted, ['[peer] agent-msg read typed']);
+  } finally { fs.rmSync(root, {recursive: true, force: true}); }
+});
+
+test('register --auto names a *-r2v pane after its session, only for the pane agent, never over a live one', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-msg-auto-test-'));
+  const sid = '55555555-5555-4555-8555-555555555555', other = '66666666-6666-4666-8666-666666666666';
+  const state = {draft: '', width: 80, mode: 0, panePid: 42, submitted: [], agentKind: 'claude',
+    session: 'autoeval-compare-r2v'};
+  const env = {AGENT_MSG_HOME: root, TMUX_PANE: '%1', CLAUDE_CODE_SESSION_ID: sid};
+  const me = fixture(env, state);
+  try {
+    await me.cli('register', '--auto', '--socket', '/test');
+    assert.deepEqual(me.last(), {name: 'compare', identity: 'claude:' + sid});
+    // The same Claude after /clear (a new session id): it takes its name back.
+    const cleared = fixture({...env, CLAUDE_CODE_SESSION_ID: other}, state);
+    await cleared.cli('register', '--auto', '--socket', '/test');
+    assert.deepEqual(cleared.last(), {name: 'compare', identity: 'claude:' + other});
+    // compare bound to another live process (43, in the pane): a second session leaves it, even
+    // while that pane is in copy mode.
+    const {DatabaseSync} = require('node:sqlite'), store = new DatabaseSync(path.join(root, 'messages.sqlite3'));
+    store.prepare("UPDATE agents SET data=json_set(data, '$.pid', 43) WHERE name='compare'").run(); store.close();
+    state.parents = {43: 42}; state.mode = 1; state.session = 'compare-r2v';
+    const second = fixture({...env, CLAUDE_CODE_SESSION_ID: sid}, state);
+    await second.cli('register', '--auto', '--socket', '/test');
+    assert.match(second.last().skipped, /bound to another live session/);
+    state.mode = 0;
+    state.session = 'thesis';
+    await me.cli('register', '--auto', '--socket', '/test');
+    assert.equal(me.last().skipped, 'not a *-r2v session');
+    state.session = 'autoeval-bot-r2v'; state.sessions = ['bot-r2v', 'autoeval-bot-r2v'];
+    await me.cli('register', '--auto', '--socket', '/test');
+    assert.equal(me.last().name, 'autoeval-bot');  // bot is bot-r2v's
+    // A Claude a tool started inside the pane: its parent is not the pane process.
+    state.panePid = 7; state.session = 'data-r2v';
+    await me.cli('register', '--auto', '--socket', '/test');
+    assert.equal(me.last().skipped, "not the pane's own agent");
+    state.panePid = 42;
+    await me.cli('whoami');
+    assert.equal(me.last().name, 'autoeval-bot');
+    assert.doesNotThrow(() => me.cli('register', '--auto'));  // a hook never fails
+  } finally { fs.rmSync(root, {recursive: true, force: true}); }
+});
+
+test('agy outside tmux registers without TMUX_PANE, exchanges messages, and checks process liveness', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-msg-notmux-agy-'));
+  const conv = '77777777-7777-4777-8777-777777777777', claude = '88888888-8888-4888-8888-888888888888';
+  const agyEnv = {AGENT_MSG_HOME: root, ANTIGRAVITY_CONVERSATION_ID: conv,
+    ANTIGRAVITY_LS_ADDRESS: 'localhost:2', ANTIGRAVITY_CSRF_TOKEN: 'secret-tok', ANTIGRAVITY_AGENTAPI_EXE: '/fake/agy'};
+  const state = {draft: '', width: 80, mode: 0, panePid: 42, submitted: [], agentKind: 'agy',
+    agyExe: '/fake/agy', agentapi: [], starts: {42: 'claude-start', 43: 'agy-start-1'}};
+  const agy = fixture(agyEnv, state);
+  const claudeSide = fixture({AGENT_MSG_HOME: root, TMUX_PANE: '%1', CLAUDE_CODE_SESSION_ID: claude}, state);
+  const claudeNoTmux = fixture({AGENT_MSG_HOME: root, CLAUDE_CODE_SESSION_ID: claude}, state);
+  const body = path.join(root, 'body'); fs.writeFileSync(body, '升级 tmux');
+  try {
+    // Non-tmux Claude still requires a tmux pane.
+    state.agentKind = 'claude';
+    await assert.rejects(claudeNoTmux.cli('register', 'cl-notmux'), /tmux pane required/);
+    await claudeSide.cli('register', 'wf', '--socket', '/test');
+
+    // Non-tmux agy (PID 43) registers and sends to tmux Claude (PID 42) without touching tmux for itself.
+    state.agentKind = 'agy'; state.parents = {[process.pid]: 43, 43: 1};
+    await agy.cli('register', 'rex-agy');
+    assert.equal(agy.last().pane, null);
+    assert.ok(!JSON.stringify(agy.last()).includes('secret-tok'));
+    await agy.cli('whoami'); assert.equal(agy.last().name, 'rex-agy');
+    await agy.cli('send', 'wf', '--file', body, '--id', 'ask-wf');
+    assert.equal(agy.last().state, 'submitted');
+
+    // tmux Claude replies back to non-tmux agy via agentapi.
+    state.agentKind = 'claude'; delete state.parents;
+    await claudeSide.cli('read', 'ask-wf');
+    assert.equal(claudeSide.last().sender_name, 'rex-agy');
+    state.stdin = '好的，开始协调';
+    await claudeSide.cli('reply', 'ask-wf', '--id', 'wf-ack');
+    assert.equal(claudeSide.last().state, 'read');
+    assert.match(state.agentapi.at(-1).args[3], /\n\n好的，开始协调$/);
+
+    // If the non-tmux agy process restarts (procStart changes), delivery defers as stale.
+    state.starts[43] = 'agy-start-2';
+    state.stdin = '第二条';
+    await claudeSide.cli('send', 'rex-agy', '--id', 'after-restart');
+    assert.equal(claudeSide.last().state, 'deferred');
+    assert.match(claudeSide.last().detail, /stale/);
+  } finally { fs.rmSync(root, {recursive: true, force: true}); }
 });
