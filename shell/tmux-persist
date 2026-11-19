@@ -1,8 +1,10 @@
 #!/bin/zsh
-# Bring the *-r2v, adapt-clf and thesis tmux sessions, each running Claude Code, back after a reboot.
+# Bring the *-r2v, adapt-clf and thesis tmux sessions, each running Claude Code or the
+# Antigravity CLI (agy), back after a reboot.
 # Claude Code records every live process in ~/.claude/sessions/<pid>.json with
-# its tmux pane ("name:@win.%pane") and conversation id; `save` copies the entries
-# of those sessions into a snapshot, and `restore` recreates each missing
+# its tmux pane ("name:@win.%pane") and conversation id; a live agy holds its
+# conversation's ~/.gemini/antigravity-cli/presence/<id>.lock open. `save` copies the
+# entries of those sessions into a snapshot, and `restore` recreates each missing
 # session in its cwd and resumes that exact conversation.
 # LaunchAgents that dotfiles.sh installs run `restore` at login
 # (local.tmux-persist-restore) and `save` every 5 minutes (local.tmux-persist-save).
@@ -10,12 +12,13 @@
 #        tmux-persist save       refresh the snapshot from live Claude processes
 #        tmux-persist restore    recreate snapshot sessions that are not running
 #        tmux-persist restart [--effort <level>] <name>...|--all
-#                                restart the Claude in running sessions (--all:
-#                                every session running one, e.g. after an
+#                                restart the Claude or agy in running sessions
+#                                (--all: every session running one, e.g. after an
 #                                update), resuming the same conversations
 #                                with a message saying they were restarted (only
-#                                to a Claude that left work to recover), at the
-#                                effort each was launched with (or <level>)
+#                                to a Claude that left work to recover), on the
+#                                model and effort agent-models.conf sets (else
+#                                the ones each runs now; --effort: <level>)
 #        tmux-persist stale      sessions whose Claude predates the installed
 #                                version (shows "Restart to update"): tpr $(tps)
 set -euo pipefail
@@ -27,8 +30,13 @@ PROJECTS=${TMUX_PERSIST_CLAUDE_PROJECTS:-$HOME/.claude/projects}
 # reply, which is Opus 5 after a refusal fallback even once /model switched back.
 # It names the default; a session running another model keeps that one (live_of).
 LAUNCH=${TMUX_PERSIST_LAUNCH:-claude --dangerously-skip-permissions --model claude-opus-5-5 --resume}
+# agy through the shell's `g` (shell/.functions), which adds the proxy agy needs here; with
+# no --model it starts on agy's default (Gemini 4 Neon at high).
+AGY_LAUNCH=${TMUX_PERSIST_AGY_LAUNCH:-g --conversation}
+AGY_PRESENCE=${TMUX_PERSIST_AGY_PRESENCE:-$HOME/.gemini/antigravity-cli/presence}
 PATTERN='(*-r2v|adapt-clf|thesis)'
-SNAP=$STATE/snapshot  # name<TAB>cwd<TAB>sessionId<TAB>effort<TAB>flags<TAB>model (trailing ones may be absent)
+SNAP=$STATE/snapshot  # name<TAB>cwd<TAB>sessionId<TAB>effort<TAB>flags<TAB>model<TAB>agent (trailing ones may be
+                      # absent; agent is "agy" for an agy session, else a Claude one)
 # Launch flags a session needs again on every launch: a channel (e.g. the Feishu
 # avatar bot's) only pushes messages into a Claude started with them. Each takes
 # one or more values, which must not contain spaces (ps drops the quoting).
@@ -37,10 +45,17 @@ KEEP=(--mcp-config --dangerously-load-development-channels --channels)
 # The first message of a restarted conversation: inspect restored state before
 # recreating missing work; %s is the session id.
 RESTARTED="这个会话刚被重启了（tmux-persist restart）：Claude 进程已被替换，对话已恢复。先检查后台任务、Monitor、cron、scheduled wakeup 和 loop 的现状；定时任务先用 CronList 核对，只恢复仍需要且缺失的工作，保留已有频率，不重复创建。子代理上下文在 ~/.claude/projects/*/%s/subagents/，没有 \"finished\":true 的 meta.json 记录未完成工作，用 SendMessage 按文件名里的 agentId 继续，不要重新起。然后继续当前任务。"
+# agy's first message after every restart and restore, passed with -i: unlike Claude, agy loses all its
+# background tasks and schedules with the process, and keeps its subagents only as idle ones, so it always
+# has work to recover. Registration and project memory need no step: agy's session start brings them.
+AGY_RESTARTED="这个会话刚被重启（tmux-persist）：agy 进程已替换，对话已恢复。重启会停掉所有后台任务和 schedule 定时任务，它们不会自己恢复；子代理还在，但都处于空闲，手上的活已中断。先用 manage_task list 看现状，用 ps 确认没有残留的常驻进程实例，再按你的记录或交接文档重建仍需要的常驻进程和定时任务，保留原来的频率，不要重复提交；用 manage_subagents 找到有未完成工作的子代理，给它发消息接着做，不要另起新的。然后继续当前任务。"
 SELF=${0:A}
 # The cross-machine mailbox channel (agents/claude/peer, see its README): every launch gets it,
 # so each session can be messaged from another Mac. Empty disables it.
 PEER_MCP=${TMUX_PERSIST_PEER_MCP-${SELF:h:h}/agents/claude/peer/mcp.json}
+# The model and level set for each session (agents/claude/agent-models.conf, which
+# opus-repin also reads); they outrank what a session runs now.
+AGENT_MODELS=${AGENT_MODELS:-$HOME/.claude/agent-models.conf}
 
 # launchd starts us with a bare PATH.
 path=(/opt/homebrew/bin /usr/local/bin $path)
@@ -100,10 +115,40 @@ claudes() {
         [[ ${started[$pid]:-} == "${w[1,2]} ${w[3]#0} ${w[4,-1]}" ]] || continue
         [[ $pid == "${panepid[${tmux##*.}]}" || ${parent[$pid]} == "${panepid[${tmux##*.}]}" ]] || continue
         native_owned "$name" "$id" && continue
-        print -r -- "$name"$'\t'"$pid"$'\t'"${tmux##*.}"$'\t'"$cwd"$'\t'"$id"$'\t'"$ver"
+        print -r -- "$name"$'\t'"$pid"$'\t'"${tmux##*.}"$'\t'"$cwd"$'\t'"$id"$'\t'"$ver"$'\t'claude
     done < <(for f in $files; do print -rn -- "$(<$f)"$'\0'; done \
         | jq -rRs 'split("\u0000")[] | fromjson? | [.pid, .procStart, .tmux // "", .cwd, .sessionId, .version // ""] | @tsv')
 }
+
+# agys: the same rows ("...<TAB><TAB>agy", no version) for each agy that is a pane's process or its
+# child. The conversation comes from the presence lock it holds open, which follows /clear.
+agys() {
+    local -A owner pane_of conv dir
+    local row pid ppid pane f
+    local -a w locks=("$AGY_PRESENCE"/*.lock(N))
+    (( ${#locks} )) || return 0
+    for row in ${(f)"$(lsof -Fpn -- $locks 2>/dev/null || true)"}; do
+        case $row in p*) pid=${row#p} ;; n*) conv[$pid]=${${row#n}:t:r} ;; esac
+    done
+    (( ${#conv} )) || return 0
+    for row in ${(f)"$(lsof -a -d cwd -Fpn -p ${(j:,:)${(k)conv}} 2>/dev/null || true)"}; do
+        case $row in p*) pid=${row#p} ;; n*) dir[$pid]=${row#n} ;; esac
+    done
+    for row in ${(f)"$(tmux_ list-panes -a -F '#{pane_pid} #{pane_id} #{session_name}' 2>/dev/null || true)"}; do
+        w=(${=row}); pane_of[${w[1]}]=${w[2]}; owner[${w[1]}]=${w[3,-1]}
+    done
+    for pid in ${(k)conv}; do
+        ppid=$(/bin/ps -o ppid= -p $pid 2>/dev/null) || continue
+        pane=${pane_of[$pid]:-${pane_of[${ppid// /}]:-}}
+        f=${pane_of[$pid]:+$pid}; f=${f:-${ppid// /}}
+        [[ -n $pane ]] || continue
+        native_owned "${owner[$f]}" "${conv[$pid]}" && continue
+        print -r -- "${owner[$f]}"$'\t'"$pid"$'\t'"$pane"$'\t'"${dir[$pid]:-}"$'\t'"${conv[$pid]}"$'\t\t'agy
+    done
+}
+
+# agents: claudes and agys.
+agents() { claudes; agys; }
 
 # with_peer <flags>: <flags> plus the peer channel: its config after any --mcp-config values
 # and server:peer after any development channels, each added with its flag when absent.
@@ -155,6 +200,21 @@ live_model() {
 live_effort() {
     local e=${"$(live_of "$1")"##*$'\t'}
     [[ $e == (low|medium|high|xhigh|max) ]] && print -r -- "$e" || true
+}
+
+# configured <name>: "<model>\t<level>" agent-models.conf sets for session <name>
+# (the level empty for "-"), or nothing.
+# <agent> claude or agy: a model for the other kind (the file not yet updated after a switch) is left
+# out, as that agent would refuse it, and noted; the level still applies.
+configured() {
+    [[ -f $AGENT_MODELS ]] || return 0
+    local row=$(awk -v n="$1" '$1 == n { print $2 "\t" ($3 == "-" ? "" : $3); exit }' "$AGENT_MODELS")
+    local model=${row%%$'\t'*}
+    if [[ -n $model ]] && { [[ $2 == agy && $model == claude-* ]] || [[ $2 != agy && $model != claude-* ]]; }; then
+        note "agent-models.conf: $1 runs $2, so its model $model is ignored"
+        row=$'\t'${row#*$'\t'}
+    fi
+    print -r -- "$row"
 }
 
 # model_of <pid>: the model Claude <pid> was launched with, or nothing.
@@ -241,10 +301,29 @@ accept_dev_channels() {
 }
 note() { print -u2 "tmux-persist: $1"; mkdir -p "$STATE"; print -r -- "$(date '+%F %T') $1" >> "$STATE/dialog.log"; }
 
+# entry <cwd> <id> <effort> <flags> <model> [agy]: a snapshot row without its name, trailing
+# empty columns dropped.
+entry() {
+    local row="$1"$'\t'"$2"$'\t'"$3"$'\t'"$4"
+    if [[ ${6:-} == agy ]]; then row+=$'\t'"$5"$'\t'agy; elif [[ -n $5 ]]; then row+=$'\t'"$5"; fi
+    print -r -- "$row"
+}
+
+# launch_line <agent> <id> <model> <effort> [<flags> [<msg>]]: the command that resumes conversation
+# <id>. agy takes no Claude model as its default and none of the KEEP flags, and always gets
+# $AGY_RESTARTED, last, as -i takes the next word.
+launch_line() {
+    if [[ $1 == agy ]]; then
+        print -r -- "$AGY_LAUNCH $2${3:+ --model $3}${4:+ --effort $4} -i ${(qq)AGY_RESTARTED}"
+    else
+        print -r -- "$(launch_with "$3") $2${6:+ ${(qq)6}}${4:+ --effort $4}${5:+ $5}"
+    fi
+}
+
 save() {
     local -A rows
     local -a open
-    local name pid pane cwd id ver effort flags model
+    local name pid pane cwd id ver effort flags model agent
     open=(${(f)"$(tmux_ list-sessions -F '#S' 2>/dev/null || true)"})
     # No tmux server (e.g. at boot, before restore) says nothing about which
     # sessions were closed, so the snapshot stays as it is.
@@ -253,35 +332,41 @@ save() {
     # Claude is not running now; a session closed on purpose drops out.
     # A doubled tab makes it a non-whitespace separator, so an empty effort
     # column does not collapse and shift the flags into it.
-    [[ -f $SNAP ]] && while IFS=$'\t\t' read -r name cwd id effort flags model; do
+    [[ -f $SNAP ]] && while IFS=$'\t\t' read -r name cwd id effort flags model agent; do
         persisted "$name" && (( ${open[(Ie)$name]} )) || continue
         native_owned "$name" "$id" && continue
-        rows[$name]="$cwd"$'\t'"$id"$'\t'"$effort"$'\t'"$flags"${model:+$'\t'"$model"}
+        rows[$name]=$(entry "$cwd" "$id" "$effort" "$flags" "$model" "$agent")
     done < "$SNAP"
-    while IFS=$'\t' read -r name pid pane cwd id ver; do
+    while IFS=$'\t\t' read -r name pid pane cwd id ver agent; do
         persisted "$name" || continue
+        if [[ $agent == agy ]]; then  # agy keeps no readable record of a /model change
+            rows[$name]=$(entry "$cwd" "$id" "$(effort_of "$pid")" "" "$(model_of "$pid")" agy)
+            continue
+        fi
         # What the session runs now outranks what it was launched with.
         effort=$(live_effort "$id"); [[ -n $effort ]] || effort=$(effort_of "$pid")
         model=$(live_model "$id"); [[ -n $model ]] || model=$(model_of "$pid")
-        rows[$name]="$cwd"$'\t'"$id"$'\t'"$effort"$'\t'"$(flags_of "$pid")"${model:+$'\t'"$model"}
-    done < <(claudes)
+        rows[$name]=$(entry "$cwd" "$id" "$effort" "$(flags_of "$pid")" "$model")
+    done < <(agents)
     mkdir -p "$STATE"
     for name in ${(ko)rows}; do print -r -- "$name"$'\t'"${rows[$name]}"; done > "$SNAP.tmp"
     mv "$SNAP.tmp" "$SNAP"
 }
 
 restore() {
-    local name cwd id effort flags model
+    local name cwd id effort flags model agent conf
     [[ -f $SNAP ]] || return 0
-    while IFS=$'\t\t' read -r name cwd id effort flags model; do  # \t\t: see save
+    while IFS=$'\t\t' read -r name cwd id effort flags model agent; do  # \t\t: see save
         persisted "$name" || continue
         native_owned "$name" "$id" && continue
         tmux_ has-session -t "=$name" 2>/dev/null && continue
+        conf=$(configured "$name" "$agent")
+        model=${${conf%%$'\t'*}:-$model} effort=${${conf#*$'\t'}:-$effort}
         [[ -d $cwd ]] || cwd=$HOME
-        flags=$(with_peer "$flags")
-        # Typed into the pane's shell, so exiting Claude leaves a shell behind.
+        [[ $agent == agy ]] || flags=$(with_peer "$flags")
+        # Typed into the pane's shell, so exiting the agent leaves a shell behind.
         tmux_ new-session -d -s "$name" -c "$cwd"
-        tmux_ send-keys -t "=$name:" "$(launch_with "$model") $id${effort:+ --effort $effort}${flags:+ $flags}" Enter
+        tmux_ send-keys -t "=$name:" C-u "$(launch_line "$agent" "$id" "$model" "$effort" "$flags")" Enter
         # At login the network and several Claudes start together: wait up to 5 min.
         accept_dev_channels "=$name:" "$flags" ${TMUX_PERSIST_DIALOG_WAIT:-3000} &
         print -r -- "restored $name"
@@ -312,21 +397,27 @@ owes() {
     return 1
 }
 
-# restart_pane <shell> <name> <pid> <pane> <cwd> <id>: same pane, window and
+# restart_pane <shell> <name> <pid> <pane> <cwd> <id> <agent>: same pane, window and
 # attached clients; only the pane's process is replaced, by a login <shell>.
-# The new Claude gets EFFORT if set, else the old one's launch effort, and the
-# old one's KEEP flags; the message, when the old one owes work, goes right after
-# the id, as a flag taking several values would swallow it.
+# The new Claude gets the model agent-models.conf sets, else the one the old one
+# runs or was launched with; EFFORT if set, else the configured level, else the
+# old one's live or launch level; and the old one's KEEP flags. The message, when
+# the old one owes work, goes right after the id, as a flag taking several values
+# would swallow it.
 restart_pane() {
-    local shell=$1 name=$2 pid=$3 pane=$4 cwd=$5 id=$6 tries=0 msg=
-    local effort=${EFFORT:-$(live_effort "$id")} flags=$(with_peer "$(flags_of "$pid")")
-    local model=$(live_model "$id") launch
+    local shell=$1 name=$2 pid=$3 pane=$4 cwd=$5 id=$6 agent=$7 tries=0 msg= flags=
+    local conf=$(configured "$name" "$agent")
+    local effort=${EFFORT:-${conf#*$'\t'}} model=${conf%%$'\t'*}
+    [[ -n $effort ]] || effort=$(live_effort "$id")
+    [[ -n $model ]] || model=$(live_model "$id")
     [[ -n $effort ]] || effort=$(effort_of "$pid")
     [[ -n $model ]] || model=$(model_of "$pid")
-    launch=$(launch_with "$model")
     [[ -d $cwd ]] || cwd=$HOME
-    # Read before the old Claude goes: its status is gone with it.
-    if owes "$pid" "$id"; then printf -v msg "$RESTARTED" "$id"; fi
+    # Read before the old Claude goes: its status is gone with it. agy has neither.
+    if [[ $agent != agy ]]; then
+        flags=$(with_peer "$(flags_of "$pid")")
+        if owes "$pid" "$id"; then printf -v msg "$RESTARTED" "$id"; fi
+    fi
     # An explicit command, since a bare respawn reruns the pane's original one.
     tmux_ respawn-pane -k -t "$pane" -c "$cwd" "exec ${(q)shell} -l"
     # Two Claude processes must not share one transcript.
@@ -334,7 +425,8 @@ restart_pane() {
         (( ++tries < 100 )) || { kill -9 "$pid" 2>/dev/null; break; }
         sleep 0.1
     done
-    tmux_ send-keys -t "$pane" "$launch $id${msg:+ ${(qq)msg}}${effort:+ --effort $effort}${flags:+ $flags}" Enter
+    # C-u first: whatever the user typed into the new shell meanwhile would prefix the line.
+    tmux_ send-keys -t "$pane" C-u "$(launch_line "$agent" "$id" "$model" "$effort" "$flags" "$msg")" Enter
     accept_dev_channels "$pane" "$flags" ${TMUX_PERSIST_DIALOG_WAIT:-600}
     print -r -- "restarted $name ($pane)"
 }
@@ -343,17 +435,17 @@ restart_pane() {
 # running one), in parallel. Nothing restarts unless each session has one. The Claudes
 # are listed once, as listing them takes seconds.
 restart() {
-    local name row pid pane cwd id ver v shell missing=0
+    local name row pid pane cwd id ver agent v shell missing=0
     local -a all rows found env
-    all=(${(f)"$(claudes)"})
+    all=(${(f)"$(agents)"})
     if [[ $* == --all ]]; then
         set -- ${(u)all%%$'\t'*}
-        (( $# )) || { print -u2 "tmux-persist: no running Claude in any session"; exit 1; }
+        (( $# )) || { print -u2 "tmux-persist: no running Claude or agy in any session"; exit 1; }
     fi
     for name in "$@"; do
         found=("${(@M)all:#$name$'\t'*}")
         if (( ! ${#found} )); then
-            print -u2 "tmux-persist: no running Claude in session $name"; missing=1; continue
+            print -u2 "tmux-persist: no running Claude or agy in session $name"; missing=1; continue
         fi
         rows+=("${found[@]}")
     done
@@ -361,7 +453,7 @@ restart() {
     # Run from inside one of those Claudes (e.g. via `!`), killing its pane would
     # kill us, so the tmux server reruns us outside the pane.
     for row in "${rows[@]}"; do
-        IFS=$'\t' read -r name pid pane cwd id ver <<< "$row"
+        IFS=$'\t\t' read -r name pid pane cwd id ver agent <<< "$row"
         [[ $pane == "${TMUX_PANE:-}" ]] || continue
         env=(TMUX_PANE=)
         for v in ${(k)parameters[(I)TMUX_PERSIST_*]}; do env+=("$v=${(P)v}"); done
@@ -370,8 +462,8 @@ restart() {
     done
     shell=$(tmux_ show -gv default-shell)
     for row in "${rows[@]}"; do
-        IFS=$'\t' read -r name pid pane cwd id ver <<< "$row"
-        restart_pane "$shell" "$name" "$pid" "$pane" "$cwd" "$id" &
+        IFS=$'\t\t' read -r name pid pane cwd id ver agent <<< "$row"
+        restart_pane "$shell" "$name" "$pid" "$pane" "$cwd" "$id" "$agent" &
     done
     wait
 }
@@ -382,7 +474,7 @@ stale() {
     local name pid pane cwd id ver installed
     installed=${TMUX_PERSIST_VERSION:-$(claude --version)}
     installed=${installed%% *}  # "2.1.310 (Claude Code)"
-    claudes | while IFS=$'\t' read -r name pid pane cwd id ver; do
+    claudes | while IFS=$'\t\t' read -r name pid pane cwd id ver agent; do
         [[ -n $ver && $ver != "$installed" ]] && print -r -- "$name"
     done | sort -u
 }

@@ -9,10 +9,13 @@ test_root=$(mktemp -d "${TMPDIR:-/tmp}/tmux-persist-test.XXXXXX")
 export TMUX_PERSIST_STATE="$test_root/state" TMUX_PERSIST_CLAUDE_SESSIONS="$test_root/sessions"
 export TMUX_PERSIST_CLAUDE_PROJECTS="$test_root/projects"
 export TMUX_PERSIST_SOCKET="tmux-persist-test-$$" TMUX_PERSIST_LAUNCH="echo resumed"
+export TMUX_PERSIST_AGY_LAUNCH="echo agy-resumed" TMUX_PERSIST_AGY_PRESENCE="$test_root/presence"
 # The fake Claudes that show no launch dialog need not be waited on for long.
 export TMUX_PERSIST_DIALOG_WAIT=20
 # No peer channel unless a check sets one (see the peer checks below).
 export TMUX_PERSIST_PEER_MCP=""
+# No per-session model config unless a check writes one.
+export AGENT_MODELS="$test_root/agent-models.conf"
 unset TMUX_PANE  # a real pane id could collide with the private server's
 cleanup() {
     t kill-server 2>/dev/null || true
@@ -193,6 +196,35 @@ busy keep-r2v id-fb --model claude-opus-5-5 --effort high
     || fail "fallback model pinned into snapshot: $(snap)"
 rm -f "$TMUX_PERSIST_CLAUDE_PROJECTS/proj/id-fb.jsonl"
 t kill-session -t "=keep-r2v" 2>/dev/null || true
+
+# agent-models.conf outranks what a session runs now on restore and restart, and
+# restart --effort outranks its level; "-" leaves the level to the session.
+# wait_line <target> <regex>: wait until a line of pane <target> matches <regex>
+# (a restart puts its message, which these fake Claudes are owed, after the id).
+wait_line() {
+    tries=0
+    until t capture-pane -p -J -t "$1" | grep -qE -- "$2"; do
+        tries=$((tries + 1)); [ "$tries" -lt 50 ] || fail "expected '$2' in $1: $(t capture-pane -p -J -t "$1")"
+        sleep 0.1
+    done
+}
+printf '{"type":"api-request","querySource":"repl_main_thread","params":{"model":"claude-fable-5-2","output_config":{"effort":"high"}}}\n' \
+    > "$TMUX_PERSIST_CLAUDE_PROJECTS/proj/id-conf.jsonl"
+printf '# session model effort\nkeep-r2v  claude-opus-5-5  xhigh\nother-r2v claude-fable-5-2 -\n' > "$AGENT_MODELS"
+busy keep-r2v id-conf --model claude-fable-5-2 --effort high
+"$tp" save
+t kill-server
+TMUX_PERSIST_LAUNCH="echo resumed --model claude-opus-5" "$tp" restore > /dev/null
+wait_line "=keep-r2v:" "^resumed --model claude-opus-5-5 id-conf --effort xhigh$"
+busy keep-r2v id-conf --model claude-fable-5-2 --effort high
+TMUX_PERSIST_LAUNCH="echo resumed --model claude-opus-5" "$tp" restart --effort low keep-r2v > /dev/null
+wait_line "=keep-r2v:" "^resumed --model claude-opus-5-5 id-conf .* --effort low$"
+busy other-r2v id-conf --model claude-opus-5-5 --effort medium
+TMUX_PERSIST_LAUNCH="echo resumed --model claude-opus-5" "$tp" restart other-r2v > /dev/null
+wait_line "=other-r2v:" "^resumed --model claude-fable-5-2 id-conf .* --effort high$"
+rm -f "$AGENT_MODELS" "$TMUX_PERSIST_CLAUDE_PROJECTS/proj/id-conf.jsonl"
+t kill-session -t "=keep-r2v" 2>/dev/null || true
+t kill-session -t "=other-r2v" 2>/dev/null || true
 
 busy keep-r2v id-keep --effort high
 "$tp" save
@@ -385,5 +417,44 @@ session "${split% *}" "$(LC_ALL=C /bin/date -u -r "$(LC_ALL=C /bin/date -j -f '%
 version "${split% *}" 2.0.1
 busy new-r2v id-new; version "$busy_pid" 2.0.2
 [ "$(TMUX_PERSIST_VERSION='2.0.2 (Claude Code)' "$tp" stale)" = "old-r2v" ] || fail "stale: $(TMUX_PERSIST_VERSION=2.0.2 "$tp" stale)"
+
+# agy: a live agy is found by the presence lock it holds open, saved with its launch model and
+# level, and restored and restarted through AGY_LAUNCH on the model agent-models.conf sets.
+conv=0983f4bc-882e-40fc-aec2-1af2030a8130
+mkdir -p "$TMUX_PERSIST_AGY_PRESENCE"; : > "$TMUX_PERSIST_AGY_PRESENCE/$conv.lock"
+t new-session -d -s train-agy-r2v -c "$test_root" \
+    "exec -a agy perl -e 'open my \$f, \"<\", shift; sleep 600' $TMUX_PERSIST_AGY_PRESENCE/$conv.lock --model gemini-4-neon --effort low"
+agy=$(t display -p -t "=train-agy-r2v:" '#{pane_pid} #{pane_id}'); agy_pid=${agy% *} agy_pane=${agy#* }
+tries=0
+until "$tp" save && grep -q '^train-agy-r2v' "$TMUX_PERSIST_STATE/snapshot"; do
+    tries=$((tries + 1)); [ "$tries" -lt 30 ] || fail "save missed the agy session"; sleep 0.1
+done
+[ "$(grep '^train-agy-r2v' "$TMUX_PERSIST_STATE/snapshot")" = "$(printf 'train-agy-r2v\t%s\t%s\tlow\t\tgemini-4-neon\tagy' "$(cd "$test_root" && pwd -P)" "$conv")" ] \
+    || fail "agy snapshot row: $(grep '^train-agy-r2v' "$TMUX_PERSIST_STATE/snapshot" | cat -t)"
+printf 'train-agy-r2v gemini-4-carbon high\n' > "$AGENT_MODELS"
+[ "$("$tp" restart train-agy-r2v)" = "restarted train-agy-r2v ($agy_pane)" ] || fail "agy restart"
+tries=0
+until t capture-pane -p -J -t "$agy_pane" | grep -q "^agy-resumed $conv --model gemini-4-carbon --effort high -i 这个会话刚被重启.*manage_task list.*继续当前任务。$"; do
+    tries=$((tries + 1)); [ "$tries" -lt 50 ] || fail "agy not resumed: $(t capture-pane -p -J -t "$agy_pane")"; sleep 0.1
+done
+! kill -0 "$agy_pid" 2>/dev/null || fail "old agy still running"
+t kill-session -t "=train-agy-r2v"
+"$tp" restore >/dev/null
+tries=0
+until t capture-pane -p -J -t "=train-agy-r2v:" 2>/dev/null | grep -q "^agy-resumed $conv --model gemini-4-carbon --effort high -i 这个会话刚被重启.*manage_task list.*继续当前任务。$"; do
+    tries=$((tries + 1)); [ "$tries" -lt 50 ] || fail "agy not restored"; sleep 0.1
+done
+# A Claude model set for an agy session (the file not yet updated after a switch) is ignored and
+# noted; its level still applies.
+t kill-session -t "=train-agy-r2v"
+printf 'train-agy-r2v claude-opus-5-5 medium\n' > "$AGENT_MODELS"
+"$tp" restore >/dev/null 2>&1
+tries=0
+until t capture-pane -p -J -t "=train-agy-r2v:" 2>/dev/null | grep -q "^agy-resumed $conv --model gemini-4-neon --effort medium -i "; do
+    tries=$((tries + 1)); [ "$tries" -lt 50 ] || fail "agy given a Claude model: $(t capture-pane -p -J -t "=train-agy-r2v:" 2>&1)"; sleep 0.1
+done
+grep -q 'train-agy-r2v runs agy, so its model claude-opus-5-5 is ignored' "$TMUX_PERSIST_STATE/dialog.log" || fail "mismatch not noted"
+t kill-session -t "=train-agy-r2v"
+: > "$AGENT_MODELS"
 
 echo "ok"
