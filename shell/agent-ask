@@ -247,10 +247,17 @@ def agy_scope():
                               capture_output=True, text=True).stdout.strip()
     except OSError:
         return None
+    return agy_name(tmux, (config().get("groups") or {}).values())
+
+
+def agy_name(tmux, known):
+    """The session name for tmux session `tmux`, spelled as in `known` (the names the groups are bound to)
+    when only letter case differs: "autoeval-compare-r2v" is "AutoEval Compare (R2V)", not "Autoeval ..."."""
     words = [w for w in tmux[: -len(AGY_TMUX_SUFFIX)].replace("_", "-").split("-") if w]
     if not tmux.endswith(AGY_TMUX_SUFFIX) or not words:
         return None
-    return " ".join(w[:1].upper() + w[1:] for w in words) + f" {SCOPE_SUFFIX}"
+    name = " ".join(w[:1].upper() + w[1:] for w in words) + f" {SCOPE_SUFFIX}"
+    return next((k for k in known if k.casefold() == name.casefold()), name)
 
 
 def agy_subagent(conv):
