@@ -1,27 +1,27 @@
-# Universal-skill authoring (Claude · Codex)
+# Universal-skill authoring (Claude · Codex · agy)
 
-How to write a `SKILL.md` that is shared across both agents (marked C/X in the
+How to write a `SKILL.md` that is shared across agents (marked C/X/D/A in the
 [skill matrix](../README.md)) so one file works — or degrades cleanly — on each. Read this
-before editing a skill wired to more than `claude`. Claude-only skills (agent-team, codex-exec,
-gpt-pro) and per-harness builds (recall) are exempt.
+before editing a skill wired to more than `claude`. Per-harness builds (recall) are exempt;
+agent-team and codex-exec are wired to Claude and agy, so they follow the Claude and agy parts.
 
 ## The one idea
 
-The two harnesses **already converged on the Agent Skills `SKILL.md` format** (`name` +
+The harnesses **already converged on the Agent Skills `SKILL.md` format** (`name` +
 `description` + markdown body) — that intersection is the portable contract. Slash-commands,
 `$ARGUMENTS`, the `Skill` tool, `AskUserQuestion`, and schedulers are *harness extensions*
 layered on top. A universal skill leans on the portable core and treats every extension as an
 optional accelerator with a plain-text fallback.
 
-What each harness actually does (verified 2026-06):
+What each harness actually does (Claude/Codex verified 2026-06; agy 1.5.12 from its docs, 2026-11):
 
-| Construct | Claude Code | Codex CLI |
-|-----------|-------------|-----------|
-| `SKILL.md` + `description`-trigger | ✓ | ✓ |
-| `/<skill-name>` slash | ✓ | ✗ (no auto per-name; `/skills` picker / implicit) |
-| `$ARGUMENTS` / `$1` interpolation | interpolated **pre-model** | ✗ (skills; only deprecated custom-prompts had it) |
-| `Skill(...)`, `AskUserQuestion`, `Cron*` | ✓ | ✗ |
-| `allowed-tools`/`user-invocable`/`effort` frontmatter | enforced | ignored |
+| Construct | Claude Code | Codex CLI | Antigravity CLI (agy) |
+|-----------|-------------|-----------|-----------------------|
+| `SKILL.md` + `description`-trigger | ✓ | ✓ | ✓ |
+| `/<skill-name>` slash | ✓ | ✗ (no auto per-name; `/skills` picker / implicit) | ✓ (each skill becomes a slash command) |
+| `$ARGUMENTS` / `$1` interpolation | interpolated **pre-model** | ✗ (skills; only deprecated custom-prompts had it) | ✗ (undocumented; treat as dead text) |
+| `Skill(...)`, `AskUserQuestion`, `Cron*` | ✓ | ✗ | ✗ under those names (own `ask_question`, `schedule` tools) |
+| `allowed-tools`/`user-invocable`/`effort` frontmatter | enforced | ignored | ignored (only `name`, `description`) |
 
 Why `$ARGUMENTS` is the sharp trap: it's substituted by the harness *before the model sees the
 body*. On a harness that doesn't interpolate, the literal string `$ARGUMENTS` reaches the model
@@ -61,7 +61,7 @@ Plus two hygiene rules:
    only universal invocation path). If you mention a slash command, keep it to one line and don't
    hard-reference another command's *behavior* (`/goal launches the guardrail`) — Codex has no
    auto per-name slash, so prose like "run `/push`" invokes nothing there.
-7. **No hardcoded `~/.claude/` (or `~/.codex/`) skill paths in the body.** They point
+7. **No hardcoded `~/.claude/` (or `~/.codex/`, `~/.gemini/`) skill paths in the body.** They point
    at the wrong directory on the other harness. Reference scripts relative to the skill dir
    ("the `gpt-pro` script beside this `SKILL.md`"). Frontmatter (`allowed-tools`) may keep
    absolute paths — it's Claude-only and ignored elsewhere.
@@ -69,7 +69,7 @@ Plus two hygiene rules:
 ## Mechanical gate
 
 `./dotfiles.sh` (and `./dotfiles.sh lint` on demand) warns when a universal skill **body**
-contains `$ARGUMENTS` or a `~/.{claude,codex}/skills/` path (also as `$HOME/` or `${HOME}/`). It is intentionally
+contains `$ARGUMENTS` or a `~/.{claude,codex}/skills/` or `~/.gemini/[config/|antigravity-cli/]skills/` path (also as `$HOME/` or `${HOME}/`). It is intentionally
 conservative — it does **not** catch un-degraded `AskUserQuestion`/`Skill()`/`Cron*` (those have
 legitimate degradation uses and need human review against rule 4). The warning is non-fatal:
 it surfaces the issue without breaking setup.
@@ -77,5 +77,5 @@ it surfaces the issue without breaking setup.
 ## Frontmatter is safe
 
 `allowed-tools`, `user-invocable`, `effort`, `model` are Claude-only keys that Codex
-ignores. Use them freely — they are the no-cost portability layer. The rule is only that the
+and agy ignore. Use them freely — they are the no-cost portability layer. The rule is only that the
 **body must not rely on** a tool listed there being present at runtime.

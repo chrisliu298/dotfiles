@@ -1,0 +1,11 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/settings.json",
+  "showFeedbackSurvey": false,
+  "altScreenMode": "always",
+  "useTerminalCursor": true,
+  "queuedMessages": "send-immediately",
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.gemini/antigravity-cli/statusline.sh"
+  }
+}

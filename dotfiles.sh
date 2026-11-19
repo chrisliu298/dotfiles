@@ -50,6 +50,7 @@ LINKS=(
     "agents/claude/statusline-command.sh:.claude/statusline-command.sh"
     "agents/claude/lang-guard.py:.claude/lang-guard.py"
     "agents/claude/opus-repin.sh:.claude/opus-repin.sh"
+    "agents/claude/agent-models.conf:.claude/agent-models.conf"
     "shell/agent-ask:.local/bin/agent-ask"
     "agents/claude/themes/anthropic-dark.json:.claude/themes/anthropic-dark.json"
     "agents/claude/themes/anthropic-light.json:.claude/themes/anthropic-light.json"
@@ -63,36 +64,39 @@ LINKS=(
 # name|source|agents — name * = auto-discover subdirs with SKILL.md
 # source: ./path (local), ~/path (host-local, skipped when absent), or owner/repo[/subpath] (GitHub)
 SKILLS=(
-    # The wildcard installs every skill to Claude, Codex and DeepSeek Harness as live symlinks;
-    # the explicit entries below narrow that (claude-only: codex-exec, agent-team, gpt-pro; recall
-    # has a separate build per agent).
-    # DeepSeek is installed only on hosts where the harness has run (its ~/.dsh exists).
-    "*|./agents/skills|claude,codex,deepseek"
-    # codex-exec: claude-only caller; Codex is its executor, so it must not get the skill.
-    "codex-exec|./agents/skills/codex-exec|claude"
-    # agent-team: claude-only caller; Codex and the other hosts remain dispatched backends.
-    "agent-team|./agents/skills/agent-team|claude"
-    # gpt-pro: claude-only caller; its scripts dir is on PATH from the Claude copy (shell/.zshenv).
-    "gpt-pro|./agents/skills/gpt-pro|claude"
-    # recall: one skill name, two harness-specific implementations (like pdf). Both default to
+    # The wildcard installs every skill to Claude, Codex, DeepSeek Harness and Antigravity (agy) as
+    # live symlinks;
+    # the explicit entries below narrow that (Claude and agy only: codex-exec, agent-team; off
+    # everywhere: gpt-pro; recall has a separate build per agent).
+    # DeepSeek and agy are installed only on hosts where the harness has run (its home exists).
+    "*|./agents/skills|claude,codex,deepseek,agy"
+    # codex-exec: Claude and agy call it; Codex is its executor, so it must not get the skill.
+    "codex-exec|./agents/skills/codex-exec|claude,agy"
+    # agent-team: Claude and agy call it; Codex and the other hosts remain dispatched backends.
+    "agent-team|./agents/skills/agent-team|claude,agy"
+    # gpt-pro: off for every agent. An entry with no agents keeps the wildcard from installing it
+    # and prunes the links an earlier install left.
+    "gpt-pro|./agents/skills/gpt-pro|"
+    # recall: one skill name, three harness-specific implementations (like pdf). Each defaults to
     # their own full transcript store, with an explicit cross-agent mode in a shared entrypoint.
-    # agents/skills/recall/ has no SKILL.md, so the wildcard skips it; these two entries install
+    # agents/skills/recall/ has no SKILL.md, so the wildcard skips it; these entries install
     # each subdir as `recall`.
     "recall|./agents/skills/recall/claude|claude"
     "recall|./agents/skills/recall/codex|codex"
+    "recall|./agents/skills/recall/agy|agy"
     # pdf is OpenAI's native skill for Codex (Claude's synced one is off), not repo-owned.
     "pdf|openai/skills/skills/.curated/pdf|codex"
 )
 
-# Host-local third-party skills that only Claude may use. Their installers (the legacy Merlin
+# Host-local third-party skills for Claude and agy only. Their installers (the legacy Merlin
 # bundle script, hand copies) drop them into ~/.agents/skills, which Codex and DeepSeek
-# Harness read natively, so install_skills moves each into ~/.claude/skills.
-CLAUDE_ONLY_AGENT_SKILLS=(weekly-report 'merlin-*')
+# Harness read natively, so install_skills moves each into ~/.claude/skills and links it for agy.
+CLAUDE_AGY_HOST_SKILLS=(weekly-report 'merlin-*')
 
-MCP_SERVERS=()  # name|command|args|agents (user-scoped MCP servers; agents: claude,codex or omit for both)
+MCP_SERVERS=()  # name|command|args|agents (user-scoped MCP servers; agents: claude,codex,agy or omit for claude,codex)
 # Shared Computer Use runs on the ChatGPT app's runtime: register it only where installed.
 if [[ -x /Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node && -d "$HOME/.codex/computer-use" ]]; then
-    MCP_SERVERS+=("codex-computer-use|$ROOT/agents/claude/computer-use-mcp.sh||claude,codex")
+    MCP_SERVERS+=("codex-computer-use|$ROOT/agents/claude/computer-use-mcp.sh||claude,codex,agy")
 fi
 
 # name|marketplace — Claude plugins installed + enabled at user scope (claude-only)
@@ -102,6 +106,10 @@ SKILL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/skills-src"
 # DeepSeek Harness's user skill root; scanned natively alongside ~/.agents/skills.
 DSH_HOME_DIR="${DSH_HOME:-$HOME/.dsh}"
 DSH_SKILLS_DIR="$DSH_HOME_DIR/skills"
+# Antigravity (agy): the CLI's own state dir exists once agy has run; personal skills go in
+# ~/.gemini/config/skills, which both the Antigravity CLI and App read.
+AGY_CLI_DIR="$HOME/.gemini/antigravity-cli"
+AGY_SKILLS_DIR="$HOME/.gemini/config/skills"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}"
 GLOBAL_STAMP="$CACHE_DIR/dotfiles-global-stamp"
 
@@ -146,7 +154,12 @@ compute_fingerprint() {
     data=$({ git -C "$ROOT" rev-parse HEAD 2>/dev/null
              git -C "$ROOT" status --porcelain=v1 2>/dev/null
              git -C "$ROOT" diff --no-ext-diff --no-color HEAD -- . 2>/dev/null
-             cat "$HOST_CONF" 2>/dev/null; })
+             cat "$HOST_CONF" 2>/dev/null
+             # Hosts gain agy or DeepSeek by running them once, outside the repo; agy's memory
+             # rules follow the workspaces it trusts and the Claude memories that exist.
+             _agy_available && echo agy; _dsh_available && echo dsh
+             jq -c '.trustedWorkspaces' "$AGY_CLI_DIR/settings.json" 2>/dev/null
+             ls -d "$HOME"/.claude/projects/*/memory/MEMORY.md 2>/dev/null; })
     printf '%s' "$data" | md5 2>/dev/null \
         || printf '%s' "$data" | md5sum 2>/dev/null | cut -d' ' -f1
 }
@@ -175,9 +188,11 @@ sync_git_checkout() {
     fi
 }
 
-# Has DeepSeek Harness been set up on this host? Its ~/.dsh (or $DSH_HOME) is
-# created on first launch; skip the directory entirely rather than seeding it.
+# Has DeepSeek Harness (or agy) been set up on this host? Its ~/.dsh (or $DSH_HOME), like
+# agy's ~/.gemini/antigravity-cli, is created on first launch; skip the directory entirely
+# rather than seeding it.
 _dsh_available() { [[ -d "$DSH_HOME_DIR" ]]; }
+_agy_available() { [[ -d "$AGY_CLI_DIR" ]]; }
 
 _resolve_source() {
     local source="$1"
@@ -278,6 +293,62 @@ setup_theme_state() {
     fi
 }
 
+# agy rewrites ~/.gemini/antigravity-cli/settings.json itself (trustedWorkspaces, /model), so
+# merge the repo keys onto the live file like Claude's settings: repo values win, others survive.
+# Its files are linked here rather than in LINKS so a host where agy never ran gets no ~/.gemini.
+# agy reads no Claude Code memory, so each workspace agy trusts that has one gets an untracked
+# always-on rule (.agents/rules/claude-memory.md, listed in the repo's .git/info/exclude) that
+# embeds its MEMORY.md through agy's own file reference, every turn and after compaction too.
+# Claude keys the memory by the workspace's real path with each non-alphanumeric character as "-".
+install_agy_memory_rules() {
+    local settings="$AGY_CLI_DIR/settings.json" ws real memory rule exclude prefix body
+    [[ -f "$settings" ]] || return 0
+    while IFS= read -r ws; do
+        [[ -d "$ws" ]] && real=$(cd "$ws" && pwd -P) || continue
+        memory="$HOME/.claude/projects/$(printf '%s' "$real" | sed 's/[^A-Za-z0-9]/-/g')/memory/MEMORY.md"
+        exclude=$(git -C "$real" rev-parse --path-format=absolute --git-path info/exclude 2>/dev/null) || continue
+        prefix=$(git -C "$real" rev-parse --show-prefix)  # a workspace below the repo root: its path there
+        [[ -f "$memory" ]] || continue
+        rule="$real/.agents/rules/claude-memory.md"
+        git -C "$real" ls-files --error-unmatch "$rule" &>/dev/null && { warn "skip ${rule/#$HOME/~} (tracked)"; continue; }
+        body=$(printf '%s\n' '---' 'trigger: always_on' '---' '' \
+            "This workspace's Claude Code project memory, shared with Claude sessions here. Each line of the index points" \
+            "to a file beside it: read the one that applies before related work, and check that a file, function or flag it" \
+            "names still exists before relying on it. To remember something new, write a file in the same format and add" \
+            "a line to the index." '' "@[Claude project memory](${memory/#$HOME/~})")
+        if [[ ! -f "$rule" || "$(<"$rule")" != "$body" ]]; then
+            mkdir -p "${rule%/*}" && printf '%s\n' "$body" > "$rule" && log "write ${rule/#$HOME/~}"
+        fi
+        grep -qxF "${prefix}.agents/rules/claude-memory.md" "$exclude" 2>/dev/null \
+            || { mkdir -p "${exclude%/*}"; echo "${prefix}.agents/rules/claude-memory.md" >> "$exclude"; }
+    done < <(jq -r '.trustedWorkspaces[]? // empty' "$settings" 2>/dev/null)
+}
+
+install_agy_settings() {
+    local src="$ROOT/agents/agy/settings.json" dest="$AGY_CLI_DIR/settings.json" tmp
+    _agy_available || return 0
+    command -v jq >/dev/null 2>&1 || { warn "skip agy settings (jq not found)"; return 0; }
+    ensure_symlink "$ROOT/agents/AGENTS.md" "$HOME/.gemini/AGENTS.md"
+    ensure_symlink "$ROOT/agents/agy/statusline.sh" "$AGY_CLI_DIR/statusline.sh"
+    if [[ -f "$HOME/.gemini/config/hooks.json" && ! -L "$HOME/.gemini/config/hooks.json" ]]; then
+        warn "keep ~/.gemini/config/hooks.json (not ours; merge agents/agy/hooks.json into it by hand)"
+    else
+        ensure_symlink "$ROOT/agents/agy/hooks.json" "$HOME/.gemini/config/hooks.json"
+    fi
+    # A link left by an older install would let agy's own writes land in the repo: replace it with a file.
+    [[ -L "$dest" ]] && { cp "$dest" "$dest.tmp.$$" && mv "$dest.tmp.$$" "$dest" || return; }
+    tmp=$(mktemp "$dest.XXXXXX") || return
+    if [[ -f "$dest" ]]; then
+        jq -s '.[0] * .[1]' "$dest" "$src" > "$tmp" || { rm -f "$tmp"; warn "could not merge ${dest/#$HOME/~}"; return; }
+    else
+        cp "$src" "$tmp"
+    fi
+    if [[ -f "$dest" ]] && cmp -s "$tmp" "$dest"; then rm -f "$tmp"
+    else chmod 600 "$tmp" && mv "$tmp" "$dest" && log "write ${dest/#$HOME/~}"
+    fi
+    install_agy_memory_rules
+}
+
 # Unattended Claude Code sessions (agent-team's claude) often start in a
 # session scratchpad under /tmp/claude-<uid>, where an unanswered workspace trust
 # dialog stalls them. Trust that root once: it covers every scratchpad below it
@@ -358,7 +429,7 @@ install_launch_agents() {
     # Feishu receiver for agent questions (shell/agent-ask); restarted whenever it exits.
     install_launch_agent local.agent-ask-hub \
         "<string>$HOME/.local/bin/uv</string><string>run</string><string>--no-project</string><string>--with</string><string>lark-oapi==1.7.5</string><string>python3</string><string>$HOME/.local/bin/agent-ask</string><string>hub</string>" \
-        "<key>KeepAlive</key><true/><key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin</string></dict>"
+        "<key>KeepAlive</key><true/><key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:$HOME/.local/bin:/usr/bin:/bin</string></dict>"
     # Keep read-only clones current (shell/repo-sync); only hosts that list SYNC_REPOS run it.
     ((${#SYNC_REPOS[@]})) && install_launch_agent local.repo-sync \
         "<string>$HOME/.local/bin/repo-sync</string>" \
@@ -491,11 +562,11 @@ _fetch_skills_repos() {
     wait
 }
 
-# Move the CLAUDE_ONLY_AGENT_SKILLS out of ~/.agents/skills into ~/.claude/skills, replacing a
+# Move the CLAUDE_AGY_HOST_SKILLS out of ~/.agents/skills into ~/.claude/skills, replacing a
 # symlink an earlier run left there. An existing directory there is never overwritten.
-_claim_claude_only_skills() {
+_claim_host_skills() {
     local pattern src name dest
-    for pattern in "${CLAUDE_ONLY_AGENT_SKILLS[@]}"; do
+    for pattern in "${CLAUDE_AGY_HOST_SKILLS[@]}"; do
         for src in "$HOME"/.agents/skills/$pattern; do
             [[ -d "$src" && ! -L "$src" && -f "$src/SKILL.md" ]] || continue
             name="${src##*/}" dest="$HOME/.claude/skills/${src##*/}"
@@ -504,25 +575,28 @@ _claim_claude_only_skills() {
                 continue
             fi
             [[ -L "$dest" ]] && rm "$dest"
-            mv "$src" "$dest" && log "move ~/.agents/skills/$name → ~/.claude/skills/$name (claude-only)"
+            mv "$src" "$dest" && log "move ~/.agents/skills/$name → ~/.claude/skills/$name (Claude and agy)"
         done
     done
 }
 
 install_skills() {
     mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills"
-    _claim_claude_only_skills
+    _claim_host_skills
     # DeepSeek Harness is installed per host; its home exists once the app has run.
     local dsh_available=false
     _dsh_available && { dsh_available=true; mkdir -p "$DSH_SKILLS_DIR"; }
     $dsh_available || log "DeepSeek Harness home not found; skipping DeepSeek skills"
+    local agy_available=false
+    _agy_available && { agy_available=true; mkdir -p "$AGY_SKILLS_DIR"; }
+    $agy_available || log "Antigravity CLI home not found; skipping agy skills"
     local explicit_names=$'\n'
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name _ _ <<< "$entry"
         [[ "$name" != "*" ]] && explicit_names+="$name"$'\n'
     done
 
-    local claude_expected="" codex_expected="" dsh_expected=""
+    local claude_expected="" codex_expected="" dsh_expected="" agy_expected=""
     for entry in "${SKILLS[@]}"; do
         IFS='|' read -r name source agents <<< "$entry"
         local base_dir; base_dir=$(_resolve_source "$source")
@@ -560,13 +634,27 @@ install_skills() {
             [[ "$agents" == *claude* ]] && { ensure_symlink "$spath" "$HOME/.claude/skills/$sname"; claude_expected+="$sname"$'\n'; }
             [[ "$agents" == *codex* ]]  && { ensure_symlink "$spath" "$HOME/.codex/skills/$sname";  codex_expected+="$sname"$'\n'; }
             [[ "$agents" == *deepseek* ]] && $dsh_available && { ensure_symlink "$spath" "$DSH_SKILLS_DIR/$sname"; dsh_expected+="$sname"$'\n'; }
+            [[ "$agents" == *agy* ]] && $agy_available && { ensure_symlink "$spath" "$AGY_SKILLS_DIR/$sname"; agy_expected+="$sname"$'\n'; }
         done
     done
+
+    # The host-local skills _claim_host_skills keeps in ~/.claude/skills, linked for agy too.
+    if $agy_available; then
+        local pattern src
+        for pattern in "${CLAUDE_AGY_HOST_SKILLS[@]}"; do
+            for src in "$HOME"/.claude/skills/$pattern; do
+                [[ -d "$src" && ! -L "$src" && -f "$src/SKILL.md" ]] || continue
+                skipped "${src##*/}" ${SKIP_SKILLS[@]+"${SKIP_SKILLS[@]}"} && continue
+                ensure_symlink "$src" "$AGY_SKILLS_DIR/${src##*/}"; agy_expected+="${src##*/}"$'\n'
+            done
+        done
+    fi
 
     # Clean stale skill symlinks
     local dir expected
     local -a skill_dirs=("$HOME/.claude/skills" "$HOME/.codex/skills")
     $dsh_available && skill_dirs+=("$DSH_SKILLS_DIR")
+    $agy_available && skill_dirs+=("$AGY_SKILLS_DIR")
     for dir in "${skill_dirs[@]}"; do
         [[ -d "$dir" ]] || continue
         # Exact-path match (not substring) so a $HOME containing an agent
@@ -575,6 +663,7 @@ install_skills() {
             "$HOME/.claude/skills")   expected="$claude_expected" ;;
             "$HOME/.codex/skills")    expected="$codex_expected"  ;;
             "$DSH_SKILLS_DIR")        expected="$dsh_expected"    ;;
+            "$AGY_SKILLS_DIR")        expected="$agy_expected"    ;;
         esac
         for entry in "$dir"/*; do
             [[ -L "$entry" ]] || continue
@@ -740,37 +829,47 @@ install_vscode_theme() {
 }
 
 install_mcp_servers() {
-    local has_claude=false has_codex=false
+    local has_claude=false has_codex=false has_agy=false
     command -v claude &>/dev/null && has_claude=true
     command -v codex &>/dev/null && has_codex=true
-    $has_claude || $has_codex || { warn "neither claude nor codex CLI found"; return; }
+    command -v agy &>/dev/null && _agy_available && has_agy=true
+    $has_claude || $has_codex || $has_agy || { warn "no claude, codex or agy CLI found"; return; }
 
     # Skip expensive CLI calls when MCP_SERVERS config hasn't changed
     local stamp_file="$CACHE_DIR/dotfiles-mcp-stamp"
-    local fingerprint; fingerprint=$(printf '%s\n' "${MCP_SERVERS[@]}" | md5 2>/dev/null \
-        || printf '%s\n' "${MCP_SERVERS[@]}" | md5sum 2>/dev/null | cut -d' ' -f1)
+    # The CLI set is part of the fingerprint, so a host that gains one (agy) registers its servers.
+    local fingerprint; fingerprint=$(printf '%s\n' "${MCP_SERVERS[@]}" "$has_claude$has_codex$has_agy" | md5 2>/dev/null \
+        || printf '%s\n' "${MCP_SERVERS[@]}" "$has_claude$has_codex$has_agy" | md5sum 2>/dev/null | cut -d' ' -f1)
     stamp_fresh "$stamp_file" "$fingerprint" && return
 
-    local claude_mcp_list=""
+    local claude_mcp_list="" agy_mcp_names=""
     $has_claude && { claude_mcp_list="$(claude mcp list 2>/dev/null)" || true; }
+    # `agy mcp list` prints a table; the config file is the exact source of names.
+    $has_agy && agy_mcp_names="$(jq -r '.mcpServers // {} | keys[]' "$HOME/.gemini/config/mcp_config.json" 2>/dev/null)" || true
 
-    local entry name cmd args agents
+    # A failed registration leaves the stamp unwritten, so the next run tries it again.
+    local entry name cmd args agents failed=false
     for entry in "${MCP_SERVERS[@]}"; do
         IFS='|' read -r name cmd args agents <<< "$entry"
         [[ -z "$agents" ]] && agents="claude,codex"
         if $has_claude && [[ ",$agents," == *,claude,* ]] \
             && ! printf '%s\n' "$claude_mcp_list" | grep -q "^$name:"; then
             claude mcp add --scope user "$name" -- $cmd $args 2>/dev/null \
-                && log "add claude/$name" || warn "fail claude/$name"
+                && log "add claude/$name" || { warn "fail claude/$name"; failed=true; }
         fi
         if $has_codex && [[ ",$agents," == *,codex,* ]] && [[ "$name" != "codex" ]] \
             && ! codex mcp get "$name" &>/dev/null; then
             codex mcp add "$name" -- $cmd $args 2>/dev/null \
-                && log "add codex/$name" || warn "fail codex/$name"
+                && log "add codex/$name" || { warn "fail codex/$name"; failed=true; }
+        fi
+        if $has_agy && [[ ",$agents," == *,agy,* ]] \
+            && ! printf '%s\n' "$agy_mcp_names" | grep -qx "$name"; then
+            agy mcp add "$name" -- $cmd $args >/dev/null 2>&1 \
+                && log "add agy/$name" || { warn "fail agy/$name"; failed=true; }
         fi
     done
 
-    stamp_write "$stamp_file" "$fingerprint"
+    $failed || stamp_write "$stamp_file" "$fingerprint"
 }
 
 install_plugins() {
@@ -813,7 +912,7 @@ install_plugins() {
 
 # ── Skill portability lint ───────────────────────────────────────
 # Warn (non-fatal) when a universal (non-claude-only) OWN skill BODY embeds
-# harness-specific syntax that silently breaks on Codex. Frontmatter is
+# harness-specific syntax that silently breaks on Codex or agy. Frontmatter is
 # exempt (allowed-tools etc. are additive and ignored off-Claude). Conservative
 # by design — flags only the two unambiguous hazards; tool-name degradation
 # (AskUserQuestion/Skill) needs human review. See
@@ -830,7 +929,7 @@ lint_skills() {
         [[ -f "$d/SKILL.md" ]] || continue
         [[ "$claude_only" == *$'\n'"$dname"$'\n'* ]] && continue
         m=$(awk 'NR==1&&/^---$/{f=1;next} f&&/^---$/{f=0;next} !f{print FNR": "$0}' "$d/SKILL.md" \
-            | grep -E '\$ARGUMENTS|(~|\$HOME|\$\{HOME\})/\.(claude|codex)/skills/' || true)
+            | grep -E '\$ARGUMENTS|(~|\$HOME|\$\{HOME\})/\.(claude|codex|gemini(/config|/antigravity-cli)?)/skills/' || true)
         [[ -n "$m" ]] || continue
         warn "non-portable syntax in universal skill '$dname' (body):"
         printf '%s\n' "$m" | sed 's/^/        /'
@@ -884,7 +983,7 @@ main() {
 
     # Foreground: local-only sections
     section "Theme"; setup_theme_state
-    section "Links";  install_links; install_launch_agents; install_cron; install_vscode_theme; install_peer_channel
+    section "Links";  install_links; install_agy_settings; install_launch_agents; install_cron; install_vscode_theme; install_peer_channel
 
     # Must start after Links: TPM reads ~/.config/tmux/tmux.conf (the symlink
     # install_links creates), not the repo copy. Launched here rather than with

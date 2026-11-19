@@ -442,7 +442,7 @@ scout-papers-scholar-inbox-all() {
 }
 
 # Use the shared server; reasoning effort comes from config.toml or /model.
-CODEX_MODEL=gpt-6.1-sol
+CODEX_MODEL=gpt-6.2-sol
 x(){ command codex --yolo -m "$CODEX_MODEL" "$@"; }
 xa(){ command codex-ark --yolo "$@"; }
 xac(){ xa resume --last "$@"; }
@@ -457,6 +457,24 @@ xtu(){ xu "$@"; }
 xc(){ command codex resume --last --yolo -m "$CODEX_MODEL" "$@"; }
 xr(){ command codex resume --yolo -m "$CODEX_MODEL" "$@"; }
 xu(){ command "$HOME/.local/bin/codex" update "$@"; }
+
+# Antigravity CLI (agy). Google's API rejects requests from this region ("User
+# location is not supported"), so route agy through the local proxy (the
+# `proxy` alias's port) whenever it is listening; elsewhere it connects directly.
+_agy(){
+    if nc -z -w 1 127.0.0.1 7897 2>/dev/null; then
+        local p=http://127.0.0.1:7897 s=socks5://127.0.0.1:7897 n=localhost,127.0.0.1,::1
+        https_proxy=$p http_proxy=$p all_proxy=$s no_proxy=$n \
+            HTTPS_PROXY=$p HTTP_PROXY=$p ALL_PROXY=$s NO_PROXY=$n command agy "$@"
+    else
+        command agy "$@"
+    fi
+}
+g(){ _agy --dangerously-skip-permissions "$@"; }
+gc(){ g --continue "$@"; }
+# agy has no resume picker flag: pass a conversation ID, or run /resume inside g.
+gr(){ (( $# )) || { echo "usage: gr <conversation-id> [agy flags]" >&2; return 2; }; g --conversation "$@"; }
+gu(){ _agy update "$@"; }
 
 # Show Claude + Codex account emails on local, macmini, and l40s.
 ae() {

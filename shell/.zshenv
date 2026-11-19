@@ -18,6 +18,8 @@ export COLORTERM=truecolor
 # Claude Code clamps to 256 colors under $TMUX unless this is set; tmux here
 # forwards RGB (terminal-features), so keep truecolor (e.g. the clawd orange).
 export CLAUDE_CODE_TMUX_TRUECOLOR=1
+# Antigravity CLI (agy): keep the account email and plan tier out of its header.
+export AGY_CLI_HIDE_ACCOUNT_INFO=1
 
 # Starship prompt config
 # Host-local generated Starship config (active palette applied by `theme`;
@@ -29,9 +31,18 @@ export STARSHIP_CONFIG="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-theme/sta
 # =============================================================================
 # PATH
 # =============================================================================
-export PATH="$HOME/.claude/skills/gpt-pro/scripts:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/.local/bin:$PATH"
+export PATH="$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/.local/bin:$PATH"
 if (( IS_MACOS )); then
-    eval "$(/opt/homebrew/bin/brew shellenv zsh)"  # explicit shell skips brew's slow `ps` parent-shell probe
+    # Verbatim output of `brew shellenv zsh`, inlined: spawning brew costs ~20 ms on
+    # every zsh, scripts included. Re-copy it if Homebrew changes its layout.
+    export HOMEBREW_PREFIX="/opt/homebrew";
+    export HOMEBREW_CELLAR="/opt/homebrew/Cellar";
+    export HOMEBREW_REPOSITORY="/opt/homebrew";
+    fpath[1,0]="/opt/homebrew/share/zsh/site-functions";
+    export FPATH;
+    export PATH="/opt/homebrew/bin:/opt/homebrew/sbin${PATH+:$PATH}";
+    [ -z "${MANPATH-}" ] || { export MANPATH="${MANPATH%"${MANPATH##*[!:]}"}"; export MANPATH=":${MANPATH#"${MANPATH%%[!:]*}"}"; };
+    export INFOPATH="/opt/homebrew/share/info:${INFOPATH:-}";
     export PATH="/opt/homebrew/opt/curl/bin:$PATH"
     export PATH="/Applications/Visual Studio Code.app/Contents/Resources/app/bin:$PATH"
     export PATH="/Library/TeX/texbin:$PATH"

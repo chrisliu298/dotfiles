@@ -2,25 +2,25 @@
 
 Personal dotfiles and AI agent configurations for macOS with zsh, managed by `dotfiles.sh` (the single entrypoint: initializes submodules, symlinks configs into `~`, installs skills, and registers MCP servers + Claude plugins + tmux plugins).
 
-> **Project-level doc, shared by Codex and Claude Code** (v2.1.277+ reads `AGENTS.md` when no `CLAUDE.md` exists). Global instructions live in `agents/AGENTS.md`. Don't add a root `CLAUDE.md` or `CLAUDE.local.md` — either makes Claude Code skip this file.
+> **Project-level doc, shared by Codex, Claude Code and Antigravity (agy)** (Claude Code v2.1.277+ reads `AGENTS.md` when no `CLAUDE.md` exists). Global instructions live in `agents/AGENTS.md`. Don't add a root `CLAUDE.md` or `CLAUDE.local.md` — either makes Claude Code skip this file.
 
 ## Project Structure & Module Organization
 
-Two `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`settings.json` — merged into the live file, not symlinked — keybindings, statusline, themes) and `codex/` → `~/.codex/` (themes and host-local Computer Use routing through Codex's config writer). The rest are not agent homes:
+Three `agents/<name>/` directories target one agent's home each: `claude/` → `~/.claude/` (`settings.json` — merged into the live file, not symlinked — keybindings, statusline, themes), `codex/` → `~/.codex/` (themes and host-local Computer Use routing through Codex's config writer), and `agy/` → `~/.gemini/` (`settings.json` merged into the live `antigravity-cli/settings.json` the same way, the status line script, and `hooks.json` for agent-ask, linked as `config/hooks.json`; only on hosts where agy has run). The rest are not agent homes:
 
-- `agents/AGENTS.md` — the single global instruction file, symlinked as both `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`.
+- `agents/AGENTS.md` — the single global instruction file, symlinked as `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, and `~/.gemini/AGENTS.md` (agy's global rules file; 24 KB per-file limit).
 - `agents/eval/` — instruction-following harness for the shared agent doc (prompts, rubric, runner scripts).
-- `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` installs each into the agents the `SKILLS` table selects (most to Claude, Codex, and DeepSeek Harness; some are Claude- or Codex-only) as live symlinks. The one exception is `agent-audit`, a project skill in `.claude/skills/` that loads only in this repo.
+- `agents/skills/` — the single source of truth for repo-owned skills; `dotfiles.sh` installs each into the agents the `SKILLS` table selects (most to Claude, Codex, DeepSeek Harness, and agy's `~/.gemini/config/skills/`; some are Claude- or Codex-only) as live symlinks. The one exception is `agent-audit`, a project skill in `.claude/skills/` that loads only in this repo.
 
 Elsewhere:
 
 - `.config/ghostty`: Ghostty/cmux terminal config — tracked in-repo (not fetched from the standalone `chrisliu298/ghostty-config` repo), symlinked like the rest of `.config/`.
-- The global instruction file `agents/AGENTS.md` is one agent-read text shared by Claude Code and Codex through symlinks, so there is no copy to sync. Behavior parity across models when the text changes is checked by the harness in `agents/eval/`.
+- The global instruction file `agents/AGENTS.md` is one agent-read text shared by Claude Code, Codex, and agy through symlinks, so there is no copy to sync. Behavior parity across models when the text changes is checked by the harness in `agents/eval/`.
 
 ## Build, Test, and Development Commands
 
 - `./dotfiles.sh` — initialize submodules, sync skill repos, symlink files, install skills, and register MCP servers + Claude plugins + tmux plugins (TPM).
-- `./dotfiles.sh lint` — run skill portability checks (universal C/X skill mechanical violations); also runs automatically at the end of a full `./dotfiles.sh`.
+- `./dotfiles.sh lint` — run skill portability checks (universal C/X/D/A skill mechanical violations); also runs automatically at the end of a full `./dotfiles.sh`.
 
 ## Conventions
 
@@ -29,7 +29,7 @@ Elsewhere:
 
 ## Skills, MCP Servers & Plugins
 
-Never edit repo-owned skills through `~/.claude/skills/`, `~/.codex/skills/`, or `~/.dsh/skills/` — those entries are symlinks. Check `agents/skills/README.md` for source. Host-local skills such as `weekly-report` are real directories there and are edited in place.
+Never edit repo-owned skills through `~/.claude/skills/`, `~/.codex/skills/`, `~/.dsh/skills/`, or `~/.gemini/config/skills/` — those entries are symlinks. Check `agents/skills/README.md` for source. Host-local skills such as `weekly-report` are real directories there and are edited in place.
 
 Run `./dotfiles.sh` after changes to installation logic, skill wiring, or managed configuration. Instruction-only edits use the existing symlinks; run `./dotfiles.sh lint` and verify the affected links resolve instead.
 
@@ -48,7 +48,7 @@ Run `./dotfiles.sh` after changes to installation logic, skill wiring, or manage
 
 ## Maintaining Docs
 
-- **Global instructions**: edit `agents/AGENTS.md` only; it reaches both agents through symlinks — see `agents/eval/` for the parity check.
+- **Global instructions**: edit `agents/AGENTS.md` only; it reaches every agent through symlinks — see `agents/eval/` for the parity check.
 - **Update docs**: after structural changes (adding, removing, or renaming files/directories, skills, or configs), check whether `README.md` or `AGENTS.md` reference the affected paths and update them.
 
 ## Not Backed Up

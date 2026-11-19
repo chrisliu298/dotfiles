@@ -21,7 +21,8 @@ dotfiles/
 ├── .config/                 # App configs (Neovim, tmux, btop)
 ├── vscode/openai-theme/     # VS Code OpenAI Light/Dark theme, installed as an extension
 └── agents/                  # AI agent configurations
-    ├── AGENTS.md            # Global instructions, linked as ~/.claude/CLAUDE.md and ~/.codex/AGENTS.md
+    ├── AGENTS.md            # Global instructions, linked as ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md and ~/.gemini/AGENTS.md
+    ├── agy/                 # Antigravity CLI (agy) settings, status line, and agent-ask hooks
     ├── claude/              # Claude Code config (settings, keybindings, statusline, themes)
     ├── codex/               # Codex themes and shared Computer Use configuration
     └── skills/              # Repo-owned skill sources + authoring references

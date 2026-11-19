@@ -1,0 +1,16 @@
+{
+  "agent-ask": {
+    "SessionStart": [
+      { "type": "command", "command": "python3 ~/.local/bin/agent-ask agy-session", "timeout": 10 }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "ask_question",
+        "hooks": [{ "type": "command", "command": "python3 ~/.local/bin/agent-ask agy-ask", "timeout": 30 }]
+      }
+    ],
+    "Stop": [
+      { "type": "command", "command": "python3 ~/.local/bin/agent-ask agy-reply", "timeout": 60 }
+    ]
+  }
+}

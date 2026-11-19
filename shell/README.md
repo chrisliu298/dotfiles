@@ -11,7 +11,7 @@ Zsh with Zinit plugin manager and Starship prompt.
 | `.aliases` | Command shortcuts |
 | `.functions` | Shell utility functions |
 | `remap-keys` | macOS: right Option → right Control via `hidutil`, merged with existing mappings (e.g. Raycast Hyper Key); re-applied at login by the `local.remap-keys` LaunchAgent that `dotfiles.sh` writes. `remap-keys --reset` removes it |
-| `tmux-persist` | macOS: recreate the `*-r2v`, `adapt-clf` and `thesis` tmux sessions after a reboot, each resuming its Claude Code conversation in its cwd. `local.tmux-persist-save` snapshots them every 5 min (a session closed on purpose drops out), `local.tmux-persist-restore` restores at login; `tmux-persist` alone shows the snapshot. `tmux-persist restart [--effort <level>] <session>...` restarts the Claude in running sessions (e.g. after an update; `--all` in place of the names restarts every session running one) in place and in parallel, resuming the same conversations with a first message saying the session was restarted, so the agent checks background tasks, Monitors, cron jobs and loops before restoring only missing work (CronList first for timers, preserving their frequency; unfinished subagents are continued via `SendMessage`, not respawned); each keeps the `--effort` its Claude was launched with (also saved in the snapshot for restore), unless `--effort` sets a new one; restart and restore likewise keep the channel launch flags (`--mcp-config`, `--dangerously-load-development-channels`, `--channels`) a session was started with, so a Claude that receives a bot's messages through a channel keeps receiving them (the development-channel warning at launch, confirmed by hand on the session's first launch, is then accepted automatically: Enter only while that dialog is the bottom of the screen, up to 3 presses, giving up after 60 s on restart and 5 min on restore with a line in `~/.local/state/tmux-persist/dialog.log`), and the restart message goes right after the id so a multi-value flag cannot swallow it; `tmux-persist stale` lists the sessions whose Claude predates the installed version (the ones showing "Restart to update"), so `tpr $(tps)` restarts them all. Both resume on Opus 5.5, since `claude --resume` alone takes the model of the transcript's last reply. Test: `shell/test-tmux-persist.sh` |
+| `tmux-persist` | macOS: recreate the `*-r2v`, `adapt-clf` and `thesis` tmux sessions after a reboot, each resuming its Claude Code or agy conversation in its cwd. An agy session is found by the `~/.gemini/antigravity-cli/presence/<conversation>.lock` its process holds open and resumed with `g --conversation <id>` (the alias adds the proxy), on the `--model`/`--effort` that `agent-models.conf` sets (a base id such as `gemini-4-neon`), else the ones it was launched with, else agy's default; agy has no KEEP flags and no version check, and always gets a restart message (passed with `-i`), since a restart loses its background tasks and schedules and leaves its subagents idle; a model in `agent-models.conf` for the other kind of agent (a Claude model for an agy session, or the reverse) is ignored and noted in `dialog.log`, the level still applies. `local.tmux-persist-save` snapshots them every 5 min (a session closed on purpose drops out), `local.tmux-persist-restore` restores at login; `tmux-persist` alone shows the snapshot. `tmux-persist restart [--effort <level>] <session>...` restarts the Claude in running sessions (e.g. after an update; `--all` in place of the names restarts every session running one) in place and in parallel, resuming the same conversations with a first message saying the session was restarted (only when the old Claude left work that Claude does not pick up by itself on `--resume`: a turn, background shell or permission prompt in progress, or a subagent active since its start without `"finished":true`; session crons and wakeups it re-arms itself, so one with none of those resumes silently), so the agent checks background tasks, Monitors, cron jobs and loops before restoring only missing work (CronList first for timers, preserving their frequency; unfinished subagents are continued via `SendMessage`, not respawned); each gets the model and effort `agents/claude/agent-models.conf` (linked to `~/.claude/agent-models.conf`, which `opus-repin.sh` also reads) sets for its session name, else the ones it runs now or was launched with (also saved in the snapshot for restore), and `--effort` overrides the level; restart and restore likewise keep the channel launch flags (`--mcp-config`, `--dangerously-load-development-channels`, `--channels`) a session was started with, so a Claude that receives a bot's messages through a channel keeps receiving them (the development-channel warning at launch, confirmed by hand on the session's first launch, is then accepted automatically: Enter only while that dialog is the bottom of the screen, up to 3 presses, giving up after 60 s on restart and 5 min on restore with a line in `~/.local/state/tmux-persist/dialog.log`), and the restart message goes right after the id so a multi-value flag cannot swallow it; `tmux-persist stale` lists the sessions whose Claude predates the installed version (the ones showing "Restart to update"), so `tpr $(tps)` restarts them all. A session neither configured nor recorded resumes on Opus 5.5, since `claude --resume` alone takes the model of the transcript's last reply. Test: `shell/test-tmux-persist.sh` |
 | `repo-sync` | macOS: fast-forward the repos a host's `~/.config/dotfiles/host.conf` lists in `SYNC_REPOS` to their upstream, every 5 minutes through the `local.repo-sync` login agent (installed only when `SYNC_REPOS` is set), and rerun `./dotfiles.sh` when dotfiles itself moves. Repos with uncommitted tracked changes or diverged history are skipped and logged to `~/.local/state/repo-sync.log`. Used on mbp14 so its bots read what K65 pushed. Test: `sh shell/test-repo-sync.sh` |
 | `reap_agent_team.sh` | macOS: run by cron every 15 minutes; archives and stops idle agent-team sessions and closes idle Codex executor lines. `dotfiles.sh` adds the cron entry once. |
 | `rc-title` | After a Claude Code account switch, set each Remote Control session's title to its local name. Claude Code marks a conversation reconnected under another account as cross-account, gives its new remote session a random title, and stops pushing `/rename`; `rc-title` puts the local title (custom title, else AI title) on the sessions the current account owns, and archives the stale remote sessions earlier reconnects left active (skipping any still connected). Takes no options; a second run reporting `renamed 0, archived 0` verifies it |
@@ -28,16 +28,16 @@ its own private runtimes, which are managed by the app rather than dotfiles.
 
 ### Ark models in the native Codex CLI
 
-`codex-ark` launches the native CLI on Ark's GPT-6-Astra (default) or
-GPT-6.1-Sol endpoint. Reasoning
+`codex-ark` launches the native CLI on Ark's GPT-6.2-Astra (default) or
+GPT-6.2-Sol endpoint. Reasoning
 effort comes from `~/.codex/config.toml`, a selected profile, or `/model`.
 It uses `ARK_API_KEY`, `ARK_OPERATOR_ID`, and `ARK_OPERATOR_EMAIL`
 from the shell environment; keep their exports in `~/.zshenv.local`, outside Git.
 It uses launch-only provider overrides and `--no-daemon`, leaving the ordinary
 `codex`/`x` subscription route and both agent skills unchanged. Sessions remain
 in `~/.codex`; native skills, AGENTS, MCP, hooks and compatible configuration
-are reused. The model picker labels the endpoints `GPT-6-Astra (Ark)` and
-`GPT-6.1-Sol (Ark)`; choose the `(Ark)` entries to use the configured endpoints.
+are reused. The model picker labels the endpoints `GPT-6.2-Astra (Ark)` and
+`GPT-6.2-Sol (Ark)`; choose the `(Ark)` entries to use the configured endpoints.
 
 ```sh
 codex-ark                                      # start in the current directory
@@ -47,15 +47,15 @@ ARK_SESSION_ID=training codex-ark               # fixed tracing label across res
 xa                                            # same as codex-ark --yolo, like x
 xac                                           # resume the last Ark session
 xar                                           # choose an Ark session
-ARK_MODEL=sol codex-ark                        # start GPT-6.1-Sol on Ark
+ARK_MODEL=sol codex-ark                        # start GPT-6.2-Sol on Ark
 xas                                           # Sol with --yolo, like xa
 xasc                                          # resume the last session on Ark Sol
 xasr                                          # choose a session to resume on Ark Sol
 ```
 
-`ARK_MODEL` accepts `astra` / `gpt-6-astra`, or `sol` / `gpt-6.1-sol` /
-`gpt-6-1-sol` / `azure-gpt-6-1-sol`, as well as either endpoint ID.
-Sol uses `ep-20261026202616-6c8l8`; Astra uses `ep-20261020213556-cxb6v`.
+`ARK_MODEL` accepts `astra` / `gpt-6.2-astra` / `gpt-6-2-astra`, or `sol` /
+`gpt-6.2-sol` / `gpt-6-2-sol`, as well as either endpoint ID.
+Sol uses `ep-20261118194013-p9556`; Astra uses `ep-20261118200450-z8fsl`.
 Codex ends a turn on Ark's `429` without retrying, so `codex-ark` routes requests
 through `codex-ark-relay`, a local relay that lives as long as that Codex process.
 A `429` arrives before any output, so the relay resends the same request after a
@@ -77,7 +77,7 @@ the user asks for Ark; `gpt` and ordinary cx lines stay on the subscription.
 
 ### Rex agent communication
 
-Claude-to-Claude peers use native `SendMessage`, even when both sessions run in tmux. Do not use `agent-msg`, `tmux send-keys`, or terminal input injection between Claude sessions. For Claude-to-Codex or Codex-to-Claude peers, use the global `agent-msg` CLI:
+Claude-to-Claude peers use native `SendMessage`, even when both sessions run in tmux. Do not use `agent-msg`, `tmux send-keys`, or terminal input injection between Claude sessions. Between Claude and Codex or agy, either way, use the global `agent-msg` CLI:
 
 ```sh
 agent-msg register training              # run inside that agent; uses its session env
@@ -96,6 +96,17 @@ so the agent inside, whatever it is, can ask its registered caller. It is recogn
 process, an ancestor of every command it runs. Nothing is typed into a send-only peer; answers go
 back through `agent-team send` or `cx send`.
 
+An agy session registers itself (`agent-msg register NAME` from its agent's own command): agy
+gives the local address and token of its `agy agentapi send-message`, which wakes even an idle
+session, only to the commands its agent runs, and `register` stores them with the record (`list`
+leaves them out). Re-register after `/clear` or a restart, which change the conversation or token.
+A Claude launched with the peer channel (`agents/claude/peer/server.mjs`, which tmux-persist adds)
+gets its messages pushed through the channel instead of typed: the server keeps
+`~/.local/state/agent-msg/channel/<Claude pid>/listener` with its own pid, and agent-msg drops the
+message there when that pid is a child of the recipient Claude (`submitted` with detail `channel`,
+as the server pushes it afterwards; a push that fails is retried every 5 s). A Claude without one
+still gets it typed.
+
 Human registration can specify `--kind claude|codex --session UUID --pane %N
 --pid PID --socket PATH`; `--replace` explicitly rebinds an existing name.
 Re-register after restarting or switching the registered conversation. Registration
@@ -105,9 +116,14 @@ to create a model session, change scope, submit jobs, or bypass existing approva
 
 Messages and delivery locks live in `~/.local/state/agent-msg/messages.sqlite3`
 (`AGENT_MSG_HOME` overrides this for isolated tests). No broker, model intermediary,
-queue transport, or transcript edits are involved. A short `[peer] agent-msg read ID`
-notification uses tmux Enter to steer. `submitted` means Enter was sent; only the
-receiver's `read`/`reply` confirms processing. Long bodies stay in the database.
+queue transport, or transcript edits are involved. A message pushed through a Claude's
+peer channel or agy's agentapi carries its body when it has at most 4000 characters
+(agy's is `read` once agentapi takes it, a channel drop stays `submitted`); a longer one, and any message typed into a pane with tmux
+Enter (Codex, a Claude without the channel), is a short `[peer] agent-msg read ID`
+pointer, `submitted` until the receiver's `read`/`reply` confirms processing. Bodies
+come from `--file FILE` or, without it, stdin; they stay in the database, which only the user
+can read (it holds agy tokens). Pushes type nothing, so copy mode or a draft in the recipient's
+pane does not defer them.
 `replied` means a reply is stored; inspect that reply's own delivery status too.
 
 User drafts, copy mode, dialogs, stale processes and unknown screen layouts defer
@@ -296,7 +312,7 @@ Verify: `node --test shell/rex-claude.test.cjs` and `shell/test-rex-tmux-exclusi
 
 ## Plugins (Zinit)
 
-`zsh-completions` and the `fzf` binary load before the first prompt; `zsh-autosuggestions`, `zsh-syntax-highlighting`, fzf key bindings and Oh My Zsh snippets (`sudo`, `command-not-found`) load in turbo mode right after it. Tab stays on `menu-complete`. `starship` and `zoxide` init scripts are cached in `~/.cache/zsh-init/`, keyed by binary mtime. Modern Unix tools (`fd`, `rg`, `zoxide`, `delta`) installed via Zinit from GitHub releases.
+`zsh-completions` and the `fzf` binary load before the first prompt; `zsh-autosuggestions`, `zsh-syntax-highlighting`, fzf key bindings and Oh My Zsh snippets (`sudo`, `command-not-found`) load in turbo mode right after it; `.zshrc` keeps stdin closed while a line is edited and rewrites the two plugins' `/dev/null` redirections and path-prefix glob, because endpoint security on the work Mac stalls those calls (see the comment there). Tab stays on `menu-complete`. `starship` and `zoxide` init scripts are cached in `~/.cache/zsh-init/`, keyed by binary mtime. Modern Unix tools (`fd`, `rg`, `zoxide`, `delta`) installed via Zinit from GitHub releases.
 
 ## Key Aliases & Functions
 
@@ -308,6 +324,7 @@ See `.aliases` and `.functions` for the full list. Highlights:
 - **Claude Code**: `c` (auto-accept), `cc` (continue), `cr` (resume), `csd` / `csall` (Claude Desktop account / switch CLI + Desktop together), `scout-papers-scholar-inbox-all` (sequentially scout five awesome lists with Opus at high effort, showing final messages only)
 - **DeepSeek** (Claude Code on DeepSeek's Anthropic endpoint; every tier on `deepseek-flash`, 1M context, needs `DEEPSEEK_API_KEY` in `~/.zshenv.local`): `ds` (start), `dsc` (continue), `dsr` (resume)
 - **Codex**: `x` / `xt` (official / TraeX), `xc` / `xtc` (resume --last), `xr` / `xtr` (resume picker or session ID), `xu` / `xtu` (update shared CLI), `cal`/`cas`/`caw`/`caa` (codex-auth list/status/switch/login)
+- **Antigravity (agy)**: `g` (start, permissions skipped), `gc` (continue), `gr <conversation-id>` (resume by ID; run `/resume` inside `g` for the picker), `gu` (update). All go through `_agy`, which routes agy through the local proxy on port 7897 when it is listening (Google's API rejects requests from mainland China). `AGY_CLI_HIDE_ACCOUNT_INFO=1` in `.zshenv` keeps the account email and plan out of agy's header
 - **Homebrew**: `bi`/`bu`/`bic` (install/uninstall/cask), `bupd`/`bupg` (update/upgrade)
 - **Functions**: `theme [light|dark|toggle|status]` (Ghostty + Starship + btop + tmux + Neovim + Codex TUI + Claude Code OpenAI/Anthropic themes + macOS; fastfetch follows ANSI), `rename_device`
 
@@ -329,7 +346,7 @@ after updating to discard old function definitions. The headless shortcuts
 `chl` and `xhl` were also removed; invoke `claude -p` or `codex exec` directly
 for non-interactive work.
 
-Continue/resume suffixes (`*c`/`*r`) are uniform across the Claude/Codex aliases.
+Continue/resume suffixes (`*c`/`*r`) are uniform across the Claude/Codex/agy aliases.
 
 ### Agent questions on Feishu
 
@@ -344,10 +361,39 @@ user's open_id, records the answer and answers the click with the redrawn card, 
 answered at once. It reads the app secret from the login keychain (service `agent-ask`);
 store it once with `agent-ask store-secret` after copying it from the open platform. The asyncRewake `hook-wait` started
 with the question wakes the session with the answers (exit 2); `hook-deliver` on PostToolUse and
-UserPromptSubmit hands them to a busy session at its next tool call. Delivery stamps the card;
+UserPromptSubmit hands them to a busy session at its next tool call; its command first checks
+`answered/` in sh, where each undelivered answer leaves an empty file, so tool calls start Python
+only while an answer waits. Delivery stamps the card;
 an answer nobody picked up within 5 minutes is flagged on the card. The newest open card lists
 the other open questions, so no separate summary message is sent. State, the lark-cli profile name, the
 chat and the user's open_id live in `~/.local/state/agent-ask/` (config.json, hub.log).
 `agent-ask list` shows open questions; agents withdraw a question with `agent-ask withdraw QID REASON`.
+
+The user can also type under a card, a 📣 notification or a reply the session posted, in its thread
+or quoting it. The hub takes `im.message.receive_v1` too, keeps only the user's messages in that
+private chat, files each one under `inbox/` by message id (Feishu redelivers an event it thinks failed,
+so the id dedupes), and leaves an `answered/msg-*` marker. A busy session gets it from `hook-deliver`
+at its next tool call; an idle one is woken by `hook-listen`, an asyncRewake Stop hook that waits
+in the background, one per session. Delivery puts a ✅ reaction on the user's message, and
+`hook-reply` posts the session's next reply in the same thread. Which session sent a notification or
+a posted reply is kept in `threads/`; cards are matched through their question records.
+
+To start a conversation, the user begins a private-chat message with a session's name ("training 看下…",
+"@Compare：…"; the name without "(R2V)", or its last word when unique), or writes in the session's own
+group. `agent-ask groups` creates one private group per running session (the user as owner, the bot as
+member) and records it under `groups` in config.json; there the session's reply is a plain reply, not a
+thread. Each message goes to the session running under that name now, so threads survive a restart; a
+message naming no session, or one that is not running, gets an answer from the hub instead of silence.
+Without the `im:message.group_msg` scope Feishu delivers only group messages that @ the bot.
+
+Antigravity (agy) sessions take part when agy runs in a tmux session whose name ends with `-r2v`
+(`foo-r2v` is "Foo (R2V)" on Feishu). `agents/agy/hooks.json` (linked as `~/.gemini/config/hooks.json`)
+runs `agy-session` on SessionStart, which files the conversation under `agy/` in the state dir and tells
+the agent to run `agent-ask agy-register` once; that command, run by the agent itself, adds the language
+server address and token agy hands only to the agent's own commands (its hooks get neither). `agy-ask`
+turns `ask_question` calls into the same cards and denies the dialog; `agy-reply` on Stop posts replies
+like `hook-reply`, reading agy's `transcript_full.jsonl`. agy has no background wake-up hook, so the hub
+pushes each answer and thread message into the conversation itself with `agy agentapi send-message`
+(undocumented in agy 1.5.12), which wakes an idle session too, and retries every minute when a push fails.
 
 Run the isolated checks with `uv run --no-project --with pytest pytest shell/tests/test_agent_ask.py`.
