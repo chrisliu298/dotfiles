@@ -4,7 +4,7 @@
 # provider, model and catalog exist only as command-line overrides of this launch.
 #
 #   codex-ark [codex options] [exec|resume ...]   # effort comes from config or /model
-#   ARK_MODEL=sol codex-ark [codex options]     # GPT-6.1-Sol on Ark
+#   ARK_MODEL=sol codex-ark [codex options]     # GPT-6.2-Sol on Ark
 #
 # Requires ARK_API_KEY, ARK_OPERATOR_ID and ARK_OPERATOR_EMAIL (~/.zshenv.local).
 # ARK_SESSION_ID is the caller's fixed `extra` session_id (one value per caller).
@@ -13,11 +13,11 @@ set -eu
 umask 077
 
 # Requests name the endpoint; aliases only choose one of these fixed Ark routes.
-astra_ep=ep-20261020213556-cxb6v
-sol_ep=ep-20261026202616-6c8l8
+astra_ep=ep-20261118200450-z8fsl
+sol_ep=ep-20261118194013-p9556
 case "${ARK_MODEL:-astra}" in
-  astra|gpt-6-astra|"$astra_ep") ep=$astra_ep ;;
-  sol|gpt-6.1-sol|gpt-6-1-sol|azure-gpt-6-1-sol|"$sol_ep") ep=$sol_ep ;;
+  astra|gpt-6.2-astra|gpt-6-2-astra|"$astra_ep") ep=$astra_ep ;;
+  sol|gpt-6.2-sol|gpt-6-2-sol|"$sol_ep") ep=$sol_ep ;;
   *) echo 'codex-ark: ARK_MODEL must select astra or sol' >&2; exit 2 ;;
 esac
 base_url=https://ark-cn-beijing.bytedance.net/api/v3
@@ -71,7 +71,7 @@ mkdir -p "${catalog%/*}"
   process.stdin.on("data", chunk => { input += chunk; });
   process.stdin.on("end", () => {
     const catalog = JSON.parse(input);
-    for (const [ep, base] of [[astraEp, "gpt-6-astra"], [solEp, "gpt-6.1-sol"]]) {
+    for (const [ep, base] of [[astraEp, "gpt-6.2-astra"], [solEp, "gpt-6.2-sol"]]) {
       const model = catalog.models.find(m => m.slug === base);
       if (!model) { console.error(`codex-ark: ${base} is not in this Codex catalog`); process.exit(1); }
       catalog.models = catalog.models.filter(m => m.slug !== ep);
@@ -87,6 +87,8 @@ mkdir -p "${catalog%/*}"
 export NO_PROXY="${NO_PROXY:+$NO_PROXY,}127.0.0.1,ark-cn-beijing.bytedance.net"
 export no_proxy="${no_proxy:+$no_proxy,}127.0.0.1,ark-cn-beijing.bytedance.net"
 
+# Ark serves Responses compaction_trigger (verified 2026-11-17 on both endpoints; the
+# standalone /responses/compact returns 404), so use Codex's remote compaction, not local.
 # Codex ends a turn on Ark's 429 without retrying; codex-ark-relay resends those requests
 # after a backoff. It runs beside Codex, which takes over this process ($$) through exec.
 relay=$(dirname -- "$(readlink -f -- "$0")")/codex-ark-relay
@@ -104,6 +106,7 @@ exec "$codex_bin" --no-daemon \
   -c 'model_providers.ark.env_key="ARK_API_KEY"' \
   -c 'model_providers.ark.wire_api="responses"' \
   -c 'model_providers.ark.requires_openai_auth=false' \
+  -c 'model_providers.ark.capabilities.remote_compaction="v2"' \
   -c 'model_providers.ark.env_http_headers={"x-modelhub-operator-id"="ARK_OPERATOR_ID","x-modelhub-operator-email"="ARK_OPERATOR_EMAIL"}' \
   -c "model_providers.ark.http_headers={\"extra\"='{\"session_id\":\"$session_id\"}'}" \
   -c "model_catalog_json=\"$catalog\"" \

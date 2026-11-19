@@ -2,7 +2,7 @@
 name: codex-exec
 description: |
   Hand settled, checkable implementation (multi-file changes, test iterations, scripted runs) to
-  a Codex executor line on explicit request, or difficult Ark tasks from the user's resident *-r2v Claude sessions, then verify it.
+  a Codex executor line on explicit request, or difficult Ark tasks from the user's resident *-r2v Claude or agy sessions, then verify it.
   Handle line management and executor replies for already authorized work.
   Default delegation uses the host's native subagent, not this skill. Not for review (agent-team).
 ---
@@ -19,19 +19,20 @@ make the design decisions yourself; after it returns, verify as if you had not s
 Claude instances inside agent-team, native subagents or executor lines must not invoke
 this skill; they cannot inherit the parent session's authorization. For top-level sessions,
 follow the global AGENTS authorization boundary: explicit user request, except
-only the user-facing, resident `*-r2v` Claude Code sessions may proactively delegate
+only the user-facing, resident `*-r2v` Claude Code or agy sessions may proactively delegate
 difficult tasks to Ark (`cx start --ark`). It excludes agent-team Claude instances,
 native subagents, executor lines, all other sessions/hosts, and the subscription.
 A settled plan, a multi-file change, or a request for parallel work alone is not authorization. A request for 方舟/Ark/Astra GPT to do the work is a Codex
 request for an Ark line (`cx start --ark`, see Lines and effort); plain GPT or Codex is
-the subscription. The user's fixed form `/codex-exec [gpt|ark|ark-sol]` followed by the task
-authorizes Codex for that task and picks the line's model: `gpt` or no id is the subscription,
-`ark` is `--ark` (Astra), `ark-sol` is `ARK_MODEL=sol` with `--ark`. When delegation helps, use the host's native subagent by default,
+the subscription. The user's fixed form `/codex-exec [sol|astra]` followed by the task
+authorizes Codex for that task and picks the line's model, with the same ids as agent-team: `sol`
+or no id is the subscription's GPT-6.2-Sol, `astra` is `--ark` (Ark's GPT-6.2-Astra). The former ids
+`gpt`, `ark` and `ark-sol` are gone: name the new ids and ask which the user means. When delegation helps, use the host's native subagent by default,
 including for implementation. Existing authorized work may finish with necessary
 clarifications and rework; a peer reply or a resumed line does not authorize new scope.
 
 A Codex line is a separate thread/worktree, not a native subagent. A bare request
-for a subagent uses the native Agent tool. Only act on your own lines or ones the
+for a subagent uses the host's native subagent. Only act on your own lines or ones the
 user hands you. Merge requests, merges, training jobs, job priorities and messages
 to people remain with you, not the executor. The line's full access does not expand
 the assignment. Its ongoing executor contract is [executor.md](executor.md).

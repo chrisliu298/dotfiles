@@ -13,9 +13,9 @@ const fs = require('node:fs');
 const args = process.argv.slice(2);
 if (args[0] === 'debug') {
   if (JSON.stringify(args) !== JSON.stringify(['debug', 'models', '--bundled'])) process.exit(3);
-  console.log(JSON.stringify({models: [{slug: 'gpt-6-astra', display_name: 'Astra',
+  console.log(JSON.stringify({models: [{slug: 'gpt-6.2-astra', display_name: 'Astra',
     context_window: 272000, test_metadata: 'preserved'},
-    {slug: 'gpt-6.1-sol', display_name: 'Sol', context_window: 272000,
+    {slug: 'gpt-6.2-sol', display_name: 'Sol', context_window: 272000,
     test_metadata: 'sol-preserved'}]}));
 } else {
   const url = args.find(arg => arg.startsWith('model_providers.ark.base_url='));
@@ -42,14 +42,15 @@ assert(launch.args.includes('model_provider="ark"'));
 assert(launch.args.includes('model_providers.ark.env_key="ARK_API_KEY"'));
 assert(launch.args.some(arg => /^model_providers\.ark\.base_url="http:\/\/127\.0\.0\.1:\d+\/api\/v3"$/.test(arg)));
 assert(launch.args.includes('model_providers.ark.requires_openai_auth=false'));
+assert(launch.args.includes('model_providers.ark.capabilities.remote_compaction="v2"'));
 assert(!launch.args.some(arg => arg.startsWith('model_reasoning_effort=')));
 assert(launch.args.includes(`model_providers.ark.http_headers={"extra"='{"session_id":"route-test"}'}`));
-assert.deepEqual(launch.args.slice(-3), ['ep-20261020213556-cxb6v', 'exec', 'Reply OK']);
+assert.deepEqual(launch.args.slice(-3), ['ep-20261118200450-z8fsl', 'exec', 'Reply OK']);
 assert.equal(launch.NO_PROXY, 'existing.invalid,127.0.0.1,ark-cn-beijing.bytedance.net');
 assert.equal(launch.no_proxy, 'lower.invalid,127.0.0.1,ark-cn-beijing.bytedance.net');
 assert.equal(catalog.models.length, 4);
-assert.equal(catalog.models.find(m => m.slug === 'ep-20261020213556-cxb6v').test_metadata, 'preserved');
-assert.equal(catalog.models.find(m => m.slug === 'ep-20261026202616-6c8l8').test_metadata, 'sol-preserved');
+assert.equal(catalog.models.find(m => m.slug === 'ep-20261118200450-z8fsl').test_metadata, 'preserved');
+assert.equal(catalog.models.find(m => m.slug === 'ep-20261118194013-p9556').test_metadata, 'sol-preserved');
 JS
 # The relay ends with the Codex process that replaced codex-ark.
 pid=$(node -p 'JSON.parse(require("node:fs").readFileSync(process.argv[1])).pid' "$CAPTURE")
@@ -60,12 +61,12 @@ done
 if LC_ALL=C pgrep -f "codex-ark-relay $pid " >/dev/null; then
   echo 'relay outlived Codex' >&2; exit 1
 fi
-for model in sol gpt-6.1-sol gpt-6-1-sol azure-gpt-6-1-sol ep-20261026202616-6c8l8; do
+for model in sol gpt-6.2-sol gpt-6-2-sol ep-20261118194013-p9556; do
   ARK_MODEL="$model" "$root/codex-ark" resume --last
   node - "$CAPTURE" <<'JS'
 const assert = require('node:assert/strict');
 const launch = JSON.parse(require('node:fs').readFileSync(process.argv[2]));
-assert.deepEqual(launch.args.slice(-3), ['ep-20261026202616-6c8l8', 'resume', '--last']);
+assert.deepEqual(launch.args.slice(-3), ['ep-20261118194013-p9556', 'resume', '--last']);
 assert(!launch.args.some(arg => arg.startsWith('model_reasoning_effort=')));
 assert(launch.args.includes('model_provider="ark"'));
 JS
@@ -117,7 +118,7 @@ const launch = JSON.parse(require('node:fs').readFileSync(process.argv[2]));
 const suffix = { 'xas exec alias-check': ['--yolo', 'exec', 'alias-check'],
   xasc: ['--yolo', 'resume', '--last'],
   'xasr session-check': ['--yolo', 'resume', 'session-check'] }[process.argv[3]];
-assert.deepEqual(launch.args.slice(-(suffix.length + 1)), ['ep-20261026202616-6c8l8', ...suffix]);
+assert.deepEqual(launch.args.slice(-(suffix.length + 1)), ['ep-20261118194013-p9556', ...suffix]);
 JS
 done
 # Relay behavior against a local stand-in for Ark (Retry-After: 0 keeps the retries instant).
