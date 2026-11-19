@@ -20,18 +20,18 @@ From the authorized working directory:
 # helper is scripts/agent-team beside this SKILL.md.
 $helper backends
 session="$($helper start --effort medium --backend claude < /tmp/review.md)"
-# Same assignment for gpt, carbon and hydro, a distinct one for claude:
-$helper start --effort high --backend gpt --backend carbon --backend hydro \
+# Same assignment for astra, carbon and neon, a distinct one for claude:
+$helper start --effort high --backend astra --backend carbon --backend neon \
   --backend claude=/tmp/claude-review.md < /tmp/review.md
-# pro receives the file contents and ignores --effort; claude receives the path:
-$helper start --effort high --backend pro --backend claude --file src/main.py < /tmp/review.md
+# Each backend receives the absolute path to read:
+$helper start --effort high --backend astra --backend claude --file src/main.py < /tmp/review.md
 $helper wait "$session"
 $helper send "$session" < /tmp/supplement.md
 $helper wait "$session"
 $helper stop "$session"
 
 # A multi-backend start returns a JSON manifest of independent sessions.
-$helper start --effort high --backend claude --backend gpt --backend hydro < /tmp/review.md
+$helper start --effort high --backend claude --backend sol --backend neon < /tmp/review.md
 # Read session handles from the manifest; later actions infer each backend.
 $helper wait "$session1" "$session2" "$session3"
 $helper send "$session1" "$session2" "$session3" < /tmp/supplement.md
@@ -64,7 +64,7 @@ agreements, disagreements, and remaining gaps.
 ## Questions from backends
 
 When this session is registered with agent-msg (`agent-msg whoami` succeeds), `start` tells
-every persistent backend except `pro` how to ask it; otherwise questions come in replies. A
+every persistent backend how to ask it; otherwise questions come in replies. A
 question arrives as `[peer] agent-msg read ID`: run that command, and take the session from its
 `sender_name`. Decide what is yours to decide; relay to the user what is theirs. Answer with
 `$helper send SESSION < answer.md`, never `agent-msg reply` (backends are send-only peers), then

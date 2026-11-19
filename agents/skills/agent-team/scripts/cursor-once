@@ -3,7 +3,7 @@
 emulate -L zsh
 setopt pipe_fail
 
-# review-subagent supplies the backend (carbon or hydro) and its model at the chosen effort.
+# review-subagent supplies the backend (carbon or neon) and its model at the chosen effort.
 backend="${AGENT_TEAM_BACKEND:-}" model="${CURSOR_MODEL:-}"
 if [[ -z "$backend" || -z "$model" ]]; then
     print -u2 'cursor-once: AGENT_TEAM_BACKEND and CURSOR_MODEL must be set; run it through agent-team'

@@ -9,18 +9,12 @@ shift
 # into __run. Cursor's Gemini model ids carry the tier, so their model follows the effort.
 case "$harness" in
     claude) model=opus ;;
-    gpt) model=gpt-6.1-sol ;;
-    # Ark's endpoints through codex-ark, only when asked for; ARK_MODEL=sol picks Sol.
-    ark)
-        ark_model=${ARK_MODEL:-astra}
-        case "$ark_model" in
-            astra) model=gpt-6-astra ;;
-            sol) model=gpt-6.1-sol ;;
-            *) print -u2 'agent-team: ARK_MODEL must be astra or sol'; exit 2 ;;
-        esac ;;
+    sol) model=gpt-6.2-sol ;;
+    # Ark's endpoints through codex-ark, pinned to Astra.
+    astra) model=gpt-6.2-astra ;;
     # Both Gemini backends run through Cursor Agent.
     carbon) model_family=gemini-4-carbon ;;
-    hydro) model_family=gemini-4-hydrogen ;;
+    neon) model_family=gemini-4-neon ;;
     *) print -u2 'unknown review harness'; exit 2 ;;
 esac
 set_effort() {
@@ -38,11 +32,15 @@ helper=agent-team
 tmp="agent-team-${harness}"
 prefix="${harness}-review-"
 cursor=0
-[[ "$harness" == (carbon|hydro) ]] && cursor=1
-# Session and turn-directory names this backend answers to: sessions started before carbon
-# was renamed from cursor (and, earlier, from gemini) keep their old names.
-names="$harness"
-[[ "$harness" == carbon ]] && names='carbon|cursor|gemini'
+[[ "$harness" == (carbon|neon) ]] && cursor=1
+# Session and turn-directory names this backend answers to: sessions started before a rename
+# keep their old names (carbon was cursor and, earlier, gemini; sol was gpt; astra was ark).
+case "$harness" in
+    carbon) names='carbon|cursor|gemini' ;;
+    sol) names='sol|gpt' ;;
+    astra) names='astra|ark' ;;
+    *) names="$harness" ;;
+esac
 runner="${0:A}"
 codex_cli="$HOME/.local/bin/codex"
 ark_cli="$HOME/.local/bin/codex-ark"
@@ -65,8 +63,8 @@ check_harness_cli() {
         fi
         return 0
     fi
-    [[ "$harness" == (gpt|ark) ]] || return 0
-    if [[ "$harness" == ark && ! -x "$ark_cli" ]]; then
+    [[ "$harness" == (sol|astra) ]] || return 0
+    if [[ "$harness" == astra && ! -x "$ark_cli" ]]; then
         print -u2 "$helper: codex-ark missing; run ./dotfiles.sh"
         return 127
     fi
@@ -176,7 +174,7 @@ launch() {
         # Read-only scope is an assignment instruction, as for Claude and Cursor.
         local -a cli=("$codex_cli" --model "$model")
         # codex-ark fixes the provider and endpoint itself and rejects --model.
-        [[ "$harness" == ark ]] && cli=(env ARK_MODEL="$ark_model" ARK_SESSION_ID="${ARK_SESSION_ID:-agent-team-ark}" "$ark_cli")
+        [[ "$harness" == astra ]] && cli=(env ARK_MODEL=astra ARK_SESSION_ID="${ARK_SESSION_ID:-agent-team-astra}" "$ark_cli")
         local -a options=(--dangerously-bypass-approvals-and-sandbox
             -c "model_reasoning_effort=\"$effort\"" -c 'shell_environment_policy.inherit="all"')
         if [[ "$mode" == once ]]; then
@@ -392,9 +390,9 @@ case "$action" in
                 exit 1
             fi
             harness_env=(-e "CURSOR_AGENT_BIN=$cursor_cli")
-        elif [[ "$harness" == ark ]]; then
+        elif [[ "$harness" == astra ]]; then
             # The Ark session label follows the review session across turns.
-            harness_env=(-e "ARK_MODEL=$ark_model" -e "ARK_SESSION_ID=$session")
+            harness_env=(-e "ARK_SESSION_ID=$session")
         fi
         if ! pane="$(tmux new-session -d -x 160 -y 48 -P -F '#{pane_id}' -s "$session" -c "$PWD" \
             -e CODEX_REVIEW_SUBAGENT_ACTIVE=1 -e REVIEW_SUBAGENT_TMUX_RUNNER=1 \

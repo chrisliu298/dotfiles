@@ -123,12 +123,12 @@ while True:
         else: input_text += char
 '''
 
-CURSOR = ('carbon', 'hydro')
-MODELS = {'claude': 'opus', 'gpt': 'gpt-6.1-sol', 'carbon': 'gemini-4-carbon-high',
-          'hydro': 'gemini-4-hydrogen-high'}
+CURSOR = ('carbon', 'neon')
+MODELS = {'claude': 'opus', 'sol': 'gpt-6.2-sol', 'carbon': 'gemini-4-carbon-high',
+          'neon': 'gemini-4-neon-high'}
 
 
-@pytest.fixture(params=['claude', 'gpt', 'ark', *CURSOR])
+@pytest.fixture(params=['claude', 'sol', 'astra', *CURSOR])
 def harness(request, tmp_path):
     name = request.param
     env = {key: os.environ[key] for key in ('PATH', 'LANG') if key in os.environ}
@@ -269,8 +269,8 @@ for line in sys.stdin:
 
 def test_unified_parallel_backends(harness):
     name, run, _ = harness
-    backends = ('claude', 'gpt', 'carbon')
-    if name != 'gpt' or not shutil.which('tmux'):
+    backends = ('claude', 'sol', 'carbon')
+    if name != 'sol' or not shutil.which('tmux'):
         pytest.skip('Unified real session manager')
     result = run('start', '--effort', 'high', *(arg for backend in backends for arg in ('--backend', backend)), unified=True)
     assert result.returncode == 0, result.stderr
@@ -331,9 +331,9 @@ def test_unified_can_follow_up_and_stop_a_legacy_session(harness):
 @pytest.mark.parametrize('failure', ['input_unavailable', 'dead_pane'])
 def test_unified_failed_send_cannot_replay_previous_reply(harness, failure):
     name, run, tmp = harness
-    if name != 'gpt' or not shutil.which('tmux'):
+    if name != 'sol' or not shutil.which('tmux'):
         pytest.skip('Unified batch failure recovery')
-    started = run('start', '--effort', 'high', '--backend', 'claude', '--backend', 'gpt', unified=True)
+    started = run('start', '--effort', 'high', '--backend', 'claude', '--backend', 'sol', unified=True)
     sessions = [item['session'] for item in json.loads(started.stdout)['sessions']]
     def tmux(*args):
         return subprocess.run(['tmux', *args], env=run.env, capture_output=True, text=True, check=True).stdout.strip()
@@ -415,10 +415,10 @@ def test_once_pins_and_json(harness):
     assert json.loads(result.stdout) == {'result': 'review result', 'exit_code': 0, 'is_error': False}
     call = json.loads((tmp / 'call.json').read_text())
     args = call['args']
-    if name == 'ark':
-        # codex-ark pins the endpoint itself; Astra unless ARK_MODEL asks for Sol.
+    if name == 'astra':
+        # codex-ark pins the endpoint itself; the helper pins Astra.
         assert '--model' not in args
-        assert (call['ark_model'], call['ark_session']) == ('astra', 'agent-team-ark')
+        assert (call['ark_model'], call['ark_session']) == ('astra', 'agent-team-astra')
     else:
         assert args[args.index('--model') + 1] == MODELS[name]
         assert call['ark_model'] is None
@@ -426,7 +426,7 @@ def test_once_pins_and_json(harness):
     if name == 'claude':
         assert args[args.index('--effort') + 1] == 'high'
         assert call['launcher'] == 'c'
-    elif name in ('gpt', 'ark'):
+    elif name in ('sol', 'astra'):
         assert 'model_reasoning_effort="high"' in args
         assert '--dangerously-bypass-approvals-and-sandbox' in args
     else:
@@ -452,7 +452,7 @@ def test_chosen_effort_reaches_backend(harness, mode):
         args = json.loads((tmp / 'call.json').read_text())['args']
         if name == 'claude':
             assert args[args.index('--effort') + 1] == 'medium'
-        elif name in ('gpt', 'ark'):
+        elif name in ('sol', 'astra'):
             assert 'model_reasoning_effort="medium"' in args
         else:
             # Cursor carries the tier in the model id.
@@ -485,10 +485,10 @@ def test_cursor_launch_has_all_tool_permissions(harness, mode):
 
 
 @pytest.mark.parametrize('mode', ['--once', 'start'])
-def test_gpt_matches_unsandboxed_launcher(harness, mode):
+def test_sol_matches_unsandboxed_launcher(harness, mode):
     name, run, tmp = harness
-    if name != 'gpt':
-        pytest.skip('GPT-only sandbox selection')
+    if name != 'sol':
+        pytest.skip('Sol-only sandbox selection')
     if mode == 'start' and not shutil.which('tmux'):
         pytest.skip('tmux is required for session launch checks')
     result = run(mode)
@@ -498,7 +498,7 @@ def test_gpt_matches_unsandboxed_launcher(harness, mode):
         if session:
             wait_for(run, session, 'capture', 'MOCK_READY')
         args = json.loads((tmp / 'call.json').read_text())['args']
-        assert args[args.index('--model') + 1] == 'gpt-6.1-sol'
+        assert args[args.index('--model') + 1] == 'gpt-6.2-sol'
         assert 'model_reasoning_effort="high"' in args
         # Like the user's `x --yolo`: no approvals and no sandbox, so network is always available.
         assert '--dangerously-bypass-approvals-and-sandbox' in args and '--sandbox' not in args
@@ -507,26 +507,25 @@ def test_gpt_matches_unsandboxed_launcher(harness, mode):
             assert run('stop', session).returncode == 0
 
 
-def test_ark_model_selection(harness):
+def test_astra_pins_its_model(harness):
     name, run, tmp = harness
-    if name != 'ark':
-        pytest.skip('Ark-only model selection')
+    if name != 'astra':
+        pytest.skip('Astra-only model pinning')
+    # The caller's ARK_MODEL does not leak into the pinned Astra launch.
     result = run('--once', extra_env={'ARK_MODEL': 'sol'})
     assert result.returncode == 0, result.stderr
-    assert json.loads((tmp / 'call.json').read_text())['ark_model'] == 'sol'
+    assert json.loads((tmp / 'call.json').read_text())['ark_model'] == 'astra'
     (tmp / 'call.json').unlink()
-    result = run('--once', extra_env={'ARK_MODEL': 'other'})
-    assert result.returncode == 2 and 'astra or sol' in result.stderr
     (tmp / '.local' / 'bin' / 'codex-ark').unlink()
     result = run('--once')
     assert result.returncode == 127 and 'codex-ark missing' in result.stderr
     assert not (tmp / 'call.json').exists()
 
 
-def test_gpt_ignores_other_codex_on_path(harness):
+def test_sol_ignores_other_codex_on_path(harness):
     name, run, tmp = harness
-    if name != 'gpt':
-        pytest.skip('GPT-only CLI selection')
+    if name != 'sol':
+        pytest.skip('Sol-only CLI selection')
     (tmp / 'codex').unlink()
     (tmp / 'codex').write_text('#!/bin/sh\necho wrong-cli >&2\nexit 99\n')
     (tmp / 'codex').chmod(0o755)
@@ -536,10 +535,10 @@ def test_gpt_ignores_other_codex_on_path(harness):
 
 
 @pytest.mark.parametrize('mode', ['--once', 'start'])
-def test_gpt_rejects_old_cli_before_dispatch(harness, mode):
+def test_sol_rejects_old_cli_before_dispatch(harness, mode):
     name, run, tmp = harness
-    if name != 'gpt':
-        pytest.skip('GPT-only version requirement')
+    if name != 'sol':
+        pytest.skip('Sol-only version requirement')
     result = run(mode, extra_env={'MOCK_CODEX_VERSION': '0.157.1'})
     assert result.returncode == 2
     assert '0.159.2' in result.stderr
@@ -548,10 +547,10 @@ def test_gpt_rejects_old_cli_before_dispatch(harness, mode):
     assert not run('list').stdout.strip()
 
 
-def test_gpt_missing_canonical_cli_does_not_fall_back(harness):
+def test_sol_missing_canonical_cli_does_not_fall_back(harness):
     name, run, tmp = harness
-    if name != 'gpt':
-        pytest.skip('GPT-only CLI selection')
+    if name != 'sol':
+        pytest.skip('Sol-only CLI selection')
     (tmp / '.local' / 'bin' / 'codex').unlink()
     result = run('--once')
     assert result.returncode == 127
@@ -634,7 +633,7 @@ def test_default_tmux_lifecycle(harness):
     assert peers() == [session]
     wait_for(run, session, 'capture', 'MOCK_READY')
     r = run('wait', session)
-    expected = 'DRAFT:assignment\n\nANSWER:assignment' if name in ('gpt', 'ark') else 'ANSWER:assignment'
+    expected = 'DRAFT:assignment\n\nANSWER:assignment' if name in ('sol', 'astra') else 'ANSWER:assignment'
     assert (r.returncode, r.stdout.strip()) == (0, expected), r.stderr
     r = run('capture', session)  # Point callers polling the screen at `wait`.
     assert 'turn finished' in r.stderr and 'wait' in r.stderr, r.stderr
@@ -643,7 +642,7 @@ def test_default_tmux_lifecycle(harness):
     assert run('send', session, prompt='FOLLOWUP_123').returncode == 0
     r = run('wait', session)  # Blocks for the turn hook, even if it fired before wait started.
     assert (r.returncode, r.stdout.strip()) == (0, 'ANSWER:FOLLOWUP_123'), r.stderr
-    if name == 'ark':
+    if name == 'astra':
         # The Ark tracing label follows the review session.
         call = json.loads((tmp / 'call.json').read_text())
         assert (call['ark_model'], call['ark_session']) == ('astra', session)
@@ -808,21 +807,22 @@ def test_cursor_wait_steers_followup_queued_behind_a_steer(harness):
         assert run('stop', session).returncode == 0
 
 
-@pytest.mark.parametrize('legacy_name', ['cursor', 'gemini'])
-def test_carbon_manages_sessions_started_under_former_names(harness, legacy_name):
+@pytest.mark.parametrize('renamed, legacy_name', [('carbon', 'cursor'), ('carbon', 'gemini'), ('sol', 'gpt'), ('astra', 'ark')])
+def test_renamed_backend_manages_sessions_started_under_former_names(harness, renamed, legacy_name):
     name, run, _ = harness
-    if name != 'carbon' or not shutil.which('tmux'):
-        pytest.skip('Sessions started before carbon was renamed from cursor (earlier gemini)')
+    if name != renamed or not shutil.which('tmux'):
+        pytest.skip('Sessions started before a backend was renamed')
     session = run().stdout.strip()
-    legacy = legacy_name + session[len('carbon'):]
+    legacy = legacy_name + session[len(renamed):]
     turn_dir = Path(subprocess.run(['tmux', 'show-options', '-v', '-t', session, '@review_turn_dir'],
                                    env=run.env, capture_output=True, text=True, check=True).stdout.strip())
     subprocess.run(['tmux', 'rename-session', '-t', '=' + session, legacy], env=run.env, check=True)
     try:
         assert legacy in run('list', unified=True).stdout.split()
-        assert run('wait', legacy, unified=True).stdout.strip() == 'ANSWER:assignment'
+        expected = 'DRAFT:assignment\n\nANSWER:assignment' if renamed in ('sol', 'astra') else 'ANSWER:assignment'
+        assert run('wait', legacy, unified=True).stdout.strip() == expected
         # Its turn directory carries the old backend name too.
-        old_dir = turn_dir.with_name(turn_dir.name.replace('-carbon-', f'-{legacy_name}-'))
+        old_dir = turn_dir.with_name(turn_dir.name.replace(f'-{renamed}-', f'-{legacy_name}-'))
         turn_dir.rename(old_dir)
         subprocess.run(['tmux', 'set-option', '-t', legacy, '@review_turn_dir', str(old_dir)], env=run.env, check=True)
     finally:

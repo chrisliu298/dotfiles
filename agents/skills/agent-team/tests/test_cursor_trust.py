@@ -30,7 +30,7 @@ print(json.dumps({{'type': 'result', 'is_error': False, 'result': 'review comple
     return env, capture
 
 
-@pytest.mark.parametrize('name, model', [('carbon', 'gemini-4-carbon-high'), ('hydro', 'gemini-4-hydrogen-high')])
+@pytest.mark.parametrize('name, model', [('carbon', 'gemini-4-carbon-high'), ('neon', 'gemini-4-neon-high')])
 @pytest.mark.parametrize('options', [[], ['--output-format', 'json']])
 def test_one_shot_trusts_authorized_workspace(cursor_backend, options, name, model):
     env, capture = cursor_backend

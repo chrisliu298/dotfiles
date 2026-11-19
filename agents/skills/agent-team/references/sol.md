@@ -1,7 +1,7 @@
-# `gpt` backend
+# `sol` backend
 
 Uses the managed Codex CLI at `~/.local/bin/codex`, requiring version 0.159.2+.
-Model is pinned to `gpt-6.1-sol`, with the existing login; effort is the call's `--effort`
+Model is pinned to `gpt-6.2-sol`, with the existing login; effort is the call's `--effort`
 (`model_reasoning_effort`). Report
 a missing/old CLI; do not install or silently choose another model during review.
 
@@ -15,3 +15,4 @@ final answer in that turn, including the response after a mid-turn supplement.
 Native running-turn input is steered into the turn. The wrapper's `submitted`
 status confirms the input submission, not an independent consumption receipt.
 `interrupt` sends Escape; background work may survive. One-shot mode is ephemeral.
+Sessions started as `gpt-review-*` under the former backend name are `sol` sessions.

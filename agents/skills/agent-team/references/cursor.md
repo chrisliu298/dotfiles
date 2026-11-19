@@ -1,8 +1,8 @@
-# `carbon` and `hydro` backends
+# `carbon` and `neon` backends
 
 Both use Cursor Agent (`cursor-agent`) in native Agent mode with automatic `--trust`
 for the authorized working directory, and differ only in the model: `carbon`
-runs `gemini-4-carbon-<effort>`, `hydro` runs `gemini-4-hydrogen-<effort>`, where `<effort>`
+runs `gemini-4-carbon-<effort>`, `neon` runs `gemini-4-neon-<effort>`, where `<effort>`
 is the call's `--effort` (`medium` or `high`); Cursor carries the tier in the model id.
 Mode and model flags are not exposed. The calling agent can select either backend directly when the
 CLI is installed. Everything below applies to both. Sessions started as `cursor-review-*`

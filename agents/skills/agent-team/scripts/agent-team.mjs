@@ -6,12 +6,22 @@ import { fileURLToPath } from 'node:url';
 
 const skill = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const runner = resolve(skill, 'scripts/review-subagent');
-// Pro runs live in the gpt-pro relay rather than tmux, so a separate adapter drives them.
-const proSession = resolve(skill, 'scripts/pro-session.mjs');
-const names = ['claude', 'gpt', 'ark', 'carbon', 'hydro', 'pro'];
+const names = ['claude', 'sol', 'astra', 'carbon', 'neon'];
+// Former backend names: the new name for a renamed backend, or why it is gone.
+const former = {
+  cursor: 'was renamed to carbon (Gemini 4 Carbon through Cursor Agent); neon is Gemini 4 Neon',
+  gemini: 'was renamed to carbon (Gemini 4 Carbon through Cursor Agent); neon is Gemini 4 Neon',
+  gpt: 'was renamed to sol (GPT-6.2-Sol on the subscription)',
+  ark: 'was renamed to astra (GPT-6.2-Astra on Ark)',
+  'ark-sol': 'was removed; Sol runs only on the subscription as sol',
+  pro: 'was removed; ChatGPT Pro is not available to agents',
+  hydro: 'was replaced by neon (Gemini 4 Neon through Cursor Agent), which scores higher at the same speed',
+};
+// Sessions started under a former name keep its prefix and belong to the renamed backend.
+const legacySessions = { cursor: 'carbon', gemini: 'carbon', gpt: 'sol', ark: 'astra' };
 const efforts = ['medium', 'high'];
 // Both Gemini backends run through Cursor Agent.
-const cursor = ['carbon', 'hydro'];
+const cursor = ['carbon', 'neon'];
 const args = process.argv.slice(2);
 
 function usage(message) {
@@ -22,10 +32,9 @@ function usage(message) {
     '       agent-team wait SESSION [SESSION ...] [--timeout SECONDS]\n' +
     '       agent-team capture|status|interrupt|stop SESSION [SESSION ...]\n' +
     '       agent-team list | backends\n' +
-    '       NAME is claude, gpt, ark, carbon, hydro, or pro; each at most once per call. NAME=PROMPT gives that\n' +
-    '       backend its own prompt file instead of stdin. --file attaches a file to pro and lists its\n' +
-    '       path for the others. Models are fixed; --effort is required unless pro is the only backend,\n' +
-    '       which ignores it.\n');
+    '       NAME is claude, sol, astra, carbon, or neon; each at most once per call. NAME=PROMPT gives that\n' +
+    '       backend its own prompt file instead of stdin. --file lists a file\'s path for the backends to\n' +
+    '       read. Models are fixed; --effort is required.\n');
   process.exit(2);
 }
 
@@ -40,8 +49,8 @@ while (args.length) {
   const option = args.shift();
   if (option === '--backend' && ['start', '--once'].includes(action)) {
     const [backend, ...file] = (args.shift() || '').split('=');
-    if (['cursor', 'gemini'].includes(backend)) usage(`backend ${backend} was renamed to carbon (Gemini 4 Carbon through Cursor Agent); hydro is Gemini 4 Hydrogen`);
-    if (!names.includes(backend)) usage('backend must be claude, gpt, ark, carbon, hydro, or pro');
+    if (Object.hasOwn(former, backend)) usage(`backend ${backend} ${former[backend]}`);
+    if (!names.includes(backend)) usage('backend must be claude, sol, astra, carbon, or neon');
     if (selections.some(item => item.backend === backend)) usage(`each backend runs at most once per call: ${backend}`);
     const selection = { backend };
     if (file.length) {
@@ -69,16 +78,16 @@ while (args.length) {
     timeout = args.shift();
     if (!/^[1-9][0-9]*$/.test(timeout || '') || !Number.isSafeInteger(Number(timeout))) usage('timeout must be a positive integer');
   } else if (!option.startsWith('-') && ['send', 'wait', 'capture', 'status', 'interrupt', 'stop'].includes(action)) {
-    const match = /^(claude|gpt|ark|carbon|hydro|cursor|gemini|pro)-review-[a-zA-Z0-9-]+$/.exec(option);
-    if (!match) usage(`invalid review session: ${option}`);
+    const match = /^([a-z]+)-review-[a-zA-Z0-9-]+$/.exec(option);
+    const backend = match && (legacySessions[match[1]] || (names.includes(match[1]) ? match[1] : null));
+    if (!backend) usage(`invalid review session: ${option}`);
     if (sessions.some(item => item.session === option)) usage('the same session must not be targeted twice');
-    // Sessions started before carbon was renamed from cursor (earlier gemini) keep their old prefix.
-    sessions.push({ backend: ['cursor', 'gemini'].includes(match[1]) ? 'carbon' : match[1], session: option });
+    sessions.push({ backend, session: option });
   } else usage(`unsupported option or argument: ${option}`);
 }
 if (['start', '--once'].includes(action) && !selections.length) usage('specify at least one backend; there is no automatic fallback');
 // The caller picks the tier for each task; there is no default to fall back on.
-if (['start', '--once'].includes(action) && !effort && selections.some(item => item.backend !== 'pro')) usage('specify --effort medium or high');
+if (['start', '--once'].includes(action) && !effort) usage('specify --effort medium or high');
 if (['send', 'wait', 'capture', 'status', 'interrupt', 'stop'].includes(action) && !sessions.length) usage('specify a review session');
 if (!['start', '--once', 'send', 'wait', 'capture', 'status', 'interrupt', 'stop', 'list', 'backends'].includes(action)) usage('unknown action');
 
@@ -91,15 +100,10 @@ function command(name) {
   return (process.env.PATH || '').split(':').map(dir => join(dir || '.', name)).find(executable) || null;
 }
 function availability(backend) {
-  if (backend === 'pro') {
-    const named = process.env.GPT_PRO_BIN;
-    if (named ? !(named.includes('/') && executable(named)) : !command('gpt-pro') && !executable(resolve(skill, '../gpt-pro/scripts/gpt-pro'))) {
-      return 'gpt-pro is missing or not executable; install the gpt-pro skill';
-    }
-  } else if (cursor.includes(backend)) {
+  if (cursor.includes(backend)) {
     if (!command(process.env.CURSOR_AGENT_BIN || 'cursor-agent')) return 'cursor-agent is missing or not executable';
     if (!command('jq')) return `jq is required for ${backend}`;
-  } else if (backend === 'gpt' || backend === 'ark') {
+  } else if (backend === 'sol' || backend === 'astra') {
     const cli = join(homedir(), '.local/bin/codex');
     if (!executable(cli)) return 'managed Codex CLI is missing; run ./dotfiles.sh';
     const version = spawnSync(cli, ['--version'], { encoding: 'utf8', timeout: 5000 });
@@ -107,9 +111,8 @@ function availability(backend) {
     if (version.status !== 0 || !match) return 'could not verify the managed Codex CLI version';
     const [major, minor, patch] = match.slice(1).map(Number);
     if (major === 0 && (minor < 159 || minor === 159 && patch < 2)) return 'Codex CLI 0.159.2+ is required';
-    if (backend === 'ark') {
+    if (backend === 'astra') {
       if (!executable(join(homedir(), '.local/bin/codex-ark'))) return 'codex-ark is missing; run ./dotfiles.sh';
-      if (!['astra', 'sol'].includes(process.env.ARK_MODEL || 'astra')) return 'ARK_MODEL must be astra or sol';
       // The runner's zsh reads the credentials from ~/.zshenv.local, which the caller may not have loaded.
       const shell = command('zsh');
       if (!shell || spawnSync(shell, ['-c', '[[ -n "${ARK_API_KEY:-}" && -n "${ARK_OPERATOR_ID:-}" && -n "${ARK_OPERATOR_EMAIL:-}" ]]'], { timeout: 5000 }).status !== 0) {
@@ -158,15 +161,11 @@ if (action === '--once') {
 function run(item, commandArgs, input = '', options = {}) {
   return new Promise(resolveResult => {
     let stdout = '', stderr = '';
-    const bounded = commandArgs[0] === '--once', pro = item.backend === 'pro';
-    // A Pro answer can take far longer than the tmux backends' default hour.
-    const seconds = Number(timeout || (pro ? 7200 : 3600));
+    const bounded = commandArgs[0] === '--once';
+    const seconds = Number(timeout || 3600);
     let cancelled = 0, timer, killTimer;
-    // Pro bounds its own one-shot wait; the outer deadline is only a backstop.
-    if (pro && bounded) commandArgs = [...commandArgs, '--timeout', String(seconds)];
     // Each one-shot gets an owned process group so timeout also stops descendants.
-    const child = pro ? spawn(process.execPath, [proSession, ...commandArgs], { stdio: ['pipe', 'pipe', 'pipe'], detached: bounded, ...options })
-      : spawn(runner, [item.backend, ...commandArgs], { stdio: ['pipe', 'pipe', 'pipe'], detached: bounded, ...options });
+    const child = spawn(runner, [item.backend, ...commandArgs], { stdio: ['pipe', 'pipe', 'pipe'], detached: bounded, ...options });
     function signalGroup(signal) {
       if (!child.pid) return;
       try { process.kill(-child.pid, signal); }
@@ -182,7 +181,7 @@ function run(item, commandArgs, input = '', options = {}) {
     if (bounded) {
       activeOnce.add(cancel);
       // Use a deadline rather than an overflowing Node timer for large valid values.
-      const deadline = performance.now() + (seconds + (pro ? 60 : 0)) * 1000;
+      const deadline = performance.now() + seconds * 1000;
       timer = setInterval(() => {
         if (performance.now() >= deadline) cancel(124, `one-shot timed out after ${seconds} seconds`);
       }, Math.min(seconds * 1000, 1000));
@@ -248,15 +247,15 @@ if (action === 'backends') {
   }
   for (const item of selections) {
     item.prompt ??= input;
-    // Pro inlines attached files itself; the other backends read them from disk.
-    if (files.length && item.backend !== 'pro') item.prompt = item.prompt.replace(/\s*$/, '\n\nRead these files:\n') + files.map(path => `- ${path}\n`).join('');
+    // Backends read attached files from disk.
+    if (files.length) item.prompt = item.prompt.replace(/\s*$/, '\n\nRead these files:\n') + files.map(path => `- ${path}\n`).join('');
   }
-  // Persistent backends other than pro may ask the caller, when it is reachable through agent-msg.
-  const caller = action === 'start' && selections.some(item => item.backend !== 'pro') ? callerName() : null;
-  if (caller) for (const item of selections) if (item.backend !== 'pro') item.prompt = item.prompt.replace(/\s*$/, '\n\n') + askCaller(caller);
+  // Persistent backends may ask the caller, when it is reachable through agent-msg.
+  const caller = action === 'start' ? callerName() : null;
+  if (caller) for (const item of selections) item.prompt = item.prompt.replace(/\s*$/, '\n\n') + askCaller(caller);
   if (action === 'start' && selections.some(item => Buffer.byteLength(item.prompt) > 131072)) usage('initial prompt exceeds 128 KiB; send further context later');
   if (['start', '--once'].includes(action)) {
-    if (action === 'start' && selections.some(item => item.backend !== 'pro') && !command('tmux')) {
+    if (action === 'start' && !command('tmux')) {
       process.stderr.write('agent-team: tmux is required\n');
       process.exit(127);
     }
@@ -264,8 +263,7 @@ if (action === 'backends') {
     const results = await Promise.all(selections.map(item => {
       if (!checks.has(item.backend)) checks.set(item.backend, probe(item.backend));
       const reason = checks.get(item.backend);
-      const extra = item.backend === 'pro' ? files.flatMap(path => ['--file', path]) : ['--effort', effort];
-      const task = reason ? Promise.resolve({ ...item, stdout: '', stderr: reason + '\n', exit_code: 1 }) : run(item, [action, ...extra], item.prompt);
+      const task = reason ? Promise.resolve({ ...item, stdout: '', stderr: reason + '\n', exit_code: 1 }) : run(item, [action, '--effort', effort], item.prompt);
       return task.then(outcome => {
         if (action === 'start' && outcome.exit_code === 0) {
           process.stderr.write(`[${item.backend}] started ${outcome.stdout.trim()}\n`);
@@ -305,7 +303,7 @@ if (action === 'backends') {
     diagnose(results);
     if (action === 'send') {
       const messages = results.map(item => ({ ...result(item), delivery: item.exit_code === 0 ?
-        [...cursor, 'pro'].includes(item.backend) ? 'confirmed' : 'submitted' : item.exit_code === 124 ? 'unconfirmed' : 'failed' }));
+        cursor.includes(item.backend) ? 'confirmed' : 'submitted' : item.exit_code === 124 ? 'unconfirmed' : 'failed' }));
       json(results.length === 1 ? messages[0] : { results: messages, is_error: results.some(item => item.exit_code !== 0) });
     } else if (results.length === 1) process.stdout.write(results[0].stdout);
     else json({ results: results.map(result), is_error: results.some(item => item.exit_code !== 0) });
