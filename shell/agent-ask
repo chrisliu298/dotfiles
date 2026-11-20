@@ -293,7 +293,10 @@ def agy_current(conv):
 
 # agy gives its address and token only to the agent's own commands, so a hook cannot register it anywhere.
 AGY_REGISTER = "现在先运行一次 `agent-ask agy-register`，否则用户的答复送不回来。"
-AGY_HINT = ("你在 tmux 常驻会话里，提问（ask_question）会发到用户飞书。" + AGY_REGISTER +
+AGY_HINT = ("你在 tmux 常驻会话里，提问（ask_question）会发到用户飞书。用户多在手机上、看不到这里的对话，"
+            "所以要他拍板的事都用 ask_question 问，别只写在回复里；调用后显示被拒绝、带「✅ 已发到用户飞书」，"
+            "那是发送成功的回执，不是故障。问题不超过 160 字，每个选项不超过 130 字，超长会被打回并提示哪里要缩短。"
+            + AGY_REGISTER +
             "也运行一次 `agent-msg register --auto`（不用看输出），其他会话才能用 agent-msg 找到你；"
             "/clear 或重启后它会再提醒你。不需要用户决定、但用户该马上知道的事（坏消息、长任务跑完、需要他回电脑看）"
             "用 `agent-ask notify \"一两句白话\"` 推到他飞书；例行进度不要推，上限 {limit} 字。")
@@ -804,7 +807,8 @@ def file_question(sid, name, cwd, qid, questions, host="claude"):
                "先运行一次 `agent-ask agy-register`（每个会话一次），否则答复送不回来；答复会作为一条新消息送进这个对话；")
     else:
         how = "答复会以 hook 消息送来，空闲时也会唤醒你；"
-    return (f"✅ 已发到用户飞书（待答 {qid}）。这是回执，不是故障：不要重问，也别停下等，先照推荐项继续，"
+    lead = "发送成功：agy 会把这条回执显示成 tool call denied，但问题已经发出。" if host == "agy" else ""
+    return (f"{lead}✅ 已发到用户飞书（待答 {qid}）。这是回执，不是故障：不要重问，也别停下等，先照推荐项继续，"
             f"只把不可逆或对外的那步留到答复后。{how}问题过时了就 `agent-ask withdraw {qid} 原因`。")
 
 
